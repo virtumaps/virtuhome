@@ -6,6 +6,7 @@
 // wall apart joined on the wall's middle, doors and windows on their edges and furniture mapped.
 import { newId, normalizePlan, DEFAULT_SETTINGS, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
 import { centroid, pointInPolygon, segmentDistance } from "../model/geom";
+import { FURNITURE } from "../scene/furniture-lib";
 
 type M = number[];
 
@@ -15,6 +16,25 @@ interface Surface {
   polygonCorners?: number[][];
   story?: number;
   category?: Record<string, unknown>;
+  /** iOS 17: what kind of sofa, chair, table or storage it is ({ SofaType: "lShaped" }). */
+  attributes?: Record<string, string>;
+}
+
+/** House Scan's detections.json: decoration found by the camera or tagged by hand while scanning. */
+export interface Detections {
+  version: number;
+  space?: "structure" | "arsession";
+  objects: {
+    label: string;
+    confidence?: number;
+    source?: "auto" | "manual";
+    /** Centre of the object in the scan's coordinates (metres, y up). */
+    position: number[];
+    size?: number[] | null;
+    room?: number | null;
+    story?: number | null;
+    aligned?: "verified" | "assumed";
+  }[];
 }
 
 interface CapturedRoomJson {
@@ -40,6 +60,8 @@ export interface ImportOptions {
   /** Name (as in the manifest) of the room with the front door; it ends up at the bottom of the plan. */
   frontDoorRoom?: string;
   wallExterior?: number;
+  /** Decoration from House Scan's detections.json. */
+  detections?: Detections | null;
 }
 
 export interface ImportReport {
@@ -47,7 +69,62 @@ export interface ImportReport {
   floors: number;
   openings: number;
   furniture: number;
+  /** Plants, dumbbells, pictures... from detections.json. */
+  decor: number;
   warnings: string[];
+}
+
+/** detections.json labels to furniture types. */
+const DECOR_TYPES: Record<string, string> = {
+  plant: "plant", plant_tall: "plant_tall", flowers: "flowers", dumbbells: "dumbbells", kettlebell: "kettlebell",
+  weight_bench: "weight_bench", treadmill: "treadmill", exercise_bike: "exercise_bike", yoga_mat: "yoga_mat",
+  guitar: "guitar", piano: "piano", bicycle: "bicycle", picture: "picture", mirror: "mirror", clock: "clock",
+  rug: "rug", lamp_floor: "lamp_floor", lamp_table: "lamp_table", vase: "vase", books: "books", pet_bed: "pet_bed",
+  aquarium: "aquarium", speaker: "speaker", christmas_tree: "christmas_tree", basket: "basket", bin: "bin",
+  laptop: "laptop", monitor: "monitor", toy: "toy_box",
+};
+/** Hung on a wall: turned to face the room and moved onto the wall. */
+const WALL_DECOR = new Set(["picture", "mirror", "clock"]);
+
+/** The furniture type for a RoomPlan object, using its iOS 17 attributes and size. */
+function typeFor(cat: string, attrs: Record<string, string>, w: number, h: number, d: number, bottom: number, roomName: string): string | null {
+  const room = roomName.toLowerCase();
+  switch (cat) {
+    case "sofa": {
+      const t = attrs.SofaType;
+      if (t === "singleSeat") return "armchair";
+      if (t === "lShaped") return "sofa_l";
+      if (t === "lShapedExtension") return "sofa_section";
+      return w < 1.75 ? "sofa_2" : "sofa";
+    }
+    case "chair": {
+      const t = attrs.ChairType;
+      if (t === "swivel") return "office_chair";
+      if (t === "stool" || attrs.ChairBackType === "missing") return h > 0.7 ? "stool_bar" : "stool";
+      if (attrs.ChairArmType === "existing" && w > 0.62) return "armchair";
+      return attrs.ChairLegType === "star" ? "office_chair" : "chair";
+    }
+    case "table": {
+      const round = attrs.TableShapeType === "circularElliptic";
+      if (attrs.TableShapeType === "lShaped") return "desk_l";
+      if (attrs.TableType === "coffee" || h < 0.55) return round ? "coffee_round" : "coffee_table";
+      if (/office|study|desk/.test(room) && !round) return "desk";
+      if (round) return Math.max(w, d) / Math.max(0.1, Math.min(w, d)) > 1.3 ? "table_oval" : "table_round";
+      return "table";
+    }
+    case "storage": {
+      if (attrs.StorageType === "shelf") return h > 1.2 ? "bookcase" : "shelf";
+      if (h < 1.3) return /bed/.test(room) ? "dresser" : "sideboard";
+      if (/bed/.test(room) && w >= 1.0 && h >= 1.7) return "wardrobe";
+      return "tall_cabinet";
+    }
+    case "bed":
+      return w < 1.15 ? "bed_single" : w >= 1.75 ? "bed_king" : "bed";
+    case "television":
+      return bottom > 0.5 ? "tv_wall" : "tv_board";
+    default:
+      return ROOMPLAN_TYPES[cat] ?? null;
+  }
 }
 
 const ROOMPLAN_TYPES: Record<string, string> = {
@@ -334,14 +411,67 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
 
   // 7. furniture
   let furnitureCount = 0;
-  for (const o of top("objects")) {
+  const roomNameAt = (story: number, p: Vec2) => rooms.find((r) => r.story === story && pointInPolygon(p, r.poly))?.name ?? "";
+  const objects = top("objects");
+  // an L-shaped sofa comes as two objects: the main part and its extension
+  const merged = new Set<Surface>();
+  const sofaL = new Map<Surface, { centre: Vec2; axis: Vec2; w: number; d: number; mirror: boolean; turn: boolean }>();
+  for (const main of objects.filter((o) => o.attributes?.SofaType === "lShaped")) {
+    const a = item(main);
+    const [mw = 2, , md = 1] = main.dimensions ?? [];
+    const ax: Vec2 = a.axis;
+    const az: Vec2 = [-ax[1], ax[0]];
+    let best: { o: Surface; dist: number } | null = null;
+    for (const ext of objects) {
+      if (ext.attributes?.SofaType !== "lShapedExtension" || merged.has(ext)) continue;
+      const e = item(ext);
+      const dist = Math.hypot(e.centre[0] - a.centre[0], e.centre[1] - a.centre[1]);
+      if (e.story === a.story && dist < 2.5 && (!best || dist < best.dist)) best = { o: ext, dist };
+    }
+    if (!best) continue;
+    merged.add(best.o);
+    // both footprints in the main part's frame; the union is the corner sofa
+    const e = item(best.o);
+    const [ew = 0.8, , ed = 1] = best.o.dimensions ?? [];
+    const eaz: Vec2 = [-e.axis[1], e.axis[0]];
+    let x0 = -mw / 2, x1 = mw / 2, z0 = -md / 2, z1 = md / 2;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const cx = e.centre[0] + e.axis[0] * (sx * ew) / 2 + eaz[0] * (sz * ed) / 2 - a.centre[0];
+      const cz = e.centre[1] + e.axis[1] * (sx * ew) / 2 + eaz[1] * (sz * ed) / 2 - a.centre[1];
+      const lx = cx * ax[0] + cz * ax[1];
+      const lz = cx * az[0] + cz * az[1];
+      x0 = Math.min(x0, lx); x1 = Math.max(x1, lx); z0 = Math.min(z0, lz); z1 = Math.max(z1, lz);
+    }
+    const ex = (e.centre[0] - a.centre[0]) * ax[0] + (e.centre[1] - a.centre[1]) * ax[1];
+    const ez = (e.centre[0] - a.centre[0]) * az[0] + (e.centre[1] - a.centre[1]) * az[1];
+    // the return reaches forward; if it lies behind, the sofa faces the other way round
+    const turn = ez < 0;
+    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+    sofaL.set(main, {
+      centre: [a.centre[0] + ax[0] * mx + az[0] * mz, a.centre[1] + ax[1] * mx + az[1] * mz],
+      axis: turn ? [-ax[0], -ax[1]] : ax,
+      w: x1 - x0, d: z1 - z0,
+      // corner sofas have their return on the right (+x); one on the left is mirrored
+      mirror: turn ? ex > 0 : ex < 0,
+      turn,
+    });
+  }
+  for (const o of objects) {
+    if (merged.has(o)) continue;
     const cat = Object.keys(o.category ?? {})[0] ?? "";
-    let type = ROOMPLAN_TYPES[cat];
+    const it = item(o);
+    let { centre, axis } = it;
+    const { bottom, story } = it;
+    let [w = 0.5, h = 0.5, d = 0.5] = o.dimensions ?? [];
+    const type = typeFor(cat, o.attributes ?? {}, w, h, d, bottom, roomNameAt(story, fin(centre)));
     if (!type) continue;
-    const { centre, axis, bottom, story } = item(o);
-    const [w = 0.5, h = 0.5, d = 0.5] = o.dimensions ?? [];
-    if (cat === "storage" && h < 1.3) type = "sideboard";
-    if (cat === "television" && bottom > 0.5) type = "tv_wall";
+    const l = sofaL.get(o);
+    if (l) {
+      centre = l.centre;
+      axis = l.axis;
+      w = l.w;
+      d = l.d;
+    }
     const p = fin(centre);
     const ax = place(axis);
     const piece: Furniture = {
@@ -349,6 +479,7 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
       rotation: round((Math.atan2(ax[1], ax[0]) * 180) / Math.PI),
       w: round(w), d: round(d), h: round(h),
     };
+    if (l?.mirror) piece.mirror = true;
     if (type === "tv_wall") piece.y = round(Math.max(0, bottom));
     if (type === "stairs") {
       // RoomPlan sees only the first steps: give the flight the storey height and a matching run
@@ -359,10 +490,66 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
     furnitureCount++;
   }
 
+  // 8. decoration from House Scan's detections (in the scan's coordinates, like the objects)
+  let decorCount = 0;
+  const det = opt.detections;
+  if (det?.objects?.length) {
+    if (det.space && det.space !== "structure") warnings.push("detections.json is from an unfinished scan: decor may sit in the wrong place.");
+    let assumed = 0;
+    for (const o of det.objects) {
+      const type = DECOR_TYPES[o.label];
+      if (!type || !Array.isArray(o.position) || o.position.length < 3) continue;
+      const story = o.story ?? (o.room !== null && o.room !== undefined ? rawRooms[o.room]?.story ?? 0 : 0);
+      if (!floors.length) break;
+      const def = DECOR_DEFAULTS[type];
+      const [sw, sh] = o.size ?? [];
+      const fit = (v: number | undefined, usual: number) => (v && isFinite(v) ? clamp(v, usual * 0.5, usual * 2) : usual);
+      const w = round(fit(sw, def[0]));
+      const hh = round(fit(sh, def[2]));
+      const dd = round(type === "plant" || type === "plant_tall" ? w : def[1]);
+      const p = fin(rot([o.position[0], o.position[2]], straighten));
+      const bottom = o.position[1] - (sh && isFinite(sh) ? sh : def[2]) / 2 - (level.get(story) ?? 0);
+      const piece: Furniture = { id: newId("f"), type, x: p[0], z: p[1], rotation: 0, w, d: dd, h: hh };
+      const fl = floorOf(story);
+      if (WALL_DECOR.has(type)) {
+        // onto the nearest wall of its room, facing in
+        const room = fl.rooms.find((r) => pointInPolygon(p, r.points)) ?? fl.rooms[0];
+        if (room) {
+          let best: { d: number; a: Vec2; b: Vec2; t: number } | null = null;
+          room.points.forEach((a, i) => {
+            const b = room.points[(i + 1) % room.points.length];
+            const sd2 = segmentDistance(p, a, b);
+            if (!best || sd2.d < best.d) best = { d: sd2.d, a, b, t: sd2.t };
+          });
+          const bb = best as { d: number; a: Vec2; b: Vec2; t: number } | null;
+          if (bb) {
+            const len = Math.hypot(bb.b[0] - bb.a[0], bb.b[1] - bb.a[1]) || 1;
+            const dir: Vec2 = [(bb.b[0] - bb.a[0]) / len, (bb.b[1] - bb.a[1]) / len];
+            let n: Vec2 = [-dir[1], dir[0]];
+            const c = centroid(room.points);
+            if ((c[0] - bb.a[0]) * n[0] + (c[1] - bb.a[1]) * n[1] < 0) n = [-n[0], -n[1]];
+            const off = wallInterior / 2 + dd / 2 + 0.01;
+            piece.x = round(bb.a[0] + dir[0] * bb.t + n[0] * off);
+            piece.z = round(bb.a[1] + dir[1] * bb.t + n[1] * off);
+            piece.rotation = round((Math.atan2(-n[0], n[1]) * 180) / Math.PI);
+          }
+        }
+        piece.y = round(clamp(bottom, 0.3, 2.2));
+      } else if (bottom > 0.3) {
+        // on a table or a shelf
+        piece.y = round(Math.min(bottom, 2));
+      }
+      if (o.aligned === "assumed") assumed++;
+      fl.furniture.push(piece);
+      decorCount++;
+    }
+    if (assumed) warnings.push(`${assumed} decor item${assumed === 1 ? "" : "s"} could not be lined up exactly: check where they stand.`);
+  }
+
   const plan = normalizePlan({ version: 1, settings: { ...DEFAULT_SETTINGS, wall_exterior: wallExt, wall_interior: round(wallInterior) }, floors });
   return {
     plan,
-    report: { rooms: rooms.length, floors: floors.length, openings: openingCount, furniture: furnitureCount, warnings },
+    report: { rooms: rooms.length, floors: floors.length, openings: openingCount, furniture: furnitureCount, decor: decorCount, warnings },
   };
 }
 
@@ -399,6 +586,11 @@ function dedupe(poly: Vec2[], r: { lines: ["h" | "v", number][] }): Vec2[] {
   r.lines = lines;
   return out;
 }
+
+/** Usual sizes of decor (width, depth, height), as the furniture library has them. */
+const DECOR_DEFAULTS: Record<string, [number, number, number]> = Object.fromEntries(
+  Object.values(DECOR_TYPES).map((t) => [t, FURNITURE[t]?.size ?? [0.4, 0.4, 0.4]]),
+);
 
 const median = (v: number[]) => {
   const s = [...v].sort((a, b) => a - b);

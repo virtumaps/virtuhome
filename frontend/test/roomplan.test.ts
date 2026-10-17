@@ -69,4 +69,53 @@ describe("importRoomPlan", () => {
     expect(a[1]).toBeCloseTo(maxZ);
     expect(b[1]).toBeCloseTo(maxZ);
   });
+
+  it("picks furniture styles from RoomPlan's attributes and joins an L-shaped sofa", () => {
+    const obj = (cat: string, attrs: Record<string, string>, w: number, h: number, d: number, x: number, z: number) =>
+      ({ category: { [cat]: {} }, attributes: attrs, ...surface(w, h, x, FLOOR + h / 2, z, 0), dimensions: [w, h, d] });
+    const withObjects = {
+      ...scan,
+      objects: [
+        obj("sofa", { SofaType: "lShaped" }, 2.4, 0.8, 0.95, 2, 1.0),
+        // the return: in front of the main part, at its right end
+        obj("sofa", { SofaType: "lShapedExtension" }, 0.8, 0.8, 0.9, 2.8, 1.925),
+        obj("chair", { ChairType: "stool" }, 0.4, 0.75, 0.4, 5, 1),
+        obj("table", { TableType: "coffee", TableShapeType: "circularElliptic" }, 0.8, 0.4, 0.8, 5.5, 2),
+        obj("storage", { StorageType: "shelf" }, 0.9, 1.9, 0.3, 6.5, 0.4),
+      ],
+    };
+    const { plan } = importRoomPlan(withObjects, null, {});
+    const types = plan.floors[0].furniture.map((x) => x.type).sort();
+    expect(types).toEqual(["bookcase", "coffee_round", "sofa_l", "stool_bar"]);
+    const l = plan.floors[0].furniture.find((x) => x.type === "sofa_l")!;
+    expect(l.w).toBeCloseTo(2.4, 2);
+    expect(l.d).toBeCloseTo(1.85, 2);
+    expect(l.mirror).toBeFalsy();
+  });
+
+  it("adds decoration from detections.json: on the floor, and pictures onto the wall", () => {
+    const detections = {
+      version: 1,
+      space: "structure" as const,
+      objects: [
+        { label: "plant", position: [2, FLOOR + 0.5, 1.5], size: [0.5, 1.0, 0.5], room: 0, story: 0 },
+        { label: "picture", position: [1, FLOOR + 1.5, 0.1], size: [0.6, 0.45, 0.03], room: 0, story: 0 },
+        { label: "other", position: [1, FLOOR, 1], room: 0 },
+      ],
+    };
+    const { plan, report } = importRoomPlan(scan, null, { detections });
+    expect(report.decor).toBe(2);
+    const f = plan.floors[0];
+    const plant = f.furniture.find((x) => x.type === "plant")!;
+    expect(plant.y).toBeUndefined();
+    expect(plant.h).toBeCloseTo(1.0, 2);
+    const pic = f.furniture.find((x) => x.type === "picture")!;
+    expect(pic.rotation).toBeCloseTo(0, 5);
+    expect(pic.y).toBeCloseTo(1.275, 2);
+    // flat against the top wall of its room, facing into it
+    const room = f.rooms[0];
+    const top = Math.min(...room.points.map((p) => p[1]));
+    expect(pic.z - top).toBeGreaterThan(0);
+    expect(pic.z - top).toBeLessThan(0.15);
+  });
 });

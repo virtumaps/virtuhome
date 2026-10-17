@@ -6,7 +6,7 @@
 // In edit mode a tap selects instead of switching, and devices, lamps and furniture can be dragged.
 import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
 import { autoPlace } from "../auto/placement";
-import { importRoomPlan, isRoomPlan, type Manifest } from "../import/roomplan";
+import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
 import { newId, normalizePlan, spaces, type Device, type Floor, type FloorMaterial, type Furniture, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
@@ -26,6 +26,12 @@ const SLAB = 0.18;
 
 const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
+
+/** House Scan's detections.json (decor found while scanning). */
+function isDetections(data: unknown): data is Detections {
+  const d = data as Detections;
+  return typeof d?.version === "number" && Array.isArray(d.objects) && d.objects.every((o) => typeof o?.label === "string" && Array.isArray(o.position));
+}
 
 /** Tiny DOM helper: h("div", { class: "x", onclick }, child, "text") */
 function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, unknown> = {}, ...children: (Node | string | null | undefined | false)[]): HTMLElementTagNameMap[K] {
@@ -365,7 +371,7 @@ export class Editor {
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
     const box = h("div", {},
       h("h4", {}, "Scan"),
-      h("p", { class: "ed-hint" }, "Choose the scan's house.json, together with its manifest.json for the room names. Rooms, doors, windows and furniture come from the scan."),
+      h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
       h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan…"),
       fileIn,
       h("h4", {}, "Devices"),
@@ -820,9 +826,16 @@ export class Editor {
     if (!files?.length) return;
     let house: unknown = null;
     let manifest: Manifest | null = null;
+    let detections: Detections | null = null;
     for (const file of Array.from(files)) {
-      const data = JSON.parse(await file.text());
+      let data: unknown;
+      try {
+        data = JSON.parse(await file.text());
+      } catch {
+        continue;
+      }
       if (isRoomPlan(data)) house = data;
+      else if (isDetections(data)) detections = data;
       else if (Array.isArray((data as Manifest).rooms) && (data as Manifest).rooms.every((r) => typeof r.name === "string")) manifest = data as Manifest;
     }
     if (!house) {
@@ -830,7 +843,7 @@ export class Editor {
       return;
     }
     const front = manifest?.rooms.find((r) => /hall|entrance|porch|front/i.test(r.name))?.name;
-    const { plan, report } = importRoomPlan(house as never, manifest, { frontDoorRoom: front });
+    const { plan, report } = importRoomPlan(house as never, manifest, { frontDoorRoom: front, detections });
     const go = () => {
       this.change((p) => {
         p.floors = plan.floors;
@@ -840,7 +853,7 @@ export class Editor {
       const placed = autoPlace(this.plan, this.hass);
       this.change((p) => Object.assign(p, placed.plan), false);
       this.showReport([
-        `${report.rooms} rooms on ${report.floors} floor${report.floors === 1 ? "" : "s"}, ${report.openings} doors and windows, ${report.furniture} pieces of furniture.`,
+        `${report.rooms} rooms on ${report.floors} floor${report.floors === 1 ? "" : "s"}, ${report.openings} doors and windows, ${report.furniture} pieces of furniture${report.decor ? `, ${report.decor} decorations` : ""}.`,
         `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
         ...report.warnings,
       ]);

@@ -24,7 +24,9 @@ async function loadPlan(): Promise<Plan> {
     const house = await (await fetch(`/dev/scans/${scan}/house.json`)).json();
     const res = await fetch(`/dev/scans/${scan}/manifest.json`);
     const manifest = res.ok ? await res.json() : null;
-    const { plan, report } = importRoomPlan(house, manifest, { frontDoorRoom: q.get("front") ?? "Hallway (downstairs)" });
+    const det = await fetch(`/dev/scans/${scan}/detections.json`);
+    const detections = det.ok ? await det.json().catch(() => null) : null;
+    const { plan, report } = importRoomPlan(house, manifest, { frontDoorRoom: q.get("front") ?? "Hallway (downstairs)", detections });
     console.info("import", report);
     (window as unknown as { importReport: unknown }).importReport = report;
     return plan;
