@@ -6,6 +6,10 @@ export const EDITOR_CSS = /* css */ `
 }
 .ed-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 6px 14px; }
 .ed-head b { font-size: 15px; margin-right: auto; }
+.ed-modes { display: flex; gap: 2px; margin: 0 10px 8px; padding: 3px; border-radius: 12px; background: var(--vh-chip); }
+.ed-mode { flex: 1; border: 0; border-radius: 9px; padding: 6px; background: none; color: var(--vh-dim); font: inherit; font-weight: 600; cursor: pointer; }
+.ed-mode.on { background: var(--vh-glass); color: var(--vh-text); box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+.vh-root.plan2d .vh-tools, .vh-root.plan2d .vh-bar, .vh-root.plan2d .vh-overlay, .vh-root.plan2d .vh-menu { display: none; }
 .ed-tabs { display: flex; gap: 4px; padding: 0 10px 8px; border-bottom: 1px solid var(--vh-line); }
 .ed-tab { flex: 1; border: 0; border-radius: 10px; padding: 7px 4px; background: transparent; color: var(--vh-dim); font: inherit; cursor: pointer; }
 .ed-tab.on { background: var(--vh-chip-on); color: var(--vh-text); font-weight: 600; }

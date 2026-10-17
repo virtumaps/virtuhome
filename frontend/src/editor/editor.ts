@@ -8,7 +8,7 @@ import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelet
 import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
-import { newId, normalizePlan, spaces, type Device, type Floor, type FloorMaterial, type Furniture, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
+import { newId, normalizePlan, spaces, type Device, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
 import { CATEGORY_NAMES, FURNITURE, isUpholstered, styleOptions, type Category } from "../scene/furniture-lib";
@@ -18,9 +18,10 @@ import { iconIndex } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import { EDITOR_CSS } from "./styles";
+import { Plan2D, PLAN2D_CSS } from "./plan2d";
 
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
-type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture"; id: string } | null;
+type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening"; id: string } | null;
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 const SLAB = 0.18;
 
@@ -75,6 +76,9 @@ export class Editor {
   /** The add-item picker's category and search text (kept across re-renders). */
   private pickCat: Category | "all" = "all";
   private pickQuery = "";
+  /** The 2D plan (bird's-eye, with measurements), when it is shown instead of 3D. */
+  private plan2d: Plan2D | null = null;
+  private modeBtns: HTMLButtonElement[] = [];
   private dirty = false;
   private tab: Tab = "home";
   private sel: Selection = null;
@@ -88,7 +92,7 @@ export class Editor {
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
-    const style = h("style", {}, EDITOR_CSS);
+    const style = h("style", {}, EDITOR_CSS + PLAN2D_CSS);
     this.status = h("span", { class: "ed-status" });
     this.body = h("div", { class: "ed-body" });
     this.undoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowULeftTop)}<span>Undo</span>`, onclick: () => this.doUndo() });
@@ -101,6 +105,9 @@ export class Editor {
         this.redoBtn,
         h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, onclick: () => this.save() }),
         h("button", { class: "ed-ib", title: "Close", html: svg(mdiClose), onclick: () => this.close() }),
+      ),
+      h("div", { class: "ed-modes" },
+        ...this.modeButtons(),
       ),
       h("div", { class: "ed-tabs" },
         ...(["home", "rooms", "devices", "selected", "extensions"] as Tab[]).map((t) =>
@@ -117,6 +124,51 @@ export class Editor {
     window.addEventListener("keydown", this.onKey);
     this.render();
     this.updateHistoryButtons();
+  }
+
+  private modeButtons(): HTMLButtonElement[] {
+    this.modeBtns = [
+      h("button", { class: "ed-mode on", onclick: () => this.setPlanMode(false) }, "3D view"),
+      h("button", { class: "ed-mode", onclick: () => this.setPlanMode(true) }, "2D plan"),
+    ];
+    return this.modeBtns;
+  }
+
+  /** Shows the 2D plan with measurements over the 3D view, or goes back to 3D. */
+  private setPlanMode(on: boolean): void {
+    this.modeBtns.forEach((b, i) => b.classList.toggle("on", (i === 1) === on));
+    const root = this.host.view.root;
+    root.classList.toggle("plan2d", on);
+    if (on && !this.plan2d) {
+      const viewer = this.host.view.viewer;
+      this.plan2d = new Plan2D({
+        plan: () => this.plan,
+        selection: () => this.sel,
+        select: (sel) => this.select(sel),
+        change: (fn, label) => this.change(fn, false, label),
+        dragStart: () => {
+          this.dragStart = structuredClone(this.plan);
+        },
+        dragMove: () => this.queueDragPreview(),
+        dragEnd: (label) => {
+          const before = this.dragStart;
+          this.dragStart = null;
+          if (!before || !label || JSON.stringify(before) === JSON.stringify(this.plan)) return;
+          this.undo.push({ plan: before, label });
+          this.redo = [];
+          this.dirty = true;
+          this.apply();
+        },
+        floor: () => (viewer.mode === "floor" ? viewer.activeFloor : 0),
+        setFloor: (i) => this.host.view.showFloor(i),
+        status: (text) => (this.status.textContent = text),
+      });
+      root.append(this.plan2d.el);
+      this.status.textContent = "Drag corners, walls, doors and furniture. Click a measurement to type it.";
+    } else if (!on && this.plan2d) {
+      this.plan2d.dispose();
+      this.plan2d = null;
+    }
   }
 
   /** Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes (not while typing in a field). */
@@ -150,6 +202,7 @@ export class Editor {
   private apply(quiet = false): void {
     this.host.view.previewPlan(this.plan);
     this.updateSelectionMarker();
+    this.plan2d?.render();
     if (!quiet) this.render();
     this.status.textContent = this.dirty ? "Unsaved changes" : "Saved";
     this.updateHistoryButtons();
@@ -194,7 +247,8 @@ export class Editor {
     const exists = !!f && (
       s.kind === "room" ? f.rooms.some((r) => r.id === s.id) :
       s.kind === "outdoor" ? (f.outdoor ?? []).some((o) => o.id === s.id) :
-      s.kind === "device" ? f.devices.some((d) => d.id === s.id) : f.furniture.some((x) => x.id === s.id));
+      s.kind === "device" ? f.devices.some((d) => d.id === s.id) :
+      s.kind === "opening" ? f.openings.some((o) => o.id === s.id) : f.furniture.some((x) => x.id === s.id));
     if (!exists) this.sel = null;
   }
 
@@ -231,6 +285,9 @@ export class Editor {
     viewer.overlayMarkers = [];
     cancelAnimationFrame(this.dragRaf);
     window.removeEventListener("keydown", this.onKey);
+    this.plan2d?.dispose();
+    this.plan2d = null;
+    this.host.view.root.classList.remove("plan2d");
     this.el.remove();
     this.host.close();
   }
@@ -248,6 +305,7 @@ export class Editor {
   private select(sel: Selection): void {
     this.sel = sel;
     this.updateSelectionMarker();
+    this.plan2d?.render();
     if (sel) this.show("selected");
     else this.render();
   }
@@ -590,6 +648,7 @@ export class Editor {
     if (s.kind === "room") return this.roomPanel(fi, f.rooms.find((r) => r.id === s.id));
     if (s.kind === "outdoor") return this.outdoorPanel(fi, f.outdoor?.find((o) => o.id === s.id));
     if (s.kind === "device") return this.devicePanel(fi, f.devices.find((d) => d.id === s.id));
+    if (s.kind === "opening") return this.openingPanel(fi, f.openings.find((o) => o.id === s.id));
     return this.furniturePanel(fi, f.furniture.find((x) => x.id === s.id));
   }
 
@@ -626,7 +685,8 @@ export class Editor {
         FURNITURE[x.type]?.name ?? x.type))),
       h("h4", {}, `Doors and windows (${openings.length})`),
       ...openings.map((o) => h("div", { class: "ed-card" },
-        h("div", { class: "ed-row" }, h("b", {}, o.kind), h("small", {}, `${o.width.toFixed(2)} m wide`)),
+        h("div", { class: "ed-row" }, h("b", {}, o.kind), h("small", {}, `${o.width.toFixed(2)} m wide`),
+          h("button", { class: "ed-btn ghost small", onclick: () => this.select({ floor: fi, kind: "opening", id: o.id }) }, "Edit")),
         h("div", { class: "ed-row" },
           h("label", {}, "Sensor"),
           this.dropdown(contacts, o.entity ?? "", (v) => this.change((p) => {
@@ -743,6 +803,39 @@ export class Editor {
           this.select(null);
         } }, "Remove"),
       ),
+    );
+  }
+
+  /** A door, window or opening: kind, size, which way it opens, and what it is linked to. */
+  private openingPanel(fi: number, o: Opening | undefined): HTMLElement {
+    if (!o) return h("div", {});
+    const upd = (label: string, fn: (x: Opening) => void) => this.change((p) => fn(p.floors[fi].openings.find((y) => y.id === o.id)!), false, label);
+    const contacts = this.entities((id, st) => domainOf(id) === "binary_sensor" && ["door", "window", "opening", "garage_door"].includes(String(st.attributes.device_class)));
+    const covers = this.entities((id) => domainOf(id) === "cover");
+    const room = this.plan.floors[fi].rooms.find((r) => r.id === o.room_id);
+    const num = (label: string, key: "width" | "height" | "sill" | "offset", step = "0.05") =>
+      [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step, min: "0", value: String(o[key]), onchange: (e: Event) => upd(`Change ${o.kind} ${label.toLowerCase()}`, (x) => (x[key] = Math.max(0, Number((e.target as HTMLInputElement).value)))) })];
+    const names: Record<Opening["kind"], string> = { door: "Door", window: "Window", passage: "Opening", garage: "Garage door" };
+    return h("div", {},
+      h("h4", {}, `${names[o.kind]}${room ? ` · ${room.name}` : ""}`),
+      h("div", { class: "ed-chips" }, ...(["door", "window", "passage", "garage"] as Opening["kind"][]).map((k) =>
+        h("button", { class: `ed-chip${o.kind === k ? " on" : ""}`, onclick: () => o.kind !== k && upd(`Make it a ${names[k].toLowerCase()}`, (x) => {
+          x.kind = k;
+          if (k === "window" && x.sill < 0.3) x.sill = 0.9;
+          if (k !== "window") x.sill = 0;
+        }) }, names[k]))),
+      h("div", { class: "ed-row" }, ...num("Width", "width"), ...num("Height", "height")),
+      h("div", { class: "ed-row" }, ...(o.kind === "window" ? num("Sill", "sill") : []), ...num("From corner", "offset")),
+      o.kind === "door" || o.kind === "garage" ? h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost small", onclick: () => upd("Flip a door's hinge", (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, "Flip hinge"),
+        h("button", { class: "ed-btn ghost small", onclick: () => upd("Swing a door the other way", (x) => (x.swing = x.swing === "out" ? "in" : "out")) }, "Swing other way"),
+      ) : null,
+      h("div", { class: "ed-row" }, h("label", {}, "Sensor"), this.dropdown(contacts, o.entity ?? "", (v) => upd("Link a sensor", (x) => (x.entity = v || null)), "None")),
+      o.kind === "window" ? h("div", { class: "ed-row" }, h("label", {}, "Blind"), this.dropdown(covers, o.cover ?? "", (v) => upd("Link a blind", (x) => (x.cover = v || null)), "None")) : null,
+      h("button", { class: "ed-btn danger", onclick: () => {
+        this.change((p) => (p.floors[fi].openings = p.floors[fi].openings.filter((x) => x.id !== o.id)), false, `Remove a ${names[o.kind].toLowerCase()}`);
+        this.select(null);
+      } }, "Remove"),
     );
   }
 
