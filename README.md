@@ -28,6 +28,9 @@ On a computer or a recent iPad it switches to a realistic look with textures, su
   themselves. The car's battery, what it is charging to and by when, and its charge modes are in the
   energy sheet; the charger on the driveway lights up while it charges, and the car (shaped like
   yours) is on the drive while it is plugged in or its tracker says it is home.
+- **Fences and garden walls:** 15 designs from closeboard and lap panels to picket, railings,
+  palisade, glass and brick walls, in any height and colour, with gravel boards, trellis toppers and
+  gates. Fence a garden in one tap, or draw fences in the 2D plan.
 - **Make it look like home:** floor finishes, wall paint and wallpaper, the outside in brick, render,
   stone or cladding, and about 110 pieces of furniture and decor in swappable styles, colours and
   fabrics.
@@ -93,9 +96,12 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   corner, add a corner exactly where you click an edge with the corner tool, click a wall to add a door
   or window and slide it along, turn furniture with its handle.
   As in 3D, furniture, devices, doors and windows move only once they are selected.
+  The fence tool draws a fence corner by corner: click its last point again to finish.
   Arrow keys nudge, R turns, Delete removes.
 - **Looks:** a room's floor and wall finish and paint colour, the outside walls (also per storey), and
   for furniture its style, colour, upholstery and mirroring. Add items from a searchable catalogue.
+- **Fences:** tap a fence for its style, height, colour, posts, gravel board, trellis topper and gates.
+  "Fence round it" on a garden area fences every edge that isn't along the house.
 - **Energy:** Edit → Home → Energy shows the solar, house, battery and grid sensors found from the
   energy settings, and takes another where one is wrong. Panels' peak sets how brightly placed solar
   panels shine (otherwise the best output seen). Charger and Car battery do the same for car charging.

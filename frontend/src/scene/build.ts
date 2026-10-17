@@ -12,6 +12,7 @@ import { Geo, ROOM_NONE, ROOM_OUTSIDE, type V3 } from "./geo";
 import { WALL_HANG, WALL_TRIM } from "./materials";
 import { buildOpeningFixed, joineryLook, type OpeningInfo } from "./joinery";
 import { cameraPieces, cameraRig, type CameraRig } from "./cameras";
+import { fencePaint, fencePieces } from "./fences";
 import { inPalette, type Palette } from "./palette";
 
 export const SLAB = 0.18;
@@ -102,9 +103,10 @@ export interface RoomInfo {
 export interface ItemRef {
   /**
    * Editor handles: "corner" sits on a room's corner, id "<space id>:<corner index>"; "edge" is the
-   * + in the middle of an edge that adds a corner there, id "<space id>:<edge index>".
+   * + in the middle of an edge that adds a corner there, id "<space id>:<edge index>". A fence's
+   * points and +s are "fencepoint" and "fenceedge", id "<fence id>:<index>".
    */
-  kind: "furniture" | "device" | "corner" | "edge" | "opening";
+  kind: "furniture" | "device" | "corner" | "edge" | "opening" | "fence" | "fencepoint" | "fenceedge";
   id: string;
 }
 
@@ -384,6 +386,17 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     }
   }
 
+  // fences: a piece per bay, post and gate, standing on the ground; a tap picks the whole fence
+  for (const fence of floor.fences ?? []) {
+    opaque.currentItem = glass.currentItem = items.length;
+    items.push({ kind: "fence", id: fence.id });
+    const paint = fencePaint(fence);
+    for (const piece of fencePieces(fence, opt.low)) {
+      const at: Vec2 = [piece.item.x, piece.item.z];
+      addParts(opaque, piece.parts, piece.item, y0 + groundAt(floor, at), false, roomAt(at), -1, pal, opt.low, glass, paint);
+    }
+  }
+
   // cameras: a model of their kind on their wall or ceiling, tapped and dragged like their device
   const cameras: CameraRig[] = [];
   for (const d of floor.devices) {
@@ -607,7 +620,7 @@ export function separateFaces(parts: Part[], raised = false): Part[] {
 }
 
 /** A piece's parts, into the floor's mesh; its glass into the glass mesh when one is given. */
-function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, raised: boolean, room: number, glow: number, pal: Palette, low: boolean, glass?: Geo): void {
+function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, raised: boolean, room: number, glow: number, pal: Palette, low: boolean, glass?: Geo, paint?: Set<Role>): void {
   const def = furnitureType(item.type);
   const r = (item.rotation * Math.PI) / 180;
   const c = Math.cos(r);
@@ -619,7 +632,7 @@ function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, r
   const finish = item.finish ?? def.finish ?? "fabric";
   const upholstery = UPHOLSTERY[finish] ?? UPHOLSTERY.fabric;
   const picked = parseHex(item.color) ?? (finish !== "fabric" ? upholstery.color : null);
-  const painted = paintRoles(def, parts);
+  const painted = paint ?? paintRoles(def, parts);
   parts = separateFaces(parts, raised);
   const colourOf = (role: Role): V3 => {
     if (picked !== null && painted.has(role)) {

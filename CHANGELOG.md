@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### New
+- Fences and garden walls in 15 designs: closeboard, lap panel, slatted, venetian, hit and miss,
+  louvre, composite, trellis, picket, post and rail, railings, estate fencing, palisade, glass and a
+  brick wall with piers. Any height and colour; timber, concrete or metal posts at any spacing; a
+  concrete gravel board and a trellis topper on timber panels; single gates and double driveway
+  gates in the fence's own style. Draw them with the fence tool in the 2D plan, or tap "Fence round
+  it" on a garden area to fence every edge that isn't along the house. Drag their points in 3D or 2D,
+  add corners with the +s, or drag a whole fence.
 - Car charging: EV chargers (Ohme, Zappi, Hypervolt, Pod Point, Wallbox, Easee, OCPP and others) are
   found by themselves. The energy sheet shows the car next to the house with what it draws, a card
   per car with its battery, the level and time it charges to, what the charger is doing and its

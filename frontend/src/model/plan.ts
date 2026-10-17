@@ -153,9 +153,45 @@ export interface Floor {
   walls: FreeWall[];
   /** Garden areas (usually on the ground floor only). */
   outdoor?: OutdoorArea[];
+  /** Fences and garden walls along the ground. */
+  fences?: Fence[];
   /** This storey's outside walls, when they differ from the house's (e.g. cladding upstairs). */
   exterior_finish?: ExteriorFinish | null;
   exterior_color?: string | null;
+}
+
+/** The fence designs (scene/fences.ts builds them). */
+export type FenceStyle =
+  | "closeboard" | "lap" | "slatted" | "venetian" | "hit_miss" | "louvre" | "composite" | "trellis"
+  | "picket" | "post_rail" | "railings" | "estate" | "palisade" | "glass" | "brick_wall";
+export type FencePost = "timber" | "concrete" | "metal" | "pier";
+
+/** A gate in a fence: its middle `at` metres along the fence from its first point. */
+export interface FenceGate {
+  at: number;
+  width: number;
+  /** Two leaves meeting in the middle (a driveway gate). */
+  double?: boolean;
+}
+
+/** A fence or garden wall: a line of posts and panels along the ground, corner to corner. */
+export interface Fence {
+  id: string;
+  /** Its line, from its first point to its last (open: it does not come back on its own). */
+  points: Vec2[];
+  style: FenceStyle;
+  /** Top of the panels above the ground (m); a topper sits on top of that. */
+  height: number;
+  /** Colour ("#rrggbb"); null = the style's own (natural timber, black metal…). */
+  color?: string | null;
+  /** null = the style's usual posts. */
+  posts?: FencePost | null;
+  /** A concrete board along the bottom; null = the style's usual. */
+  gravel_board?: boolean | null;
+  topper?: "trellis" | null;
+  /** Between posts (m); null = the style's usual (1.83 m for UK panels). */
+  spacing?: number | null;
+  gates?: FenceGate[];
 }
 
 export interface PlanSettings {
@@ -234,6 +270,7 @@ export function normalizePlan(raw: unknown): Plan {
     devices: f.devices ?? [],
     walls: f.walls ?? [],
     outdoor: (f.outdoor ?? []).map((o) => ({ ...o, area_id: o.area_id ?? null, kind: o.kind ?? "lawn" })),
+    fences: (f.fences ?? []).filter((x) => (x.points ?? []).length >= 2).map((x) => ({ ...x, gates: x.gates ?? [] })),
   }));
   floors.sort((a, b) => a.elevation - b.elevation);
   return { version: 1, name: p.name, settings, floors };

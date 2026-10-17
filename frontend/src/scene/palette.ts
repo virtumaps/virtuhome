@@ -60,6 +60,8 @@ const DAY_ROLES: Record<Role, number> = {
   walnut: 0x6e4f38,
   primed: 0xf3f2ee,
   blackMetal: 0x2a2b2e,
+  concrete: 0xb3b0a8,
+  brick: 0xa65d44,
 };
 
 export const DAY: Palette = {

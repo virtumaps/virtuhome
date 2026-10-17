@@ -13,7 +13,9 @@ export type Role =
   | "glass" | "plant" | "leaf" | "pot" | "soil" | "accent" | "red" | "blue" | "screen" | "ceramic"
   | "rug" | "mattress" | "bulb" | "paper" | "canvas" | "mirror" | "water" | "rubber"
   // balustrade materials
-  | "pine" | "softwood" | "oak" | "walnut" | "primed" | "blackMetal";
+  | "pine" | "softwood" | "oak" | "walnut" | "primed" | "blackMetal"
+  // fences and garden walls
+  | "concrete" | "brick";
 
 /** Parts that light up with their entity: a TV screen, a lamp shade. */
 export type Glow = "screen" | "lamp";

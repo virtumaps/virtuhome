@@ -2,17 +2,18 @@
 // corners and walls (snapping to the grid and lining up with other corners), lengths typed in,
 // rooms drawn, doors and windows placed and slid along their wall, furniture moved and turned.
 // Every change goes through the editor, so undo, redo and saving work the same as in 3D.
-import { mdiCursorDefault, mdiDoor, mdiFitToPageOutline, mdiPencilOutline, mdiRectangleOutline, mdiVectorPolylinePlus, mdiWindowClosedVariant } from "@mdi/js";
+import { mdiCursorDefault, mdiDoor, mdiFence, mdiFitToPageOutline, mdiPencilOutline, mdiRectangleOutline, mdiVectorPolylinePlus, mdiWindowClosedVariant } from "@mdi/js";
 import { area, bounds, labelPoint, pointInPolygon, segmentDistance } from "../model/geom";
-import { groundOf, newId, splitEdge, type Floor, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
+import { groundOf, newId, splitEdge, type Fence, type Floor, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
 import { layoutWalls } from "../model/walls";
 import { outdoorTop } from "../scene/build";
 import { FLOOR_FINISHES, type FinishDef } from "../scene/finishes";
 import { CEILING_LAMPS, furnitureType } from "../scene/furniture-lib";
+import { fenceStyle } from "../scene/fences";
 import { styleOf } from "../scene/joinery";
 import { Collider, settle } from "./collide";
 
-export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening"; id: string } | null;
+export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence"; id: string } | null;
 
 export interface Plan2DHost {
   plan(): Plan;
@@ -29,7 +30,7 @@ export interface Plan2DHost {
   status(text: string): void;
 }
 
-type Tool = "select" | "rect" | "draw" | "door" | "window" | "corner";
+type Tool = "select" | "rect" | "draw" | "door" | "window" | "corner" | "fence";
 
 const NS = "http://www.w3.org/2000/svg";
 const svgIcon = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
@@ -160,6 +161,7 @@ export class Plan2D {
       ["door", mdiDoor, "Door: click on a wall"],
       ["window", mdiWindowClosedVariant, "Window: click on a wall"],
       ["corner", mdiVectorPolylinePlus, "Corner: click on an edge where it goes, drag to place it"],
+      ["fence", mdiFence, "Fence: click its corners, then the last one again"],
     ];
     const floors = this.host.plan().floors;
     this.bar.innerHTML = "";
@@ -198,6 +200,11 @@ export class Plan2D {
     }
   }
 
+  /** Starts drawing a fence (the editor's "Draw a fence" button). */
+  drawFence(): void {
+    this.setTool("fence");
+  }
+
   private setTool(t: Tool): void {
     this.tool = t;
     this.drawing = [];
@@ -211,6 +218,7 @@ export class Plan2D {
       door: "Click on a wall to put a door there.",
       window: "Click on a wall to put a window there.",
       corner: "Click on the edge of a room or garden area where the new corner goes, and drag it into place (Esc when done).",
+      fence: "Click where the fence starts and at each corner; click the last point again (or press Enter) to finish. Esc cancels.",
     }[t]);
   }
 
@@ -224,7 +232,7 @@ export class Plan2D {
     const svg = this.svg;
     svg.setAttribute("width", String(this.w));
     svg.setAttribute("height", String(this.h));
-    const layers = { grid: el("g"), ghost: el("g"), fill: el("g"), wall: el("g"), open: el("g"), items: el("g"), dims: el("g"), labels: el("g"), handles: el("g"), guides: el("g") };
+    const layers = { grid: el("g"), ghost: el("g"), fill: el("g"), fence: el("g"), wall: el("g"), open: el("g"), items: el("g"), dims: el("g"), labels: el("g"), handles: el("g"), guides: el("g") };
     svg.replaceChildren(...Object.values(layers));
     this.drawGrid(layers.grid);
     if (!f) {
@@ -325,6 +333,9 @@ export class Plan2D {
       piece(cursor, s1);
     }
 
+    // fences: a line in their colour, posts as dots when there is room, gates as gaps
+    for (const fence of f.fences ?? []) this.drawFenceLine(layers.fence, fence, sel?.kind === "fence" && sel.id === fence.id);
+
     // furniture and devices
     for (const x of f.furniture) {
       const def = furnitureType(x.type);
@@ -384,6 +395,23 @@ export class Plan2D {
         layers.handles.append(el("circle", { cx: x, cy: y, r: 7, class: "p2-corner", "data-kind": "corner", "data-id": selShape.id, "data-i": i }));
       });
     }
+    // the selected fence: its points, and a + in the middle of each stretch to add a corner there
+    const selFence = sel?.kind === "fence" && sel.floor === fi && this.tool === "select" ? f.fences?.find((x) => x.id === sel.id) : undefined;
+    if (selFence) {
+      selFence.points.forEach((p, i) => {
+        const q = selFence.points[i + 1];
+        if (!q) return;
+        const [mx, my] = this.toScreen([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]);
+        layers.handles.append(el("rect", { x: mx - 5, y: my - 5, width: 10, height: 10, rx: 2, class: "p2-edge", "data-kind": "fenceedge", "data-id": selFence.id, "data-i": i }));
+        const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+        if (len * this.s > 40) layers.dims.append(this.badge(mx, my - 16, fmt(len), "p2-dim sel"));
+      });
+      selFence.points.forEach((p, i) => {
+        const [x, y] = this.toScreen(p);
+        layers.handles.append(el("circle", { cx: x, cy: y, r: 7, class: "p2-corner", "data-kind": "fencepoint", "data-id": selFence.id, "data-i": i }));
+      });
+    }
+
     // the selected piece of furniture: a handle to turn it
     if (sel?.kind === "furniture" && sel.floor === fi && this.tool === "select") {
       const x = f.furniture.find((y) => y.id === sel.id);
@@ -662,7 +690,7 @@ export class Plan2D {
         return;
       }
       if (this.tool !== "select") {
-        this.hover = this.tool === "draw" || this.tool === "rect" ? this.snap(p, new Set(), e.altKey) : p;
+        this.hover = this.tool === "draw" || this.tool === "rect" || this.tool === "fence" ? this.snap(p, new Set(), e.altKey) : p;
         if (this.rubber) this.rubber.b = this.hover;
         this.render();
       }
@@ -703,6 +731,10 @@ export class Plan2D {
         e.preventDefault();
         this.finishDrawing();
       }
+      if (this.tool === "fence" && this.drawing.length >= 2) {
+        e.preventDefault();
+        this.finishFence();
+      }
     });
   }
 
@@ -725,9 +757,9 @@ export class Plan2D {
       this.editLength(id, Number(target.dataset.i), target);
       return;
     }
-    if (kind === "room" || kind === "outdoor") {
-      // select it; dragging on a room still moves the view
-      this.host.select({ floor: fi, kind: kind as "room" | "outdoor", id });
+    if (kind === "room" || kind === "outdoor" || kind === "fence") {
+      // select it; dragging on a room or a fence still moves the view
+      this.host.select({ floor: fi, kind: kind as "room" | "outdoor" | "fence", id });
       const [x, y] = this.toScreen(p);
       this.pan = { x, y, ox: this.ox, oy: this.oy, moved: false, keep: true };
       void e;
@@ -741,6 +773,31 @@ export class Plan2D {
         this.pan = { x, y, ox: this.ox, oy: this.oy, moved: false, keep: true, tap: { floor: fi, kind, id } };
         return;
       }
+    }
+    if (kind === "fencepoint" || kind === "fenceedge") {
+      const fence = f.fences?.find((x) => x.id === id);
+      if (!fence) return;
+      let i = Number(target.dataset.i);
+      this.host.dragStart();
+      const [sx, sy] = this.toScreen(p);
+      let made = false;
+      this.drag = {
+        kind, label: kind === "fencepoint" ? "Move a fence point" : "Add a fence corner", moved: false,
+        apply: (x, z, ev) => {
+          const live = this.host.plan().floors[fi].fences?.find((y) => y.id === id);
+          if (!live) return;
+          // a + becomes a new point once it moves
+          if (kind === "fenceedge" && !made) {
+            const [px, py] = this.toScreen([x, z]);
+            if (Math.hypot(px - sx, py - sy) < 5) return;
+            made = true;
+            live.points.splice(i + 1, 0, [x, z]);
+            i += 1;
+          }
+          live.points[i] = this.snap([x, z], new Set(), ev.altKey);
+        },
+      };
+      return;
     }
     if (kind === "corner") {
       const sh = this.shapes().find((x) => x.id === id);
@@ -869,6 +926,17 @@ export class Plan2D {
       this.render();
       return;
     }
+    if (this.tool === "fence") {
+      const q = this.snap(p, new Set(), e.altKey);
+      const last = this.drawing[this.drawing.length - 1];
+      if (last && this.drawing.length >= 2 && Math.hypot(q[0] - last[0], q[1] - last[1]) * this.s < 12) {
+        this.finishFence();
+        return;
+      }
+      if (!last || Math.hypot(q[0] - last[0], q[1] - last[1]) > 0.05) this.drawing.push(q);
+      this.render();
+      return;
+    }
     if (this.tool === "corner") {
       const hit = this.shapeEdgeAt(p, e.altKey);
       if (!hit) {
@@ -940,6 +1008,57 @@ export class Plan2D {
       return;
     }
     this.addRoom(pts);
+  }
+
+  /** A fence along the points clicked: like the last fence drawn, else a closeboard fence. */
+  private finishFence(): void {
+    const pts = this.drawing;
+    this.drawing = [];
+    if (pts.length < 2) {
+      this.render();
+      return;
+    }
+    const fi = this.floorIndex;
+    const like = this.floor?.fences?.[this.floor.fences.length - 1];
+    const fence: Fence = {
+      id: newId("fence"), points: pts.map(([x, z]) => [r2(x), r2(z)]),
+      style: like?.style ?? "closeboard", height: like?.height ?? 1.8, color: like?.color ?? null, gates: [],
+    };
+    this.host.change((p) => {
+      const f = p.floors[fi];
+      f.fences = [...(f.fences ?? []), fence];
+    }, "Draw a fence");
+    this.host.select({ floor: fi, kind: "fence", id: fence.id });
+    this.setTool("select");
+  }
+
+  private drawFenceLine(g: SVGGElement, fence: Fence, selected: boolean): void {
+    const def = fenceStyle(fence.style);
+    const colour = fence.color ?? def.color ?? (def.paint.includes("blackMetal") ? "#2b2c2e" : def.paint.includes("metal") ? "#9aa0a6" : fence.style === "brick_wall" ? "#a65d44" : fence.style === "glass" ? "#7fb6d1" : "#b8874f");
+    const wide = Math.max(3, (fence.style === "brick_wall" ? 0.25 : 0.08) * this.s);
+    const grp = el("g", { class: `p2-fence${selected ? " sel" : ""}`, "data-kind": "fence", "data-id": fence.id });
+    grp.append(el("polyline", { points: this.pts(fence.points), class: "p2-fence-line", stroke: colour, "stroke-width": wide }));
+    // gates: a pale gap across the line
+    const along = (d: number): Vec2 => {
+      let acc = 0;
+      for (let i = 1; i < fence.points.length; i++) {
+        const a = fence.points[i - 1], b = fence.points[i];
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (acc + l >= d || i === fence.points.length - 1) {
+          const t = l ? Math.max(0, Math.min(1, (d - acc) / l)) : 0;
+          return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        }
+        acc += l;
+      }
+      return fence.points[0];
+    };
+    for (const gate of fence.gates ?? []) {
+      const [ax, ay] = this.toScreen(along(gate.at - gate.width / 2));
+      const [bx, by] = this.toScreen(along(gate.at + gate.width / 2));
+      grp.append(el("line", { x1: ax, y1: ay, x2: bx, y2: by, class: "p2-fence-gate", "stroke-width": wide + 1 }));
+    }
+    grp.append(el("polyline", { points: this.pts(fence.points), class: "p2-fence-hit" }));
+    g.append(grp);
   }
 
   private addRoom(points: Vec2[]): void {
@@ -1033,6 +1152,10 @@ export class Plan2D {
       this.finishDrawing();
       return;
     }
+    if (e.key === "Enter" && this.tool === "fence" && this.drawing.length >= 2) {
+      this.finishFence();
+      return;
+    }
     if (!sel || sel.floor !== fi) return;
     if (e.key === "Delete" || e.key === "Backspace") {
       if (sel.kind === "room" || sel.kind === "outdoor") return; // rooms are removed from the drawer, with a confirmation
@@ -1042,7 +1165,8 @@ export class Plan2D {
         if (sel.kind === "furniture") f.furniture = f.furniture.filter((x) => x.id !== sel.id);
         if (sel.kind === "device") f.devices = f.devices.filter((x) => x.id !== sel.id);
         if (sel.kind === "opening") f.openings = f.openings.filter((x) => x.id !== sel.id);
-      }, "Remove");
+        if (sel.kind === "fence") f.fences = (f.fences ?? []).filter((x) => x.id !== sel.id);
+      }, sel.kind === "fence" ? "Remove a fence" : "Remove");
       this.host.select(null);
       return;
     }
@@ -1086,6 +1210,11 @@ export const PLAN2D_CSS = /* css */ `
 .p2-out-asphalt { fill: #5d6066; }
 .p2-out-deck { fill: #b58a62; }
 .p2-out.sel { fill-opacity: 0.55; }
+.p2-fence { cursor: pointer; }
+.p2-fence-line { fill: none; stroke-linecap: square; stroke-linejoin: miter; opacity: 0.9; }
+.p2-fence.sel .p2-fence-line { opacity: 1; filter: drop-shadow(0 0 2px #2f7cf6); }
+.p2-fence-gate { stroke: var(--p2-bg, #f4f5f2); stroke-dasharray: 3 3; }
+.p2-fence-hit { fill: none; stroke: transparent; stroke-width: 16; }
 .p2-wall { fill: #3b3f45; }
 .p2-wall.ext { fill: #24272c; }
 .vh-root:not(.day) .p2-wall { fill: #a3acba; }
