@@ -3,7 +3,7 @@
 // lighting and live-state code drive. Every surface is tagged with its finish ("floor:oak",
 // "ext:brick", "role:fabric"...) so the realistic look can texture it.
 import { Color, ShapeUtils, Vector2 } from "three";
-import type { Floor, Furniture, Plan, Vec2 } from "../model/plan";
+import { groundOf, type Floor, type Furniture, type Plan, type Vec2 } from "../model/plan";
 import { bounds, labelPoint, pointInPolygon, segmentDistance } from "../model/geom";
 import { layoutWalls, OUTSIDE, type WallLayout, type WallSegment } from "../model/walls";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, parseHex, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "./finishes";
@@ -11,9 +11,37 @@ import { baseHeight, CEILING_LAMPS, FURNITURE, furnitureType, paintRoles, type P
 import { Geo, ROOM_NONE, ROOM_OUTSIDE, type V3 } from "./geo";
 import { WALL_HANG, WALL_TRIM } from "./materials";
 import { buildOpeningFixed, joineryLook, type OpeningInfo } from "./joinery";
+import { cameraPieces, cameraRig, type CameraRig } from "./cameras";
 import { inPalette, type Palette } from "./palette";
 
 export const SLAB = 0.18;
+
+/**
+ * Height of garden area k's top above the floor's level. A deck stands level with the floor indoors
+ * (a hair under it, so a deck reaching under a wall never fights the floor); the rest lie on the
+ * ground. Overlapping areas stack a few millimetres apart: decks over the rest, later over earlier.
+ */
+export function outdoorTop(floor: Floor, k: number): number {
+  const all = floor.outdoor ?? [];
+  if (all[k]?.kind === "deck") return -0.012 + 0.002 * Math.min(5, all.slice(0, k).filter((o) => o.kind === "deck").length);
+  return -SLAB + 0.004 + (all[k]?.kind === "patio" ? 0.012 : 0) + 0.003 * k;
+}
+
+/** The garden area on top at p (an index into floor.outdoor), or -1. */
+export function outdoorAt(floor: Floor, p: Vec2): number {
+  let top = -1;
+  (floor.outdoor ?? []).forEach((o, k) => {
+    if (pointInPolygon(p, o.points) && (top < 0 || outdoorTop(floor, k) > outdoorTop(floor, top))) top = k;
+  });
+  return top;
+}
+
+/** What stands outside at p rests on, from the floor's level: a deck, or the ground. */
+export function groundAt(floor: Floor, p: Vec2): number {
+  const k = outdoorAt(floor, p);
+  return k >= 0 && floor.outdoor![k].kind === "deck" ? outdoorTop(floor, k) : -SLAB;
+}
+
 /** Lintels whose bottom is at least this high sit above any cut, so they can drop out when cut. */
 const HANG_ABOVE = 1.5;
 const GRID = 0.32; // spacing of the lighting grid on floors and walls (m)
@@ -72,8 +100,11 @@ export interface RoomInfo {
 
 /** A movable thing of the plan: a piece of furniture, or a device (a light gets a lamp model). */
 export interface ItemRef {
-  /** "corner": an editor handle on a room's corner, id "<space id>:<corner index>". */
-  kind: "furniture" | "device" | "corner" | "opening";
+  /**
+   * Editor handles: "corner" sits on a room's corner, id "<space id>:<corner index>"; "edge" is the
+   * + in the middle of an edge that adds a corner there, id "<space id>:<edge index>".
+   */
+  kind: "furniture" | "device" | "corner" | "edge" | "opening";
   id: string;
 }
 
@@ -91,6 +122,8 @@ export interface FloorBuild {
   windows: WindowInfo[];
   portals: Portal[];
   screens: { furniture: Furniture; glow: number; entity: string | null }[];
+  /** Cameras: where each hangs and what it sees (the viewer draws that). */
+  cameras: CameraRig[];
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
 }
 
@@ -161,8 +194,8 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
   }));
   const roomAt = (p: Vec2): number => {
     for (let i = 0; i < floor.rooms.length; i++) if (pointInPolygon(p, floor.rooms[i].points)) return i;
-    for (let k = 0; k < outdoor.length; k++) if (pointInPolygon(p, outdoor[k].points)) return floor.rooms.length + k;
-    return ROOM_OUTSIDE;
+    const k = outdoorAt(floor, p);
+    return k >= 0 ? floor.rooms.length + k : ROOM_OUTSIDE;
   };
 
   // how each side of a wall looks: the room's own walls inside, the house's finish outside
@@ -180,13 +213,13 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
 
   // ---------------------------------------------------------------- garden areas
   outdoor.forEach((o, k) => {
-    opaque.useSurface(`out:${o.kind}`);
-    const colour = lin(pal.outdoor[o.kind] ?? pal.outdoor.lawn);
+    const ground = groundOf(o);
+    opaque.useSurface(`out:${ground}`);
+    const colour = lin(pal.outdoor[ground] ?? pal.outdoor.lawn);
     const up: V3 = [0, 1, 0];
     const b0 = bounds(o.points);
     const g = grid * 2; // a coarser lighting grid outside
-    // decks and patios stand proud of the ground; overlapping areas stack a few millimetres apart
-    const y = y0 - SLAB + 0.004 + (o.kind === "deck" || o.kind === "patio" ? 0.012 : 0) + 0.003 * k;
+    const y = y0 + outdoorTop(floor, k);
     for (let gx = Math.floor(b0.minX / g) * g; gx < b0.maxX; gx += g) {
       for (let gz = Math.floor(b0.minZ / g) * g; gz < b0.maxZ; gz += g) {
         const cell = clipToRect(o.points, gx, gz, gx + g, gz + g);
@@ -196,6 +229,20 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
         for (const [a, c, d] of tris) opaque.tri(ids[a], ids[c], ids[d], up);
       }
     }
+    if (o.kind !== "deck") return;
+    // a deck's open sides, down into the ground; not along the house, where they would only hide
+    const turn = Math.sign(area(o.points)) || 1;
+    const side = colour.map((c) => c * 0.78) as V3;
+    o.points.forEach((p, i) => {
+      const q = o.points[(i + 1) % o.points.length];
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (len < 0.01) return;
+      const n: V3 = [(turn * (q[1] - p[1])) / len, 0, (-turn * (q[0] - p[0])) / len];
+      const out: Vec2 = [(p[0] + q[0]) / 2 + n[0] * 0.3, (p[1] + q[1]) / 2 + n[2] * 0.3];
+      if (floor.rooms.some((r) => pointInPolygon(out, r.points))) return;
+      const lo = y0 - SLAB - 0.01;
+      opaque.quad([p[0], lo, p[1]], [q[0], lo, q[1]], [q[0], y, q[1]], [p[0], y, p[1]], n, side, floor.rooms.length + k, -1, -1, Math.max(1, Math.ceil(len / g)), 1);
+    });
   });
 
   // ---------------------------------------------------------------- room floors
@@ -314,7 +361,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     const isLamp = def.category === "lights";
     const ceiling = CEILING_LAMPS.has(item.type);
     const onGround = room >= floor.rooms.length;
-    const bottom = y0 + baseHeight(item, floor.height) - (onGround ? SLAB : 0);
+    const bottom = y0 + baseHeight(item, floor.height) + (onGround ? groundAt(floor, [item.x, item.z]) : 0);
     const parts = def.build(item.w, item.d, item.h, item);
     let glow = -1;
     if (isLamp || parts.some((p) => p.glow === "screen")) {
@@ -337,10 +384,22 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     }
   }
 
+  // cameras: a model of their kind on their wall or ceiling, tapped and dragged like their device
+  const cameras: CameraRig[] = [];
+  for (const d of floor.devices) {
+    if (!d.entity.startsWith("camera.")) continue;
+    const rig = cameraRig(floor, layout, d);
+    cameras.push(rig);
+    opaque.currentItem = glass.currentItem = items.length;
+    items.push({ kind: "device", id: d.id });
+    const room = roomAt(rig.lens);
+    for (const piece of cameraPieces(rig)) addParts(opaque, piece.parts, piece.item, y0 + piece.bottom, true, room, -1, pal, opt.low, glass);
+  }
+
   opaque.currentItem = glass.currentItem = -1;
   const all = floor.rooms.flatMap((r) => r.points);
   return {
-    floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens,
+    floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens, cameras,
     bounds: all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 1, maxZ: 1 },
   };
 }

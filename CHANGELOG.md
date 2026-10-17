@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Cameras are models of their kind where they hang: a camera on a bracket against its wall (its body
+  turned to where it looks), a dome on the ceiling, a doorbell flat on the outside wall, or a camera
+  on a stand on a table or the floor. Tap one for its live picture; a pin floats over it while it sees
+  motion.
+- Edit → a camera: its field of view and reach.
+- Asphalt driveways: Edit → a driveway → Surface picks block paving or asphalt.
+- 2D plan: a corner tool. Click the edge of a room or garden area where the new corner goes (it lines
+  up with other corners and the grid along the edge) and drag it into place.
+
+### Changed
+- Every camera shows what it sees, also in the whole-house view and in the editor. A camera without a
+  direction looks away from its wall (a dome all round), and the view is a clear glow on the floor
+  with an outline and a faint beam from the lens, stopping at the first walls. It is red while the
+  camera is live or sees motion and grey while it is offline. Before, a camera without a direction
+  showed nothing and the view was too faint to see indoors.
+- In the editor, furniture, devices, doors and windows move only once they are selected: tap or
+  click one first, then drag it. Dragging anything else turns the 3D view (or moves the 2D plan),
+  so turning the view no longer shifts a piece by mistake.
+- A selected room or garden area has a + in the middle of each edge: drag it out to where the new
+  corner goes, or tap it for a corner in the middle of that edge. This replaces the Add a corner
+  button, which always split the longest edge, often on the far side of the shape.
+- Block-paved driveways are laid in herringbone with brindle blocks. Before, a driveway was the
+  path's paving, only larger.
+- "Same style on every door" (and window) copies the style and glazing bars too, not only the
+  finish and colour.
+- Barn doors can hang on either side of their wall: Edit → the door → Hangs.
+- Stairs: each step is a wooden tread with a small nosing on a white riser. A picked colour changes
+  the treads only; before, every other step was darker.
+- A deck stands raised, level with the floor inside, with board sides down to the garden, and can
+  be tapped and resized even where it lies inside a lawn.
+
+### Fixed
+- A closed door leaves a 4 mm gap all round with a door stop behind it, so no daylight shows past the
+  handle side (it was a 3 cm gap). French and side-hinged garage doors meet the same way.
+- Saving twice in one editing session no longer says someone else saved the plan in the meantime.
+
 ## 0.4.0
 
 ### New

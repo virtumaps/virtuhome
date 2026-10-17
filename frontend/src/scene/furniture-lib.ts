@@ -259,11 +259,15 @@ function steps(w: number, d: number, h: number, item?: Furniture): Part[] {
   const run = d / n;
   const rise = h / n;
   const parts: Part[] = [];
+  // a wooden tread on each step, its nosing over the painted riser below
+  const tread = Math.min(0.03, rise / 3), nosing = Math.min(0.025, run / 6);
   for (let i = 0; i < n; i++) {
     // the bottom step is at the front (+z); every step is a solid block down to the floor. The top
     // one stops a centimetre short, so it does not fight the floor of the storey above for pixels.
     const top = i === n - 1 ? h - 0.01 : rise * (i + 1);
-    parts.push(box(0, 0, d / 2 - run * (i + 0.5), w, top, run, i % 2 ? "wood" : "woodDark"));
+    const z = d / 2 - run * (i + 0.5);
+    parts.push(box(0, 0, z, w, top - tread, run, "primed"));
+    parts.push(box(0, top - tread, z + nosing / 2, w, tread, run + nosing, "wood"));
   }
   const style = item?.balustrade;
   if (item && style && style !== "none" && style in BALUSTRADES) parts.push(...balustrade(w, d, h, n, style, item));

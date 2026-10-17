@@ -2,14 +2,18 @@
 // into a couple of meshes, and lights them on the CPU.
 import {
   Color, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer,
-  CircleGeometry, BufferGeometry, BufferAttribute, DoubleSide, type Material,
+  CircleGeometry, BufferGeometry, BufferAttribute, DoubleSide, LineSegments, LineBasicMaterial, AdditiveBlending, NormalBlending,
+  type Material,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
-import { buildFloor, lin, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { pointInPolygon } from "../model/geom";
+import { buildFloor, lin, outdoorAt, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { Geo, type V3 } from "./geo";
 import { relight, relightRealistic, roomGlow, roomLights, type LampState, type LightingState } from "./lighting";
 import { buildOpeningMoving, joineryLook, restOpen, windowFollowsSensor, type OpeningInfo } from "./joinery";
+import { headingDir, type CameraRig } from "./cameras";
+import type { WallSegment } from "../model/walls";
 import { Halos, Markers, type HaloSpec, type MarkerSpec } from "./markers";
 import { floorUniforms, getCut, glassMaterial, opaqueMaterial, setCut, setTint, WALL_TRIM, type FloorUniforms } from "./materials";
 import { DAY, paletteFor, type Palette } from "./palette";
@@ -43,8 +47,8 @@ export interface LiveSource {
   tint(floor: Floor, room: { id: string }): [number, number, number, number] | null;
   /** Short text under the room name, e.g. "21.4° · 48 %". */
   roomText(floor: Floor, room: { id: string }): string | null;
-  /** A camera that is live or sees motion (its view cone turns red). */
-  cameraActive?(d: Device): boolean;
+  /** A camera's state: its view turns red while it is live or sees motion, grey while offline. */
+  cameraState?(d: Device): "idle" | "active" | "offline";
 }
 
 export interface Hit {
@@ -112,6 +116,8 @@ export class Viewer {
   /** Edit mode: things can be dragged; plan coordinates of the finger while dragging. */
   editMode = false;
   onDrag: ((hit: Hit, x: number, z: number, phase: DragPhase) => void) | null = null;
+  /** Edit mode: whether pressing on this thing grabs it; otherwise the press turns the view. */
+  canDrag: ((hit: Hit) => boolean) | null = null;
   /** Extra markers drawn on top (the editor's selection). */
   overlayMarkers: MarkerSpec[] = [];
   /** Called once when moving the view stays slow (under ~22 frames per second). */
@@ -123,8 +129,11 @@ export class Viewer {
   private markers: Markers;
   private halos: Halos;
   private ground: Mesh;
-  /** What the cameras of the shown floor see, on the floor. */
+  /** What the cameras see: a glow on the floor and a faint beam from the lens, and their outlines. */
   private cones: Mesh;
+  private coneLines: LineSegments;
+  /** A camera being dragged in the editor: its view follows the model. */
+  private liftedCamera: { id: string; dx: number; dz: number } | null = null;
   private live: LiveSource | null = null;
   private raf = 0;
   private dirty = true;
@@ -171,9 +180,11 @@ export class Viewer {
     this.halos = new Halos();
     this.ground = new Mesh(new CircleGeometry(1, 64), this.basicGround);
     this.ground.rotation.x = -Math.PI / 2;
-    this.cones = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide }));
+    this.cones = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide, forceSinglePass: true }));
     this.cones.renderOrder = 3;
-    this.scene.add(this.ground, this.cones, this.halos.mesh, this.markers.mesh);
+    this.coneLines = new LineSegments(new BufferGeometry(), new LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+    this.coneLines.renderOrder = 3;
+    this.scene.add(this.ground, this.cones, this.coneLines, this.halos.mesh, this.markers.mesh);
     this.setupLook();
     this.applyPalette();
 
@@ -467,6 +478,7 @@ export class Viewer {
     f.group.add(mesh);
     this.look?.attach(mesh, f.u, true);
     this.lifted = { f, mesh, index, saved, geometry: src };
+    if (ref.kind === "device" && f.fb.cameras.some((c) => c.id === ref.id)) this.liftedCamera = { id: ref.id, dx: 0, dz: 0 };
     this.sceneChanged = true;
     this.invalidate();
     return true;
@@ -476,6 +488,11 @@ export class Viewer {
   moveLifted(dx: number, dz: number): void {
     if (!this.lifted) return;
     this.lifted.mesh.position.set(dx, 0, dz);
+    if (this.liftedCamera) {
+      this.liftedCamera.dx = dx;
+      this.liftedCamera.dz = dz;
+      this.refreshCones();
+    }
     this.sceneChanged = true;
     this.invalidate();
   }
@@ -485,6 +502,10 @@ export class Viewer {
     const l = this.lifted;
     if (!l) return;
     this.lifted = null;
+    if (this.liftedCamera) {
+      this.liftedCamera = null;
+      this.refreshCones();
+    }
     if (l.f.opaque.geometry === l.geometry) {
       (l.index.array as Uint16Array | Uint32Array).set(l.saved);
       l.index.needsUpdate = true;
@@ -872,6 +893,8 @@ export class Viewer {
         // the whole house shows only what wants attention: through the floors above, the rest is noise
         if (this.mode === "house" && !look.attention) continue;
         const pos = this.devicePosition(fi, d);
+        // a camera's pin (live, motion, offline) floats over its model
+        if (d.entity.startsWith("camera.")) pos[1] += 0.3;
         specs.push({ key: d.id, pos, icon: look.icon, color: look.color, size: this.mode === "house" ? 22 : 30, pulse: look.pulse, alpha: 1 });
       }
     });
@@ -881,66 +904,132 @@ export class Viewer {
   }
 
   /**
-   * Camera view cones on the floor of the shown storey: each ray stops at the first wall it meets
-   * (doorways let it through), red while the camera is live or sees motion.
+   * What each camera sees, in every view and in the editor (where it shows the aim): a glow on the
+   * floor (or the ground outside) fading out to its reach, a faint beam from the lens down to it and
+   * an outline. Each ray stops at the first wall it meets; doorways let it through. Blue while idle,
+   * red while the camera is live or sees motion, grey while it is offline.
    */
   private refreshCones(): void {
-    const pos: number[] = [];
-    const col: number[] = [];
-    const f = this.mode === "floor" ? this.floors[this.activeFloor] : undefined;
-    if (f && this.live && !this.editMode) {
-      const walls = f.fb.layout.walls;
-      for (const d of f.fb.floor.devices) {
-        if (!d.entity.startsWith("camera.") || d.rotation === null || d.rotation === undefined) continue;
-        const active = this.live.cameraActive?.(d) ?? false;
-        const c = active ? [0.95, 0.22, 0.2] : [0.24, 0.55, 0.99];
-        const fov = ((d.fov ?? 90) * Math.PI) / 180;
-        const reach = d.reach ?? 7;
-        const h = (d.rotation * Math.PI) / 180;
-        const outside = this.roomAt(this.activeFloor, [d.x, d.z]) < 0 || this.roomAt(this.activeFloor, [d.x, d.z]) >= f.fb.floor.rooms.length;
-        const y = f.fb.floor.elevation + f.offset + (outside ? -SLAB : 0) + 0.035;
-        const n = 28;
-        const rim: [number, number][] = [];
-        for (let k = 0; k <= n; k++) {
-          const a = h - fov / 2 + (fov * k) / n;
-          const rx = -Math.sin(a), rz = Math.cos(a);
-          let t = reach;
-          for (const w of walls) {
-            // ray o + t r against the wall's centre line a + u (b - a)
-            const ex = w.b[0] - w.a[0], ez = w.b[1] - w.a[1];
-            const den = rx * ez - rz * ex;
-            if (Math.abs(den) < 1e-6) continue;
-            const ox = w.a[0] - d.x, oz = w.a[1] - d.z;
-            const tt = (ox * ez - oz * ex) / den;
-            const u = (ox * rz - oz * rx) / den;
-            if (tt < 0.35 || tt >= t || u < 0 || u > 1) continue;
-            const along = u * w.length;
-            if (w.openings.some((o) => o.opening.kind !== "window" && along > o.t0 && along < o.t1)) continue;
-            t = tt;
-          }
-          rim.push([d.x + rx * t, d.z + rz * t]);
+    const tri: number[] = [], triCol: number[] = [];
+    const line: number[] = [], lineCol: number[] = [];
+    const night = this.pal.name === "night";
+    for (const [fi, f] of this.floors.entries()) {
+      if (!f.group.visible || (this.mode === "floor" && fi !== this.activeFloor)) continue;
+      for (const rig of f.fb.cameras) {
+        const d = f.fb.floor.devices.find((x) => x.id === rig.id);
+        const state = (d && !this.editMode && this.live?.cameraState?.(d)) || "idle";
+        const c = lin(state === "active" ? 0xff4b45 : state === "offline" ? 0x9aa0a8 : 0x3d8bfd);
+        // how strong the glow is at the camera's foot, the beam at the lens and the outline
+        const k = state === "active" ? 1.35 : state === "offline" ? 0.45 : 1;
+        const lift = this.liftedCamera?.id === rig.id ? this.liftedCamera : null;
+        const lx = rig.lens[0] + (lift?.dx ?? 0), lz = rig.lens[1] + (lift?.dz ?? 0);
+        const base = f.fb.floor.elevation + f.offset;
+        const gy = base + (rig.outside ? -SLAB : 0) + 0.03;
+        const ly = base + rig.y;
+        const full = rig.fov >= 359;
+        const fov = (rig.fov * Math.PI) / 180;
+        const h = (rig.heading * Math.PI) / 180;
+        const n = Math.max(8, Math.min(90, Math.round(rig.fov / 4)));
+        const reach = rig.reach;
+        // the rays: direction and where each stops
+        const rays: [number, number, number][] = [];
+        for (let i = 0; i <= n; i++) {
+          const a = full ? (Math.PI * 2 * i) / n : h - fov / 2 + (fov * i) / n;
+          const [rx, rz] = headingDir((a * 180) / Math.PI);
+          rays.push([rx, rz, this.castRay(f.fb.layout.walls, lx, lz, rx, rz, reach)]);
         }
-        for (let k = 0; k < n; k++) {
-          pos.push(d.x, y, d.z, rim[k][0], y, rim[k][1], rim[k + 1][0], y, rim[k + 1][1]);
-          col.push(c[0], c[1], c[2], active ? 0.34 : 0.13, c[0], c[1], c[2], 0.02, c[0], c[1], c[2], 0.02);
+        // even over what it covers, softer toward its reach
+        const glow = (r: number) => (night ? 0.3 : 0.42) * k * (1 - (night ? 0.65 : 0.55) * Math.min(1, r / reach));
+        const at = (i: number, r: number): number[] => [lx + rays[i][0] * r, gy, lz + rays[i][1] * r];
+        const push = (out: number[], col: number[], p: number[], a: number) => {
+          out.push(p[0], p[1], p[2]);
+          col.push(c[0], c[1], c[2], a);
+        };
+        // the glow on the floor, in rings so it fades with distance, not with each ray's length
+        const rings = 10;
+        for (let i = 0; i < n; i++) {
+          for (let j = 0; j < rings; j++) {
+            const r0 = (reach * j) / rings, r1 = (reach * (j + 1)) / rings;
+            const a0 = Math.min(r0, rays[i][2]), a1 = Math.min(r1, rays[i][2]);
+            const b0 = Math.min(r0, rays[i + 1][2]), b1 = Math.min(r1, rays[i + 1][2]);
+            if (a0 === a1 && b0 === b1) continue;
+            const q = [at(i, a0), at(i, a1), at(i + 1, b1), at(i + 1, b0)];
+            const qa = [glow(a0), glow(a1), glow(b1), glow(b0)];
+            for (const v of [0, 1, 2, 0, 2, 3]) push(tri, triCol, q[v], qa[v]);
+          }
+        }
+        // the beam: from the lens out to where the view ends, fading as it goes
+        const beam = (full ? 0.05 : 0.1) * k;
+        for (let i = 0; i < n; i++) {
+          push(tri, triCol, [lx, ly, lz], beam);
+          push(tri, triCol, at(i, rays[i][2]), 0);
+          push(tri, triCol, at(i + 1, rays[i + 1][2]), 0);
+        }
+        // the outline: the edge of the view on the floor, and the beam's sides
+        const edge = (r: number) => (night ? 0.22 + 0.5 * Math.max(0, 1 - r / reach) : 0.6) * k;
+        for (let i = 0; i < n; i++) {
+          push(line, lineCol, at(i, rays[i][2]), edge(rays[i][2]));
+          push(line, lineCol, at(i + 1, rays[i + 1][2]), edge(rays[i + 1][2]));
+        }
+        if (!full) {
+          for (const i of [0, n]) {
+            push(line, lineCol, [lx, gy, lz], 0.7 * k);
+            push(line, lineCol, at(i, rays[i][2]), edge(rays[i][2]));
+            push(line, lineCol, [lx, ly, lz], 0.55 * k);
+            push(line, lineCol, at(i, rays[i][2]), 0.05 * k);
+          }
         }
       }
     }
-    const old = this.cones.geometry;
-    const g = new BufferGeometry();
-    if (pos.length) {
-      g.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
-      g.setAttribute("color", new BufferAttribute(new Float32Array(col), 4));
+    // a glow adds light at night; by day it tints the floor
+    const blending = night ? AdditiveBlending : NormalBlending;
+    for (const m of [this.cones.material as MeshBasicMaterial, this.coneLines.material as LineBasicMaterial]) {
+      if (m.blending !== blending) {
+        m.blending = blending;
+        m.needsUpdate = true;
+      }
     }
-    this.cones.geometry = g;
-    old.dispose();
+    const fill = (obj: Mesh | LineSegments, pos: number[], col: number[]) => {
+      const old = obj.geometry;
+      const g = new BufferGeometry();
+      if (pos.length) {
+        g.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
+        g.setAttribute("color", new BufferAttribute(new Float32Array(col), 4));
+      }
+      obj.geometry = g;
+      old.dispose();
+    };
+    fill(this.cones, tri, triCol);
+    fill(this.coneLines, line, lineCol);
   }
 
-  /** World position of a device's marker. */
+  /** How far a ray along the floor gets before it meets a wall's face (doorways let it through). */
+  private castRay(walls: WallSegment[], ox: number, oz: number, rx: number, rz: number, reach: number): number {
+    let t = reach;
+    for (const w of walls) {
+      const ex = w.b[0] - w.a[0], ez = w.b[1] - w.a[1];
+      const den = rx * ez - rz * ex;
+      if (Math.abs(den) < 1e-6) continue;
+      const qx = w.a[0] - ox, qz = w.a[1] - oz;
+      const tt = (qx * ez - qz * ex) / den;
+      const along = ((qx * rz - qz * rx) / den) * w.length;
+      // walls reach past their ends to close corners
+      if (tt <= 0.02 || along < -w.extendStart - 0.01 || along > w.length + w.extendEnd + 0.01) continue;
+      const face = tt - ((w.thickness / 2) * w.length) / Math.abs(den);
+      if (face >= t) continue;
+      if (w.openings.some((o) => o.opening.kind !== "window" && along > o.t0 && along < o.t1)) continue;
+      t = Math.max(0, face);
+    }
+    return t;
+  }
+
+  /** World position of a device's marker (a camera's: its lens). */
   devicePosition(fi: number, d: Device): [number, number, number] {
     const f = this.floors[fi];
+    const rig = f.fb.cameras.find((c) => c.id === d.id);
+    if (rig) return [rig.lens[0], f.fb.floor.elevation + f.offset + rig.y, rig.lens[1]];
     const domain = d.entity.split(".")[0];
-    const usual = d.mount === "ceiling" ? f.fb.floor.height - 0.15 : d.mount === "floor" ? 0.3 : domain === "camera" ? 2.2 : domain === "binary_sensor" ? 2.0 : 1.2;
+    const usual = d.mount === "ceiling" ? f.fb.floor.height - 0.15 : d.mount === "floor" ? 0.3 : domain === "binary_sensor" ? 2.0 : 1.2;
     const y = f.fb.floor.elevation + f.offset + (d.y ?? usual);
     return [d.x, y, d.z];
   }
@@ -1290,7 +1379,7 @@ export class Viewer {
       }
       if (this.editMode && this.onDrag) {
         const hit = this.pick(e.clientX, e.clientY);
-        if (hit.item && (hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "furniture")) {
+        if (hit.item && (hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "furniture") && (this.canDrag?.(hit) ?? true)) {
           drag = { hit, plane: new Plane(new Vector3(0, 1, 0), -(hit.y ?? 0)), moved: false };
           this.controls.enabled = false;
           el.setPointerCapture(e.pointerId);
@@ -1395,6 +1484,23 @@ export class Viewer {
         }
       }
     }
+    // cameras: their lens, as generous a target as a lamp
+    let camBest: { d: number; fi: number; rig: CameraRig; y: number } | null = null;
+    for (const [fi, f] of this.floors.entries()) {
+      if (!f.group.visible || (this.mode === "floor" && fi !== this.activeFloor)) continue;
+      for (const rig of f.fb.cameras) {
+        const wy = f.fb.floor.elevation + f.offset + rig.y;
+        v.set(rig.lens[0], wy, rig.lens[1]).project(this.camera);
+        if (v.z > 1) continue;
+        const d = Math.hypot(((v.x + 1) / 2) * this.width - x, ((1 - v.y) / 2) * this.height - y);
+        if (d < 26 && (!camBest || d < camBest.d)) camBest = { d, fi, rig, y: wy };
+      }
+    }
+    if (camBest && (!lampBest || camBest.d < lampBest.d)) {
+      const { fi, rig } = camBest;
+      const device = this.floors[fi].fb.floor.devices.find((dd) => dd.id === rig.id);
+      return { kind: "marker", floor: fi, room: this.roomAt(fi, rig.lens), entity: rig.entity, device, item: { kind: "device", id: rig.id }, y: camBest.y };
+    }
     if (lampBest) return { kind: "lamp", floor: lampBest.fi, room: lampBest.room, entity: lampBest.entity, item: lampBest.item, y: lampBest.y };
     // then the meshes: a screen with an entity, else the room the floor belongs to
     const ray = new Raycaster();
@@ -1423,19 +1529,14 @@ export class Viewer {
     return { kind: "empty", floor: this.activeFloor, room: -1, entity: null };
   }
 
-  /** Room (or garden area, numbered after the rooms) under a plan point, or -1. */
+  /** Room (or garden area, numbered after the rooms; the one on top where they overlap) under a plan point, or -1. */
   roomAt(fi: number, p: Vec2): number {
-    const f = this.floors[fi];
-    const rooms = f ? spaces(f.fb.floor) : [];
-    for (let i = 0; i < rooms.length; i++) {
-      const pts = rooms[i].points;
-      let inside = false;
-      for (let a = 0, b = pts.length - 1; a < pts.length; b = a++) {
-        if (pts[a][1] > p[1] !== pts[b][1] > p[1] && p[0] < ((pts[b][0] - pts[a][0]) * (p[1] - pts[a][1])) / (pts[b][1] - pts[a][1]) + pts[a][0]) inside = !inside;
-      }
-      if (inside) return i;
-    }
-    return -1;
+    const f = this.floors[fi]?.fb.floor;
+    if (!f) return -1;
+    const ri = f.rooms.findIndex((r) => pointInPolygon(p, r.points));
+    if (ri >= 0) return ri;
+    const k = outdoorAt(f, p);
+    return k >= 0 ? f.rooms.length + k : -1;
   }
 
   floorBuild(i: number): FloorBuild | undefined {
