@@ -8,7 +8,7 @@ import { loadExtensions, registerView, type Tool, type ToolHandle, type ViewHand
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
 import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
-import { EV_TYPES } from "../scene/furniture-lib";
+import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { VIEW_CSS } from "./styles";
 
 export interface ViewConfig {
@@ -104,6 +104,8 @@ export class VhView {
   private hasEv = false;
   private evGlowKey = "";
   private evLabelKey = "";
+  /** Cars that are away now (as their "parked" says): left out of the 3D view, never out of the plan. */
+  private awayKey = "";
   private barWatch: ResizeObserver | null = null;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
@@ -215,6 +217,7 @@ export class VhView {
     if (sun && typeof sun.azimuth === "number" && typeof sun.elevation === "number") this.viewer.setSun(sun.azimuth, sun.elevation);
     if (this.plan && this.plan.floors.length) this.apply(changes);
     if (energyChanged) this.onEnergy();
+    else this.checkParked();
     this.updateAlarm(h);
     if (!this.unregister) {
       this.unregister = registerView(this.handle());
@@ -452,6 +455,28 @@ export class VhView {
       }
     }
     if (relight) this.viewer.refreshLighting();
+    this.checkParked();
+  }
+
+  /** Cars of the plan that are away now. */
+  private awayCars(plan: Plan): string[] {
+    if (this.editor) return [];
+    return plan.floors.flatMap((f) => f.furniture.filter((x) => CAR_TYPES.has(x.type) && x.parked && !this.live.carHere(x)).map((x) => x.id));
+  }
+
+  /** The plan as the 3D view shows it: without the cars that are away. */
+  private shownPlan(plan: Plan): Plan {
+    const away = new Set(this.awayCars(plan));
+    this.awayKey = [...away].join(",");
+    if (!away.size) return plan;
+    return { ...plan, floors: plan.floors.map((f) => (f.furniture.some((x) => away.has(x.id)) ? { ...f, furniture: f.furniture.filter((x) => !away.has(x.id)) } : f)) };
+  }
+
+  /** A car arrived or left: its floor is drawn again with it or without it (a few times a day). */
+  private checkParked(): void {
+    if (!this.plan || !this.started || this.editor || !this.hasEv) return;
+    if (this.awayCars(this.plan).join(",") === this.awayKey) return;
+    this.viewer.setPlan(this.shownPlan(this.plan), true);
   }
 
   private renderEnergy(): void {
@@ -550,7 +575,7 @@ export class VhView {
     // the plan is drawn with the chargers as they are now
     [this.evGlowKey, this.evLabelKey] = evKeys(this.energy.now);
     this.applyTheme();
-    this.viewer.setPlan(plan, !first);
+    this.viewer.setPlan(this.shownPlan(plan), !first);
     if (this._hass) {
       this.viewer.setLive(this.live);
       this.started = true;
@@ -783,6 +808,8 @@ export class VhView {
       },
     });
     this.editor = editor;
+    // every car is shown while editing, here or not
+    if (this.awayKey && this.plan) this.viewer.setPlan(this.shownPlan(this.plan), true);
     this.root.classList.add("editing");
     this.root.append(editor.el);
     this.renderChips();

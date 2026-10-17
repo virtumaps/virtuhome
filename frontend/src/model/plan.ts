@@ -82,6 +82,11 @@ export interface Furniture {
   finish?: Upholstery | null;
   /** Mirrored left to right (which side a corner sofa's chaise is on). */
   mirror?: boolean;
+  /**
+   * Cars: when the car is here (hidden in 3D otherwise). Unset: always; "plugged": while its
+   * charger has it plugged in; or an entity: a tracker or person at home, a sensor that is on.
+   */
+  parked?: string | null;
   /** Stairs: the balustrade's style and material, and which side going up it is on. */
   balustrade?: BalustradeStyle | null;
   balustrade_material?: BalustradeMaterial | null;

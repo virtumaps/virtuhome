@@ -2,12 +2,12 @@
 // to refresh when states change. Home Assistant replaces a state object whenever it changes, so
 // spotting changes is a cheap identity comparison over the entities the plan uses.
 import { pointInPolygon } from "../model/geom";
-import { spaces, type Device, type Floor, type Plan, type Room, type Space } from "../model/plan";
+import { spaces, type Device, type Floor, type Furniture, type Plan, type Room, type Space } from "../model/plan";
 import type { GlowSlot, LampInfo } from "../scene/build";
 import { lin } from "../scene/build";
 import type { V3 } from "../scene/geo";
 import { kelvinToRgb, type LampState } from "../scene/lighting";
-import { EV_TYPES } from "../scene/furniture-lib";
+import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
 import type { EnergyLive } from "./energy";
@@ -85,8 +85,8 @@ export class HassLive implements LiveSource {
   heatmap = false;
   /** Motion sensors of each camera's own device (a doorbell's motion turns its view cone red). */
   private cameraMotion = new Map<string, string[]>();
-  /** Rooms and garden areas with a car or a charger: the entity it is linked to (null: the house's charger). */
-  private evSpaces = new Map<string, (string | null)[]>();
+  /** Rooms and garden areas with a car or a charger in them. */
+  private evSpaces = new Map<string, Furniture[]>();
   /** The house's solar: solar panels in the plan shine with it (darker in the day look's brighter light). */
   energy: EnergyLive | null = null;
   day = false;
@@ -194,7 +194,8 @@ export class HassLive implements LiveSource {
         // or stops charging (the view sees to both), not on every reading
         if (EV_TYPES.has(f.type)) {
           const space = spaces(floor).find((sp) => pointInPolygon([f.x, f.z], sp.points));
-          if (space) this.evSpaces.set(`${floor.id}/${space.id}`, [...(this.evSpaces.get(`${floor.id}/${space.id}`) ?? []), f.entity ?? null]);
+          if (space) this.evSpaces.set(`${floor.id}/${space.id}`, [...(this.evSpaces.get(`${floor.id}/${space.id}`) ?? []), f]);
+          this.watch(f.parked && f.parked !== "plugged" ? f.parked : null, "labels");
           continue;
         }
         if (f.type === "solar_panels" && f.entity && domainOf(f.entity) === "sensor") continue;
@@ -398,7 +399,10 @@ export class HassLive implements LiveSource {
     if (t && !isUnavailable(t) && !isNaN(parseFloat(t.state))) parts.push(`${parseFloat(t.state).toFixed(1)}°`);
     const h = this.state(w.humidity);
     if (h && !isUnavailable(h) && !isNaN(parseFloat(h.state))) parts.push(`${Math.round(parseFloat(h.state))} %`);
-    const cars = new Set((this.evSpaces.get(`${floor.id}/${room.id}`) ?? []).map((e) => this.ev(e)));
+    // a car that is here, or a charger with a car plugged in
+    const cars = new Set((this.evSpaces.get(`${floor.id}/${room.id}`) ?? [])
+      .filter((f) => (CAR_TYPES.has(f.type) ? this.carHere(f) : !["unplugged", "unknown"].includes(this.ev(f.entity ?? null)?.state ?? "unknown")))
+      .map((f) => this.ev(f.entity ?? null)));
     for (const ev of cars) if (ev) parts.push(evText(ev));
     if (this.roomExtraText) {
       const space = spaces(floor).find((x) => x.id === room.id);
@@ -414,6 +418,21 @@ export class HassLive implements LiveSource {
     if (!e?.now) return null;
     const i = entity ? e.sources.ev.findIndex((c) => chargerEntities(c).includes(entity)) : 0;
     return e.now.ev[i] ?? null;
+  }
+
+  /** Whether a car of the plan is here now, as its "parked" says (with nothing to go by, it is). */
+  carHere(f: Furniture): boolean {
+    if (!f.parked) return true;
+    if (f.parked === "plugged") {
+      const st = this.ev(f.entity ?? null)?.state;
+      return !st || st !== "unplugged";
+    }
+    const s = this.state(f.parked);
+    if (!s || isUnavailable(s)) return true;
+    const dom = domainOf(f.parked);
+    if (dom === "device_tracker" || dom === "person") return s.state === "home";
+    if (dom === "binary_sensor" || dom === "input_boolean") return s.state === "on";
+    return !["off", "not_home", "away", "unplugged", "disconnected"].includes(s.state.toLowerCase());
   }
 
   /** Lights of a room's area (double-tap toggles them all). */

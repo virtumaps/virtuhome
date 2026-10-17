@@ -11,7 +11,7 @@ import { labelPoint } from "../model/geom";
 import { newId, normalizePlan, spaces, type Device, type EnergySettings, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
-import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
+import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
 import { controlsFor, defaultFinish, styleOf, stylesFor } from "../scene/joinery";
 import { pointInPolygon } from "../model/geom";
@@ -647,6 +647,30 @@ export class Editor {
     ];
   }
 
+  /** A car: when it shows (it can leave the drive), and its charger's car's own shape and size. */
+  private carRows(fi: number, x: Furniture, reshape: (label: string) => (fn: (y: Furniture) => void) => void): HTMLElement[] {
+    const here = this.entities((id) => ["device_tracker", "person", "binary_sensor", "input_boolean"].includes(domainOf(id)));
+    const name = this.host.view.live.ev(x.entity ?? null)?.name ?? null;
+    const model = carModel(name);
+    const same = model && model.type === x.type && [x.w, x.d, x.h].every((v, i) => Math.abs(v - model.size[i]) < 0.005);
+    const rows: (HTMLElement | null)[] = [
+      h("div", { class: "ed-row" }, h("label", {}, "Shown"),
+        this.dropdown([["plugged", "While plugged in"], ...here], x.parked ?? "", (v) => this.change((p) => {
+          const y = p.floors[fi].furniture.find((z) => z.id === x.id)!;
+          if (v) y.parked = v;
+          else delete y.parked;
+        }, false, "Car shown"), "Always")),
+      h("p", { class: "ed-hint" }, "A car that is away is left out of the 3D view. A charger only knows when the car is plugged in; a tracker in the car, or its own integration, knows when it is parked."),
+      model && name && !same
+        ? h("button", { class: "ed-btn ghost", onclick: () => reshape("Shape")((y) => {
+          y.type = model.type;
+          [y.w, y.d, y.h] = model.size;
+        }) }, `Shape it like the ${name}`)
+        : null,
+    ];
+    return rows.filter((e): e is HTMLElement => !!e);
+  }
+
   private floorRow(f: Floor, i: number): HTMLElement {
     const haFloors = Object.values(this.hass.floors ?? {});
     return h("div", { class: "ed-card" },
@@ -992,6 +1016,7 @@ export class Editor {
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
       h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? "Charger" : "Linked to"),
         this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? "The house's charger" : "None found") : "Nothing")),
+      ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
       h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
       h("div", { class: "ed-row" }, ...num("Height", "h"), ...num("Above floor", "y")),
       this.turnRow((deg) => reshape("Turn")((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360))),

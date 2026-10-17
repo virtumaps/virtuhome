@@ -25,7 +25,8 @@ On a computer or a recent iPad it switches to a realistic look with textures, su
   Assistant's energy settings; solar panels placed in the plan shine with what they make.
 - **Car charging:** Ohme, Zappi, Hypervolt, Pod Point, Wallbox, Easee and OCPP chargers are found by
   themselves. The car's battery, what it is charging to and by when, and its charge modes are in the
-  energy sheet; the charger on the driveway lights up while it charges.
+  energy sheet; the charger on the driveway lights up while it charges, and the car (shaped like
+  yours) is on the drive while it is plugged in or its tracker says it is home.
 - **Make it look like home:** floor finishes, wall paint and wallpaper, the outside in brick, render,
   stone or cladding, and about 110 pieces of furniture and decor in swappable styles, colours and
   fabrics.

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { autoPlace } from "../src/auto/placement";
 import { evState, findChargers, readEv } from "../src/live/ev";
-import { normalizePlan } from "../src/model/plan";
+import { HassLive } from "../src/live/live";
+import { EnergyLive } from "../src/live/energy";
+import { normalizePlan, type Furniture } from "../src/model/plan";
+import { carModel } from "../src/scene/furniture-lib";
 import { findSources, readNow } from "../src/live/energy";
 import type { Hass, HassEntity, HassEntityReg } from "../src/live/hass";
 
@@ -191,7 +194,10 @@ describe("placing the charger", () => {
     expect(car.rotation).toBe(180);
     expect(car.z - car.d / 2).toBeGreaterThan(7.54);
     expect(car.z + car.d / 2).toBeLessThan(13);
-    expect(report.placed).toEqual(["Ohme Home Pro → Driveway", "Car → Driveway"]);
+    // the Ohme's car, a Leaf: a hatchback of its size, shown while it is plugged in
+    expect([car.w, car.d, car.h]).toEqual([1.77, 4.45, 1.55]);
+    expect(car.parked).toBe("plugged");
+    expect(report.placed).toEqual(["Ohme Home Pro → Driveway", "Nissan LEAF → Driveway"]);
     // the charger's switches are no plugs on a wall
     expect(f.devices.some((d) => d.entity.includes("ohme"))).toBe(false);
   });
@@ -200,5 +206,38 @@ describe("placing the charger", () => {
     const { plan: p } = autoPlace(autoPlace(plan(), ohme().hass).plan, ohme().hass);
     expect(p.floors[0].furniture.filter((x) => x.type === "ev_charger").length).toBe(1);
     expect(p.floors[0].furniture.filter((x) => x.type === "car").length).toBe(1);
+  });
+});
+
+describe("the car", () => {
+  it("knows popular cars by their name", () => {
+    expect(carModel("Nissan LEAF (2015-2018)")).toEqual({ type: "car", size: [1.77, 4.45, 1.55] });
+    expect(carModel("Tesla Model Y Long Range")?.type).toBe("car_suv");
+    expect(carModel("Tesla Model 3 (2019+)")?.type).toBe("car_saloon");
+    expect(carModel("Hyundai IONIQ 5")?.type).toBe("car_suv");
+    expect(carModel("Ohme Home Pro")).toBeNull();
+  });
+
+  it("is here as its charger or its tracker says", () => {
+    const at = (status: string, tracker?: string) => {
+      const h = ohme(status);
+      if (tracker) h.device("t", "ibeacon", { name: "Car tag" })("device_tracker.car_tag", tracker);
+      const energy = new EnergyLive();
+      energy.update(h.hass);
+      const live = new HassLive(normalizePlan({ version: 1, floors: [] }));
+      live.energy = energy;
+      live.update(h.hass);
+      return live;
+    };
+    const car = (parked?: string): Furniture => ({ id: "c", type: "car", x: 0, z: 0, rotation: 0, w: 1.8, d: 4.4, h: 1.5, parked });
+    expect(at("unplugged").carHere(car())).toBe(true);
+    expect(at("unplugged").carHere(car("plugged"))).toBe(false);
+    expect(at("plugged_in").carHere(car("plugged"))).toBe(true);
+    expect(at("charging").carHere(car("plugged"))).toBe(true);
+    expect(at("unplugged", "home").carHere(car("device_tracker.car_tag"))).toBe(true);
+    expect(at("unplugged", "not_home").carHere(car("device_tracker.car_tag"))).toBe(false);
+    expect(at("unplugged", "Work").carHere(car("device_tracker.car_tag"))).toBe(false);
+    // nothing to go by: it stays
+    expect(at("unplugged", "unavailable").carHere(car("device_tracker.car_tag"))).toBe(true);
   });
 });

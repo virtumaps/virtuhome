@@ -19,8 +19,11 @@ export type Role =
 export type Glow = "screen" | "lamp";
 
 export interface Part {
-  /** box; cyl (a cylinder, cone or disc); ball (an ellipsoid); prism (a roof-like ridge along x). */
-  shape: "box" | "cyl" | "ball" | "prism";
+  /**
+   * box; cyl (a cylinder, cone or disc); ball (an ellipsoid); prism (a roof-like ridge along x);
+   * hull (a side outline extruded across x: a car's body).
+   */
+  shape: "box" | "cyl" | "ball" | "prism" | "hull";
   x: number;
   y: number;
   z: number;
@@ -39,6 +42,10 @@ export interface Part {
   shear?: number;
   /** Upright cylinders: how far the top end sits from the bottom one along x and z (a splayed leg). */
   lean?: [number, number];
+  /** Hulls: the outline seen from the side, as [along z, up y] in 0..1 of the part's depth and height. */
+  outline?: [number, number][];
+  /** Hulls: how far each side leans in at the top (m), like a car's windows. */
+  inset?: number;
 }
 
 export type Category =
@@ -84,6 +91,85 @@ const ball = (x: number, y: number, z: number, w: number, h: number, d: number, 
 const prism = (x: number, y: number, z: number, w: number, h: number, d: number, role: Role): Part => ({
   shape: "prism", x, y, z, w, h, d, role,
 });
+/** A side outline ([z, y] in metres) extruded w wide around x, leaning in by `inset` at the top. */
+function hull(x: number, w: number, pts: [number, number][], role: Role, inset = 0): Part {
+  const zs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const z0 = Math.min(...zs), z1 = Math.max(...zs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const d = z1 - z0 || 1, h = y1 - y0 || 1;
+  return { shape: "hull", x, y: y0, z: (z0 + z1) / 2, w, h, d, role, inset, outline: pts.map(([z, y]) => [(z - z0) / d, (y - y0) / h]) };
+}
+
+/** A car's lines: its body's top from the nose back, its glasshouse, its wheels (all in 0..1 of length and height, from the back). */
+interface CarStyle {
+  top: [number, number][];
+  cabin: [number, number][];
+  wheels: [number, number];
+}
+
+const CAR_STYLES: Record<"hatchback" | "saloon" | "suv" | "estate", CarStyle> = {
+  hatchback: {
+    top: [[1, 0.4], [0.96, 0.5], [0.72, 0.6], [0.02, 0.62], [0, 0.42]],
+    cabin: [[0.03, 0.61], [0.06, 0.92], [0.15, 0.99], [0.56, 0.99], [0.73, 0.595]],
+    wheels: [0.2, 0.81],
+  },
+  saloon: {
+    top: [[1, 0.4], [0.96, 0.48], [0.71, 0.58], [0.18, 0.64], [0.03, 0.64], [0, 0.46]],
+    cabin: [[0.17, 0.63], [0.36, 0.99], [0.57, 0.99], [0.71, 0.575]],
+    wheels: [0.21, 0.8],
+  },
+  suv: {
+    top: [[1, 0.46], [0.965, 0.56], [0.73, 0.64], [0.03, 0.66], [0, 0.47]],
+    cabin: [[0.03, 0.65], [0.055, 0.93], [0.13, 0.99], [0.57, 0.99], [0.73, 0.635]],
+    wheels: [0.2, 0.8],
+  },
+  estate: {
+    top: [[1, 0.4], [0.96, 0.5], [0.72, 0.6], [0.02, 0.62], [0, 0.42]],
+    cabin: [[0.025, 0.61], [0.04, 0.95], [0.09, 0.99], [0.57, 0.99], [0.73, 0.595]],
+    wheels: [0.19, 0.81],
+  },
+};
+
+/** A car of a style: body, tinted glasshouse under a roof, wheels with hubs, lights, plates, mirrors and a charging port. */
+function carParts(w: number, d: number, h: number, style: CarStyle): Part[] {
+  const Z = (u: number) => -d / 2 + u * d, Y = (v: number) => v * h;
+  const r = Math.min(0.4, Math.max(0.26, h * 0.21));
+  const sill = r * 0.6, ra = r + 0.04;
+  // along the bottom from the back, up and over each wheel
+  const arch = (zc: number): [number, number][] => [
+    [zc - ra, sill], ...Array.from({ length: 7 }, (_, k) => [zc - ra * Math.cos((k * Math.PI) / 6), r + ra * Math.sin((k * Math.PI) / 6)] as [number, number]), [zc + ra, sill],
+  ];
+  const [ur, uf] = style.wheels;
+  const body: [number, number][] = [
+    [Z(0.012), sill], ...arch(Z(ur)), ...arch(Z(uf)), [Z(0.99), sill], ...style.top.map(([u, v]) => [Z(u), Y(v)] as [number, number]),
+  ];
+  const wc = w - 0.08, lean = 0.13;
+  const cabin = style.cabin.map(([u, v]) => [Z(u), Y(v)] as [number, number]);
+  const roofTop = cabin.filter(([, y]) => y >= Y(0.98)).map(([z]) => z);
+  const r0 = Math.min(...roofTop), r1 = Math.max(...roofTop), top = Y(0.99);
+  const tw = 0.21, wx = w / 2 - 0.03 - tw / 2;
+  const out: Part[] = [
+    hull(0, w, body, "accent", 0.02),
+    hull(0, wc, cabin, "dark", lean),
+    hull(0, wc - 2 * lean + 0.02, [[r0 - 0.05, top - 0.04], [r0 + 0.03, top + 0.012], [r1 - 0.03, top + 0.012], [r1 + 0.06, top - 0.04]], "accent", 0.005),
+  ];
+  for (const zc of [Z(ur), Z(uf)]) {
+    for (const sx of [-1, 1]) {
+      out.push(rod("x", sx * wx, 0, zc, tw, 2 * r, 2 * r, "rubber", 16));
+      out.push(rod("x", sx * wx, r * 0.42, zc, tw + 0.014, r * 1.16, r * 1.16, "metal", 10));
+    }
+  }
+  // lights and plates stand a little proud of the nearly upright nose and tail
+  const nose = Z(0.995), tail = Z(0.006);
+  for (const sx of [-1, 1]) {
+    out.push(box(sx * (w / 2 - 0.24), Y(0.3), nose, 0.3, Y(0.07), 0.05, "bulb"));
+    out.push(box(sx * (w / 2 - 0.2), Y(0.47), tail, 0.28, Y(0.06), 0.05, "red"));
+    out.push(box(sx * (wc / 2 + 0.05), Y(0.62), Z(0.7), 0.12, 0.07, 0.1, "accent"));
+  }
+  out.push(box(0, Y(0.16), nose, 0.52, 0.11, 0.04, "white"), box(0, Y(0.3), tail, 0.52, 0.11, 0.04, "white"));
+  // the charging port in the nose: lit while the car is plugged in
+  out.push(box(0, Y(0.34), nose, 0.18, 0.045, 0.05, "screen", "screen"));
+  return out;
+}
 
 /** Four legs at the corners of a w x d footprint. */
 function legs(w: number, d: number, h: number, t = 0.04, inset = 0.03, role: Role = "woodDark"): Part[] {
@@ -889,21 +975,10 @@ export const FURNITURE: Record<string, FurnitureType> = {
   tree: { name: "Tree", category: "outdoor", family: "tree", size: [3.0, 3.0, 5.0], build: (w, d, h) => [cyl(0, 0, 0, 0.3, h * 0.5, 0.3, "woodDark", undefined, 8, 0.7), ball(0, h * 0.35, 0, w, h * 0.55, d, "plant", 12), ball(w * 0.15, h * 0.6, -d * 0.1, w * 0.7, h * 0.4, d * 0.7, "leaf", 10)] },
   tree_conifer: { name: "Conifer", category: "outdoor", family: "tree", size: [2.0, 2.0, 5.0], build: (w, d, h) => [cyl(0, 0, 0, 0.25, h * 0.2, 0.25, "woodDark", undefined, 8), cyl(0, h * 0.15, 0, w, h * 0.45, d, "leaf", undefined, 10, 0.4), cyl(0, h * 0.45, 0, w * 0.75, h * 0.35, d * 0.75, "leaf", undefined, 10, 0.3), cyl(0, h * 0.7, 0, w * 0.5, h * 0.3, d * 0.5, "leaf", undefined, 10, 0)] },
   hot_tub: { name: "Hot tub", category: "outdoor", family: "hot_tub", size: [2.0, 2.0, 0.9], paint: ["woodDark"], build: (w, d, h) => [box(0, 0, 0, w, h - 0.02, d, "woodDark"), box(0, h - 0.1, 0, w - 0.2, 0.1, d - 0.2, "water")] },
-  car: {
-    name: "Car", category: "outdoor", family: "vehicle", size: [1.85, 4.4, 1.45], paint: ["accent"],
-    build: (w, d, h) => [
-      box(0, 0.2, 0, w, h * 0.42 - 0.2, d, "accent"),
-      box(0, h * 0.42, -d * 0.06, w * 0.88, h * 0.58 - 0.04, d * 0.48, "glass"),
-      box(0, h - 0.04, -d * 0.06, w * 0.84, 0.04, d * 0.42, "accent"),
-      ...[-1, 1].flatMap((s) => [rod("x", s * (w / 2 - 0.12), 0, d * 0.31, 0.22, 0.64, 0.64, "rubber", 14), rod("x", s * (w / 2 - 0.12), 0, -d * 0.33, 0.22, 0.64, 0.64, "rubber", 14)]),
-      box(-w * 0.32, h * 0.32, d / 2, 0.28, 0.08, 0.02, "bulb"),
-      box(w * 0.32, h * 0.32, d / 2, 0.28, 0.08, 0.02, "bulb"),
-      box(-w * 0.32, h * 0.32, -d / 2, 0.28, 0.08, 0.02, "red"),
-      box(w * 0.32, h * 0.32, -d / 2, 0.28, 0.08, 0.02, "red"),
-      // the charging port in the nose: lit while the car is plugged in
-      box(0, h * 0.24, d / 2, 0.16, 0.05, 0.02, "screen", "screen"),
-    ],
-  },
+  car: { name: "Hatchback", category: "outdoor", family: "car", size: [1.77, 4.25, 1.52], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.hatchback) },
+  car_saloon: { name: "Saloon", category: "outdoor", family: "car", size: [1.85, 4.7, 1.44], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.saloon) },
+  car_suv: { name: "SUV", category: "outdoor", family: "car", size: [1.88, 4.6, 1.65], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.suv) },
+  car_estate: { name: "Estate", category: "outdoor", family: "car", size: [1.82, 4.7, 1.5], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.estate) },
   bicycle: {
     name: "Bicycle", category: "outdoor", family: "vehicle", size: [0.55, 1.75, 1.05], paint: ["blue"],
     build: (w, d, h) => [rod("x", 0, 0, -d / 2 + 0.35, 0.04, 0.68, 0.68, "rubber", 16), rod("x", 0, 0, d / 2 - 0.35, 0.04, 0.68, 0.68, "rubber", 16), box(0, 0.34, 0, 0.04, 0.04, d - 0.7, "blue"), box(0, 0.38, -0.12, 0.04, 0.45, 0.04, "blue"), box(0, 0.83, -0.12, 0.12, 0.05, 0.24, "dark"), box(0, 0.38, d / 2 - 0.4, 0.04, h - 0.45, 0.04, "blue"), box(0, h - 0.06, d / 2 - 0.4, w, 0.03, 0.03, "dark")],
@@ -950,8 +1025,46 @@ export const FURNITURE: Record<string, FurnitureType> = {
   column: { name: "Column", category: "structure", family: "column", size: [0.3, 0.3, 2.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white")] },
 };
 
+/** Cars, in their styles. */
+export const CAR_TYPES = new Set(Object.keys(FURNITURE).filter((k) => FURNITURE[k].family === "car"));
+
 /** Pieces that show a car charger's state: the chargers' lights, the cars' charging ports. */
-export const EV_TYPES = new Set(["car", "ev_charger", "ev_charger_post"]);
+export const EV_TYPES = new Set([...CAR_TYPES, "ev_charger", "ev_charger_post"]);
+
+/** Popular electric cars: the style and size (w, d, h) for a car's name ("Nissan LEAF (2015-2018)"). */
+const CAR_MODELS: [RegExp, string, number, number, number][] = [
+  [/leaf/i, "car", 1.77, 4.45, 1.55],
+  [/model ?3/i, "car_saloon", 1.85, 4.69, 1.44],
+  [/model ?y/i, "car_suv", 1.92, 4.75, 1.62],
+  [/model ?s/i, "car_saloon", 1.96, 4.97, 1.45],
+  [/model ?x/i, "car_suv", 2.0, 5.04, 1.68],
+  [/\bmg ?4\b/i, "car", 1.84, 4.29, 1.5],
+  [/\bmg ?5\b/i, "car_estate", 1.82, 4.6, 1.54],
+  [/\bmg zs\b/i, "car_suv", 1.81, 4.32, 1.62],
+  [/\bid\.? ?3\b|\bborn\b/i, "car", 1.81, 4.26, 1.55],
+  [/\bid\.? ?[457]\b|enyaq|\bq4\b|elroq/i, "car_suv", 1.85, 4.58, 1.63],
+  [/niro/i, "car_suv", 1.83, 4.42, 1.57],
+  [/\bev ?6\b/i, "car_suv", 1.88, 4.68, 1.55],
+  [/\bev ?9\b/i, "car_suv", 1.98, 5.01, 1.75],
+  [/kona/i, "car_suv", 1.8, 4.21, 1.57],
+  [/ioniq ?5/i, "car_suv", 1.89, 4.64, 1.6],
+  [/ioniq ?6/i, "car_saloon", 1.88, 4.86, 1.5],
+  [/ioniq/i, "car", 1.82, 4.47, 1.45],
+  [/polestar ?2/i, "car_saloon", 1.86, 4.61, 1.48],
+  [/zoe/i, "car", 1.79, 4.09, 1.56],
+  [/\bi3\b/i, "car", 1.78, 4.01, 1.6],
+  [/\bi4\b/i, "car_saloon", 1.85, 4.78, 1.45],
+  [/ix3|xc40|ex30|ex40|c40|eq[ab]\b|atto ?3|mach-?e/i, "car_suv", 1.87, 4.5, 1.63],
+  [/i-?pace|e-?tron|eqc/i, "car_suv", 1.94, 4.75, 1.6],
+  [/e-?208|corsa|e-?2008|\bmini\b|dolphin|500e|fiat 500/i, "car", 1.75, 4.0, 1.48],
+  [/\bseal\b|taycan|\beqe\b/i, "car_saloon", 1.9, 4.85, 1.42],
+];
+
+/** The style and size for a car's name, when it is a car we know. */
+export function carModel(name: string | null | undefined): { type: string; size: [number, number, number] } | null {
+  const m = name ? CAR_MODELS.find(([re]) => re.test(name)) : undefined;
+  return m ? { type: m[1], size: [m[2], m[3], m[4]] } : null;
+}
 
 /** Light fixtures follow a light entity's state. */
 export const LAMP_TYPES = Object.keys(FURNITURE).filter((k) => FURNITURE[k].category === "lights");

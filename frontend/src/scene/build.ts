@@ -493,7 +493,7 @@ function flatFaces(p: Part): boolean[] {
   // a sheared box's top and bottom follow its slope
   if (p.shape === "box") return [true, true, !p.shear, !p.shear, true, true];
   if (p.shape === "prism") return [true, true, true, false, false, false];
-  if (p.shape === "ball") return [false, false, false, false, false, false];
+  if (p.shape === "ball" || p.shape === "hull") return [false, false, false, false, false, false];
   if (p.axis === "x") return [true, true, false, false, false, false];
   if (p.axis === "z") return [false, false, false, false, true, true];
   return [false, false, true, (p.taper ?? 1) > 0.001, false, false];
@@ -596,6 +596,8 @@ function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, r
       if (elevated) q([x0, ya1, z1], [x1, ya1, z1], [x1, ya0, z0], [x0, ya0, z0], [-up[0], -up[1], -up[2]], 1);
     } else if (p.shape === "prism") {
       prismPart(g, p, toWorld, rotN, col, room, gslot, elevated);
+    } else if (p.shape === "hull") {
+      hullPart(g, p, toWorld, rotN, col, room, gslot, elevated);
     } else {
       lathe(g, p, toWorld, rotN, col, room, gslot, elevated, low);
     }
@@ -621,6 +623,38 @@ function prismPart(g: Geo, p: Part, toWorld: ToWorld, rotN: RotN, col: V3, room:
     g.tri(a, b, t, n);
   }
   if (elevated) g.quad(toWorld(x0, ya, z1), toWorld(x1, ya, z1), toWorld(x1, ya, z0), toWorld(x0, ya, z0), [0, -1, 0], col, room, -1, gslot);
+}
+
+/** A side outline extruded across x, its sides leaning in towards the top (a car's body and windows). */
+function hullPart(g: Geo, p: Part, toWorld: ToWorld, rotN: RotN, col: V3, room: number, gslot: number, elevated: boolean): void {
+  const pts = (p.outline ?? []).map(([u, v]) => [p.z - p.d / 2 + u * p.d, p.y + v * p.h] as [number, number]);
+  if (pts.length < 3) return;
+  const lean = (p.inset ?? 0) / (p.h || 1);
+  const half = (y: number) => p.w / 2 - lean * (y - p.y);
+  // the sides: one flat, leaning face each
+  const tris = ShapeUtils.triangulateShape(pts.map(([z, y]) => new Vector2(z, y)), []);
+  const nl = Math.hypot(1, lean);
+  for (const sx of [-1, 1]) {
+    const n = rotN(sx / nl, lean / nl, 0);
+    const ids = pts.map(([z, y]) => g.vertex(toWorld(p.x + sx * half(y), y, z), n, col, room, -1, gslot));
+    for (const [a, b, c] of tris) g.tri(ids[a], ids[b], ids[c], n);
+  }
+  // around the outline (which way is out follows the outline's turn)
+  let area = 0;
+  pts.forEach(([z, y], i) => {
+    const [z2, y2] = pts[(i + 1) % pts.length];
+    area += z * y2 - z2 * y;
+  });
+  const turn = area > 0 ? 1 : -1;
+  pts.forEach(([za, ya], i) => {
+    const [zb, yb] = pts[(i + 1) % pts.length];
+    const l = Math.hypot(zb - za, yb - ya);
+    if (l < 1e-6) return;
+    const ny = (-(zb - za) / l) * turn, nz = ((yb - ya) / l) * turn;
+    // the bottom of something standing on the ground is never seen
+    if (!elevated && ny < -0.99 && ya < p.y + 0.02) return;
+    g.quad(toWorld(p.x - half(ya), ya, za), toWorld(p.x + half(ya), ya, za), toWorld(p.x + half(yb), yb, zb), toWorld(p.x - half(yb), yb, zb), rotN(0, ny, nz), col, room, -1, gslot);
+  });
 }
 
 /**

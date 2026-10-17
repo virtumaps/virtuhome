@@ -10,8 +10,8 @@
 import { bounds, centroid, labelPoint, outwardNormal, pointInPolygon, segmentDistance } from "../model/geom";
 import { newId, type Device, type Floor, type Mount, type Opening, type OutdoorArea, type Plan, type Room, type Vec2 } from "../model/plan";
 import { domainOf, type Hass, type HassEntity } from "../live/hass";
-import { findChargers, type EvCharger } from "../live/ev";
-import { FURNITURE } from "../scene/furniture-lib";
+import { findChargers, readEv, type EvCharger } from "../live/ev";
+import { CAR_TYPES, carModel, FURNITURE } from "../scene/furniture-lib";
 
 export interface PlacementReport {
   roomsLinked: string[];
@@ -259,7 +259,8 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
 
 /**
  * A charger on the house's wall where the driveway meets it (on a post when the house is not there),
- * and a car parked in front of it, its nose to the house, when the plan has no car yet.
+ * and a car parked in front of it, its nose to the house, when the plan has no car yet: shaped like
+ * the charger's car when it names one we know, and shown while it is plugged in.
  */
 function placeCharger(p: Plan, hass: Hass, c: EvCharger, report: PlacementReport): void {
   const link = c.status ?? c.power ?? c.level;
@@ -288,7 +289,9 @@ function placeCharger(p: Plan, hass: Hass, c: EvCharger, report: PlacementReport
   const along = (t: number, off: number): Vec2 => [a[0] + dir[0] * t + n[0] * off, a[1] + dir[1] * t + n[1] * off];
 
   // the car in the middle of the edge, the charger beside its nose
-  const [cw, cd, ch] = FURNITURE.car.size;
+  const car = readEv(hass, c).name;
+  const model = carModel(car);
+  const [cw, cd, ch] = model?.size ?? FURNITURE.car.size;
   const tc = l >= cw + 1 ? l / 2 - cw / 2 - 0.35 : l / 2;
   const wall = toHouse(along(tc, 0)) - p.settings.wall_exterior / 2;
   const onWall = wall < 0.5;
@@ -299,13 +302,16 @@ function placeCharger(p: Plan, hass: Hass, c: EvCharger, report: PlacementReport
   floor.furniture.push({ id: newId("f"), type, x: at[0], z: at[1], rotation: heading(n[0], n[1]), w, d, h, entity: link });
   report.placed.push(`${c.name} → ${spot.name}`);
 
-  if (p.floors.some((f) => f.furniture.some((x) => x.type === "car")) || l < cw + 1) return;
+  if (p.floors.some((f) => f.furniture.some((x) => CAR_TYPES.has(x.type))) || l < cw + 1) return;
   const gap = Math.max(0, -wall) + 0.6 + cd / 2;
   const mid = along(l / 2, gap);
   const corners: Vec2[] = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([s, t]) => along(l / 2 + (s * cw) / 2, gap + (t * cd) / 2));
   if (!corners.every((q) => pointInPolygon(q, pts))) return;
-  floor.furniture.push({ id: newId("f"), type: "car", x: mid[0], z: mid[1], rotation: (heading(-n[0], -n[1]) + 360) % 360, w: cw, d: cd, h: ch, entity: link });
-  report.placed.push(`Car → ${spot.name}`);
+  floor.furniture.push({
+    id: newId("f"), type: model?.type ?? "car", x: mid[0], z: mid[1], rotation: (heading(-n[0], -n[1]) + 360) % 360, w: cw, d: cd, h: ch, entity: link,
+    color: "#b9bec6", ...(c.status || c.plug ? { parked: "plugged" } : {}),
+  });
+  report.placed.push(`${model ? car : "Car"} → ${spot.name}`);
 }
 
 /** Garden areas take part like rooms (their lights, cameras and plugs go there). */
