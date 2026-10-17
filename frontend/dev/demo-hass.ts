@@ -2,6 +2,7 @@
 // plan uses, areas taken from the plan's rooms, and services that flip states like the real thing.
 import type { Plan } from "../src/model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../src/live/hass";
+import { demoHistory, storyState } from "./demo-history";
 
 export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true): Hass {
   const states: Record<string, HassEntity> = {};
@@ -59,9 +60,28 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
     }
   }
   put("sun.sun", night ? "below_horizon" : "above_horizon", { azimuth: night ? 320 : 200, elevation: night ? -20 : 38 });
-  // two people, and a leak sensor (?leak turns it on to show the alert banner)
-  put("person.alex", "home", { friendly_name: "Alex" });
-  put("person.sam", "not_home", { friendly_name: "Sam" });
+  // two people and the alarm, where the pretend day (demo-history.ts) has them now
+  const story = (id: string, fallback: string) => storyState(id, Date.now())?.s ?? fallback;
+  put("person.alex", story("person.alex", "home"), { friendly_name: "Alex" });
+  put("person.sam", story("person.sam", "not_home"), { friendly_name: "Sam" });
+  put("alarm_control_panel.home", story("alarm_control_panel.home", "disarmed"), { friendly_name: "Alarm", code_arm_required: false });
+  // the cameras' own sensors, on their devices (a doorbell's ding is an occupancy sensor, as ring-mqtt has it)
+  const devices: NonNullable<Hass["devices"]> = {
+    doorbell: { id: "doorbell", name: "Doorbell" },
+    kitchen_camera: { id: "kitchen_camera", name: "Kitchen camera" },
+  };
+  for (const [id, device, dc] of [
+    ["binary_sensor.doorbell_motion", "doorbell", "motion"],
+    ["binary_sensor.doorbell_ding", "doorbell", "occupancy"],
+    ["binary_sensor.kitchen_camera_motion", "kitchen_camera", "motion"],
+  ] as const) {
+    put(id, "off", { device_class: dc });
+    entities[id] = { entity_id: id, device_id: device };
+  }
+  for (const [id, device] of [["camera.doorbell", "doorbell"], ["camera.kitchen", "kitchen_camera"]]) {
+    if (entities[id]) entities[id].device_id = device;
+  }
+  // a leak sensor (?leak turns it on to show the alert banner)
   const kitchenArea = plan.floors[0]?.rooms.find((r) => /kitchen/i.test(r.name))?.area_id ?? null;
   put("binary_sensor.kitchen_leak", new URLSearchParams(location.search).has("leak") ? "on" : "off", { device_class: "moisture", friendly_name: "Kitchen leak" });
   entities["binary_sensor.kitchen_leak"] = { entity_id: "binary_sensor.kitchen_leak", area_id: kitchenArea };
@@ -69,7 +89,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
   const hass: Hass = {
     states,
     entities,
-    devices: {},
+    devices,
     areas,
     floors: {},
     user: { id: "demo", name: "Demo", is_admin: true },
@@ -90,7 +110,9 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
       Object.assign(hass, { states: { ...states } });
       onChange({ ...hass, states: { ...states } });
     },
-    async callWS() {
+    async callWS<T>(msg: Record<string, unknown>) {
+      // replays read the recorder's history; the demo has a pretend day for them
+      if (msg.type === "history/history_during_period") return demoHistory(msg as Parameters<typeof demoHistory>[0], states) as T;
       throw new Error("demo");
     },
     connection: {

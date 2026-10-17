@@ -2,9 +2,9 @@
 import { mdiArrowExpandAll, mdiHomeOutline, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
 import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
-import { HassLive, solarStep, toggleEntity, type Change } from "../live/live";
+import { HassLive, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
 import { EnergyLive, type EnergyNow } from "../live/energy";
-import { loadExtensions, registerView, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
+import { loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
 import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
@@ -107,6 +107,12 @@ export class VhView {
   /** Cars that are away now (as their "parked" says): left out of the 3D view, never out of the plan. */
   private awayKey = "";
   private barWatch: ResizeObserver | null = null;
+  /** An extension replaying the past: the view draws its states, and live ones wait until it ends. */
+  private replayed: { hass: Hass; time: number; options: ReplayOptions; drawn: boolean } | null = null;
+  /** Extensions' room colours and texts, set aside while a replay shows its own. */
+  private extTint: RoomTint | null = null;
+  private extText: RoomText | null = null;
+  private themeTimer = 0;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
@@ -177,8 +183,9 @@ export class VhView {
       const el = (e.target as HTMLElement).closest<HTMLElement>(".vh-label");
       if (!el) return;
       const floor = Number(el.dataset.floor);
-      if (el.dataset.room !== undefined) this.openRoom(floor, Number(el.dataset.room));
-      else this.showFloor(floor);
+      if (el.dataset.room === undefined) this.showFloor(floor);
+      else if (this.replayed) this.replayed.options.onHit?.({ floor, room: Number(el.dataset.room), entity: null }, "tap");
+      else this.openRoom(floor, Number(el.dataset.room));
     });
     this.root.querySelector(".vh-tools")!.addEventListener("click", (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>("[data-act]")?.dataset.act;
@@ -211,14 +218,10 @@ export class VhView {
     this._hass = h;
     this.subscribe();
     const energyChanged = this.energy.update(h);
-    const changes = this.live.update(h);
-    this.applyTheme();
-    const sun = h.states["sun.sun"]?.attributes;
-    if (sun && typeof sun.azimuth === "number" && typeof sun.elevation === "number") this.viewer.setSun(sun.azimuth, sun.elevation);
-    if (this.plan && this.plan.floors.length) this.apply(changes);
+    // while a replay shows the past, live states wait for it to end
+    if (!this.replayed) this.draw(h);
     if (energyChanged) this.onEnergy();
     else this.checkParked();
-    this.updateAlarm(h);
     if (!this.unregister) {
       this.unregister = registerView(this.handle());
       loadExtensions(h, this.config.dev_extensions ?? []);
@@ -230,6 +233,98 @@ export class VhView {
         console.error("VirtuHome extension error", err);
       }
     }
+  }
+
+  /** Draws a set of states: the live ones, or a replay's (plus parts to redraw anyway). */
+  private draw(h: Hass, extra: Change[] = []): void {
+    const changes = this.live.update(h);
+    for (const c of extra) changes.add(c);
+    this.applyTheme();
+    const sun = (h.states["sun.sun"] ?? this._hass?.states["sun.sun"])?.attributes;
+    if (sun && typeof sun.azimuth === "number" && typeof sun.elevation === "number") this.viewer.setSun(sun.azimuth, sun.elevation);
+    if (this.plan && this.plan.floors.length) this.apply(changes);
+    this.updateAlarm(h);
+  }
+
+  /** The states the view shows: a replay's, else the live ones. */
+  private get shown(): Hass | null {
+    return this.replayed?.hass ?? this._hass;
+  }
+
+  // ------------------------------------------------------------------ replays of the past
+
+  private startReplay(options: ReplayOptions): ReplaySession {
+    this.endReplay();
+    if (this.editor || !this._hass) {
+      // nothing to replay into: the session ends at once
+      queueMicrotask(() => options.onEnd?.());
+      return { show: () => undefined, refreshTints: () => undefined, end: () => undefined, active: false };
+    }
+    this.closeSheet();
+    const r = { hass: { ...this._hass, states: {} } as Hass, time: Date.now(), options, drawn: false };
+    this.replayed = r;
+    this.live.roomTint = options.tint ?? null;
+    this.live.roomExtraText = options.text ?? null;
+    // solar panels, chargers and cars would show what they do now
+    this.live.energy = null;
+    this.live.now = () => r.time;
+    this.root.classList.add("replaying");
+    this.statusKey = "";
+    const self = this;
+    return {
+      show: (states, time) => {
+        if (this.replayed !== r || !this._hass) return;
+        r.time = time;
+        // the registries stay live (they rarely change); the states are the replay's
+        Object.assign(r.hass, this._hass, { states });
+        // the first picture also takes the replay's room tints and texts, and the panels' and chargers' lights off
+        this.draw(r.hass, r.drawn ? [] : ["lighting", "tints", "labels", "status"]);
+        r.drawn = true;
+      },
+      refreshTints: () => {
+        if (this.replayed === r && this.started) this.viewer.refreshTints();
+      },
+      end: () => {
+        if (this.replayed === r) this.endReplay();
+      },
+      get active() {
+        return self.replayed === r;
+      },
+    };
+  }
+
+  /** Back to live: what changed meanwhile is drawn, and the extensions get their rooms back. */
+  private endReplay(): void {
+    const r = this.replayed;
+    if (!r) return;
+    this.replayed = null;
+    this.root.classList.remove("replaying");
+    this.live.roomTint = this.extTint;
+    this.live.roomExtraText = this.extText;
+    this.live.energy = this.energy;
+    this.live.now = Date.now;
+    this.statusKey = "";
+    // a room picked out in the past is not picked now
+    if (this.viewer.selectedRoom >= 0) this.viewer.selectRoom(this.viewer.activeFloor, -1, false);
+    if (this._hass) {
+      // the rooms' tints and texts, and the lights of panels and chargers, changed hands too
+      this.draw(this._hass, ["lighting", "tints", "labels", "status"]);
+      this.checkParked();
+    }
+    try {
+      r.options.onEnd?.();
+    } catch (err) {
+      console.error("VirtuHome extension error", err);
+    }
+  }
+
+  /** Where an entity is in the plan, with the names of its floor and room. */
+  private locate(entity: string): Place | null {
+    const p = this.live.place(entity);
+    const floor = p ? this.plan?.floors[p.floor] : undefined;
+    if (!p || !floor) return null;
+    const room = p.room >= 0 ? spaces(floor)[p.room] : undefined;
+    return { floor: p.floor, room: p.room, floorName: floor.name, roomName: room?.name ?? null };
   }
 
   /** What extensions get to see and do with this view. */
@@ -270,10 +365,12 @@ export class VhView {
       moreInfo: (id) => moreInfo(this.root, id),
       addTool: (tool) => this.addTool(tool),
       setRoomTint: (fn) => {
-        this.live.roomTint = fn;
+        this.extTint = fn;
+        if (!this.replayed) this.live.roomTint = fn;
       },
       setRoomText: (fn) => {
-        this.live.roomExtraText = fn;
+        this.extText = fn;
+        if (!this.replayed) this.live.roomExtraText = fn;
       },
       refreshRooms: () => {
         this.viewer.refreshTints();
@@ -303,6 +400,20 @@ export class VhView {
           };
         },
         open: () => self.openEnergy(),
+      },
+      watchedEntities: () => this.live.watched(),
+      locate: (id) => this.locate(id),
+      replay: (options = {}) => this.startReplay(options),
+      get replaying() {
+        return !!self.replayed;
+      },
+      showFloor: (i) => this.showFloor(i),
+      showHouse: () => this.showHouse(),
+      selectRoom: (floor, room, fly = true) => {
+        if (!this.plan?.floors[floor]) return;
+        this.viewer.selectRoom(floor, room, fly);
+        this.renderChips();
+        this.renderStatus();
       },
     };
   }
@@ -375,9 +486,11 @@ export class VhView {
       this.alertEl.querySelector("span")!.textContent = alerts.length > 1 ? `${alerts[0].text} · and ${alerts.length - 1} more` : alerts[0].text;
     }
     const floor = this.viewer.mode === "floor" ? this.viewer.activeFloor : null;
-    const on = this.live.lightsOn(floor).length;
+    // a replay shows who was home then; the lights chip (a switch) and today's energy would be about now
+    const past = !!this.replayed;
+    const on = past ? 0 : this.live.lightsOn(floor).length;
     const people = this.config.people === false ? [] : this.live.people();
-    const energy = this.showEnergy() ? energyChip(this.energy.now) : "";
+    const energy = this.showEnergy() && !past ? energyChip(this.energy.now) : "";
     const key = JSON.stringify([on, floor, people, energy]);
     if (key === this.statusKey) return;
     this.statusKey = key;
@@ -451,10 +564,11 @@ export class VhView {
       }
       if (label !== this.evLabelKey) {
         this.evLabelKey = label;
-        this.viewer.refreshLabels();
+        if (!this.replayed) this.viewer.refreshLabels();
       }
     }
-    if (relight) this.viewer.refreshLighting();
+    // a replay draws the past without them; its end draws them as they are then
+    if (relight && !this.replayed) this.viewer.refreshLighting();
     this.checkParked();
   }
 
@@ -474,7 +588,7 @@ export class VhView {
 
   /** A car arrived or left: its floor is drawn again with it or without it (a few times a day). */
   private checkParked(): void {
-    if (!this.plan || !this.started || this.editor || !this.hasEv) return;
+    if (!this.plan || !this.started || this.editor || this.replayed || !this.hasEv) return;
     if (this.awayCars(this.plan).join(",") === this.awayKey) return;
     this.viewer.setPlan(this.shownPlan(this.plan), true);
   }
@@ -561,7 +675,7 @@ export class VhView {
     this.live.setPlan(plan);
     if (this._hass) {
       if (this.energy.update(this._hass)) this.renderStatus();
-      this.live.update(this._hass);
+      this.live.update(this.shown ?? this._hass);
     }
     if (!plan.floors.length) {
       if (this.editor) return;
@@ -615,6 +729,8 @@ export class VhView {
   }
 
   destroy(): void {
+    this.endReplay();
+    window.clearTimeout(this.themeTimer);
     this.disconnect();
     this.unregister?.();
     this.unregister = null;
@@ -630,13 +746,28 @@ export class VhView {
     if (this.themeOverride) return this.themeOverride;
     const t = this.config.theme ?? this.plan?.settings.theme ?? "auto";
     if (t === "day" || t === "night") return t;
-    const sun = this._hass?.states["sun.sun"]?.state;
+    // a replay shows day or night as it was then
+    const sun = (this.shown?.states["sun.sun"] ?? this._hass?.states["sun.sun"])?.state;
     if (sun) return sun === "below_horizon" ? "night" : "day";
     return this._hass?.themes?.darkMode ? "night" : "day";
   }
 
   private applyTheme(): void {
     const name = this.themeName();
+    if (this.replayed && this.viewer.pal.name !== name) {
+      // a new look rebuilds the house: scrubbing back and forth over sunset changes it at most every 300 ms
+      this.themeTimer ||= window.setTimeout(() => {
+        this.themeTimer = 0;
+        this.setLook(this.themeName());
+      }, 300);
+      return;
+    }
+    window.clearTimeout(this.themeTimer);
+    this.themeTimer = 0;
+    this.setLook(name);
+  }
+
+  private setLook(name: "day" | "night"): void {
     this.root.classList.toggle("day", name === "day");
     this.live.day = name === "day";
     this.themeBtn.innerHTML = svg(name === "night" ? mdiWeatherNight : mdiWeatherSunny);
@@ -648,7 +779,9 @@ export class VhView {
 
   private cycleTheme(): void {
     this.themeOverride = this.themeName() === "night" ? "day" : "night";
-    this.applyTheme();
+    window.clearTimeout(this.themeTimer);
+    this.themeTimer = 0;
+    this.setLook(this.themeOverride);
     this.toast(this.themeOverride === "night" ? "Night look" : "Day look");
   }
 
@@ -759,7 +892,7 @@ export class VhView {
   }
 
   private alarmChip(): void {
-    const h = this._hass;
+    const h = this.shown;
     const id = h ? this.alarmEntity(h) : null;
     const s = id ? h!.states[id] : undefined;
     if (!id || !s) return;
@@ -779,6 +912,8 @@ export class VhView {
 
   async openEditor(): Promise<void> {
     if (this.editor || !this._hass) return;
+    // the editor works on the house as it is now
+    this.endReplay();
     this.closeSheet();
     this.empty.hidden = true;
     const { Editor } = await import("../editor/editor");
@@ -853,6 +988,21 @@ export class VhView {
     if (!hass) return;
     if (this.editor) {
       if (gesture === "tap") this.editor.onHit(hit);
+      return;
+    }
+    if (this.replayed) {
+      // the past can be looked around in, but nothing is switched: the replay gets the tap
+      const r = this.replayed;
+      const entity = hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "entity" ? hit.entity : null;
+      if (!entity && hit.kind === "room" && gesture === "tap" && this.viewer.mode === "house") {
+        this.viewer.setMode("floor", hit.floor);
+        this.renderChips();
+      }
+      if (!entity && hit.kind === "empty") {
+        if (gesture === "double") this.showHouse();
+        else if (this.viewer.selectedRoom >= 0) this.viewer.selectRoom(this.viewer.activeFloor, -1, false);
+      }
+      r.options.onHit?.({ floor: hit.floor, room: hit.kind === "empty" ? -1 : hit.room, entity }, gesture);
       return;
     }
     if (hit.entity && (hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "entity")) {

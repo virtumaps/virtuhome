@@ -93,6 +93,8 @@ export class HassLive implements LiveSource {
   /** Set by an extension (the Energy extension's power map). */
   roomTint: RoomTint | null = null;
   roomExtraText: RoomText | null = null;
+  /** The time the states are from: a replay of the past moves it, so a sensor that just changed still pulses. */
+  now: () => number = Date.now;
 
   constructor(plan: Plan) {
     this.plan = plan;
@@ -212,6 +214,39 @@ export class HassLive implements LiveSource {
     return id ? this.hass?.states[id] : undefined;
   }
 
+  /** Every entity whose state the view shows. */
+  watched(): string[] {
+    return [...this.kinds.keys()];
+  }
+
+  /**
+   * Where an entity is: the room (or garden area) of a device, lamp or door it is linked to in the
+   * plan, the room of the camera whose motion sensor it is, else the first room of its area. The
+   * room is an index into the floor's spaces, -1 when only the floor is known.
+   */
+  place(entity: string): { floor: number; room: number } | null {
+    const floors = this.plan.floors;
+    for (let fi = 0; fi < floors.length; fi++) {
+      const floor = floors[fi];
+      const sp = spaces(floor);
+      const at = (x: number, z: number) => sp.findIndex((s) => pointInPolygon([x, z], s.points));
+      const d = floor.devices.find((x) => x.entity === entity);
+      if (d) return { floor: fi, room: at(d.x, d.z) };
+      const o = floor.openings.find((x) => x.entity === entity || x.cover === entity);
+      if (o) return { floor: fi, room: sp.findIndex((s) => s.id === o.room_id) };
+      const f = floor.furniture.find((x) => x.entity === entity || x.parked === entity);
+      if (f) return { floor: fi, room: at(f.x, f.z) };
+    }
+    for (const [camera, motion] of this.cameraMotion) if (motion.includes(entity)) return this.place(camera);
+    const area = this.hass ? areaOf(this.hass, entity) : null;
+    if (!area) return null;
+    for (let fi = 0; fi < floors.length; fi++) {
+      const ri = spaces(floors[fi]).findIndex((s) => s.area_id === area);
+      if (ri >= 0) return { floor: fi, room: ri };
+    }
+    return null;
+  }
+
   // ------------------------------------------------------------------ LiveSource
 
   lamp(l: LampInfo): LampState | null {
@@ -279,7 +314,7 @@ export class HassLive implements LiveSource {
       icon: iconIndex(icon), color, pulse, attention: pulse > 0 || color === C.alert || color === C.open,
     });
     // attention fades: pulsing only during the first minute after a change
-    const fresh = s ? Date.now() - Date.parse(s.last_changed) < 60_000 : false;
+    const fresh = s ? this.now() - Date.parse(s.last_changed) < 60_000 : false;
     if (!s || isUnavailable(s)) {
       const icon = dom === "binary_sensor" && dc ? (MOTION_CLASSES.has(dc) ? "motion-off" : OPENING_CLASSES.has(dc) ? "door" : ALERT_CLASSES.has(dc) ? "smoke" : "dot") : iconName(dom, dc, s);
       return look(icon, C.unavailable);
