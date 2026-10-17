@@ -35,8 +35,10 @@ On a computer or a recent iPad it switches to a realistic look with textures, su
   stone or cladding, and about 110 pieces of furniture and decor in swappable styles, colours and
   fabrics.
 - **Free and open source** under the GPL-3.0 licence, and open to contributions. Extensions such as Wall Tablet
-  (doorbell camera takeover, screensaver, night dimming) and Energy (rooms coloured by their power,
-  the biggest users and what is not measured yet) are available to VirtuMaps installation clients.
+  (doorbell camera takeover, screensaver, night dimming), Energy (rooms coloured by their power,
+  the biggest users and what is not measured yet) and Security (what happened played back on the
+  house: doors, motion, cameras, the doorbell and the alarm on a timeline, and what happened while
+  everyone was out) are available to VirtuMaps installation clients.
 
 | Realistic, by day | Live: alerts, people, temperature map |
 |---|---|

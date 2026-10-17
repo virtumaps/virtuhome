@@ -10,22 +10,6 @@
   gates in the fence's own style. Draw them with the fence tool in the 2D plan, or tap "Fence round
   it" on a garden area to fence every edge that isn't along the house. Drag their points in 3D or 2D,
   add corners with the +s, or drag a whole fence.
-- Car charging: EV chargers (Ohme, Zappi, Hypervolt, Pod Point, Wallbox, Easee, OCPP and others) are
-  found by themselves. The energy sheet shows the car next to the house with what it draws, a card
-  per car with its battery, the level and time it charges to, what the charger is doing and its
-  charge modes to pick from (and Approve for a charge that waits), and today's energy into the car.
-  The corner chip shows the car's battery while it is plugged in. The charger and the car's battery
-  can be changed in Edit → Home → Energy.
-- An EV charger (on the wall or on a post) to place on the driveway: its light is green while
-  charging, blue while plugged in and amber while waiting. A car's charging port lights up the same
-  way, and the driveway's label says how full the car is.
-- Place devices automatically puts the charger on the house's wall at the driveway with a car in
-  front of it, instead of the charger's switches as plugs. The car takes the shape and size of the
-  charger's car when it names a popular one (Nissan Leaf, Tesla, MG4, ID.3, Ioniq 5…).
-- Cars come as a hatchback, saloon, SUV or estate, with wheels, lights, plates and mirrors (the old
-  boxy car becomes the hatchback). "Shape it like…" in Edit fits a car to its charger's car.
-- A car can be shown only while it is here: while plugged in, or while a tracker (a tag in the car,
-  the car's own integration) or a sensor says so. Away, it is left out of the 3D view.
 - Cameras are models of their kind where they hang: a camera on a bracket against its wall (its body
   turned to where it looks), a dome on the ceiling, a doorbell flat on the outside wall, or a camera
   on a stand on a table or the floor. Tap one for its live picture; a pin floats over it while it sees
@@ -61,6 +45,32 @@
 - A closed door leaves a 4 mm gap all round with a door stop behind it, so no daylight shows past the
   handle side (it was a 3 cm gap). French and side-hinged garage doors meet the same way.
 - Saving twice in one editing session no longer says someone else saved the plan in the meantime.
+
+## 0.4.0
+
+### New
+- Car charging: EV chargers (Ohme, Zappi, Hypervolt, Pod Point, Wallbox, Easee, OCPP and others) are
+  found by themselves. The energy sheet shows the car next to the house with what it draws, a card
+  per car with its battery, the level and time it charges to, what the charger is doing and its
+  charge modes to pick from (and Approve for a charge that waits), and today's energy into the car.
+  The corner chip shows the car's battery while it is plugged in. The charger and the car's battery
+  can be changed in Edit → Home → Energy.
+- An EV charger (on the wall or on a post) to place on the driveway: its light is green while
+  charging, blue while plugged in and amber while waiting. A car's charging port lights up the same
+  way, and the driveway's label says how full the car is.
+- Place devices automatically puts the charger on the house's wall at the driveway with a car in
+  front of it, instead of the charger's switches as plugs. The car takes the shape and size of the
+  charger's car when it names a popular one (Nissan Leaf, Tesla, MG4, ID.3, Ioniq 5…).
+- Cars come as a hatchback, saloon, SUV or estate, with wheels, lights, plates and mirrors (the old
+  boxy car becomes the hatchback). "Shape it like…" in Edit fits a car to its charger's car.
+- A car can be shown only while it is here: while plugged in, or while a tracker (a tag in the car,
+  the car's own integration) or a sensor says so. Away, it is left out of the 3D view.
+- Extension API 3: replays of the past. An extension can show the house as it was at any moment
+  from Home Assistant's history (doors, windows, lights, motion, cameras, the alarm and who was
+  home, day or night as it was then), while live states wait and nothing can be switched. It can
+  also ask where an entity is in the plan and move between floors and rooms. The Security
+  extension's timeline uses it.
+- Dev harness: the demo house has a pretend day of history to replay, and an alarm.
 
 ## 0.3.1
 - Nothing changes in VirtuHome itself. Releases are now also checked with Home Assistant's hassfest.
