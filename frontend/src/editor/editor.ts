@@ -4,14 +4,16 @@
 //   Devices  what is placed, and what of Home Assistant is not yet
 //   Selected the tapped room, device or furniture: link entities, move, turn, remove
 // In edit mode a tap selects instead of switching, and devices, lamps and furniture can be dragged.
-import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelete, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
+import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
 import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
 import { newId, normalizePlan, spaces, type Device, type Floor, type FloorMaterial, type Furniture, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
-import { FURNITURE } from "../scene/furniture-lib";
+import { CATEGORY_NAMES, FURNITURE, isUpholstered, styleOptions, type Category } from "../scene/furniture-lib";
+import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
+import { pointInPolygon } from "../model/geom";
 import { iconIndex } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
@@ -22,7 +24,7 @@ type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furnitu
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 const SLAB = 0.18;
 
-const FLOOR_MATERIALS: FloorMaterial[] = ["wood", "oak", "tiles", "carpet", "stone", "concrete"];
+const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
 
 /** Tiny DOM helper: h("div", { class: "x", onclick }, child, "text") */
@@ -51,11 +53,22 @@ export interface EditorHost {
   close(): void;
 }
 
+/** A step of the undo history: the plan before a change, and what the change was. */
+interface Step {
+  plan: Plan;
+  label: string;
+}
+
 export class Editor {
   readonly el: HTMLDivElement;
   private plan: Plan;
-  private undo: Plan[] = [];
-  private redo: Plan[] = [];
+  private undo: Step[] = [];
+  private redo: Step[] = [];
+  private undoBtn: HTMLButtonElement;
+  private redoBtn: HTMLButtonElement;
+  /** The add-item picker's category and search text (kept across re-renders). */
+  private pickCat: Category | "all" = "all";
+  private pickQuery = "";
   private dirty = false;
   private tab: Tab = "home";
   private sel: Selection = null;
@@ -72,12 +85,14 @@ export class Editor {
     const style = h("style", {}, EDITOR_CSS);
     this.status = h("span", { class: "ed-status" });
     this.body = h("div", { class: "ed-body" });
+    this.undoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowULeftTop)}<span>Undo</span>`, onclick: () => this.doUndo() });
+    this.redoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowURightTop)}<span>Redo</span>`, onclick: () => this.doRedo() });
     this.el = h("div", { class: "ed" },
       style,
       h("div", { class: "ed-head" },
         h("b", {}, "Edit home"),
-        h("button", { class: "ed-ib", title: "Undo", html: svg(mdiArrowULeftTop), onclick: () => this.doUndo() }),
-        h("button", { class: "ed-ib", title: "Redo", html: svg(mdiArrowURightTop), onclick: () => this.doRedo() }),
+        this.undoBtn,
+        this.redoBtn,
         h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, onclick: () => this.save() }),
         h("button", { class: "ed-ib", title: "Close", html: svg(mdiClose), onclick: () => this.close() }),
       ),
@@ -93,8 +108,22 @@ export class Editor {
     viewer.editMode = true;
     viewer.setWalls("low");
     viewer.onDrag = (hit, x, z, phase) => this.onDrag(hit, x, z, phase);
+    window.addEventListener("keydown", this.onKey);
     this.render();
+    this.updateHistoryButtons();
   }
+
+  /** Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes (not while typing in a field). */
+  private onKey = (e: KeyboardEvent): void => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const target = e.composedPath()[0] as HTMLElement | undefined;
+    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    const k = e.key.toLowerCase();
+    if (k === "z" && !e.shiftKey) this.doUndo();
+    else if ((k === "z" && e.shiftKey) || k === "y") this.doRedo();
+    else return;
+    e.preventDefault();
+  };
 
   // ------------------------------------------------------------------ plan changes
 
@@ -103,8 +132,8 @@ export class Editor {
   }
 
   /** Applies a change with undo; `quiet` skips re-rendering the drawer (while dragging). */
-  private change(fn: (p: Plan) => void, quiet = false): void {
-    this.undo.push(structuredClone(this.plan));
+  private change(fn: (p: Plan) => void, quiet = false, label = "Change"): void {
+    this.undo.push({ plan: structuredClone(this.plan), label });
     if (this.undo.length > 100) this.undo.shift();
     this.redo = [];
     fn(this.plan);
@@ -117,24 +146,50 @@ export class Editor {
     this.updateSelectionMarker();
     if (!quiet) this.render();
     this.status.textContent = this.dirty ? "Unsaved changes" : "Saved";
+    this.updateHistoryButtons();
+  }
+
+  private updateHistoryButtons(): void {
+    const u = this.undo[this.undo.length - 1];
+    const r = this.redo[this.redo.length - 1];
+    this.undoBtn.disabled = !u;
+    this.redoBtn.disabled = !r;
+    this.undoBtn.title = u ? `Undo: ${u.label} (Ctrl+Z)` : "Nothing to undo";
+    this.redoBtn.title = r ? `Redo: ${r.label} (Ctrl+Shift+Z)` : "Nothing to redo";
   }
 
   private doUndo(): void {
     const prev = this.undo.pop();
     if (!prev) return;
-    this.redo.push(this.plan);
-    this.plan = prev;
+    this.redo.push({ plan: this.plan, label: prev.label });
+    this.plan = prev.plan;
     this.dirty = true;
+    this.dropMissingSelection();
     this.apply();
+    this.status.textContent = `Undone: ${prev.label}`;
   }
 
   private doRedo(): void {
     const next = this.redo.pop();
     if (!next) return;
-    this.undo.push(this.plan);
-    this.plan = next;
+    this.undo.push({ plan: this.plan, label: next.label });
+    this.plan = next.plan;
     this.dirty = true;
+    this.dropMissingSelection();
     this.apply();
+    this.status.textContent = `Redone: ${next.label}`;
+  }
+
+  /** After undo the selected thing may no longer exist. */
+  private dropMissingSelection(): void {
+    const s = this.sel;
+    if (!s) return;
+    const f = this.plan.floors[s.floor];
+    const exists = !!f && (
+      s.kind === "room" ? f.rooms.some((r) => r.id === s.id) :
+      s.kind === "outdoor" ? (f.outdoor ?? []).some((o) => o.id === s.id) :
+      s.kind === "device" ? f.devices.some((d) => d.id === s.id) : f.furniture.some((x) => x.id === s.id));
+    if (!exists) this.sel = null;
   }
 
   private async save(): Promise<void> {
@@ -169,6 +224,7 @@ export class Editor {
     viewer.onDrag = null;
     viewer.overlayMarkers = [];
     cancelAnimationFrame(this.dragRaf);
+    window.removeEventListener("keydown", this.onKey);
     this.el.remove();
     this.host.close();
   }
@@ -262,7 +318,10 @@ export class Editor {
     if (this.dragStart) {
       const moved = JSON.stringify(this.dragStart) !== JSON.stringify(this.plan);
       if (moved) {
-        this.undo.push(this.dragStart);
+        const what = item.kind === "corner" ? "a corner" : item.kind === "device"
+          ? String(this.hass.states[f.devices.find((d) => d.id === item.id)?.entity ?? ""]?.attributes.friendly_name ?? "a device")
+          : FURNITURE[f.furniture.find((x) => x.id === item.id)?.type ?? ""]?.name ?? "furniture";
+        this.undo.push({ plan: this.dragStart, label: `Move ${what}` });
         this.redo = [];
         this.dirty = true;
         this.apply();
@@ -313,6 +372,12 @@ export class Editor {
       h("p", { class: "ed-hint" }, "Links rooms to areas, contacts to doors and windows, and puts lights, cameras and sensors into their rooms. Keeps what is already placed."),
       h("button", { class: "ed-btn", onclick: () => this.runAutoPlace() }, "Place devices automatically"),
       h("div", { class: "ed-report" }),
+      h("h4", {}, "Outside walls"),
+      this.finishChips(EXTERIOR_FINISHES, this.plan.settings.exterior_finish ?? "render", (k) =>
+        this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, `Outside walls: ${(EXTERIOR_FINISHES as Record<string, FinishDef>)[k].name}`)),
+      (EXTERIOR_FINISHES as Record<string, FinishDef>)[this.plan.settings.exterior_finish ?? "render"]?.tintable
+        ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, "Outside wall colour"))
+        : null,
       h("h4", {}, "Floors"),
       ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
       h("h4", {}, "Plan file"),
@@ -352,6 +417,11 @@ export class Editor {
         h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(f.elevation), onchange: (e: Event) => this.change((p) => (p.floors[i].elevation = Number((e.target as HTMLInputElement).value))) }),
         h("label", {}, "Height"),
         h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(f.height), onchange: (e: Event) => this.change((p) => (p.floors[i].height = Number((e.target as HTMLInputElement).value))) }),
+      ),
+      h("div", { class: "ed-row" },
+        h("label", {}, "Outside"),
+        this.dropdown(Object.entries(EXTERIOR_FINISHES).map(([k, d]) => [k, d.name]), f.exterior_finish ?? "", (v) =>
+          this.change((p) => (p.floors[i].exterior_finish = (v || null) as Floor["exterior_finish"]), false, `${f.name} outside walls`), "Same as the house"),
       ),
     );
   }
@@ -456,7 +526,7 @@ export class Editor {
           ),
           h("div", { class: "ed-row" },
             h("label", {}, "Floor"),
-            this.dropdown(FLOOR_MATERIALS.map((m) => [m, m]), r.floor ?? "wood", (v) => this.change((p) => (p.floors[fi].rooms[ri].floor = v as FloorMaterial))),
+            this.dropdown(Object.entries(FLOOR_FINISHES).map(([k, d]) => [k, d.name]), r.floor ?? "wood", (v) => this.change((p) => (p.floors[fi].rooms[ri].floor = v as FloorMaterial), false, `${r.name} floor`)),
           ),
         ));
       });
@@ -523,11 +593,32 @@ export class Editor {
     const contacts = this.entities((id, s) => domainOf(id) === "binary_sensor" && ["door", "window", "opening", "garage_door"].includes(String(s.attributes.device_class)));
     const covers = this.entities((id) => domainOf(id) === "cover");
     const openings = f.openings.filter((o) => o.room_id === room.id);
-    const types = Object.entries(FURNITURE).sort((a, b) => a[1].category.localeCompare(b[1].category) || a[1].name.localeCompare(b[1].name));
-    let addType = "sofa";
+    const updRoom = (label: string, fn: (r: Room) => void) => this.change((p) => fn(p.floors[fi].rooms.find((r) => r.id === room.id)!), false, label);
+    const wallFinish = room.wall_finish ?? "paint";
+    const inRoom = f.furniture.filter((x) => pointInPolygon([x.x, x.z], room.points));
     return h("div", {},
       h("h4", {}, room.name),
-      h("p", { class: "ed-hint" }, `${openings.length} doors and windows`),
+      h("div", { class: "ed-sub" }, "Floor"),
+      this.finishChips(FLOOR_FINISHES, room.floor ?? "wood", (k) => updRoom(`${room.name} floor`, (r) => (r.floor = k as FloorMaterial))),
+      h("div", { class: "ed-sub" }, "Walls"),
+      this.finishChips(WALL_FINISHES, wallFinish, (k) => updRoom(`${room.name} walls`, (r) => (r.wall_finish = k as Room["wall_finish"]))),
+      (WALL_FINISHES as Record<string, FinishDef>)[wallFinish]?.tintable
+        ? this.colourPicker(PAINT_SWATCHES, room.wall_color, (c) => updRoom(`${room.name} wall colour`, (r) => (r.wall_color = c)), "Plain white")
+        : null,
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
+          for (const fl of p.floors) for (const r of fl.rooms) {
+            r.wall_finish = room.wall_finish;
+            r.wall_color = room.wall_color ?? null;
+          }
+        }, false, "Walls in every room") }, "Use these walls everywhere"),
+      ),
+      h("h4", {}, "Add furniture and decor"),
+      this.itemPicker((type) => this.addFurniture(fi, room, type)),
+      h("h4", {}, `In this room (${inRoom.length})`),
+      h("div", { class: "ed-chips" }, ...inRoom.map((x) => h("button", { class: "ed-chip", onclick: () => this.select({ floor: fi, kind: "furniture", id: x.id }) },
+        FURNITURE[x.type]?.name ?? x.type))),
+      h("h4", {}, `Doors and windows (${openings.length})`),
       ...openings.map((o) => h("div", { class: "ed-card" },
         h("div", { class: "ed-row" }, h("b", {}, o.kind), h("small", {}, `${o.width.toFixed(2)} m wide`)),
         h("div", { class: "ed-row" },
@@ -565,11 +656,6 @@ export class Editor {
           });
           this.select(null);
         }) }, "Remove room"),
-      ),
-      h("h4", {}, "Add furniture"),
-      h("div", { class: "ed-row" },
-        this.dropdown(types.map(([k, t]) => [k, `${t.name} (${t.category})`]), addType, (v) => (addType = v)),
-        h("button", { class: "ed-btn small", onclick: () => this.addFurniture(fi, room, addType) }, "Add"),
       ),
     );
   }
@@ -627,14 +713,25 @@ export class Editor {
       : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
     const num = (label: string, key: "w" | "d" | "h" | "y") =>
       [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(x[key] ?? 0), onchange: (e: Event) => upd((y) => (y[key] = Number((e.target as HTMLInputElement).value))) })];
+    const styles = styleOptions(x.type);
+    const finish = x.finish ?? def?.finish ?? "fabric";
+    const named = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!), false, `${label} ${def?.name ?? "item"}`);
     return h("div", {},
       h("h4", {}, def?.name ?? x.type),
+      styles.length > 1 ? h("div", { class: "ed-sub" }, "Style") : null,
+      styles.length > 1 ? h("div", { class: "ed-chips" }, ...styles.map((k) =>
+        h("button", { class: `ed-chip${k === x.type ? " on" : ""}`, onclick: () => k !== x.type && this.swapType(fi, x, k) }, FURNITURE[k].name))) : null,
+      h("div", { class: "ed-sub" }, "Colour"),
+      this.colourPicker(FURNITURE_SWATCHES, x.color, (c) => named("Recolour")((y) => (y.color = c)), "Original"),
+      isUpholstered(x.type) ? h("div", { class: "ed-sub" }, "Upholstery") : null,
+      isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named("Reupholster")((y) => (y.finish = k as Furniture["finish"]))) : null,
       h("div", { class: "ed-row" }, h("label", {}, "Linked to"), this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), "Nothing")),
       h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
       h("div", { class: "ed-row" }, ...num("Height", "h"), ...num("Above floor", "y")),
-      this.turnRow((deg) => upd((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360)))),
+      this.turnRow((deg) => named("Turn")((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360))),
+        h("button", { class: `ed-ib${x.mirror ? " on" : ""}`, title: "Mirror", html: svg(mdiFlipHorizontal), onclick: () => named("Mirror")((y) => (y.mirror = !y.mirror)) })),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost", onclick: () => this.change((p) => p.floors[fi].furniture.push({ ...structuredClone(x), id: newId("f"), x: x.x + 0.3, z: x.z + 0.3 })) }, "Duplicate"),
+        h("button", { class: "ed-btn ghost", onclick: () => this.change((p) => p.floors[fi].furniture.push({ ...structuredClone(x), id: newId("f"), x: x.x + 0.3, z: x.z + 0.3 }), false, `Duplicate ${def?.name ?? "item"}`) }, "Duplicate"),
         h("button", { class: "ed-btn danger", onclick: () => {
           this.change((p) => (p.floors[fi].furniture = p.floors[fi].furniture.filter((y) => y.id !== x.id)));
           this.select(null);
@@ -643,14 +740,78 @@ export class Editor {
     );
   }
 
-  private turnRow(turn: (deg: number) => void): HTMLElement {
+  private turnRow(turn: (deg: number) => void, ...extra: HTMLElement[]): HTMLElement {
     return h("div", { class: "ed-row" },
       h("label", {}, "Turn"),
       h("button", { class: "ed-ib", title: "-90°", html: svg(mdiRotateLeft), onclick: () => turn(-90) }),
       h("button", { class: "ed-btn ghost small", onclick: () => turn(-15) }, "-15°"),
       h("button", { class: "ed-btn ghost small", onclick: () => turn(15) }, "+15°"),
       h("button", { class: "ed-ib", title: "+90°", html: svg(mdiRotateRight), onclick: () => turn(90) }),
+      ...extra,
     );
+  }
+
+  /** Swaps a piece for another style of the same kind, keeping where it stands and what it is linked to. */
+  private swapType(fi: number, x: Furniture, type: string): void {
+    const def = FURNITURE[type];
+    this.change((p) => {
+      const y = p.floors[fi].furniture.find((z) => z.id === x.id);
+      if (!y) return;
+      const [w, d, hh] = def.size;
+      // a similar width is kept (a sofa that fits its wall); otherwise the new style's own size
+      y.w = Math.abs(y.w - w) / w < 0.4 ? y.w : w;
+      y.d = d;
+      y.h = hh;
+      y.type = type;
+      if (def.y !== undefined) y.y = def.y;
+      else delete y.y;
+      if (def.finish && !y.finish) y.finish = def.finish;
+    }, false, `Change to ${def.name}`);
+  }
+
+  /** Named finishes as chips with their colour. */
+  private finishChips(defs: Record<string, FinishDef>, current: string, onPick: (k: string) => void): HTMLElement {
+    return h("div", { class: "ed-chips" }, ...Object.entries(defs).map(([k, d]) =>
+      h("button", { class: `ed-chip${k === current ? " on" : ""}`, onclick: () => k !== current && onPick(k) },
+        h("i", { style: `background:${hexOf(d.color)}` }), d.name)));
+  }
+
+  /** Colour swatches, any colour, or the default (null). */
+  private colourPicker(swatches: [string, string][], current: string | null | undefined, onPick: (c: string | null) => void, defaultLabel = "Default"): HTMLElement {
+    const cur = current?.toLowerCase() ?? null;
+    const custom = h("input", { type: "color", value: cur ?? "#ffffff", onchange: (e: Event) => onPick((e.target as HTMLInputElement).value) });
+    const isCustom = !!cur && !swatches.some(([, c]) => c === cur);
+    return h("div", { class: "ed-swatches" },
+      h("button", { class: `ed-sw none${!cur ? " on" : ""}`, title: defaultLabel, onclick: () => cur && onPick(null) }),
+      ...swatches.map(([name, c]) => h("button", { class: `ed-sw${cur === c ? " on" : ""}`, title: name, style: `--c:${c}`, onclick: () => cur !== c && onPick(c) })),
+      h("label", { class: `ed-sw custom${isCustom ? " on" : ""}`, title: "Any colour", style: isCustom ? `--c:${cur}` : "" }, custom),
+    );
+  }
+
+  /** Search and categories over everything that can be placed. */
+  private itemPicker(onAdd: (type: string) => void): HTMLElement {
+    const cats = ["all", ...Object.keys(CATEGORY_NAMES)] as (Category | "all")[];
+    const results = h("div", { class: "ed-grid" });
+    const draw = () => {
+      const q = this.pickQuery.trim().toLowerCase();
+      const list = Object.entries(FURNITURE)
+        .filter(([k, t]) => (this.pickCat === "all" || t.category === this.pickCat) && (!q || t.name.toLowerCase().includes(q) || k.includes(q.replace(/\s+/g, "_"))))
+        .sort((a, b) => a[1].name.localeCompare(b[1].name));
+      results.replaceChildren(...list.slice(0, 80).map(([k, t]) =>
+        h("button", { class: "ed-pick", title: `Add ${t.name}`, onclick: () => onAdd(k) }, h("span", { html: svg(mdiPlus) }), h("b", {}, t.name), h("small", {}, CATEGORY_NAMES[t.category]))));
+      if (!list.length) results.append(h("p", { class: "ed-hint" }, "Nothing matches."));
+    };
+    const search = h("input", { class: "ed-in", placeholder: "Search: plant, sofa, dumbbells…", value: this.pickQuery, oninput: (e: Event) => {
+      this.pickQuery = (e.target as HTMLInputElement).value;
+      draw();
+    } });
+    const chips = h("div", { class: "ed-chips scroll" }, ...cats.map((c) => h("button", { class: `ed-chip${this.pickCat === c ? " on" : ""}`, onclick: (e: Event) => {
+      this.pickCat = c;
+      chips.querySelectorAll(".ed-chip").forEach((b) => b.classList.toggle("on", b === e.currentTarget));
+      draw();
+    } }, c === "all" ? "All" : CATEGORY_NAMES[c])));
+    draw();
+    return h("div", {}, h("div", { class: "ed-search" }, h("span", { html: svg(mdiMagnify) }), search), chips, results);
   }
 
   // ------------------------------------------------------------------ actions
@@ -789,7 +950,7 @@ export class Editor {
     const at = labelPoint(room.points);
     const item: Furniture = { id: newId("f"), type, x: at[0], z: at[1], rotation: 0, w: def.size[0], d: def.size[1], h: def.size[2] };
     if (def.y) item.y = def.y;
-    this.change((p) => p.floors[fi].furniture.push(item));
+    this.change((p) => p.floors[fi].furniture.push(item), false, `Add ${def.name}`);
     this.select({ floor: fi, kind: "furniture", id: item.id });
   }
 

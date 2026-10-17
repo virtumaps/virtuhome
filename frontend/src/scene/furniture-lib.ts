@@ -561,7 +561,17 @@ export const FURNITURE: Record<string, FurnitureType> = {
   },
   plant_palm: {
     name: "Palm", category: "plants", family: "plant", size: [0.9, 0.9, 1.6], paint: ["pot"],
-    build: (w, d, h) => [...pot(w * 0.45, h * 0.22, d * 0.45), cyl(0, h * 0.22, 0, 0.07, h * 0.4, 0.07, "woodDark", undefined, 6, 0.7), cyl(0, h * 0.5, 0, w * 0.25, h * 0.5, d * 0.25, "plant", undefined, 9, 4.0), cyl(0, h * 0.62, 0, w * 0.18, h * 0.32, d * 0.18, "leaf", undefined, 7, 4.5)],
+    build: (w, d, h) => {
+      // fronds: long flat leaves drooping out from the top of the stem
+      const top = h * 0.62;
+      const fronds: Part[] = [];
+      for (const [fx, fz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7]]) {
+        const diag = fx !== 0 && fz !== 0;
+        const len = diag ? 0.32 : 0.45;
+        fronds.push(ball(fx * w * len * 0.5, top + (diag ? 0.12 : 0.02) * h, fz * d * len * 0.5, Math.abs(fx) > 0.5 || diag ? w * len : w * 0.12, h * 0.07, Math.abs(fz) > 0.5 || diag ? d * len : d * 0.12, diag ? "leaf" : "plant", 8));
+      }
+      return [...pot(w * 0.45, h * 0.22, d * 0.45), cyl(0, h * 0.22, 0, 0.07, top - h * 0.2, 0.07, "woodDark", undefined, 6, 0.7), ball(0, top - 0.03, 0, w * 0.2, h * 0.25, d * 0.2, "leaf", 8), ...fronds];
+    },
   },
   plant_small: {
     name: "Small plant", category: "plants", family: "plant", size: [0.2, 0.2, 0.3], y: 0.75, paint: ["pot"],

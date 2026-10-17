@@ -37,6 +37,43 @@ export const EDITOR_CSS = /* css */ `
 .ed-ib.small { width: 28px; height: 28px; }
 .ed-ib svg, .ed-save svg { width: 18px; height: 18px; fill: currentColor; }
 .ed-save { display: inline-flex; gap: 6px; align-items: center; border: 0; border-radius: 17px; padding: 7px 12px; background: var(--vh-accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.ed-hb {
+  display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 17px; padding: 6px 10px 6px 8px;
+  background: var(--vh-chip); color: var(--vh-text); font: inherit; font-size: 12px; cursor: pointer;
+}
+.ed-hb svg { width: 17px; height: 17px; fill: currentColor; }
+.ed-hb:disabled { opacity: 0.38; cursor: default; }
+.ed-ib.on { color: var(--vh-accent); box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
+.ed-sub { margin: 10px 0 4px; font-size: 12px; color: var(--vh-dim); }
+.ed-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0; }
+.ed-chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.ed-chip {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 14px; padding: 5px 10px; white-space: nowrap;
+  background: var(--vh-chip); color: var(--vh-text); font: inherit; font-size: 12px; cursor: pointer;
+}
+.ed-chip i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2); }
+.ed-chip.on { background: var(--vh-chip-on); box-shadow: inset 0 0 0 1.5px var(--vh-accent); font-weight: 600; }
+.ed-swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.ed-sw {
+  width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; position: relative;
+  background: var(--c, #fff); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
+}
+.ed-sw.on { box-shadow: 0 0 0 2px var(--vh-glass), 0 0 0 4px var(--vh-accent); }
+.ed-sw.none { background: linear-gradient(135deg, transparent 45%, #d9534f 45%, #d9534f 55%, transparent 55%), var(--vh-chip); }
+.ed-sw.custom { background: var(--c, conic-gradient(red, yellow, lime, cyan, blue, magenta, red)); overflow: hidden; }
+.ed-sw.custom input { opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.ed-search { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; }
+.ed-search span svg { width: 18px; height: 18px; fill: var(--vh-dim); display: block; }
+.ed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 6px; max-height: 280px; overflow: auto; }
+.ed-pick {
+  display: grid; grid-template-columns: 18px 1fr; grid-template-rows: auto auto; column-gap: 6px; text-align: left; border: 0;
+  border-radius: 10px; padding: 6px 8px; background: var(--vh-chip); color: var(--vh-text); font: inherit; cursor: pointer;
+}
+.ed-pick span { grid-row: span 2; align-self: center; }
+.ed-pick span svg { width: 16px; height: 16px; fill: var(--vh-accent); display: block; }
+.ed-pick b { font-size: 12px; font-weight: 600; }
+.ed-pick small { font-size: 11px; color: var(--vh-dim); }
+.ed-pick:hover { box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
 .ed-report { margin-top: 8px; color: var(--vh-dim); line-height: 1.45; }
 .ed-list { margin-top: 4px; }
 .ed-confirm {

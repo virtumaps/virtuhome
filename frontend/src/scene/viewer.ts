@@ -131,6 +131,8 @@ export class Viewer {
   private sceneChanged = true;
   private sun: { azimuth: number | null; elevation: number | null } = { azimuth: null, elevation: null };
   private slowWatch = { frames: 0, time: 0, fired: false };
+  /** Measured once per label element (reading sizes every frame would force layouts). */
+  private labelSize = new WeakMap<HTMLElement, number[]>();
 
   constructor(private container: HTMLElement, private overlay: HTMLElement, opts: { tier: Tier; realistic?: RealisticModule | null; theme?: "day" | "night" }) {
     this.tier = opts.tier;
@@ -432,12 +434,37 @@ export class Viewer {
     const polar = this.mode === "house" ? 0.95 : 0.78;
     const az = 0.32;
     const target = new Vector3(cx, ty, cz);
-    const pos = new Vector3(
-      cx + dist * Math.sin(polar) * Math.sin(az),
-      ty + dist * Math.cos(polar),
-      cz + dist * Math.sin(polar) * Math.cos(az),
-    );
-    this.flyTo(pos, target, fly);
+    const dir = new Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az));
+    // the box of what is shown, from the lowest floor to the top of the highest
+    const top3 = this.mode === "house" && this.floors.length
+      ? this.floors[this.floors.length - 1].fb.floor.elevation + this.floors[this.floors.length - 1].offset + this.floors[this.floors.length - 1].fb.floor.height
+      : (this.floors[this.activeFloor]?.fb.floor.elevation ?? 0) + 1.2;
+    const corners: Vector3[] = [];
+    for (const x of [b.minX, b.maxX]) for (const z of [b.minZ, b.maxZ]) for (const y of [bottom, top3]) corners.push(new Vector3(x, y, z));
+    dist = this.fitDistance(target, dir, corners, dist);
+    this.flyTo(target.clone().addScaledVector(dir, dist), target, fly);
+  }
+
+  /** How far back the camera goes for a set of points to fill most of the view (leaving room for the controls). */
+  private fitDistance(target: Vector3, dir: Vector3, pts: Vector3[], dist: number): number {
+    const cam = this.camera.clone();
+    const v = new Vector3();
+    for (let k = 0; k < 4; k++) {
+      cam.position.copy(target).addScaledVector(dir, dist);
+      cam.lookAt(target);
+      cam.updateMatrixWorld();
+      let ex = 0, ey = 0;
+      for (const p of pts) {
+        v.copy(p).project(cam);
+        ex = Math.max(ex, Math.abs(v.x));
+        ey = Math.max(ey, Math.abs(v.y));
+      }
+      // the chips take the top, the tools the right: aim for ~80 % of the view
+      const f = Math.max(ex / 0.8, ey / 0.78);
+      if (!isFinite(f) || f <= 0) break;
+      dist = Math.min(300, Math.max(3, dist * f));
+    }
+    return dist;
   }
 
   frameRoom(floor: number, room: number): void {
@@ -726,27 +753,48 @@ export class Viewer {
     this.positionLabels();
   }
 
+  /**
+   * Puts the labels over their rooms. Where labels would overlap, the bigger room keeps its label
+   * (the selected room always does); zooming in brings the others back.
+   */
   private positionLabels(): void {
     const v = new Vector3();
+    const items: { el: HTMLElement; x: number; y: number; hidden: boolean; prio: number }[] = [];
     for (const [fi, f] of this.floors.entries()) {
       f.labels.forEach((el, i) => {
+        let prio = 1e9;
         if (this.mode === "house") {
           const b = f.fb.bounds;
           v.set(b.maxX + 0.4, f.fb.floor.elevation + f.offset + 0.2, (b.minZ + b.maxZ) / 2);
         } else {
           const r = f.fb.rooms[i];
           v.set(r.label[0], f.fb.floor.elevation + f.offset + 0.05, r.label[1]);
+          prio = (fi === this.activeFloor && i === this.selectedRoom ? 1e6 : 0) + (r.area || 1);
         }
         v.project(this.camera);
         const hidden = v.z > 1 || (this.mode === "floor" && fi !== this.activeFloor);
-        const x = Math.round(((v.x + 1) / 2) * this.width);
-        const y = Math.round(((1 - v.y) / 2) * this.height);
-        const key = hidden ? "h" : `${x},${y}`;
-        if (el.dataset.at === key) return;
-        el.dataset.at = key;
-        el.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
-        el.style.visibility = hidden ? "hidden" : "visible";
+        items.push({ el, x: Math.round(((v.x + 1) / 2) * this.width), y: Math.round(((1 - v.y) / 2) * this.height), hidden, prio });
       });
+    }
+    items.sort((a, b) => b.prio - a.prio);
+    const placed: number[][] = [];
+    for (const it of items) {
+      let hide = it.hidden;
+      if (!hide) {
+        let size = this.labelSize.get(it.el);
+        if (!size) {
+          size = [it.el.offsetWidth, it.el.offsetHeight];
+          if (size[0]) this.labelSize.set(it.el, size);
+        }
+        const r = [it.x - size[0] / 2 - 3, it.y - size[1] / 2 - 2, it.x + size[0] / 2 + 3, it.y + size[1] / 2 + 2];
+        if (placed.some((p) => r[0] < p[2] && r[2] > p[0] && r[1] < p[3] && r[3] > p[1])) hide = true;
+        else placed.push(r);
+      }
+      const key = hide ? "h" : `${it.x},${it.y}`;
+      if (it.el.dataset.at === key) continue;
+      it.el.dataset.at = key;
+      if (!hide) it.el.style.transform = `translate3d(${it.x}px, ${it.y}px, 0) translate(-50%, -50%)`;
+      it.el.style.visibility = hide ? "hidden" : "visible";
     }
   }
 
