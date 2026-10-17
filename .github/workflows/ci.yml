@@ -44,5 +44,3 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # PolyForm Shield is not on GitHub's licence list; only the HACS default store needs that
-          ignore: brands license

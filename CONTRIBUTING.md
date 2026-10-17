@@ -33,10 +33,11 @@ Python: `pip install cryptography pytest && pytest tests`.
 
 ## Licence of contributions
 
-VirtuHome is licensed under the [PolyForm Shield License 1.0.0](LICENSE). By opening a pull request you
-confirm that you wrote the contribution (or have the right to submit it), that it is offered under the
-same licence, and that VirtuMaps may also use, change and license it as part of VirtuHome and its
-extensions. If you cannot agree to that, open an issue describing the change instead.
+VirtuHome is licensed under the [GNU General Public License v3.0](LICENSE). By opening a pull request
+you confirm that you wrote the contribution (or have the right to submit it), that it is offered under
+the same licence, and that VirtuMaps may also use, change and license it as part of VirtuHome and its
+extensions, including under other licences. If you cannot agree to that, open an issue describing the
+change instead.
 
 ## Extensions
 

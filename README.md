@@ -26,7 +26,7 @@ On a computer or a recent iPad it switches to a realistic look with textures, su
 - **Make it look like home:** floor finishes, wall paint and wallpaper, the outside in brick, render,
   stone or cladding, and about 110 pieces of furniture and decor in swappable styles, colours and
   fabrics.
-- **Free and open to contributions** under the PolyForm Shield licence. Extensions such as Wall Tablet
+- **Free and open source** under the GPL-3.0 licence, and open to contributions. Extensions such as Wall Tablet
   (doorbell camera takeover, screensaver, night dimming) and Energy (rooms coloured by their power,
   the biggest users and what is not measured yet) are available to VirtuMaps installation clients.
 
@@ -125,5 +125,7 @@ anywhere unless you enter a key.
 
 ## Licence
 
-[PolyForm Shield 1.0.0](LICENSE): use it, change it and share it freely, except to offer a product or
-service that competes with VirtuHome. Copyright (c) 2026 VirtuMaps.
+[GNU GPL v3](LICENSE): use it, change it and share it freely. If you share a changed version, it stays
+under the GPL with its source. The paid extensions are separate and not covered by this licence. To build
+VirtuHome into a closed product, ask about a commercial licence at info@virtumaps.com.
+Copyright (c) 2026 VirtuMaps.

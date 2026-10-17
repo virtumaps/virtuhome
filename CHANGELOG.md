@@ -2,6 +2,9 @@
 
 ## 0.3.0
 
+VirtuHome is now licensed under the GNU GPL v3 (it was PolyForm Shield). The paid extensions are
+unchanged.
+
 ### New
 - Solar, battery and grid: a chip in the corner with what the panels make (or the house uses after
   dark) and the battery's level, and an energy sheet with the power flowing between solar, battery,
