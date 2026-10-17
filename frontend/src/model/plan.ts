@@ -82,6 +82,11 @@ export interface Furniture {
   finish?: Upholstery | null;
   /** Mirrored left to right (which side a corner sofa's chaise is on). */
   mirror?: boolean;
+  /**
+   * Cars: when the car is here (hidden in 3D otherwise). Unset: always; "plugged": while its
+   * charger has it plugged in; or an entity: a tracker or person at home, a sensor that is on.
+   */
+  parked?: string | null;
   /** Stairs: the balustrade's style and material, and which side going up it is on. */
   balustrade?: BalustradeStyle | null;
   balustrade_material?: BalustradeMaterial | null;
@@ -153,7 +158,7 @@ export interface PlanSettings {
   /** Outside walls: brick, render, cladding... and a colour for paintable finishes. */
   exterior_finish: ExteriorFinish;
   exterior_color?: string | null;
-  /** Solar, battery and grid sensors; anything unset is found from Home Assistant's energy settings. */
+  /** Solar, battery, grid and car charger sensors; anything unset is found from Home Assistant. */
   energy?: EnergySettings | null;
 }
 
@@ -179,6 +184,12 @@ export interface EnergySettings {
   price_export?: string | null;
   /** What the panels make at most (kW): how brightly they shine in 3D. */
   solar_peak?: number | null;
+  /** false hides car charging. */
+  ev_enabled?: boolean;
+  /** The car charger's power sensor; its status, the car's battery and the rest come from its device. */
+  ev_charger?: string | null;
+  /** The car's battery (%), when the charger does not know it. */
+  ev_level?: string | null;
 }
 
 export interface Plan {

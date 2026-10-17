@@ -1,14 +1,17 @@
 // Translates Home Assistant states into what the 3D view shows, and tells the view which parts
 // to refresh when states change. Home Assistant replaces a state object whenever it changes, so
 // spotting changes is a cheap identity comparison over the entities the plan uses.
-import { spaces, type Device, type Floor, type Plan, type Room, type Space } from "../model/plan";
+import { pointInPolygon } from "../model/geom";
+import { spaces, type Device, type Floor, type Furniture, type Plan, type Room, type Space } from "../model/plan";
 import type { GlowSlot, LampInfo } from "../scene/build";
 import { lin } from "../scene/build";
 import type { V3 } from "../scene/geo";
 import { kelvinToRgb, type LampState } from "../scene/lighting";
+import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
 import type { EnergyLive } from "./energy";
+import { chargerEntities, type EvNow } from "./ev";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
 
 export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status";
@@ -82,6 +85,8 @@ export class HassLive implements LiveSource {
   heatmap = false;
   /** Motion sensors of each camera's own device (a doorbell's motion turns its view cone red). */
   private cameraMotion = new Map<string, string[]>();
+  /** Rooms and garden areas with a car or a charger in them. */
+  private evSpaces = new Map<string, Furniture[]>();
   /** The house's solar: solar panels in the plan shine with it (darker in the day look's brighter light). */
   energy: EnergyLive | null = null;
   day = false;
@@ -133,6 +138,7 @@ export class HassLive implements LiveSource {
     this.kinds.clear();
     this.rooms.clear();
     this.cameraMotion.clear();
+    this.evSpaces.clear();
     // people, and alarms anywhere in the house, feed the top bar
     for (const id of Object.keys(hass.states)) {
       const dom = domainOf(id);
@@ -184,7 +190,14 @@ export class HassLive implements LiveSource {
         }
       }
       for (const f of floor.furniture) {
-        // solar panels relight when the house's solar moves a step (the view sees to it), not on every reading
+        // solar panels relight when the house's solar moves a step, and chargers and cars when one starts
+        // or stops charging (the view sees to both), not on every reading
+        if (EV_TYPES.has(f.type)) {
+          const space = spaces(floor).find((sp) => pointInPolygon([f.x, f.z], sp.points));
+          if (space) this.evSpaces.set(`${floor.id}/${space.id}`, [...(this.evSpaces.get(`${floor.id}/${space.id}`) ?? []), f]);
+          this.watch(f.parked && f.parked !== "plugged" ? f.parked : null, "labels");
+          continue;
+        }
         if (f.type === "solar_panels" && f.entity && domainOf(f.entity) === "sensor") continue;
         this.watch(f.entity, "lighting", "markers");
       }
@@ -221,6 +234,7 @@ export class HassLive implements LiveSource {
   }
 
   glowColor(g: GlowSlot): V3 | null {
+    if (g.type && EV_TYPES.has(g.type)) return evGlow(this.ev(g.entity), this.day);
     if (g.type === "solar_panels" && !g.entity) return solarGlow(this.energy, null, this.day);
     const s = this.state(g.entity);
     if (!s || isUnavailable(s)) return null;
@@ -385,12 +399,40 @@ export class HassLive implements LiveSource {
     if (t && !isUnavailable(t) && !isNaN(parseFloat(t.state))) parts.push(`${parseFloat(t.state).toFixed(1)}°`);
     const h = this.state(w.humidity);
     if (h && !isUnavailable(h) && !isNaN(parseFloat(h.state))) parts.push(`${Math.round(parseFloat(h.state))} %`);
+    // a car that is here, or a charger with a car plugged in
+    const cars = new Set((this.evSpaces.get(`${floor.id}/${room.id}`) ?? [])
+      .filter((f) => (CAR_TYPES.has(f.type) ? this.carHere(f) : !["unplugged", "unknown"].includes(this.ev(f.entity ?? null)?.state ?? "unknown")))
+      .map((f) => this.ev(f.entity ?? null)));
+    for (const ev of cars) if (ev) parts.push(evText(ev));
     if (this.roomExtraText) {
       const space = spaces(floor).find((x) => x.id === room.id);
       const extra = space ? this.roomExtraText(floor, space) : null;
       if (extra) parts.push(extra);
     }
     return parts.length ? parts.join(" · ") : null;
+  }
+
+  /** The charger a car or charger of the plan is linked to (any of its entities), else the house's first. */
+  ev(entity: string | null): EvNow | null {
+    const e = this.energy;
+    if (!e?.now) return null;
+    const i = entity ? e.sources.ev.findIndex((c) => chargerEntities(c).includes(entity)) : 0;
+    return e.now.ev[i] ?? null;
+  }
+
+  /** Whether a car of the plan is here now, as its "parked" says (with nothing to go by, it is). */
+  carHere(f: Furniture): boolean {
+    if (!f.parked) return true;
+    if (f.parked === "plugged") {
+      const st = this.ev(f.entity ?? null)?.state;
+      return !st || st !== "unplugged";
+    }
+    const s = this.state(f.parked);
+    if (!s || isUnavailable(s)) return true;
+    const dom = domainOf(f.parked);
+    if (dom === "device_tracker" || dom === "person") return s.state === "home";
+    if (dom === "binary_sensor" || dom === "input_boolean") return s.state === "on";
+    return !["off", "not_home", "away", "unplugged", "disconnected"].includes(s.state.toLowerCase());
   }
 
   /** Lights of a room's area (double-tap toggles them all). */
@@ -415,6 +457,25 @@ function solarGlow(energy: EnergyLive | null, s: HassEntity | null, day: boolean
   if (k <= 0.02) return null;
   const d = day ? 0.4 : 1;
   return [(0.02 + 0.05 * k) * d, (0.04 + 0.12 * k) * d, (0.12 + 0.36 * k) * d];
+}
+
+/** A charger's light and a car's charging port: green charging, blue plugged in, amber waiting. */
+function evGlow(ev: EvNow | null, day: boolean): V3 | null {
+  if (!ev) return null;
+  const c: V3 | null =
+    ev.state === "charging" ? [0.12, 0.85, 0.35]
+    : ev.state === "plugged" || ev.state === "finished" ? [0.18, 0.45, 1.0]
+    : ev.state === "approval" || ev.state === "paused" ? [1.0, 0.6, 0.1]
+    : ev.state === "fault" ? [1.0, 0.15, 0.1]
+    : null;
+  const k = day ? 0.55 : 1;
+  return c && [c[0] * k, c[1] * k, c[2] * k];
+}
+
+/** Under the driveway's name: "Car 52% · charging". */
+function evText(ev: EvNow): string {
+  const what: Partial<Record<EvNow["state"], string>> = { charging: "charging", plugged: "plugged in", approval: "waiting", paused: "paused", finished: "charged", fault: "fault" };
+  return [`Car${ev.level !== null ? ` ${Math.round(ev.level)}%` : ""}`, what[ev.state]].filter(Boolean).join(" · ");
 }
 
 /** The panels' brightness in tenths: the 3D view only relights when it moves a step. */

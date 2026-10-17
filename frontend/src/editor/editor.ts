@@ -11,7 +11,7 @@ import { labelPoint } from "../model/geom";
 import { newId, normalizePlan, spaces, type Device, type EnergySettings, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
-import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CATEGORY_NAMES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
+import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
 import { controlsFor, defaultFinish, styleOf, stylesFor } from "../scene/joinery";
 import { pointInPolygon } from "../model/geom";
@@ -620,7 +620,7 @@ export class Editor {
       );
     return [
       h("h4", {}, "Energy"),
-      h("p", { class: "ed-hint" }, "Solar, battery and grid are read from Home Assistant's energy settings. Pick a sensor only where the automatic one is wrong. Solar panels placed in the plan shine with what they make."),
+      h("p", { class: "ed-hint" }, "Solar, battery and grid are read from Home Assistant's energy settings, and car chargers from their integrations. Pick a sensor only where the automatic one is wrong. Solar panels placed in the plan shine with what they make; EV chargers and cars light up while charging."),
       h("label", { class: "ed-check" },
         h("input", { type: "checkbox", checked: set.enabled !== false, onchange: (e: Event) => edit("enabled", (e.target as HTMLInputElement).checked ? null : false, "Energy shown") }),
         " Show solar, battery and grid"),
@@ -638,7 +638,37 @@ export class Editor {
         h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0", value: set.solar_peak ? String(set.solar_peak) : "", placeholder: "auto",
           onchange: (e: Event) => edit("solar_peak", Number((e.target as HTMLInputElement).value) || null, "Energy: panels' peak") }),
       ),
+      h("div", { class: "ed-sub" }, "Car charging"),
+      h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: set.ev_enabled !== false, onchange: (e: Event) => edit("ev_enabled", (e.target as HTMLInputElement).checked ? null : false, "Car charging shown") }),
+        " Show the car charger"),
+      row("Charger", "ev_charger", power, auto.ev.length ? `Automatic: ${auto.ev.map((c) => c.name).join(" + ")}` : "Automatic: none found"),
+      row("Car battery", "ev_level", levels, automatic(auto.ev[0]?.level ?? null)),
     ];
+  }
+
+  /** A car: when it shows (it can leave the drive), and its charger's car's own shape and size. */
+  private carRows(fi: number, x: Furniture, reshape: (label: string) => (fn: (y: Furniture) => void) => void): HTMLElement[] {
+    const here = this.entities((id) => ["device_tracker", "person", "binary_sensor", "input_boolean"].includes(domainOf(id)));
+    const name = this.host.view.live.ev(x.entity ?? null)?.name ?? null;
+    const model = carModel(name);
+    const same = model && model.type === x.type && [x.w, x.d, x.h].every((v, i) => Math.abs(v - model.size[i]) < 0.005);
+    const rows: (HTMLElement | null)[] = [
+      h("div", { class: "ed-row" }, h("label", {}, "Shown"),
+        this.dropdown([["plugged", "While plugged in"], ...here], x.parked ?? "", (v) => this.change((p) => {
+          const y = p.floors[fi].furniture.find((z) => z.id === x.id)!;
+          if (v) y.parked = v;
+          else delete y.parked;
+        }, false, "Car shown"), "Always")),
+      h("p", { class: "ed-hint" }, "A car that is away is left out of the 3D view. A charger only knows when the car is plugged in; a tracker in the car, or its own integration, knows when it is parked."),
+      model && name && !same
+        ? h("button", { class: "ed-btn ghost", onclick: () => reshape("Shape")((y) => {
+          y.type = model.type;
+          [y.w, y.d, y.h] = model.size;
+        }) }, `Shape it like the ${name}`)
+        : null,
+    ];
+    return rows.filter((e): e is HTMLElement => !!e);
   }
 
   private floorRow(f: Floor, i: number): HTMLElement {
@@ -947,9 +977,12 @@ export class Editor {
     if (!x) return h("div", {});
     const def = FURNITURE[x.type];
     const upd = (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!));
+    const chargers = this.host.view.energy.sources.ev;
     const linkable = def?.category === "lights"
       ? this.entities((id) => ["light", "switch"].includes(domainOf(id)))
-      : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
+      : EV_TYPES.has(x.type)
+        ? chargers.map((c) => [c.status ?? c.power ?? c.level ?? "", c.name] as [string, string]).filter(([id]) => id)
+        : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
     // a change of size, height, turn or side keeps the piece out of walls and other pieces
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
       fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
@@ -981,7 +1014,9 @@ export class Editor {
       isUpholstered(x.type) ? h("div", { class: "ed-sub" }, "Upholstery") : null,
       isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named("Reupholster")((y) => (y.finish = k as Furniture["finish"]))) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
-      h("div", { class: "ed-row" }, h("label", {}, "Linked to"), this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), "Nothing")),
+      h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? "Charger" : "Linked to"),
+        this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? "The house's charger" : "None found") : "Nothing")),
+      ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
       h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
       h("div", { class: "ed-row" }, ...num("Height", "h"), ...num("Above floor", "y")),
       this.turnRow((deg) => reshape("Turn")((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360))),

@@ -5,7 +5,8 @@
 // An extension module's default export:
 //   export default { id: "wall_tablet", name: "Wall Tablet", apiVersion: 1, setup(ctx) { ... } }
 //
-// API 2 adds tools, room tints and texts, and the house's energy (solar, battery, grid).
+// API 2 adds tools, room tints and texts, and the house's energy (solar, battery, grid; car chargers
+// in sources.ev and now.ev).
 import * as THREE from "three";
 import type { EnergyNow, EnergySources, EnergyToday } from "../live/energy";
 import type { Hass } from "../live/hass";
@@ -31,7 +32,7 @@ export interface ToolHandle {
   remove(): void;
 }
 
-/** The house's solar, battery and grid, as the core reads them. */
+/** The house's solar, battery, grid and car chargers, as the core reads them. */
 export interface EnergyHandle {
   readonly sources: EnergySources;
   readonly now: EnergyNow | null;
