@@ -17,6 +17,7 @@ const SCHEMA = [
     { name: "floor_chips", selector: { boolean: {} } },
     { name: "fill", selector: { boolean: {} } },
     { name: "people", selector: { boolean: {} } },
+    { name: "energy", selector: { boolean: {} } },
   ] },
   { name: "alarm", selector: { entity: { domain: "alarm_control_panel" } } },
 ];
@@ -25,7 +26,7 @@ const LABELS: Record<string, string> = {
   floor: "Open on floor (name, id or number; empty = whole house)",
   theme: "Look", walls: "Walls", quality: "Graphics", people: "Show who is home", height: "Height",
   room_panel: "Tap a room to open it", floor_chips: "Floor buttons", fill: "Fill the screen",
-  alarm: "Alarm panel in the top bar",
+  alarm: "Alarm panel in the top bar", energy: "Show solar, battery and grid",
 };
 
 type Config = Record<string, unknown>;

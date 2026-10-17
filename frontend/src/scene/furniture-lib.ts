@@ -5,12 +5,15 @@
 // Each type builds its parts for a given size: x/z offsets from the item's middle, y from the
 // floor, width along x, depth along z (front = +z), height along y, all in metres. Types of the
 // same family can be swapped for each other in the editor (a sofa for a corner sofa).
+import type { Furniture } from "../model/plan";
 import type { Upholstery } from "./finishes";
 
 export type Role =
   | "wood" | "woodDark" | "fabric" | "fabricDark" | "cushion" | "white" | "metal" | "dark"
   | "glass" | "plant" | "leaf" | "pot" | "soil" | "accent" | "red" | "blue" | "screen" | "ceramic"
-  | "rug" | "mattress" | "bulb" | "paper" | "canvas" | "mirror" | "water" | "rubber";
+  | "rug" | "mattress" | "bulb" | "paper" | "canvas" | "mirror" | "water" | "rubber"
+  // balustrade materials
+  | "pine" | "softwood" | "oak" | "walnut" | "primed" | "blackMetal";
 
 /** Parts that light up with their entity: a TV screen, a lamp shade. */
 export type Glow = "screen" | "lamp";
@@ -32,6 +35,10 @@ export interface Part {
   taper?: number;
   /** Cylinders lying down, along x or z (a dumbbell's bar, a wheel, a clock face). */
   axis?: "x" | "z";
+  /** Boxes: how much the box rises per metre along z (a handrail following a stair's pitch). */
+  shear?: number;
+  /** Upright cylinders: how far the top end sits from the bottom one along x and z (a splayed leg). */
+  lean?: [number, number];
 }
 
 export type Category =
@@ -57,7 +64,8 @@ export interface FurnitureType {
   finish?: Upholstery;
   /** Roles a picked colour applies to (default: upholstery, else wood, else the body). */
   paint?: Role[];
-  build: (w: number, d: number, h: number) => Part[];
+  /** The item itself is passed when there is one (a staircase's balustrade). */
+  build: (w: number, d: number, h: number, item?: Furniture) => Part[];
 }
 
 const box = (x: number, y: number, z: number, w: number, h: number, d: number, role: Role, glow?: Glow): Part => ({
@@ -91,6 +99,39 @@ function roundLegs(w: number, d: number, h: number, t = 0.045, inset = 0.05, rol
   return [[-x, -z], [x, -z], [-x, z], [x, z]].map(([px, pz]) => cyl(px, 0, pz, t * 0.7, h, t * 0.7, role, undefined, 6, 1.4));
 }
 
+/**
+ * Four round legs splaying out from under a seat or top: their tops at (±top[0], top[1] ± top[2])
+ * — x, then the middle and half-spread along z — and their feet at (±foot[0], ±foot[1]).
+ */
+function splayLegs(top: [number, number, number], foot: [number, number], h: number, t = 0.04, role: Role = "woodDark"): Part[] {
+  return [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz]) => ({
+    ...cyl(sx * foot[0], 0, sz * foot[1], t * 0.7, h, t * 0.7, role, undefined, 6, 1.4),
+    lean: [sx * (top[0] - foot[0]), top[1] + sz * top[2] - sz * foot[1]] as [number, number],
+  }));
+}
+
+/** Where a splayed leg's middle is at height y, as a half-spread along x. */
+function splayAt(top: number, foot: number, h: number, y: number): number {
+  return foot + ((top - foot) * y) / h;
+}
+
+/** The half-spread along each axis of the points k of the way out on a round top's diagonals. */
+function onRound(w: number, d: number, k: number): [number, number] {
+  return [(k * w) / 2 / Math.SQRT2, (k * d) / 2 / Math.SQRT2];
+}
+
+/** Round legs splaying from k0 to k1 of a round top's radius (straight down when they are equal). */
+function roundTopLegs(w: number, d: number, h: number, k0: number, k1: number, t = 0.04, role: Role = "woodDark"): Part[] {
+  const [tx, tz] = onRound(w, d, k0);
+  return splayLegs([tx, 0, tz], onRound(w, d, k1), h, t, role);
+}
+
+/** A round shelf at height y whose rim runs through the middle of roundTopLegs(w, d, h, k0, k1). */
+function legShelf(w: number, d: number, h: number, k0: number, k1: number, y: number, t: number, role: Role, seg = 14): Part {
+  const k = k1 + ((k0 - k1) * (y + t / 2)) / h;
+  return cyl(0, y, 0, k * w + 0.02, t, k * d + 0.02, role, undefined, seg);
+}
+
 function sofa(w: number, d: number, h: number, arms = true): Part[] {
   const arm = arms ? Math.min(0.2, w * 0.12) : 0;
   const seatH = Math.min(0.45, h * 0.55);
@@ -122,20 +163,95 @@ function shift(parts: Part[], dx: number, dz: number): Part[] {
   return parts.map((p) => ({ ...p, x: p.x + dx, z: p.z + dz }));
 }
 
+/** A cupboard on a plinth with a worktop. The worktop overhangs at the front only, so units stand flush in a run. */
 function cabinet(w: number, d: number, h: number, role: Role = "white", top: Role = "wood"): Part[] {
-  return [box(0, 0.08, 0, w, h - 0.12, d, role), box(0, h - 0.04, 0, w + 0.01, 0.04, d + 0.02, top), box(0, 0, -0.03, w - 0.04, 0.08, d - 0.06, "dark")];
+  return [box(0, 0.08, 0, w, h - 0.12, d, role), box(0, h - 0.04, 0.01, w, 0.04, d + 0.02, top), box(0, 0, -0.03, w - 0.04, 0.08, d - 0.06, "dark")];
 }
 
-function steps(w: number, d: number, h: number): Part[] {
+function steps(w: number, d: number, h: number, item?: Furniture): Part[] {
   const n = Math.max(3, Math.round(h / 0.19));
   const run = d / n;
   const rise = h / n;
   const parts: Part[] = [];
   for (let i = 0; i < n; i++) {
-    // the bottom step is at the front (+z); every step is a solid block down to the floor
-    parts.push(box(0, 0, d / 2 - run * (i + 0.5), w, rise * (i + 1), run, i % 2 ? "wood" : "woodDark"));
+    // the bottom step is at the front (+z); every step is a solid block down to the floor. The top
+    // one stops a centimetre short, so it does not fight the floor of the storey above for pixels.
+    const top = i === n - 1 ? h - 0.01 : rise * (i + 1);
+    parts.push(box(0, 0, d / 2 - run * (i + 0.5), w, top, run, i % 2 ? "wood" : "woodDark"));
   }
+  const style = item?.balustrade;
+  if (item && style && style !== "none" && style in BALUSTRADES) parts.push(...balustrade(w, d, h, n, style, item));
   return parts;
+}
+
+export const BALUSTRADES = { none: "None", spindles: "Spindles", bars: "Slim bars", glass: "Glass", panel: "Solid panel" } as const;
+
+export const BALUSTRADE_MATERIALS = {
+  primed: { name: "White primed", role: "primed", color: 0xf3f2ee },
+  pine: { name: "Pine", role: "pine", color: 0xd9a865 },
+  softwood: { name: "Softwood", role: "softwood", color: 0xe6cfa3 },
+  oak: { name: "Oak", role: "oak", color: 0xc39a6c },
+  walnut: { name: "Walnut", role: "walnut", color: 0x6e4f38 },
+  black: { name: "Black metal", role: "blackMetal", color: 0x2a2b2e },
+  steel: { name: "Steel", role: "metal", color: 0xb9bec4 },
+} satisfies Record<string, { name: string; role: Role; color: number }>;
+
+export type BalustradeStyle = keyof typeof BALUSTRADES;
+export type BalustradeMaterial = keyof typeof BALUSTRADE_MATERIALS;
+
+/** The material a balustrade style comes in unless changed. */
+export const BALUSTRADE_DEFAULT: Record<Exclude<BalustradeStyle, "none">, BalustradeMaterial> = {
+  spindles: "primed", bars: "black", glass: "steel", panel: "primed",
+};
+
+/**
+ * Newels at both ends, a closed string over the ends of the steps, a handrail 90 cm above the
+ * nosings, and spindles, bars, glass or a panel between them. Going up the stairs, "right" is +x.
+ */
+function balustrade(w: number, d: number, h: number, n: number, style: Exclude<BalustradeStyle, "none">, item: Furniture): Part[] {
+  const role = BALUSTRADE_MATERIALS[item.balustrade_material ?? BALUSTRADE_DEFAULT[style]]?.role ?? "primed";
+  const run = d / n, rise = h / n;
+  const slope = -rise / run;
+  /** Height of the line through the nosings. */
+  const pitch = (z: number) => rise + (d / 2 - z) * (rise / run);
+  const side = item.balustrade_side ?? "right";
+  const flip = item.mirror ? -1 : 1;
+  const out: Part[] = [];
+  const post = 0.09, rail = 0.9;
+  const zb = d / 2 - 0.04; // bottom newel, 5 mm proud of the first step
+  const zt = -d / 2 + run - 0.04; // top newel, at the top step's nosing
+  const z0 = zt + post / 2, z1 = zb - post / 2;
+  const zc = (z0 + z1) / 2, len = z1 - z0;
+  const sloped = (x: number, y: number, pw: number, ph: number, r: Role, z = zc, l = len): Part => ({ ...box(x, y, z, pw, ph, l, r), shear: slope });
+  for (const s of side === "both" ? [1, -1] : [side === "left" ? -flip : flip]) {
+    const x = s * (w / 2 - 0.02);
+    out.push(box(x, 0, zb, post, pitch(zb) + rail + 0.08, post, role));
+    // the top newel rises through the stairwell to the landing's rail height
+    out.push(box(x, h - rise - 0.02, zt, post, rise + rail + 0.1, post, role));
+    // the string covers the ends of the steps and carries the balustrade; the handrail caps it
+    out.push(sloped(s * (w / 2 - 0.0025), pitch(zc) - 0.3, 0.065, 0.36, role));
+    out.push(sloped(x, pitch(zc) + rail - 0.06, 0.065, 0.06, role));
+    if (style === "spindles" || style === "bars") {
+      const t = style === "spindles" ? 0.035 : 0.016;
+      const k = Math.max(2, Math.round(len / (style === "spindles" ? 0.12 : 0.11)));
+      for (let i = 0; i < k; i++) {
+        const z = z0 + (len * (i + 0.5)) / k;
+        // from inside the string to inside the handrail
+        out.push(box(x, pitch(z) + 0.03, z, t, rail - 0.06, t, role));
+      }
+    } else if (style === "glass") {
+      const k = Math.max(1, Math.ceil(len / 1.2));
+      const gap = 0.03;
+      const pl = (len - gap * (k + 1)) / k;
+      for (let i = 0; i < k; i++) {
+        const z = z0 + gap + pl / 2 + i * (pl + gap);
+        out.push(sloped(x, pitch(z) + 0.08, 0.012, rail - 0.16, "glass", z, pl));
+      }
+    } else {
+      out.push(sloped(x, pitch(zc) + 0.04, 0.03, rail - 0.1, role));
+    }
+  }
+  return out;
 }
 
 function bed(w: number, d: number, h: number, upholstered = false): Part[] {
@@ -256,7 +372,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
       cyl(0, 0.08, 0, w, 0.32, d, "fabricDark", undefined, 16),
       cyl(0, 0.4, 0.04, w * 0.78, 0.08, d * 0.78, "cushion", undefined, 16),
       box(0, 0.08, -d * 0.3, w * 0.9, h - 0.08, d * 0.3, "fabric"),
-      ...roundLegs(w * 0.8, d * 0.8, 0.08, 0.04, 0.03, "metal"),
+      ...roundTopLegs(w, d, 0.08, 0.7, 0.75, 0.04, "metal"),
     ],
   },
   recliner: {
@@ -282,7 +398,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
   },
   side_table: {
     name: "Side table", category: "living", family: "coffee", size: [0.45, 0.45, 0.55],
-    build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "wood", undefined, 14), ...roundLegs(w * 0.75, d * 0.75, h - 0.03, 0.035, 0.02)],
+    build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "wood", undefined, 14), ...roundTopLegs(w, d, h - 0.03, 0.6, 0.9, 0.035)],
   },
   tv_board: {
     name: "TV on a board", category: "living", family: "tv", size: [1.6, 0.45, 1.25],
@@ -386,9 +502,20 @@ export const FURNITURE: Record<string, FurnitureType> = {
   },
   stool_bar: {
     name: "Bar stool", category: "dining", family: "chair", size: [0.42, 0.42, 0.95],
-    build: (w, d, h) => [cyl(0, h - 0.2, 0, w, 0.06, d, "fabric", undefined, 14), box(0, h - 0.14, -d / 2 + 0.03, w * 0.8, 0.14, 0.03, "fabric"), ...roundLegs(w, d, h - 0.2, 0.035, 0.06, "metal"), cyl(0, 0.3, 0, w * 0.8, 0.02, d * 0.8, "metal", undefined, 12)],
+    build: (w, d, h) => {
+      const legH = h - 0.2;
+      const [tx, tz] = onRound(w, d, 0.65), [fx, fz] = onRound(w, d, 1.1);
+      // a footrest of four rails from leg to leg
+      const ry = Math.min(0.3, legH * 0.4), rx = splayAt(tx, fx, legH, ry + 0.01), rz = splayAt(tz, fz, legH, ry + 0.01);
+      return [
+        cyl(0, legH, 0, w, 0.06, d, "fabric", undefined, 14),
+        box(0, h - 0.14, -d / 2 + 0.07, w * 0.6, 0.14, 0.025, "fabric"),
+        ...splayLegs([tx, 0, tz], [fx, fz], legH, 0.035, "metal"),
+        ...[-1, 1].flatMap((s) => [rod("x", 0, ry, s * rz, 2 * rx, 0.02, 0.02, "metal", 6), rod("z", s * rx, ry, 0, 0.02, 0.02, 2 * rz, "metal", 6)]),
+      ];
+    },
   },
-  stool: { name: "Stool", category: "dining", family: "chair", size: [0.38, 0.38, 0.46], build: (w, d, h) => [cyl(0, h - 0.04, 0, w, 0.04, d, "wood", undefined, 14), ...roundLegs(w, d, h - 0.04, 0.04, 0.06)] },
+  stool: { name: "Stool", category: "dining", family: "chair", size: [0.38, 0.38, 0.46], build: (w, d, h) => [cyl(0, h - 0.04, 0, w, 0.04, d, "wood", undefined, 14), ...roundTopLegs(w, d, h - 0.04, 0.7, 1.05)] },
   bench: { name: "Bench", category: "dining", family: "chair", size: [1.4, 0.4, 0.45], build: (w, d, h) => [box(0, h - 0.05, 0, w, 0.05, d, "wood"), ...legs(w, d, h - 0.05, 0.05, 0.04)] },
 
   // ---------------------------------------------------------------- kitchen
@@ -427,7 +554,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     ],
   },
   nightstand: { name: "Bedside table", category: "bedroom", family: "bedside", size: [0.45, 0.4, 0.5], build: (w, d, h) => [box(0, 0.06, 0, w, h - 0.06, d, "wood"), ...legs(w, d, 0.06, 0.04, 0.02, "dark")] },
-  nightstand_round: { name: "Round bedside table", category: "bedroom", family: "bedside", size: [0.42, 0.42, 0.52], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "wood", undefined, 14), cyl(0, 0.2, 0, w * 0.9, 0.02, d * 0.9, "wood", undefined, 14), ...roundLegs(w * 0.8, d * 0.8, h - 0.03, 0.035, 0.02)] },
+  nightstand_round: { name: "Round bedside table", category: "bedroom", family: "bedside", size: [0.42, 0.42, 0.52], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "wood", undefined, 14), legShelf(w, d, h - 0.03, 0.7, 0.85, 0.2, 0.02, "wood"), ...roundTopLegs(w, d, h - 0.03, 0.7, 0.85, 0.035)] },
   wardrobe: {
     name: "Wardrobe", category: "bedroom", family: "storage_tall", size: [1.5, 0.6, 2.1],
     build: (w, d, h) => {
@@ -446,7 +573,17 @@ export const FURNITURE: Record<string, FurnitureType> = {
   // ---------------------------------------------------------------- bathroom
   bathtub: {
     name: "Bath", category: "bath", family: "bath", size: [1.7, 0.75, 0.55],
-    build: (w, d, h) => [box(0, 0, 0, w, h - 0.02, d, "ceramic"), box(0, h - 0.04, 0, w - 0.14, 0.02, d - 0.14, "water")],
+    build: (w, d, h) => {
+      // a rim around the water, which sits a few centimetres below it
+      const r = 0.07;
+      const rim = h - 0.02;
+      return [
+        box(0, 0, -d / 2 + r / 2, w, rim, r, "ceramic"), box(0, 0, d / 2 - r / 2, w, rim, r, "ceramic"),
+        box(-w / 2 + r / 2, 0, 0, r, rim, d - 2 * r, "ceramic"), box(w / 2 - r / 2, 0, 0, r, rim, d - 2 * r, "ceramic"),
+        box(0, 0, 0, w - 2 * r, rim - 0.12, d - 2 * r, "ceramic"),
+        box(0, rim - 0.12, 0, w - 2 * r, 0.07, d - 2 * r, "water"),
+      ];
+    },
   },
   bath_freestanding: {
     name: "Freestanding bath", category: "bath", family: "bath", size: [1.65, 0.78, 0.6],
@@ -642,7 +779,22 @@ export const FURNITURE: Record<string, FurnitureType> = {
   },
   toy_box: { name: "Toy box", category: "kids", family: "storage_low", size: [0.7, 0.4, 0.45], paint: ["blue"], build: (w, d, h) => [box(0, 0, 0, w, h - 0.03, d, "blue"), box(0, h - 0.03, 0, w + 0.02, 0.03, d + 0.02, "white"), ball(-w * 0.2, h, 0, 0.14, 0.14, 0.14, "red", 6), box(w * 0.18, h, 0.02, 0.12, 0.12, 0.12, "accent")] },
   play_tent: { name: "Play tent", category: "kids", family: "tent", size: [1.1, 1.1, 1.5], paint: ["canvas"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "canvas", undefined, 6, 0), cyl(0, 0, 0, w * 0.8, 0.012, d * 0.8, "rug", undefined, 12)] },
-  high_chair: { name: "High chair", category: "kids", family: "chair", size: [0.55, 0.6, 1.0], paint: ["white"], build: (w, d, h) => [box(0, 0.55, 0, w * 0.7, 0.05, d * 0.6, "white"), box(0, 0.55, -d * 0.28, w * 0.7, h - 0.55, 0.04, "white"), box(0, 0.75, d * 0.32, w * 0.8, 0.03, 0.15, "white"), ...roundLegs(w, d, 0.55, 0.045, 0.02, "wood")] },
+  high_chair: {
+    name: "High chair", category: "kids", family: "chair", size: [0.55, 0.6, 1.0], paint: ["white"],
+    build: (w, d, h) => {
+      // a seat with a back and sides, a tray resting on the sides, and legs splaying out to the corners
+      const sy = h * 0.56, sw = w * 0.62, arm = sy + Math.min(0.25, (h - sy) * 0.55);
+      const zb = -d * 0.32, zs = zb + 0.04, zf = d * 0.25, zt = d * 0.45;
+      return [
+        box(0, sy, (zs + zf) / 2, sw, 0.05, zf - zs, "white"),
+        box(0, sy, zb + 0.02, sw, h - sy, 0.04, "white"),
+        ...[-1, 1].map((s) => box(s * (sw / 2 - 0.015), sy + 0.05, (zs + zf) / 2, 0.03, arm - sy - 0.05, zf - zs, "white")),
+        box(0, arm, (zf - 0.06 + zt) / 2, sw + 0.12, 0.025, zt - zf + 0.06, "white"),
+        box(0, arm + 0.025, zt - 0.015, sw + 0.12, 0.02, 0.03, "white"),
+        ...splayLegs([sw / 2 - 0.05, (zb + zf) / 2, (zf - zb) / 2 - 0.05], [w / 2 - 0.03, d / 2 - 0.03], sy, 0.045, "wood"),
+      ];
+    },
+  },
 
   // ---------------------------------------------------------------- utility
   washer: {
@@ -662,13 +814,37 @@ export const FURNITURE: Record<string, FurnitureType> = {
   printer_3d: { name: "3D printer", category: "utility", family: "printer", size: [0.4, 0.4, 0.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "dark"), box(0, 0.05, d / 2 - 0.004, w * 0.85, h * 0.8, 0.008, "glass", "screen")] },
 
   // ---------------------------------------------------------------- garden
-  garden_table: { name: "Garden table", category: "outdoor", family: "garden_table", size: [1.2, 1.2, 0.72], paint: ["metal"], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "metal", undefined, 18), ...roundLegs(w * 0.8, d * 0.8, h - 0.03, 0.04, 0.02, "dark")] },
+  garden_table: { name: "Garden table", category: "outdoor", family: "garden_table", size: [1.2, 1.2, 0.72], paint: ["metal"], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "metal", undefined, 18), ...roundTopLegs(w, d, h - 0.03, 0.55, 0.8, 0.04, "dark")] },
   garden_chair: { name: "Garden chair", category: "outdoor", family: "garden_chair", size: [0.55, 0.6, 0.85], build: (w, d, h) => [box(0, 0.42, 0.02, w, 0.04, d - 0.06, "wood"), box(0, 0.46, -d / 2 + 0.04, w, h - 0.46, 0.04, "wood"), ...legs(w, d, 0.42, 0.04, 0.03, "metal"), box(-w / 2 + 0.02, 0.6, 0, 0.04, 0.03, d - 0.1, "metal"), box(w / 2 - 0.02, 0.6, 0, 0.04, 0.03, d - 0.1, "metal")] },
   sun_lounger: { name: "Sun lounger", category: "outdoor", family: "garden_chair", size: [0.7, 1.95, 0.5], paint: ["fabric"], build: (w, d, h) => [box(0, 0.25, 0.25, w, 0.06, d - 0.5, "fabric"), box(0, 0.25, -d / 2 + 0.3, w, h, 0.12, "fabric"), ...legs(w, d, 0.25, 0.04, 0.05, "metal")] },
   garden_sofa: { name: "Garden sofa", category: "outdoor", family: "garden_chair", size: [1.8, 0.8, 0.75], build: (w, d, h) => [...sofa(w, d, h).map((p) => (p.role === "fabric" ? { ...p, role: "woodDark" as Role } : p))] },
   parasol: { name: "Parasol", category: "outdoor", family: "parasol", size: [2.5, 2.5, 2.4], paint: ["canvas"], build: (w, d, h) => [cyl(0, 0, 0, 0.45, 0.06, 0.45, "dark", undefined, 10), cyl(0, 0.06, 0, 0.04, h - 0.06, 0.04, "metal", undefined, 6), cyl(0, h - 0.45, 0, w, 0.4, d, "canvas", undefined, 8, 0.05)] },
-  bbq: { name: "Barbecue", category: "outdoor", family: "bbq", size: [0.6, 0.6, 1.0], paint: ["dark"], build: (w, d, h) => [ball(0, h * 0.45, 0, w, h * 0.55, d, "dark", 12), ...roundLegs(w * 0.8, d * 0.8, h * 0.62, 0.04, 0.05, "metal"), cyl(0, h * 0.25, 0, w * 0.6, 0.02, d * 0.6, "metal", undefined, 12)] },
+  bbq: { name: "Barbecue", category: "outdoor", family: "bbq", size: [0.6, 0.6, 1.0], paint: ["dark"], build: (w, d, h) => [ball(0, h * 0.45, 0, w, h * 0.55, d, "dark", 12), ...roundTopLegs(w, d, h * 0.62, 0.55, 0.85, 0.04, "metal"), legShelf(w, d, h * 0.62, 0.55, 0.85, h * 0.25, 0.02, "metal", 12)] },
   fire_pit: { name: "Fire pit", category: "outdoor", family: "bbq", size: [0.9, 0.9, 0.4], paint: ["dark"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.8, h, d * 0.8, "dark", undefined, 16, 1.25), cyl(0, h - 0.04, 0, w * 0.85, 0.02, d * 0.85, "accent", undefined, 16)] },
+  solar_panels: {
+    // panels upright side by side, tilted to the front; their cells shine with what the house's solar makes
+    name: "Solar panels", category: "outdoor", family: "solar", size: [4.2, 1.5, 1.1],
+    build: (w, d, h) => {
+      const n = Math.max(1, Math.round(w / 1.05));
+      const gap = 0.02, pw = (w - gap * (n - 1)) / n;
+      const low = 0.25, t = 0.035;
+      const rise = Math.max(0.05, h - low - t);
+      const sh = -rise / d;
+      const mid = low + rise / 2;
+      const out: Part[] = [];
+      for (let i = 0; i < n; i++) {
+        const x = -w / 2 + pw / 2 + i * (pw + gap);
+        out.push({ ...box(x, mid, 0, pw, t, d, "metal"), shear: sh });
+        out.push({ ...box(x, mid + t, 0, pw - 0.04, 0.006, d - 0.04, "screen", "screen"), shear: sh });
+      }
+      // tall legs at the back, short ones at the front, their tops hidden in the panels
+      for (const x of [-w / 2 + 0.1, w / 2 - 0.1]) {
+        out.push(box(x, 0, -d / 2 + 0.06, 0.04, low + rise - 0.01, 0.04, "metal"));
+        out.push(box(x, 0, d / 2 - 0.06, 0.04, low + 0.05, 0.04, "metal"));
+      }
+      return out;
+    },
+  },
   trampoline: {
     name: "Trampoline", category: "outdoor", family: "play", size: [3.0, 3.0, 0.9], paint: ["blue"],
     build: (w, d, h) => [cyl(0, h - 0.06, 0, w, 0.06, d, "blue", undefined, 24), cyl(0, h - 0.055, 0, w * 0.86, 0.008, d * 0.86, "rubber", undefined, 24), ...[0, 1, 2, 3, 4, 5].map((i) => cyl(Math.cos(i * 1.047) * w * 0.47, 0, Math.sin(i * 1.047) * d * 0.47, 0.05, h - 0.06, 0.05, "metal", undefined, 5))],
@@ -755,6 +931,13 @@ export const CEILING_LAMPS = new Set(["lamp_ceiling", "lamp_pendant", "lamp_glob
 
 export function furnitureType(type: string): FurnitureType {
   return FURNITURE[type] ?? FURNITURE.tall_cabinet;
+}
+
+/** Height of a piece's bottom above its storey's floor: its own, else its type's; ceiling lamps hang from the ceiling. */
+export function baseHeight(item: { type: string; y?: number | null }, storeyHeight: number): number {
+  if (item.y !== undefined && item.y !== null) return item.y;
+  if (CEILING_LAMPS.has(item.type)) return storeyHeight - 0.02;
+  return furnitureType(item.type).y ?? 0;
 }
 
 /** Types a piece can be swapped for (same family), the piece's own type first. */

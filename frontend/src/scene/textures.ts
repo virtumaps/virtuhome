@@ -597,6 +597,19 @@ const RECIPES: Record<string, Recipe> = {
       };
     },
   },
+  // along the length of a door or a window frame
+  wood_grain_v: {
+    detail: true,
+    make: (rnd) => {
+      const g = fbm(40, 3, 4, rnd);
+      return (u, v) => {
+        const t = g(u, v);
+        const ring = Math.abs(Math.sin((u * 22 + t * 6) * Math.PI));
+        const f = 0.86 + t * 0.16 - Math.pow(1 - ring, 6) * 0.08;
+        return [f, f, f, t];
+      };
+    },
+  },
   brushed: {
     detail: true,
     make: (rnd) => {

@@ -174,9 +174,16 @@ function freeWall(fw: FreeWall, floor: Floor, settings: PlanSettings): WallSegme
   };
 }
 
-/** Walls meeting at an angle each reach half the other's thickness past the corner, so corners close. */
+/**
+ * Walls meeting at an angle each reach half the other's thickness past the corner, so corners close.
+ * Where the same line carries on (a wall split where another meets it), the two parts just meet:
+ * reaching into each other, their faces would overlap and flicker.
+ */
 function closeCorners(walls: WallSegment[]): void {
   const reach = (w: WallSegment, p: Vec2): number => {
+    const carriesOn = walls.some((o) => o !== w && Math.abs(cross(o.dir, w.dir)) < 0.2
+      && Math.abs(dot(sub(p, o.a), o.normal)) < 0.02 && (dist(p, o.a) < 0.02 || dist(p, o.b) < 0.02));
+    if (carriesOn) return 0;
     let ext = 0;
     for (const o of walls) {
       if (o === w) continue;

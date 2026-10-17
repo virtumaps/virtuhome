@@ -7,10 +7,12 @@
 
 export type Vec2 = [number, number];
 
-import type { ExteriorFinish, FloorFinish, Upholstery, WallFinish } from "../scene/finishes";
+import type { ExteriorFinish, FloorFinish, JoineryFinish, Upholstery, WallFinish } from "../scene/finishes";
+import type { DoorStyle, GarageStyle, WindowStyle } from "../scene/joinery";
+import { CEILING_LAMPS, FURNITURE, type BalustradeMaterial, type BalustradeStyle } from "../scene/furniture-lib";
 
 export type FloorMaterial = FloorFinish;
-export type { ExteriorFinish, FloorFinish, Upholstery, WallFinish };
+export type { DoorStyle, ExteriorFinish, FloorFinish, GarageStyle, JoineryFinish, Upholstery, WallFinish, WindowStyle };
 export type OpeningKind = "door" | "window" | "passage" | "garage";
 export type Mount = "ceiling" | "wall" | "floor" | "table";
 export type ThemeName = "auto" | "night" | "day";
@@ -46,9 +48,16 @@ export interface Opening {
   entity?: string | null;
   /** Blind or curtain in front of a window. */
   cover?: string | null;
-  /** Doors: hinge side seen from the room, and whether they swing into it. */
+  /** Doors and casement windows: hinge side seen from the room, and whether they swing into it. */
   hinge?: "left" | "right";
   swing?: "in" | "out";
+  /** How it is made and opens (scene/joinery.ts); null = the usual for its kind. */
+  style?: DoorStyle | WindowStyle | GarageStyle | null;
+  /** The door leaf or the window frame: a finish and, for paintable ones, a colour ("#rrggbb"). */
+  finish?: JoineryFinish | null;
+  color?: string | null;
+  /** Glazing bars across the glass (a Georgian grid). */
+  bars?: boolean;
 }
 
 export interface Furniture {
@@ -63,8 +72,8 @@ export interface Furniture {
   w: number;
   d: number;
   h: number;
-  /** Bottom above the floor (wall cabinets, wall TVs). */
-  y?: number;
+  /** Bottom above the floor (wall cabinets, wall TVs); unset or null = the type's usual height. */
+  y?: number | null;
   /** Linked entity: a TV's media player, a lamp's light, a washer's power switch. */
   entity?: string | null;
   /** Main colour ("#rrggbb"): the upholstery, else the wood or the body. */
@@ -73,6 +82,10 @@ export interface Furniture {
   finish?: Upholstery | null;
   /** Mirrored left to right (which side a corner sofa's chaise is on). */
   mirror?: boolean;
+  /** Stairs: the balustrade's style and material, and which side going up it is on. */
+  balustrade?: BalustradeStyle | null;
+  balustrade_material?: BalustradeMaterial | null;
+  balustrade_side?: "left" | "right" | "both" | null;
 }
 
 export interface Device {
@@ -140,6 +153,32 @@ export interface PlanSettings {
   /** Outside walls: brick, render, cladding... and a colour for paintable finishes. */
   exterior_finish: ExteriorFinish;
   exterior_color?: string | null;
+  /** Solar, battery and grid sensors; anything unset is found from Home Assistant's energy settings. */
+  energy?: EnergySettings | null;
+}
+
+/**
+ * Power sensors (W or kW) of the house's energy. One sensor each way (both positive), or one signed
+ * sensor: the battery positive while discharging, the grid positive while importing.
+ */
+export interface EnergySettings {
+  /** false hides solar, battery and grid everywhere. */
+  enabled?: boolean;
+  /** Added up (one sensor per string of panels is fine). */
+  solar?: string[] | null;
+  home?: string | null;
+  battery?: string | null;
+  battery_charge?: string | null;
+  battery_discharge?: string | null;
+  battery_level?: string | null;
+  grid?: string | null;
+  grid_import?: string | null;
+  grid_export?: string | null;
+  /** Prices per kWh (e.g. Octopus's current rate). */
+  price_import?: string | null;
+  price_export?: string | null;
+  /** What the panels make at most (kW): how brightly they shine in 3D. */
+  solar_peak?: number | null;
 }
 
 export interface Plan {
@@ -170,13 +209,24 @@ export function normalizePlan(raw: unknown): Plan {
     ha_floor: f.ha_floor ?? null,
     rooms: (f.rooms ?? []).map((r) => ({ ...r, area_id: r.area_id ?? null, floor: r.floor ?? "wood", wall_finish: r.wall_finish ?? "paint" })),
     openings: (f.openings ?? []).map((o) => ({ hinge: "left" as const, swing: "in" as const, ...o })),
-    furniture: f.furniture ?? [],
+    furniture: (f.furniture ?? []).map(repairHeight),
     devices: f.devices ?? [],
     walls: f.walls ?? [],
     outdoor: (f.outdoor ?? []).map((o) => ({ ...o, area_id: o.area_id ?? null, kind: o.kind ?? "lawn" })),
   }));
   floors.sort((a, b) => a.elevation - b.elevation);
   return { version: 1, name: p.name, settings, floors };
+}
+
+/**
+ * Up to 0.2.0 the integration saved a missing "y" as 0, which put wall cupboards, pictures and
+ * ceiling lamps on the floor (inside whatever stood there). On a piece that never stands on the
+ * floor, a 0 means "not set".
+ */
+function repairHeight(x: Furniture): Furniture {
+  if (x.y !== 0 || !(CEILING_LAMPS.has(x.type) || (FURNITURE[x.type]?.y ?? 0) > 0)) return x;
+  const { y: _unset, ...rest } = x;
+  return rest;
 }
 
 /** A room or a garden area: anything with a name, an area and an outline. */

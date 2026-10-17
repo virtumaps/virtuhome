@@ -1,11 +1,13 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiWallSconceFlat, mdiWeatherNight, mdiWeatherSunny, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
 import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
-import { HassLive, toggleEntity, type Change } from "../live/live";
-import { loadExtensions, registerView, type ViewHandle } from "../ext/api";
+import { HassLive, solarStep, toggleEntity, type Change } from "../live/live";
+import { EnergyLive, type EnergyNow } from "../live/energy";
+import { loadExtensions, registerView, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
 import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
+import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection } from "./energy";
 import { VIEW_CSS } from "./styles";
 
 export interface ViewConfig {
@@ -23,6 +25,8 @@ export interface ViewConfig {
   alarm?: string;
   /** Who is home, as avatars in the corner (default on). */
   people?: boolean;
+  /** Solar, battery and grid: a chip in the corner and the energy sheet (default on). */
+  energy?: boolean;
   /** Dev harness: extension modules to load without the integration. */
   dev_extensions?: string[];
   /** Options of extensions (e.g. Wall Tablet's popup, idle_return) live in the same config. */
@@ -32,6 +36,14 @@ export interface ViewConfig {
 }
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+
+/** The walls button shows its mode: a whole brick wall, one stepped down where it is cut away, or a low one. */
+const WALL_ICONS: Record<WallMode, string> = {
+  full: mdiWall,
+  smart: "M3,4H11V9H3V4M2,10H8V15H2V10M9,10H15V15H9V10M3,16H12V21H3V16M13,16H21V21H13V16Z",
+  low: "M2,10H8V15H2V10M9,10H15V15H9V10M16,10H22V15H16V10M3,16H12V21H3V16M13,16H21V21H13V16Z",
+};
+const WALL_NAMES: Record<WallMode, string> = { smart: "Walls: smart cutaway", low: "Walls: low", full: "Walls: full height" };
 
 let realisticModule: RealisticModule | null = null;
 /** The realistic look's code, fetched the first time a view needs it. */
@@ -73,10 +85,19 @@ export class VhView {
   private alertEl: HTMLButtonElement;
   private statusEl: HTMLDivElement;
   private statusKey = "";
+  readonly energy = new EnergyLive();
+  private sheetEnergy = false;
+  private energySections: EnergySection[] = [];
+  private energyListeners = new Set<(now: EnergyNow) => void>();
+  private todayTimer = 0;
+  /** The plan has solar panels, and how brightly they shine now (in steps). */
+  private hasPanels = false;
+  private panelStep = -1;
+  private barWatch: ResizeObserver | null = null;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
-    style.textContent = VIEW_CSS;
+    style.textContent = VIEW_CSS + ENERGY_CSS;
     this.root = document.createElement("div");
     this.root.className = "vh-root";
     this.root.innerHTML = `
@@ -84,7 +105,7 @@ export class VhView {
       <div class="vh-overlay"></div>
       <div class="vh-bar"></div>
       <div class="vh-tools">
-        <button class="vh-icon" data-act="walls" title="Walls">${svg(mdiWallSconceFlat)}</button>
+        <button class="vh-icon" data-act="walls" title="Walls">${svg(WALL_ICONS.smart)}</button>
         <button class="vh-icon" data-act="theme" title="Day / night">${svg(mdiWeatherNight)}</button>
         <button class="vh-icon" data-act="frame" title="Show all">${svg(mdiArrowExpandAll)}</button>
         <button class="vh-icon" data-act="heat" title="Temperature map">${svg(mdiThermometer)}</button>
@@ -110,6 +131,11 @@ export class VhView {
     this.menu = this.root.querySelector(".vh-menu")!;
     this.alertEl = this.root.querySelector(".vh-alert")!;
     this.statusEl = this.root.querySelector(".vh-status")!;
+    // the status row and the alert sit under the top bar, however many lines its chips take
+    if (typeof ResizeObserver !== "undefined") {
+      this.barWatch = new ResizeObserver(() => this.placeUnderBar());
+      this.barWatch.observe(this.chips);
+    }
     this.alertEl.onclick = () => {
       const first = this.live.alerts()[0];
       if (first) moreInfo(this.root, first.id);
@@ -118,6 +144,7 @@ export class VhView {
       const b = (e.target as HTMLElement).closest<HTMLElement>("[data-status]");
       if (!b) return;
       if (b.dataset.status === "lights") this.lightsOff();
+      else if (b.dataset.status === "energy") this.openEnergy();
       else if (b.dataset.status) moreInfo(this.root, b.dataset.status);
     });
 
@@ -128,6 +155,8 @@ export class VhView {
     this.ensureLook();
     this.viewer.walls = config.walls ?? "smart";
     this.live = new HassLive(normalizePlan({ version: 1, floors: [] }));
+    this.live.energy = this.energy;
+    this.energy.onSources = () => this.onEnergy();
     this.viewer.onHit = (hit, gesture) => this.onHit(hit, gesture);
     this.root.addEventListener("pointerdown", () => this.touchListeners.forEach((cb) => cb()), { passive: true });
 
@@ -168,11 +197,13 @@ export class VhView {
   set hass(h: Hass) {
     this._hass = h;
     this.subscribe();
+    const energyChanged = this.energy.update(h);
     const changes = this.live.update(h);
     this.applyTheme();
     const sun = h.states["sun.sun"]?.attributes;
     if (sun && typeof sun.azimuth === "number" && typeof sun.elevation === "number") this.viewer.setSun(sun.azimuth, sun.elevation);
     if (this.plan && this.plan.floors.length) this.apply(changes);
+    if (energyChanged) this.onEnergy();
     this.updateAlarm(h);
     if (!this.unregister) {
       this.unregister = registerView(this.handle());
@@ -223,7 +254,53 @@ export class VhView {
         return card;
       },
       moreInfo: (id) => moreInfo(this.root, id),
+      addTool: (tool) => this.addTool(tool),
+      setRoomTint: (fn) => {
+        this.live.roomTint = fn;
+      },
+      setRoomText: (fn) => {
+        this.live.roomExtraText = fn;
+      },
+      refreshRooms: () => {
+        this.viewer.refreshTints();
+        this.viewer.refreshLabels();
+      },
+      energy: {
+        get sources() {
+          return self.energy.sources;
+        },
+        get now() {
+          return self.energy.now;
+        },
+        get today() {
+          return self.energy.today;
+        },
+        onChange(cb) {
+          self.energyListeners.add(cb);
+          if (self.energy.now) cb(self.energy.now);
+          return () => self.energyListeners.delete(cb);
+        },
+        addSection(section) {
+          self.energySections.push(section);
+          if (self.sheetEnergy) self.renderEnergy();
+          return () => {
+            self.energySections = self.energySections.filter((x) => x !== section);
+            if (self.sheetEnergy) self.renderEnergy();
+          };
+        },
+        open: () => self.openEnergy(),
+      },
     };
+  }
+
+  private addTool(tool: Tool): ToolHandle {
+    const b = document.createElement("button");
+    b.className = "vh-icon";
+    b.title = tool.title;
+    b.innerHTML = svg(tool.icon);
+    b.onclick = () => tool.onClick();
+    this.root.querySelector(".vh-tools")!.prepend(b);
+    return { el: b, setOn: (on) => b.classList.toggle("on", on), remove: () => b.remove() };
   }
 
   /** The view the card or panel opens with: its floor, or the whole house. */
@@ -286,10 +363,12 @@ export class VhView {
     const floor = this.viewer.mode === "floor" ? this.viewer.activeFloor : null;
     const on = this.live.lightsOn(floor).length;
     const people = this.config.people === false ? [] : this.live.people();
-    const key = JSON.stringify([on, floor, people]);
+    const energy = this.showEnergy() ? energyChip(this.energy.now) : "";
+    const key = JSON.stringify([on, floor, people, energy]);
     if (key === this.statusKey) return;
     this.statusKey = key;
     const parts: string[] = [];
+    if (energy) parts.push(energy);
     if (on) parts.push(`<button class="vh-chip vh-lights" data-status="lights" title="Turn them off">${svg(mdiLightbulbOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span>${on} on</span></button>`);
     for (const p of people) {
       const initials = p.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -313,6 +392,60 @@ export class VhView {
     } catch (err) {
       this.toast(`Could not turn them off: ${String((err as { message?: string }).message ?? err)}`);
     }
+  }
+
+  private placeUnderBar(): void {
+    const top = this.chips.offsetTop + this.chips.offsetHeight + 10;
+    this.statusEl.style.top = `${top}px`;
+    this.alertEl.style.top = `${top - 2}px`;
+  }
+
+  // ------------------------------------------------------------------ energy
+
+  private showEnergy(): boolean {
+    return this.config.energy !== false && this.energy.enabled;
+  }
+
+  /** Solar, battery or grid changed: the chip, the open sheet, the panels in 3D, the extensions. */
+  private onEnergy(): void {
+    this.renderStatus();
+    if (this.sheetEnergy) this.renderEnergy();
+    const now = this.energy.now;
+    if (now) {
+      for (const cb of this.energyListeners) {
+        try {
+          cb(now);
+        } catch (err) {
+          console.error("VirtuHome extension error", err);
+        }
+      }
+    }
+    if (this.hasPanels && this.started) {
+      const step = solarStep(this.energy.solarLevel());
+      if (step !== this.panelStep) {
+        this.panelStep = step;
+        this.viewer.refreshLighting();
+      }
+    }
+  }
+
+  private renderEnergy(): void {
+    renderEnergySheet(this.sheet, this.energy, this.energySections, () => this.closeSheet());
+  }
+
+  /** The energy sheet: the flow between solar, battery, grid and the house, and today's totals. */
+  openEnergy(): void {
+    if (!this.energy.now || this.editor) return;
+    this.sheetRoom = null;
+    this.sheetEnergy = true;
+    this.renderEnergy();
+    this.sheet.classList.add("open");
+    const refresh = () => this.energy.refreshToday().then(() => {
+      if (this.sheetEnergy) this.renderEnergy();
+    });
+    refresh();
+    window.clearInterval(this.todayTimer);
+    this.todayTimer = window.setInterval(refresh, 300_000);
   }
 
   private toggleHeatmap(): void {
@@ -349,8 +482,12 @@ export class VhView {
   applyPlan(plan: Plan): void {
     const first = !this.plan;
     this.plan = plan;
+    this.energy.setSettings(plan.settings.energy);
     this.live.setPlan(plan);
-    if (this._hass) this.live.update(this._hass);
+    if (this._hass) {
+      if (this.energy.update(this._hass)) this.renderStatus();
+      this.live.update(this._hass);
+    }
     if (!plan.floors.length) {
       if (this.editor) return;
       this.showEmpty("No home yet", this.canEdit() ? "Tap Edit to import a scan of your home." : "Open VirtuHome in the sidebar to import a scan of your home or draw it.");
@@ -358,6 +495,7 @@ export class VhView {
       return;
     }
     this.empty.hidden = true;
+    this.hasPanels = plan.floors.some((f) => f.furniture.some((x) => x.type === "solar_panels"));
     this.applyTheme();
     this.viewer.setPlan(plan, !first);
     if (this._hass) {
@@ -380,7 +518,10 @@ export class VhView {
 
   setConfig(config: ViewConfig): void {
     this.config = config;
-    if (config.walls) this.viewer.setWalls(config.walls);
+    if (config.walls) {
+      this.viewer.setWalls(config.walls);
+      this.updateWallsButton();
+    }
     this.applyTheme();
   }
 
@@ -400,6 +541,8 @@ export class VhView {
     this.unregister?.();
     this.unregister = null;
     window.clearInterval(this.statsTimer);
+    window.clearInterval(this.todayTimer);
+    this.barWatch?.disconnect();
     this.viewer.dispose();
   }
 
@@ -417,6 +560,7 @@ export class VhView {
   private applyTheme(): void {
     const name = this.themeName();
     this.root.classList.toggle("day", name === "day");
+    this.live.day = name === "day";
     this.themeBtn.innerHTML = svg(name === "night" ? mdiWeatherNight : mdiWeatherSunny);
     if (this.viewer.pal.name !== name) {
       this.viewer.setTheme(name);
@@ -488,11 +632,14 @@ export class VhView {
     const next: Record<WallMode, WallMode> = { smart: "low", low: "full", full: "smart" };
     this.viewer.setWalls(next[this.viewer.walls]);
     this.updateWallsButton();
-    this.toast({ smart: "Walls: smart cutaway", low: "Walls: low", full: "Walls: full height" }[this.viewer.walls]);
+    this.toast(WALL_NAMES[this.viewer.walls]);
   }
 
   private updateWallsButton(): void {
-    this.wallsBtn.classList.toggle("on", this.viewer.walls !== "full");
+    const mode = this.viewer.walls;
+    this.wallsBtn.classList.toggle("on", mode !== "full");
+    this.wallsBtn.innerHTML = svg(WALL_ICONS[mode]);
+    this.wallsBtn.title = `${WALL_NAMES[mode]} (tap to change)`;
   }
 
   // ------------------------------------------------------------------ floors, rooms and gestures
@@ -558,7 +705,6 @@ export class VhView {
     this.empty.hidden = true;
     const { Editor } = await import("../editor/editor");
     const hass = this._hass;
-    const wallsBefore = this.viewer.walls;
     const editor = new Editor({
       view: this,
       hass,
@@ -578,8 +724,6 @@ export class VhView {
       close: () => {
         this.editor = null;
         this.root.classList.remove("editing");
-        this.viewer.setWalls(wallsBefore);
-        this.updateWallsButton();
         if (this.savedPlan) this.applyPlan(this.savedPlan);
         else if (this.plan && !this.plan.floors.length) this.applyPlan(this.plan);
         this.renderChips();
@@ -609,6 +753,8 @@ export class VhView {
     this.viewer.selectRoom(floor, room);
     this.renderChips();
     if (this.config.room_panel !== false) {
+      this.sheetEnergy = false;
+      window.clearInterval(this.todayTimer);
       this.sheetRoom = { floor, room };
       this.renderSheet();
       this.sheet.classList.add("open");
@@ -617,6 +763,8 @@ export class VhView {
 
   private closeSheet(): void {
     this.sheetRoom = null;
+    this.sheetEnergy = false;
+    window.clearInterval(this.todayTimer);
     this.sheet.classList.remove("open");
   }
 

@@ -1,4 +1,5 @@
-// Surface finishes a home can be customised with: floors, inside walls, outside walls, upholstery.
+// Surface finishes a home can be customised with: floors, inside walls, outside walls, upholstery,
+// and the joinery of doors and windows.
 // Every finish has a plain colour (what the model look draws, and what the editor's swatch shows)
 // and a texture recipe for the realistic look (scene/textures.ts draws it).
 
@@ -72,10 +73,21 @@ export const UPHOLSTERY = {
   leather: f("Leather", 0x6b4630, "leather", 0.6, 0.45, true, 0.35),
 } satisfies Record<string, FinishDef>;
 
+/** Door leaves and window frames. */
+export const JOINERY_FINISHES = {
+  painted: f("Painted wood", 0xf1efea, "plaster", 1.0, 0.5, true, 0.05),
+  upvc: f("uPVC", 0xf3f2ee, "", 1.0, 0.35, true),
+  aluminium: { ...f("Aluminium", 0xa9adb2, "brushed", 0.5, 0.35, true, 0.1), metalness: 0.6 },
+  oak: f("Oak", 0xc39a6c, "wood_grain_v", 0.9, 0.5, false, 0.25),
+  ash: f("Light wood", 0xd9c09a, "wood_grain_v", 0.9, 0.5, false, 0.2),
+  walnut: f("Walnut", 0x6e4f38, "wood_grain_v", 0.9, 0.45, false, 0.25),
+} satisfies Record<string, FinishDef>;
+
 export type FloorFinish = keyof typeof FLOOR_FINISHES;
 export type WallFinish = keyof typeof WALL_FINISHES;
 export type ExteriorFinish = keyof typeof EXTERIOR_FINISHES;
 export type Upholstery = keyof typeof UPHOLSTERY;
+export type JoineryFinish = keyof typeof JOINERY_FINISHES;
 
 /** Paint colours offered as swatches (any colour can be typed in too). */
 export const PAINT_SWATCHES: [string, string][] = [
@@ -94,6 +106,14 @@ export const FURNITURE_SWATCHES: [string, string][] = [
   ["Walnut", "#6e4f38"], ["White", "#f1efea"], ["Black", "#2b2c2f"],
 ];
 
+/** Door and window colours: the usual frame colours, then front door paints. */
+export const JOINERY_SWATCHES: [string, string][] = [
+  ["White", "#f3f2ee"], ["Cream", "#e8e1d0"], ["Agate grey", "#b5b8b1"], ["Anthracite", "#383e42"],
+  ["Black", "#26272a"], ["Chartwell green", "#a9bfae"], ["Sage", "#9aa58b"], ["Duck egg", "#c3d6d1"],
+  ["Racing green", "#2f4a3a"], ["Navy", "#2c3c5a"], ["Red", "#8e2b2b"], ["Mustard", "#d2a54a"],
+  ["Pink", "#d9a9a3"],
+];
+
 /** Every surface the builder can tag, as "<group>:<name>", with its finish (for the textured look). */
 export function finishFor(key: string): FinishDef | null {
   const [group, name] = key.split(":");
@@ -102,6 +122,7 @@ export function finishFor(key: string): FinishDef | null {
     case "wall": return (WALL_FINISHES as Record<string, FinishDef>)[name] ?? WALL_FINISHES.paint;
     case "ext": return (EXTERIOR_FINISHES as Record<string, FinishDef>)[name] ?? EXTERIOR_FINISHES.render;
     case "uph": return (UPHOLSTERY as Record<string, FinishDef>)[name] ?? UPHOLSTERY.fabric;
+    case "jn": return (JOINERY_FINISHES as Record<string, FinishDef>)[name] ?? JOINERY_FINISHES.painted;
     default: return null;
   }
 }

@@ -54,6 +54,12 @@ const DAY_ROLES: Record<Role, number> = {
   mirror: 0xcfdde6,
   water: 0x6fb3c9,
   rubber: 0x2b2c2f,
+  pine: 0xd9a865,
+  softwood: 0xe6cfa3,
+  oak: 0xc39a6c,
+  walnut: 0x6e4f38,
+  primed: 0xf3f2ee,
+  blackMetal: 0x2a2b2e,
 };
 
 export const DAY: Palette = {
@@ -87,7 +93,7 @@ export const NIGHT: Palette = {
   slab: 0x232a38,
   glass: 0x34506a,
   glassLit: 0xffc77a,
-  roles: roles({ white: 0xc9ccd2, ceramic: 0xd5d7db, mattress: 0xcfd2d6, bulb: 0x8d8a83, screen: 0x0d1015 }, DAY_ROLES),
+  roles: roles({ white: 0xc9ccd2, primed: 0xc9ccd2, ceramic: 0xd5d7db, mattress: 0xcfd2d6, bulb: 0x8d8a83, screen: 0x0d1015 }, DAY_ROLES),
   ambient: 0.34,
   lampGain: 1.0,
   text: 0xe8eef8,

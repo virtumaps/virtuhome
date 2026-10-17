@@ -20,11 +20,15 @@ On a computer or a recent iPad it switches to a realistic look with textures, su
   doors swing, curtains move, motion and alarms show where they happen, camera views show on the floor
   and turn red on motion, leaks and smoke raise a banner, a temperature map colours the rooms, room
   temperatures sit on the labels, who is home sits in the corner, and one tap turns off the lights.
+- **Solar, battery and grid:** what the panels make sits in the corner; tap it for the power flowing
+  between solar, battery, grid and the house, the price now and today's totals. Found from Home
+  Assistant's energy settings; solar panels placed in the plan shine with what they make.
 - **Make it look like home:** floor finishes, wall paint and wallpaper, the outside in brick, render,
   stone or cladding, and about 110 pieces of furniture and decor in swappable styles, colours and
   fabrics.
 - **Free and open to contributions** under the PolyForm Shield licence. Extensions such as Wall Tablet
-  (doorbell camera takeover, screensaver, night dimming) are available to VirtuMaps installation clients.
+  (doorbell camera takeover, screensaver, night dimming) and Energy (rooms coloured by their power,
+  the biggest users and what is not measured yet) are available to VirtuMaps installation clients.
 
 | Realistic, by day | Live: alerts, people, temperature map |
 |---|---|
@@ -51,6 +55,7 @@ height: 440            # px, ignored in a panel view or with fill: true
 room_panel: true       # tapping a room opens its devices
 floor_chips: true
 people: true           # who is home, in the corner
+energy: true           # solar, battery and grid in the corner (when the house has them)
 alarm: alarm_control_panel.home   # optional; default: the first alarm panel, "none" hides it
 ```
 
@@ -83,6 +88,9 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   Arrow keys nudge, R turns, Delete removes.
 - **Looks:** a room's floor and wall finish and paint colour, the outside walls (also per storey), and
   for furniture its style, colour, upholstery and mirroring. Add items from a searchable catalogue.
+- **Energy:** Edit → Home → Energy shows the solar, house, battery and grid sensors found from the
+  energy settings, and takes another where one is wrong. Panels' peak sets how brightly placed solar
+  panels shine (otherwise the best output seen).
 - **Undo / Redo** in the header, or Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z. Every save keeps a restore point.
 
 ## Scanning with House Scan

@@ -8,6 +8,8 @@ import { newId, type Floor, type Opening, type Plan, type Room, type Vec2 } from
 import { layoutWalls } from "../model/walls";
 import { FLOOR_FINISHES, type FinishDef } from "../scene/finishes";
 import { CEILING_LAMPS, furnitureType } from "../scene/furniture-lib";
+import { styleOf } from "../scene/joinery";
+import { Collider, settle } from "./collide";
 
 export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening"; id: string } | null;
 
@@ -264,21 +266,50 @@ export class Plan2D {
           const [bx, by] = this.toScreen(P(po.t1, 0));
           g.append(el("line", { x1: ax, y1: ay, x2: bx, y2: by, class: "p2-win-line" }));
         } else {
-          // a gap the width of the wall, and for doors the leaf and its swing
+          // a gap the width of the wall, and for doors the leaves and how they open
           g.append(el("polygon", { points: this.pts([P(po.t0, t), P(po.t1, t), P(po.t1, -t), P(po.t0, -t)]), class: "p2-gap" }));
           if (o.kind === "door" || o.kind === "garage") {
-            const atStart = (o.hinge ?? "left") === "left";
-            const hinge = P(atStart ? po.t0 : po.t1, 0);
+            const style = styleOf(o);
             const swing: Vec2 = o.swing === "out" ? [-po.inward[0], -po.inward[1]] : po.inward;
+            // the face of the wall the door is on
+            const side = swing[0] * w.normal[0] + swing[1] * w.normal[1] > 0 ? 1 : -1;
             const len = po.t1 - po.t0;
-            const open: Vec2 = [hinge[0] + swing[0] * len, hinge[1] + swing[1] * len];
-            const closed = P(atStart ? po.t1 : po.t0, 0);
-            const [hx, hy] = this.toScreen(hinge);
-            const [ox2, oy2] = this.toScreen(open);
-            const [cx, cy] = this.toScreen(closed);
-            const sweep = (swing[0] * w.dir[1] - swing[1] * w.dir[0]) * (atStart ? 1 : -1) > 0 ? 0 : 1;
-            g.append(el("line", { x1: hx, y1: hy, x2: ox2, y2: oy2, class: "p2-leaf" }));
-            g.append(el("path", { d: `M ${ox2} ${oy2} A ${len * this.s} ${len * this.s} 0 0 ${sweep} ${cx} ${cy}`, class: "p2-swing" }));
+            const line = (a: Vec2, b: Vec2, cls: string) => {
+              const [x1, y1] = this.toScreen(a);
+              const [x2, y2] = this.toScreen(b);
+              g.append(el("line", { x1, y1, x2, y2, class: cls }));
+            };
+            // a leaf hinged at one jamb, drawn open, with the arc it sweeps
+            const hingedLeaf = (atStart: boolean, l: number) => {
+              const hinge = P(atStart ? po.t0 : po.t1, 0);
+              const open: Vec2 = [hinge[0] + swing[0] * l, hinge[1] + swing[1] * l];
+              const [ox2, oy2] = this.toScreen(open);
+              const [cx, cy] = this.toScreen(P(atStart ? po.t0 + l : po.t1 - l, 0));
+              const sweep = (swing[0] * w.dir[1] - swing[1] * w.dir[0]) * (atStart ? 1 : -1) > 0 ? 0 : 1;
+              line(hinge, open, "p2-leaf");
+              g.append(el("path", { d: `M ${ox2} ${oy2} A ${l * this.s} ${l * this.s} 0 0 ${sweep} ${cx} ${cy}`, class: "p2-swing" }));
+            };
+            if (style === "sliding") {
+              const mid = (po.t0 + po.t1) / 2;
+              line(P(po.t0, 0.025), P(mid + 0.05, 0.025), "p2-leaf");
+              line(P(mid - 0.05, -0.025), P(po.t1, -0.025), "p2-leaf");
+            } else if (style === "barn") {
+              // on the wall's face, and dashed where it slides to
+              const off = side * (t + 0.04);
+              const l = len + 0.1;
+              const left = (o.hinge ?? "left") === "left";
+              line(P(po.t0 - 0.05, off), P(po.t1 + 0.05, off), "p2-leaf");
+              line(P(left ? po.t0 - 0.05 - l : po.t1 + 0.05, off), P(left ? po.t0 - 0.05 : po.t1 + 0.05 + l, off), "p2-swing");
+            } else if (style === "sectional" || style === "roller") {
+              line(P(po.t0, side * t), P(po.t1, side * t), "p2-leaf");
+              // an up-and-over door runs back under the ceiling
+              if (style === "sectional") g.append(el("polygon", { points: this.pts([P(po.t0, side * t), P(po.t1, side * t), P(po.t1, side * (t + o.height)), P(po.t0, side * (t + o.height))]), class: "p2-swing" }));
+            } else if (style === "french" || style === "side") {
+              hingedLeaf(true, len / 2);
+              hingedLeaf(false, len / 2);
+            } else {
+              hingedLeaf((o.hinge ?? "left") === "left", len);
+            }
           }
         }
         // a wide invisible target to grab it by
@@ -703,6 +734,8 @@ export class Plan2D {
       if (!thing) return;
       const off: Vec2 = [thing.x - p[0], thing.z - p[1]];
       this.host.dragStart();
+      // furniture keeps out of walls and other pieces: it slides along what it meets
+      const collider = kind === "furniture" ? new Collider(this.host.plan(), fi, id) : null;
       this.drag = {
         kind, label: kind === "furniture" ? `Move ${furnitureType((thing as { type: string }).type).name}` : "Move a device", moved: false,
         apply: (x, z, ev) => {
@@ -710,8 +743,8 @@ export class Plan2D {
           const t = kind === "furniture" ? live.furniture.find((y) => y.id === id) : live.devices.find((d) => d.id === id);
           if (!t) return;
           const grid = ev.altKey ? 0.01 : 0.05;
-          t.x = r2(Math.round((x + off[0]) / grid) * grid);
-          t.z = r2(Math.round((z + off[1]) / grid) * grid);
+          const to: Vec2 = [r2(Math.round((x + off[0]) / grid) * grid), r2(Math.round((z + off[1]) / grid) * grid)];
+          [t.x, t.z] = collider ? collider.place([t.x, t.z], to) : to;
         },
       };
       return;
@@ -727,6 +760,7 @@ export class Plan2D {
           let deg = (Math.atan2(-(x - t.x), z - t.z) * 180) / Math.PI;
           if (!ev.altKey) deg = Math.round(deg / 15) * 15;
           t.rotation = Math.round(((deg % 360) + 360) % 360);
+          settle(this.host.plan(), fi, id);
         },
       };
       return;
@@ -936,16 +970,17 @@ export class Plan2D {
       this.host.change((p) => {
         const f = p.floors[fi];
         const t = sel.kind === "furniture" ? f.furniture.find((x) => x.id === sel.id) : f.devices.find((x) => x.id === sel.id);
-        if (t) {
-          t.x = r2(t.x + m[0]);
-          t.z = r2(t.z + m[1]);
-        }
+        if (!t) return;
+        const to: Vec2 = [r2(t.x + m[0]), r2(t.z + m[1])];
+        [t.x, t.z] = sel.kind === "furniture" ? new Collider(p, fi, sel.id).place([t.x, t.z], to) : to;
       }, "Nudge");
     }
     if ((e.key === "r" || e.key === "R") && sel.kind === "furniture") {
       this.host.change((p) => {
         const t = p.floors[fi].furniture.find((x) => x.id === sel.id);
-        if (t) t.rotation = (t.rotation + (e.shiftKey ? 270 : 90)) % 360;
+        if (!t) return;
+        t.rotation = (t.rotation + (e.shiftKey ? 270 : 90)) % 360;
+        settle(p, fi, sel.id);
       }, "Turn furniture");
     }
   };

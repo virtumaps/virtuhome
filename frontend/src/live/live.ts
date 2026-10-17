@@ -8,9 +8,15 @@ import type { V3 } from "../scene/geo";
 import { kelvinToRgb, type LampState } from "../scene/lighting";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
+import type { EnergyLive } from "./energy";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
 
 export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status";
+
+export type RGBA = [number, number, number, number];
+/** An extension's colour for a room (null leaves it to the core), and its text under the room's name. */
+export type RoomTint = (floor: Floor, space: Space) => RGBA | null;
+export type RoomText = (floor: Floor, space: Space) => string | null;
 
 /** Something that needs attention now: a leak, smoke, a triggered alarm. */
 export interface Alert {
@@ -76,6 +82,12 @@ export class HassLive implements LiveSource {
   heatmap = false;
   /** Motion sensors of each camera's own device (a doorbell's motion turns its view cone red). */
   private cameraMotion = new Map<string, string[]>();
+  /** The house's solar: solar panels in the plan shine with it (darker in the day look's brighter light). */
+  energy: EnergyLive | null = null;
+  day = false;
+  /** Set by an extension (the Energy extension's power map). */
+  roomTint: RoomTint | null = null;
+  roomExtraText: RoomText | null = null;
 
   constructor(plan: Plan) {
     this.plan = plan;
@@ -171,7 +183,11 @@ export class HassLive implements LiveSource {
           for (const id of motion) this.watch(id, "markers");
         }
       }
-      for (const f of floor.furniture) this.watch(f.entity, "lighting", "markers");
+      for (const f of floor.furniture) {
+        // solar panels relight when the house's solar moves a step (the view sees to it), not on every reading
+        if (f.type === "solar_panels" && f.entity && domainOf(f.entity) === "sensor") continue;
+        this.watch(f.entity, "lighting", "markers");
+      }
       for (const o of floor.openings) {
         this.watch(o.entity, "openings", "lighting");
         this.watch(o.cover, "openings");
@@ -205,6 +221,7 @@ export class HassLive implements LiveSource {
   }
 
   glowColor(g: GlowSlot): V3 | null {
+    if (g.type === "solar_panels" && !g.entity) return solarGlow(this.energy, null, this.day);
     const s = this.state(g.entity);
     if (!s || isUnavailable(s)) return null;
     if (g.kind === "lamp") {
@@ -216,6 +233,7 @@ export class HassLive implements LiveSource {
     }
     if (g.kind === "screen") {
       const dom = domainOf(s.entity_id);
+      if (dom === "sensor") return solarGlow(this.energy, s, this.day);
       const on = dom === "media_player" ? !["off", "standby"].includes(s.state) : s.state === "on";
       if (!on) return null;
       return s.state === "playing" ? [0.42, 0.62, 1.0] : [0.22, 0.3, 0.45];
@@ -289,6 +307,11 @@ export class HassLive implements LiveSource {
     const w = this.rooms.get(`${floor.id}/${room.id}`);
     if (!w || !this.hass) return null;
     if (w.alerts.some((id) => this.hass!.states[id]?.state === "on")) return [0.9, 0.12, 0.1, 0.42];
+    if (this.roomTint) {
+      const space = spaces(floor).find((x) => x.id === room.id);
+      const t = space ? this.roomTint(floor, space) : null;
+      if (t) return t;
+    }
     if (this.heatmap) {
       const t = this.state(w.temperature);
       const v = t && !isUnavailable(t) ? parseFloat(t.state) : NaN;
@@ -362,6 +385,11 @@ export class HassLive implements LiveSource {
     if (t && !isUnavailable(t) && !isNaN(parseFloat(t.state))) parts.push(`${parseFloat(t.state).toFixed(1)}°`);
     const h = this.state(w.humidity);
     if (h && !isUnavailable(h) && !isNaN(parseFloat(h.state))) parts.push(`${Math.round(parseFloat(h.state))} %`);
+    if (this.roomExtraText) {
+      const space = spaces(floor).find((x) => x.id === room.id);
+      const extra = space ? this.roomExtraText(floor, space) : null;
+      if (extra) parts.push(extra);
+    }
     return parts.length ? parts.join(" · ") : null;
   }
 
@@ -369,6 +397,29 @@ export class HassLive implements LiveSource {
   roomLights(floor: Floor, room: { id: string }): string[] {
     return this.rooms.get(`${floor.id}/${room.id}`)?.lights ?? [];
   }
+}
+
+/**
+ * Solar cells: dark while the panels make nothing, a brighter blue the more they make. Linked to a
+ * power sensor of their own, or (unlinked) to the house's solar.
+ */
+function solarGlow(energy: EnergyLive | null, s: HassEntity | null, day: boolean): V3 | null {
+  let k: number;
+  if (s) {
+    if (isUnavailable(s) || s.attributes.device_class !== "power") return null;
+    const v = parseFloat(s.state) * (s.attributes.unit_of_measurement === "W" ? 1e-3 : 1);
+    k = isFinite(v) && v > 0 ? solarStep(Math.min(1, v / (energy?.solarPeak() ?? 3))) : 0;
+  } else {
+    k = energy ? solarStep(energy.solarLevel()) : 0;
+  }
+  if (k <= 0.02) return null;
+  const d = day ? 0.4 : 1;
+  return [(0.02 + 0.05 * k) * d, (0.04 + 0.12 * k) * d, (0.12 + 0.36 * k) * d];
+}
+
+/** The panels' brightness in tenths: the 3D view only relights when it moves a step. */
+export function solarStep(level: number): number {
+  return Math.round(level * 10) / 10;
 }
 
 /** Room temperature to a colour: blue below 17°, green around 20°, red from 25°. */

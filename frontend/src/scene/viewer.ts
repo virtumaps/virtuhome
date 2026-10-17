@@ -6,11 +6,12 @@ import {
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
-import { buildFloor, lin, SLAB, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { buildFloor, lin, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { Geo, type V3 } from "./geo";
 import { relight, relightRealistic, roomGlow, roomLights, type LampState, type LightingState } from "./lighting";
+import { buildOpeningMoving, joineryLook, restOpen, windowFollowsSensor, type OpeningInfo } from "./joinery";
 import { Halos, Markers, type HaloSpec, type MarkerSpec } from "./markers";
-import { floorUniforms, getCut, glassMaterial, opaqueMaterial, setCut, setTint, type FloorUniforms } from "./materials";
+import { floorUniforms, getCut, glassMaterial, opaqueMaterial, setCut, setTint, WALL_TRIM, type FloorUniforms } from "./materials";
 import { DAY, paletteFor, type Palette } from "./palette";
 import type { RealisticLook } from "./realistic";
 import type { Tier, TierSetting } from "./tier";
@@ -62,25 +63,33 @@ export type DragPhase = "start" | "move" | "end";
 
 interface FloorView {
   fb: FloorBuild;
+  /** What the floor was built from: an unchanged floor is not rebuilt. */
+  key: string;
   group: Group;
   opaque: Mesh;
   glass: Mesh;
+  /** Moving parts: door leaves, sashes that follow a sensor, blinds; and their glass. */
   dyn: Mesh;
   dynGeo: Geo;
+  dynGlass: Mesh;
+  dynGlassGeo: Geo;
   u: FloorUniforms;
   offset: number;
   /** Target and current cut per wall slot. */
   cutTarget: Float32Array;
-  doorAngle: Float32Array;
+  /** How far each door and window is open (0..1) and where it is going. */
+  doorPos: Float32Array;
   doorTarget: Float32Array;
+  winPos: Float32Array;
+  winTarget: Float32Array;
   coverPos: Float32Array;
   coverTarget: Float32Array;
   roomGlow: number[];
   labels: HTMLElement[];
 }
 
-const DOOR_OPEN = (82 * Math.PI) / 180;
-const DOOR_UNKNOWN = (28 * Math.PI) / 180;
+/** Doors start where they rest without a sensor (hinged ones ajar). */
+const doorRest = (fb: FloorBuild) => Float32Array.from(fb.doors, (d) => restOpen(d.opening));
 const EXPLODE_GAP = 2.2;
 
 export class Viewer {
@@ -109,6 +118,8 @@ export class Viewer {
   onSlow: (() => void) | null = null;
 
   private floors: FloorView[] = [];
+  /** The door or window whose wall stays up (the editor's selection). */
+  private raised: { floor: number; opening: string } | null = null;
   private markers: Markers;
   private halos: Halos;
   private ground: Mesh;
@@ -199,7 +210,7 @@ export class Viewer {
     r.domElement.style.display = "block";
     r.domElement.style.touchAction = "none";
     r.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
-    r.domElement.addEventListener("webglcontextrestored", () => this.plan && this.setPlan(this.plan, true));
+    r.domElement.addEventListener("webglcontextrestored", () => this.plan && this.setPlan(this.plan, true, false));
     this.container.appendChild(r.domElement);
     return r;
   }
@@ -255,10 +266,26 @@ export class Viewer {
 
   // ------------------------------------------------------------------ plan and looks
 
-  setPlan(plan: Plan, keepView = false): void {
+  /**
+   * Shows a plan. Floors whose plan did not change are kept as they are, and a changed floor is
+   * rebuilt into its old meshes and materials, so editing one piece costs one floor's build and
+   * no shader or texture work.
+   */
+  setPlan(plan: Plan, keepView = false, reuse = true): void {
+    this.dropLifted();
     this.plan = plan;
-    for (const f of this.floors) this.disposeFloor(f);
-    this.floors = plan.floors.map((_, i) => this.makeFloor(i));
+    if (!reuse) {
+      for (const f of this.floors) this.disposeFloor(f);
+      this.floors = [];
+    }
+    while (this.floors.length > plan.floors.length) this.disposeFloor(this.floors.pop()!);
+    plan.floors.forEach((floor, i) => {
+      const f = this.floors[i];
+      if (!f) this.floors.push(this.makeFloor(i));
+      else if (f.key !== this.floorKey(i)) this.rebuildFloor(f, i);
+      // same content, maybe a new object (undo): later edits and live state read this one
+      else f.fb.floor = floor;
+    });
     this.activeFloor = Math.min(this.activeFloor, Math.max(0, this.floors.length - 1));
     this.layoutFloors();
     this.refreshAll();
@@ -270,7 +297,7 @@ export class Viewer {
     if (this.pal.name === name) return;
     this.pal = paletteFor(name);
     this.applyPalette();
-    if (this.plan) this.setPlan(this.plan, true);
+    if (this.plan) this.setPlan(this.plan, true, false);
   }
 
   setLive(live: LiveSource): void {
@@ -287,35 +314,54 @@ export class Viewer {
     }
   }
 
-  private makeFloor(i: number): FloorView {
+  /** Everything a floor's build depends on. */
+  private floorKey(i: number): string {
+    const plan = this.plan!;
+    // stairs on the storey below cut the stairwell in this one's floor
+    return JSON.stringify([plan.settings, plan.floors[i], stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.pal.name, !!this.look, this.low]);
+  }
+
+  private buildFloor(i: number): FloorBuild {
     // the realistic look lights true colours; the model look bakes the palette's mood into them
-    const fb = buildFloor(this.plan!, i, this.look ? DAY : this.pal, { low: this.low });
+    return buildFloor(this.plan!, i, this.look ? DAY : this.pal, { low: this.low });
+  }
+
+  private makeFloor(i: number): FloorView {
+    const key = this.floorKey(i);
+    const fb = this.buildFloor(i);
     const u = floorUniforms();
     u.uCutColor.value.setHex(this.look ? 0x2c2f34 : this.pal.wallCut);
     u.uCutY.value = fb.floor.elevation + this.cutHeight;
+    u.uFloorY.value = fb.floor.elevation;
     const dynGeo = new Geo();
-    let opaque: Mesh, glass: Mesh, dyn: Mesh;
+    const dynGlassGeo = new Geo();
+    let opaque: Mesh, glass: Mesh, dyn: Mesh, dynGlass: Mesh;
     if (this.look) {
       opaque = new Mesh(this.look.geometry(fb.opaque), this.look.materials(fb.opaque, u));
       glass = new Mesh(this.look.geometry(fb.glass), this.look.glassMaterial(fb.glass, u));
       dyn = new Mesh(new BufferGeometry(), [] as Material[]);
+      dynGlass = new Mesh(new BufferGeometry(), [] as Material[]);
       this.look.attach(opaque, u, true);
       this.look.attach(dyn, u, true);
     } else {
       opaque = new Mesh(fb.opaque.toBufferGeometry(), opaqueMaterial(u));
       glass = new Mesh(fb.glass.toBufferGeometry(), glassMaterial(u));
       dyn = new Mesh(new BufferGeometry(), opaqueMaterial(u));
+      dynGlass = new Mesh(new BufferGeometry(), glassMaterial(u));
     }
     glass.renderOrder = 2;
+    dynGlass.renderOrder = 2;
     const group = new Group();
-    group.add(opaque, dyn, glass);
+    group.add(opaque, dyn, glass, dynGlass);
     this.scene.add(group);
     const slots = 128;
     return {
-      fb, group, opaque, glass, dyn, dynGeo, u, offset: 0,
+      fb, key, group, opaque, glass, dyn, dynGeo, dynGlass, dynGlassGeo, u, offset: 0,
       cutTarget: new Float32Array(slots),
-      doorAngle: new Float32Array(fb.doors.length).fill(DOOR_UNKNOWN),
-      doorTarget: new Float32Array(fb.doors.length).fill(DOOR_UNKNOWN),
+      doorPos: doorRest(fb),
+      doorTarget: doorRest(fb),
+      winPos: new Float32Array(fb.windows.length),
+      winTarget: new Float32Array(fb.windows.length),
       coverPos: new Float32Array(fb.windows.length).fill(1),
       coverTarget: new Float32Array(fb.windows.length).fill(1),
       roomGlow: [],
@@ -323,9 +369,136 @@ export class Viewer {
     };
   }
 
+  /** Builds floor i again into f's meshes, keeping its materials, uniforms and door positions. */
+  private rebuildFloor(f: FloorView, i: number): void {
+    const fb = this.buildFloor(i);
+    f.u.uCutColor.value.setHex(this.look ? 0x2c2f34 : this.pal.wallCut);
+    const swap = (mesh: Mesh, g: BufferGeometry) => {
+      mesh.geometry.dispose();
+      mesh.geometry = g;
+    };
+    if (this.look) {
+      swap(f.opaque, this.look.geometry(fb.opaque));
+      f.opaque.material = this.look.materials(fb.opaque, f.u);
+      swap(f.glass, this.look.geometry(fb.glass));
+      f.glass.material = this.look.glassMaterial(fb.glass, f.u);
+    } else {
+      swap(f.opaque, fb.opaque.toBufferGeometry());
+      swap(f.glass, fb.glass.toBufferGeometry());
+    }
+    // doors and blinds keep where they are when the same ones are still there
+    const sameDoors = fb.doors.length === f.fb.doors.length;
+    const sameWindows = fb.windows.length === f.fb.windows.length;
+    f.fb = fb;
+    f.key = this.floorKey(i);
+    f.u.uCutY.value = fb.floor.elevation + this.cutHeight;
+    f.u.uFloorY.value = fb.floor.elevation;
+    if (!sameDoors) {
+      f.doorPos = doorRest(fb);
+      f.doorTarget = doorRest(fb);
+    }
+    if (!sameWindows) {
+      f.winPos = new Float32Array(fb.windows.length);
+      f.winTarget = new Float32Array(fb.windows.length);
+      f.coverPos = new Float32Array(fb.windows.length).fill(1);
+      f.coverTarget = new Float32Array(fb.windows.length).fill(1);
+    }
+    this.rebuildDynamic(f);
+  }
+
+  // ------------------------------------------------------------------ dragging a piece
+
+  /** A piece lifted out of its floor's mesh while it is dragged. */
+  private lifted: { f: FloorView; mesh: Mesh; index: BufferAttribute; saved: Uint16Array | Uint32Array; geometry: BufferGeometry } | null = null;
+
+  /**
+   * Lifts a piece (furniture, or a light's lamp) out of its floor's merged mesh into a mesh of its
+   * own, so dragging it moves that mesh instead of rebuilding the floor. False when it has no
+   * geometry (a plain device).
+   */
+  liftItem(fi: number, ref: ItemRef): boolean {
+    this.dropLifted();
+    const f = this.floors[fi];
+    const k = f ? f.fb.items.findIndex((it) => it.kind === ref.kind && it.id === ref.id) : -1;
+    const src = f?.opaque.geometry;
+    const index = src?.getIndex();
+    if (!f || k < 0 || !src || !index) return false;
+    const owner = f.fb.opaque.item;
+    const idx = index.array as Uint16Array | Uint32Array;
+    const saved = idx.slice();
+    const remap = new Int32Array(owner.length).fill(-1);
+    const verts: number[] = [];
+    const tris: number[] = [];
+    const groups: { start: number; count: number; materialIndex: number }[] = [];
+    const ranges = src.groups.length ? src.groups : [{ start: 0, count: idx.length, materialIndex: 0 }];
+    for (const r of ranges) {
+      const start = tris.length;
+      for (let i = r.start; i < r.start + r.count; i += 3) {
+        if (owner[idx[i]] !== k) continue;
+        for (let c = 0; c < 3; c++) {
+          const v = idx[i + c];
+          if (remap[v] < 0) {
+            remap[v] = verts.length;
+            verts.push(v);
+          }
+          tris.push(remap[v]);
+        }
+        // collapsed in the floor's mesh: nothing left to draw there
+        idx[i + 1] = idx[i + 2] = idx[i];
+      }
+      if (tris.length > start) groups.push({ start, count: tris.length - start, materialIndex: r.materialIndex ?? 0 });
+    }
+    if (!tris.length) return false;
+    index.needsUpdate = true;
+    const g = new BufferGeometry();
+    for (const [name, attr] of Object.entries(src.attributes)) {
+      const a = attr as BufferAttribute;
+      const n = a.itemSize;
+      const arr = new Float32Array(verts.length * n);
+      verts.forEach((v, r) => {
+        for (let c = 0; c < n; c++) arr[r * n + c] = a.array[v * n + c];
+      });
+      g.setAttribute(name, new BufferAttribute(arr, n));
+    }
+    g.setIndex(tris);
+    if (src.groups.length) for (const gr of groups) g.addGroup(gr.start, gr.count, gr.materialIndex);
+    g.computeBoundingSphere();
+    const mesh = new Mesh(g, f.opaque.material);
+    f.group.add(mesh);
+    this.look?.attach(mesh, f.u, true);
+    this.lifted = { f, mesh, index, saved, geometry: src };
+    this.sceneChanged = true;
+    this.invalidate();
+    return true;
+  }
+
+  /** Moves the lifted piece by (dx, dz) from where it was built. */
+  moveLifted(dx: number, dz: number): void {
+    if (!this.lifted) return;
+    this.lifted.mesh.position.set(dx, 0, dz);
+    this.sceneChanged = true;
+    this.invalidate();
+  }
+
+  /** Puts the lifted piece back where it was (the drag changed nothing). */
+  dropLifted(): void {
+    const l = this.lifted;
+    if (!l) return;
+    this.lifted = null;
+    if (l.f.opaque.geometry === l.geometry) {
+      (l.index.array as Uint16Array | Uint32Array).set(l.saved);
+      l.index.needsUpdate = true;
+    }
+    l.f.group.remove(l.mesh);
+    this.look?.detach(l.mesh);
+    l.mesh.geometry.dispose();
+    this.sceneChanged = true;
+    this.invalidate();
+  }
+
   private disposeFloor(f: FloorView): void {
     this.scene.remove(f.group);
-    for (const m of [f.opaque, f.glass, f.dyn]) {
+    for (const m of [f.opaque, f.glass, f.dyn, f.dynGlass]) {
       m.geometry.dispose();
       if (this.look) this.look.detach(m);
       else (m.material as Material).dispose();
@@ -352,6 +525,15 @@ export class Viewer {
   setWalls(mode: WallMode): void {
     this.walls = mode;
     this.updateCutTargets(true);
+    this.invalidate();
+  }
+
+  /** Keeps the wall holding this door or window at full height, whatever the cutaway does (null: none). */
+  raiseOpening(floor: number, opening: string | null): void {
+    const was = this.raised;
+    if (opening === null ? was === null : was?.floor === floor && was.opening === opening) return;
+    this.raised = opening === null ? null : { floor, opening };
+    this.updateCutTargets();
     this.invalidate();
   }
 
@@ -554,6 +736,7 @@ export class Viewer {
       fill(f.opaque, f.fb.opaque);
       fill(f.glass, f.fb.glass);
       fill(f.dyn, f.dynGeo);
+      fill(f.dynGlass, f.dynGlassGeo);
       if (this.mode === "floor" && fi > this.activeFloor) continue;
       for (const lamp of f.fb.lamps) {
         const s = st.lamp(lamp);
@@ -595,17 +778,19 @@ export class Viewer {
     attr.needsUpdate = true;
   }
 
-  /** Doors swing to their contact's state, blinds move to their cover's position. */
+  /** Doors and windows open to their contact's state, blinds move to their cover's position. */
   refreshOpenings(): void {
     if (!this.live) return;
     let moving = false;
     for (const f of this.floors) {
       f.fb.doors.forEach((d, i) => {
         const c = this.live!.contact(d.opening.entity);
-        f.doorTarget[i] = c === null ? DOOR_UNKNOWN : c * DOOR_OPEN;
-        if (Math.abs(f.doorTarget[i] - f.doorAngle[i]) > 0.001) moving = true;
+        f.doorTarget[i] = c === null ? restOpen(d.opening) : c;
+        if (Math.abs(f.doorTarget[i] - f.doorPos[i]) > 0.001) moving = true;
       });
       f.fb.windows.forEach((w, i) => {
+        f.winTarget[i] = windowFollowsSensor(w.opening) ? this.live!.contact(w.opening.entity) ?? 0 : 0;
+        if (Math.abs(f.winTarget[i] - f.winPos[i]) > 0.001) moving = true;
         const c = this.live!.cover(w.opening.cover);
         f.coverTarget[i] = c === null ? 1 : c;
         if (Math.abs(f.coverTarget[i] - f.coverPos[i]) > 0.001) moving = true;
@@ -617,29 +802,22 @@ export class Viewer {
 
   private rebuildDynamic(f: FloorView): void {
     const g = new Geo();
-    g.uvY0 = f.fb.floor.elevation;
-    g.useSurface("door");
-    const wood = lin((this.look ? DAY : this.pal).roles.white);
+    const gl = new Geo();
+    g.uvY0 = gl.uvY0 = f.fb.floor.elevation;
+    gl.useSurface("glass");
+    const pal = this.look ? DAY : this.pal;
     const y0 = f.fb.floor.elevation;
-    f.fb.doors.forEach((d, i) => {
-      const a = f.doorAngle[i];
-      const dx = d.along[0] * Math.cos(a) + d.swing[0] * Math.sin(a);
-      const dz = d.along[1] * Math.cos(a) + d.swing[1] * Math.sin(a);
-      const w = d.width - 0.03;
-      const t = 0.04;
-      // the leaf: a thin box from the hinge along (dx, dz)
-      const nx = -dz, nz = dx;
-      const corner = (s: number, side: number, y: number): V3 => [d.hinge[0] + dx * s + nx * side, y0 + y, d.hinge[2] + dz * s + nz * side];
-      const h = d.height - 0.02;
-      const slot = d.wallSlot >= 0 ? d.wallSlot * 2 : -1;
-      const quads: [V3, V3, V3, V3, V3][] = [
-        [corner(0, t / 2, 0), corner(w, t / 2, 0), corner(w, t / 2, h), corner(0, t / 2, h), [nx, 0, nz]],
-        [corner(w, -t / 2, 0), corner(0, -t / 2, 0), corner(0, -t / 2, h), corner(w, -t / 2, h), [-nx, 0, -nz]],
-        [corner(0, t / 2, h), corner(w, t / 2, h), corner(w, -t / 2, h), corner(0, -t / 2, h), [0, 1, 0]],
-        [corner(w, t / 2, 0), corner(w, -t / 2, 0), corner(w, -t / 2, h), corner(w, t / 2, h), [dx, 0, dz]],
-      ];
-      for (const [p0, p1, p2, p3, n] of quads) g.quad(p0, p1, p2, p3, n, [wood[0] * 0.9, wood[1] * 0.88, wood[2] * 0.85], d.room, slot, -1, 1, 2);
+    const draw = (info: OpeningInfo, open: number, glow: number) => {
+      g.currentItem = info.item;
+      // cut, door leaves and sashes settle just under the wall's cut top
+      const ws = info.wallSlot >= 0 ? info.wallSlot * 2 + WALL_TRIM : -1;
+      buildOpeningMoving({ g, glass: gl, pal, look: joineryLook(info.opening, pal), room: info.room, ws, glow, low: this.low }, info, open);
+    };
+    f.fb.doors.forEach((d, i) => draw(d, f.doorPos[i], -1));
+    f.fb.windows.forEach((w, i) => {
+      if (windowFollowsSensor(w.opening)) draw(w, f.winPos[i], w.glow);
     });
+    g.currentItem = -1;
     f.fb.windows.forEach((w, i) => {
       if (!w.opening.cover) return;
       const open = f.coverPos[i];
@@ -662,17 +840,23 @@ export class Viewer {
       g.quad(P(half, bot), P(-half, bot), P(-half, top), P(half, top), [-w.normal[0], 0, -w.normal[1]], fabric, w.room, slot, -1, 2, 2);
     });
     f.dynGeo = g;
-    const old = f.dyn.geometry;
+    f.dynGlassGeo = gl;
+    const old = [f.dyn.geometry, f.dynGlass.geometry];
     if (this.look) {
       f.dyn.geometry = g.vertexCount ? this.look.geometry(g) : new BufferGeometry();
       f.dyn.material = this.look.materials(g, f.u);
+      f.dynGlass.geometry = gl.vertexCount ? this.look.geometry(gl) : new BufferGeometry();
+      f.dynGlass.material = gl.vertexCount ? this.look.glassMaterial(gl, f.u) : [];
     } else {
       f.dyn.geometry = g.vertexCount ? g.toBufferGeometry() : new BufferGeometry();
+      f.dynGlass.geometry = gl.vertexCount ? gl.toBufferGeometry() : new BufferGeometry();
     }
-    old.dispose();
-    if (this.live && g.vertexCount) {
+    for (const o of old) o.dispose();
+    if (this.live && (g.vertexCount || gl.vertexCount)) {
       const st = this.lightingFor(f);
-      this.fillLight(f, f.dyn, g, roomLights(f.fb, this.pal, st), st);
+      const lights = roomLights(f.fb, this.pal, st);
+      this.fillLight(f, f.dyn, g, lights, st);
+      this.fillLight(f, f.dynGlass, gl, lights, st);
     }
     this.sceneChanged = true;
   }
@@ -890,6 +1074,8 @@ export class Viewer {
             target = d > (cur > 0.5 ? 0.45 : 0.62) ? 1 : 0;
           }
         }
+        const up = this.raised;
+        if (up && up.floor === fi && w.openings.some((po) => po.opening.id === up.opening)) target = 0;
         f.cutTarget[i] = target;
         if (snap) setCut(f.u, i, target);
       });
@@ -911,14 +1097,16 @@ export class Viewer {
         } else if (cur !== t) setCut(f.u, i, t);
       }
       let dynChanged = false;
-      for (let i = 0; i < f.doorAngle.length; i++) {
-        const d = f.doorTarget[i] - f.doorAngle[i];
-        if (Math.abs(d) > 0.002) {
-          f.doorAngle[i] += d * step;
-          dynChanged = true;
-        } else if (d !== 0) {
-          f.doorAngle[i] = f.doorTarget[i];
-          dynChanged = true;
+      for (const [pos, target] of [[f.doorPos, f.doorTarget], [f.winPos, f.winTarget]]) {
+        for (let i = 0; i < pos.length; i++) {
+          const d = target[i] - pos[i];
+          if (Math.abs(d) > 0.002) {
+            pos[i] += d * step;
+            dynChanged = true;
+          } else if (d !== 0) {
+            pos[i] = target[i];
+            dynChanged = true;
+          }
         }
       }
       for (let i = 0; i < f.coverPos.length; i++) {
@@ -975,6 +1163,7 @@ export class Viewer {
 
     if ((this.dirty || again || pulsing) && this.visible && !document.hidden) {
       const t0 = performance.now();
+      this.fitNearPlane();
       if (this.look) {
         if (this.sceneChanged) this.look.markShadows();
         this.look.render();
@@ -1013,6 +1202,17 @@ export class Viewer {
   }
 
   /** Tells onSlow once when two seconds of continuous movement averaged under ~22 frames per second. */
+  /**
+   * The near plane follows the camera's distance: depth precision depends on it, and with a fixed
+   * 10 cm one, surfaces a few millimetres apart (a rug, a door's threshold) flicker from afar.
+   */
+  private fitNearPlane(): void {
+    const near = Math.min(1, Math.max(0.1, this.camera.position.distanceTo(this.controls.target) * 0.03));
+    if (Math.abs(near - this.camera.near) < 0.005) return;
+    this.camera.near = near;
+    this.camera.updateProjectionMatrix();
+  }
+
   private watchSpeed(moving: boolean, dt: number): void {
     const w = this.slowWatch;
     if (w.fired || !this.onSlow) return;
@@ -1158,6 +1358,8 @@ export class Viewer {
     const v = new Vector3();
     // markers first: the nearest within its radius on screen
     let best: { d: number; key: string } | null = null;
+    // editor handles (blue dots) win over everything drawn under or in front of them: the nearest one
+    let handle: { d: number; m: MarkerSpec } | null = null;
     for (const m of this.markers.list) {
       v.set(m.pos[0], m.pos[1], m.pos[2]).project(this.camera);
       if (v.z > 1) continue;
@@ -1165,11 +1367,9 @@ export class Viewer {
       const sy = ((1 - v.y) / 2) * this.height;
       const d = Math.hypot(sx - x, sy - y);
       if (d < m.size * 0.75 && (!best || d < best.d)) best = { d, key: m.key };
-      // editor handles win over what lies under them
-      if (m.item && d < m.size * 0.9) {
-        return { kind: "marker", floor: this.activeFloor, room: -1, entity: null, item: m.item, y: m.pos[1] };
-      }
+      if (m.item && d < Math.max(m.size * 0.9, 16) && (!handle || d < handle.d)) handle = { d, m };
     }
+    if (handle) return { kind: "marker", floor: this.activeFloor, room: -1, entity: null, item: handle.m.item, y: handle.m.pos[1] };
     if (best) {
       for (const [fi, f] of this.floors.entries()) {
         const dev = f.fb.floor.devices.find((dd) => dd.id === best!.key);
@@ -1199,16 +1399,17 @@ export class Viewer {
     // then the meshes: a screen with an entity, else the room the floor belongs to
     const ray = new Raycaster();
     ray.setFromCamera(new Vector2((x / this.width) * 2 - 1, -(y / this.height) * 2 + 1), this.camera);
-    const meshes = this.floors.filter((f, fi) => f.group.visible && (this.mode === "house" || fi === this.activeFloor)).map((f) => f.opaque);
+    const meshes = this.floors.filter((f, fi) => f.group.visible && (this.mode === "house" || fi === this.activeFloor)).flatMap((f) => [f.opaque, f.dyn]);
     const hits = ray.intersectObjects(meshes, false);
     for (const h of hits) {
-      const fi = this.floors.findIndex((f) => f.opaque === h.object);
+      const fi = this.floors.findIndex((f) => f.opaque === h.object || f.dyn === h.object);
       const f = this.floors[fi];
+      const geo = f.dyn === h.object ? f.dynGeo : f.fb.opaque;
       const vi = h.face?.a ?? -1;
       if (vi < 0) continue;
-      const itemIdx = f.fb.opaque.item[vi];
+      const itemIdx = geo.item[vi];
       const item = itemIdx >= 0 ? f.fb.items[itemIdx] : undefined;
-      const slot = f.fb.opaque.glow[vi];
+      const slot = geo.glow[vi];
       if (slot >= 0 && !this.editMode) {
         const g = f.fb.glows[slot];
         if (g?.entity) return { kind: "entity", floor: fi, room: g.room, entity: g.entity, item };

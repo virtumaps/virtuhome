@@ -4,12 +4,45 @@
 //
 // An extension module's default export:
 //   export default { id: "wall_tablet", name: "Wall Tablet", apiVersion: 1, setup(ctx) { ... } }
+//
+// API 2 adds tools, room tints and texts, and the house's energy (solar, battery, grid).
 import * as THREE from "three";
+import type { EnergyNow, EnergySources, EnergyToday } from "../live/energy";
 import type { Hass } from "../live/hass";
+import type { RoomText, RoomTint } from "../live/live";
 import type { Plan } from "../model/plan";
 import type { Viewer } from "../scene/viewer";
+import type { EnergySection } from "../ui/energy";
 
-export const EXT_API_VERSION = 1;
+export const EXT_API_VERSION = 2;
+
+/** A round button in the view's tool column. */
+export interface Tool {
+  /** An SVG path (24 x 24), e.g. one of @mdi/js. */
+  icon: string;
+  title: string;
+  onClick(): void;
+}
+
+export interface ToolHandle {
+  readonly el: HTMLButtonElement;
+  /** Shows the tool as switched on (accent colour). */
+  setOn(on: boolean): void;
+  remove(): void;
+}
+
+/** The house's solar, battery and grid, as the core reads them. */
+export interface EnergyHandle {
+  readonly sources: EnergySources;
+  readonly now: EnergyNow | null;
+  readonly today: EnergyToday | null;
+  /** Called when the readings change; returns an unsubscribe. */
+  onChange(cb: (now: EnergyNow) => void): () => void;
+  /** A section of the energy sheet, under the flow and today's totals; returns its removal. */
+  addSection(section: EnergySection): () => void;
+  /** Opens the energy sheet. */
+  open(): void;
+}
 
 /** One live view (a card or the panel) as an extension sees it. */
 export interface ViewHandle {
@@ -31,6 +64,17 @@ export interface ViewHandle {
   /** Home Assistant's own card for a config, e.g. a live camera ({ type: "picture-entity", … }). */
   createCard(config: Record<string, unknown>): Promise<(HTMLElement & { hass?: unknown }) | null>;
   moreInfo(entityId: string): void;
+
+  // API 2
+  /** Adds a button above the view's own tools. */
+  addTool(tool: Tool): ToolHandle;
+  /** Colours rooms (an alert still wins); null hands the rooms back. Then call refreshRooms(). */
+  setRoomTint(fn: RoomTint | null): void;
+  /** Text after a room's temperature under its name; null removes it. Then call refreshRooms(). */
+  setRoomText(fn: RoomText | null): void;
+  /** Redraws the rooms' tints and labels. */
+  refreshRooms(): void;
+  readonly energy: EnergyHandle;
 }
 
 export interface ExtensionContext {

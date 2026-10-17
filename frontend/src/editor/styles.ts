@@ -19,6 +19,7 @@ export const EDITOR_CSS = /* css */ `
 .ed-hint { color: var(--vh-dim); margin: 2px 0 8px; line-height: 1.4; }
 .ed-row { display: flex; gap: 6px; align-items: center; margin: 5px 0; flex-wrap: wrap; }
 .ed-row label { color: var(--vh-dim); min-width: 52px; }
+.ed-check { display: flex; gap: 6px; align-items: center; margin: 4px 0 6px; cursor: pointer; }
 .ed-card { background: var(--vh-chip); border-radius: 12px; padding: 8px 10px; margin: 6px 0; }
 .ed-card.on { box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
 .ed-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; background: var(--vh-chip); margin: 4px 0; cursor: pointer; }
@@ -41,6 +42,7 @@ export const EDITOR_CSS = /* css */ `
 .ed-ib.small { width: 28px; height: 28px; }
 .ed-ib svg, .ed-save svg { width: 18px; height: 18px; fill: currentColor; }
 .ed-save { display: inline-flex; gap: 6px; align-items: center; border: 0; border-radius: 17px; padding: 7px 12px; background: var(--vh-accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.ed-save:disabled { background: rgba(127,127,127,0.32); color: rgba(255,255,255,0.7); cursor: default; }
 .ed-hb {
   display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 17px; padding: 6px 10px 6px 8px;
   background: var(--vh-chip); color: var(--vh-text); font: inherit; font-size: 12px; cursor: pointer;

@@ -59,7 +59,8 @@ FURNITURE = vol.Schema(
         vol.Required("w"): _LENGTH,
         vol.Required("d"): _LENGTH,
         vol.Required("h"): _LENGTH,
-        vol.Optional("y", default=0): _LENGTH,
+        # unset means the type's usual height (a wall cupboard's, a ceiling lamp's), so no default of 0
+        vol.Optional("y"): vol.Any(None, _LENGTH),
         vol.Optional("entity", default=None): _ENTITY,
     },
     extra=vol.ALLOW_EXTRA,

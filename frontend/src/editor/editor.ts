@@ -8,16 +8,19 @@ import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelet
 import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
-import { newId, normalizePlan, spaces, type Device, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
+import { newId, normalizePlan, spaces, type Device, type EnergySettings, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
-import { CATEGORY_NAMES, FURNITURE, isUpholstered, styleOptions, type Category } from "../scene/furniture-lib";
-import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
+import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CATEGORY_NAMES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
+import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
+import { controlsFor, defaultFinish, styleOf, stylesFor } from "../scene/joinery";
 import { pointInPolygon } from "../model/geom";
+import { openingPoint } from "../model/walls";
 import { iconIndex } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import { EDITOR_CSS } from "./styles";
+import { Collider, settle } from "./collide";
 import { Plan2D, PLAN2D_CSS } from "./plan2d";
 
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
@@ -79,7 +82,11 @@ export class Editor {
   /** The 2D plan (bird's-eye, with measurements), when it is shown instead of 3D. */
   private plan2d: Plan2D | null = null;
   private modeBtns: HTMLButtonElement[] = [];
-  private dirty = false;
+  private unsaved = false;
+  /** The plan as last saved: Save is on only while the plan differs from it (an undo back to it turns Save off). */
+  private savedJson: string;
+  private saving = false;
+  private saveBtn: HTMLButtonElement;
   private tab: Tab = "home";
   private sel: Selection = null;
   private body: HTMLDivElement;
@@ -89,21 +96,26 @@ export class Editor {
   private dragCorners: { outdoor: boolean; id: string; i: number }[] = [];
   private dragRaf = 0;
   private pendingDrag: (() => void) | null = null;
+  /** Where the dragged piece stood when the drag began, and what it must keep out of. */
+  private dragFrom: Vec2 | null = null;
+  private collider: Collider | null = null;
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
+    this.savedJson = JSON.stringify(this.plan);
     const style = h("style", {}, EDITOR_CSS + PLAN2D_CSS);
     this.status = h("span", { class: "ed-status" });
     this.body = h("div", { class: "ed-body" });
     this.undoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowULeftTop)}<span>Undo</span>`, onclick: () => this.doUndo() });
     this.redoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowURightTop)}<span>Redo</span>`, onclick: () => this.doRedo() });
+    this.saveBtn = h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, disabled: true, title: "Nothing to save", onclick: () => this.save() });
     this.el = h("div", { class: "ed" },
       style,
       h("div", { class: "ed-head" },
         h("b", {}, "Edit home"),
         this.undoBtn,
         this.redoBtn,
-        h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, onclick: () => this.save() }),
+        this.saveBtn,
         h("button", { class: "ed-ib", title: "Close", html: svg(mdiClose), onclick: () => this.close() }),
       ),
       h("div", { class: "ed-modes" },
@@ -119,7 +131,6 @@ export class Editor {
     );
     const viewer = host.view.viewer;
     viewer.editMode = true;
-    viewer.setWalls("low");
     viewer.onDrag = (hit, x, z, phase) => this.onDrag(hit, x, z, phase);
     window.addEventListener("keydown", this.onKey);
     this.render();
@@ -149,14 +160,15 @@ export class Editor {
         dragStart: () => {
           this.dragStart = structuredClone(this.plan);
         },
-        dragMove: () => this.queueDragPreview(),
+        // the 3D view is hidden behind the plan: it catches up once, when the drag ends
+        dragMove: () => {},
         dragEnd: (label) => {
           const before = this.dragStart;
           this.dragStart = null;
           if (!before || !label || JSON.stringify(before) === JSON.stringify(this.plan)) return;
           this.undo.push({ plan: before, label });
           this.redo = [];
-          this.dirty = true;
+          this.changed();
           this.apply();
         },
         floor: () => (viewer.mode === "floor" ? viewer.activeFloor : 0),
@@ -171,17 +183,42 @@ export class Editor {
     }
   }
 
-  /** Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes (not while typing in a field). */
+  /**
+   * Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes; Backspace or Delete removes the selected
+   * piece, device, door or window (not while typing in a field; the 2D plan has its own keys).
+   */
   private onKey = (e: KeyboardEvent): void => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const target = e.composedPath()[0] as HTMLElement | undefined;
-    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
+    if ((e.key === "Backspace" || e.key === "Delete") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (!this.plan2d && this.removeSelected()) e.preventDefault();
+      return;
+    }
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === "z" && !e.shiftKey) this.doUndo();
     else if ((k === "z" && e.shiftKey) || k === "y") this.doRedo();
     else return;
     e.preventDefault();
   };
+
+  /** Removes the selected piece, device, door or window (rooms are removed from the drawer, with a confirmation). */
+  private removeSelected(): boolean {
+    const sel = this.sel;
+    if (!sel || (sel.kind !== "furniture" && sel.kind !== "device" && sel.kind !== "opening")) return false;
+    const f = this.plan.floors[sel.floor];
+    const name = sel.kind === "furniture" ? FURNITURE[f?.furniture.find((x) => x.id === sel.id)?.type ?? ""]?.name ?? "furniture"
+      : sel.kind === "device" ? "a device" : "an opening";
+    this.change((p) => {
+      const fl = p.floors[sel.floor];
+      if (!fl) return;
+      if (sel.kind === "furniture") fl.furniture = fl.furniture.filter((x) => x.id !== sel.id);
+      else if (sel.kind === "device") fl.devices = fl.devices.filter((x) => x.id !== sel.id);
+      else fl.openings = fl.openings.filter((x) => x.id !== sel.id);
+    }, false, `Remove ${name}`);
+    this.select(null);
+    return true;
+  }
 
   // ------------------------------------------------------------------ plan changes
 
@@ -195,7 +232,7 @@ export class Editor {
     if (this.undo.length > 100) this.undo.shift();
     this.redo = [];
     fn(this.plan);
-    this.dirty = true;
+    this.changed();
     this.apply(quiet);
   }
 
@@ -222,7 +259,7 @@ export class Editor {
     if (!prev) return;
     this.redo.push({ plan: this.plan, label: prev.label });
     this.plan = prev.plan;
-    this.dirty = true;
+    this.changed();
     this.dropMissingSelection();
     this.apply();
     this.status.textContent = `Undone: ${prev.label}`;
@@ -233,7 +270,7 @@ export class Editor {
     if (!next) return;
     this.undo.push({ plan: this.plan, label: next.label });
     this.plan = next.plan;
-    this.dirty = true;
+    this.changed();
     this.dropMissingSelection();
     this.apply();
     this.status.textContent = `Redone: ${next.label}`;
@@ -252,21 +289,49 @@ export class Editor {
     if (!exists) this.sel = null;
   }
 
+  /** Unsaved changes: Save can only be clicked while there are some. */
+  private get dirty(): boolean {
+    return this.unsaved;
+  }
+
+  /** After a change of the plan: whether it now differs from what was last saved. */
+  private changed(): void {
+    this.unsaved = JSON.stringify(this.plan) !== this.savedJson;
+    this.updateSaveButton();
+  }
+
+  private updateSaveButton(): void {
+    if (!this.saveBtn) return;
+    this.saveBtn.disabled = !this.unsaved || this.saving;
+    this.saveBtn.title = this.saving ? "Saving…" : this.unsaved ? "Save changes" : "Nothing to save";
+  }
+
   private async save(): Promise<void> {
+    if (!this.unsaved || this.saving) return;
+    const json = JSON.stringify(this.plan);
+    const saved = () => {
+      // edits made while saving still need a save
+      this.savedJson = json;
+      this.changed();
+      this.status.textContent = this.unsaved ? "Unsaved changes" : "Saved";
+    };
+    this.saving = true;
+    this.updateSaveButton();
     this.status.textContent = "Saving…";
     try {
       await this.host.save(this.plan, this.host.revision);
-      this.dirty = false;
-      this.status.textContent = "Saved";
+      saved();
     } catch (err) {
       const msg = String((err as { message?: string })?.message ?? err);
       if (/changed meanwhile|conflict/i.test(msg)) {
         this.confirm("Someone else saved the plan meanwhile. Save yours over it?", "Save mine", async () => {
           await this.host.save(this.plan, null);
-          this.dirty = false;
-          this.status.textContent = "Saved";
+          saved();
         });
       } else this.status.textContent = `Not saved: ${msg}`;
+    } finally {
+      this.saving = false;
+      this.updateSaveButton();
     }
   }
 
@@ -283,6 +348,8 @@ export class Editor {
     viewer.editMode = false;
     viewer.onDrag = null;
     viewer.overlayMarkers = [];
+    viewer.refreshMarkers();
+    viewer.raiseOpening(0, null);
     cancelAnimationFrame(this.dragRaf);
     window.removeEventListener("keydown", this.onKey);
     this.plan2d?.dispose();
@@ -295,7 +362,7 @@ export class Editor {
   /** The view tells the editor about taps in edit mode. */
   onHit(hit: Hit): void {
     if (hit.item?.kind === "corner") return;
-    if (hit.item) this.select({ floor: hit.floor, kind: hit.item.kind as "device" | "furniture", id: hit.item.id });
+    if (hit.item) this.select({ floor: hit.floor, kind: hit.item.kind, id: hit.item.id });
     else if (hit.kind === "room" && hit.room >= 0) {
       const s = spaces(this.plan.floors[hit.floor])[hit.room];
       if (s) this.select({ floor: hit.floor, kind: s.outdoor ? "outdoor" : "room", id: s.id });
@@ -330,9 +397,21 @@ export class Editor {
       const thing = s.kind === "device" ? f?.devices.find((d) => d.id === s.id) : f?.furniture.find((x) => x.id === s.id);
       if (thing) {
         const y = (f.elevation ?? 0) + 0.05;
-        viewer.overlayMarkers = [{ key: "__sel", pos: [thing.x, y, thing.z], icon: iconIndex("dot"), color: 0x2f7cf6, size: 18, pulse: 0.6, alpha: 0.9 }];
+        // a handle: grabbing it drags the selected piece, whatever stands in front of it
+        viewer.overlayMarkers = [{ key: "__sel", pos: [thing.x, y, thing.z], icon: iconIndex("dot"), color: 0x2f7cf6, size: 18, pulse: 0.6, alpha: 0.9, item: { kind: s.kind, id: s.id } }];
       }
     }
+    if (s && s.kind === "opening") {
+      const f = this.plan.floors[s.floor];
+      const o = f?.openings.find((x) => x.id === s.id);
+      const at = o ? openingPoint(f, o) : null;
+      if (o && at) {
+        const y = f.elevation + (o.kind === "window" ? o.sill + o.height / 2 : 0.05);
+        viewer.overlayMarkers = [{ key: "__sel", pos: [at[0], y, at[1]], icon: iconIndex("dot"), color: 0x2f7cf6, size: 18, pulse: 0.6, alpha: 0.9, item: { kind: "opening", id: o.id } }];
+      }
+    }
+    // a selected door or window is shown whole: its wall slides up out of the cutaway
+    viewer.raiseOpening(s?.floor ?? 0, s?.kind === "opening" ? s.id : null);
     viewer.refreshMarkers();
   }
 
@@ -341,7 +420,13 @@ export class Editor {
   private onDrag(hit: Hit, x: number, z: number, phase: DragPhase): void {
     const item = hit.item;
     if (!item) return;
-    const f = this.plan.floors[hit.floor];
+    // handles (corners, the selected piece's dot) belong to the selection, whichever floor is in view
+    const handle = this.sel && (item.kind === "corner" || (item.kind === this.sel.kind && item.id === this.sel.id));
+    const fi = handle && this.sel ? this.sel.floor : hit.floor;
+    const f = this.plan.floors[fi];
+    if (!f) return;
+    const view = this.host.view;
+    const find = () => (item.kind === "device" ? f.devices.find((d) => d.id === item.id) : f.furniture.find((d) => d.id === item.id));
     if (phase === "start") {
       this.dragStart = structuredClone(this.plan);
       if (item.kind === "corner") {
@@ -359,7 +444,18 @@ export class Editor {
         }
         return;
       }
-      this.select({ floor: hit.floor, kind: item.kind, id: item.id });
+      if (item.kind === "opening") {
+        this.select({ floor: fi, kind: "opening", id: item.id });
+        return;
+      }
+      this.select({ floor: fi, kind: item.kind, id: item.id });
+      const thing = find();
+      this.dragFrom = thing ? [thing.x, thing.z] : null;
+      this.collider = item.kind === "furniture" ? new Collider(this.plan, fi, item.id) : null;
+      // the view must show this very plan, so markers follow the piece; then the piece leaves its
+      // floor's mesh, and dragging only moves it
+      if (view.viewer.plan !== this.plan) view.previewPlan(this.plan);
+      view.viewer.liftItem(fi, item);
       return;
     }
     if (phase === "move" && item.kind === "corner") {
@@ -368,35 +464,52 @@ export class Editor {
         const s = c.outdoor ? f.outdoor?.find((o) => o.id === c.id) : f.rooms.find((r) => r.id === c.id);
         if (s) s.points[c.i] = [snap(x), snap(z)];
       }
-      this.queueDragPreview();
+      this.queueDragFrame(() => view.previewPlan(this.plan));
+      return;
+    }
+    if (phase === "move" && item.kind === "opening") {
+      // a door or window slides along its wall
+      const o = f.openings.find((y) => y.id === item.id);
+      const room = o && f.rooms.find((r) => r.id === o.room_id);
+      if (!o || !room) return;
+      const a = room.points[o.edge], b = room.points[(o.edge + 1) % room.points.length];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < 0.05) return;
+      const t = ((x - a[0]) * (b[0] - a[0]) + (z - a[1]) * (b[1] - a[1])) / len;
+      o.offset = Math.round(Math.max(o.width / 2, Math.min(len - o.width / 2, t)) * 100) / 100;
+      this.queueDragFrame(() => view.previewPlan(this.plan));
       return;
     }
     if (phase === "move") {
-      const thing = item.kind === "device" ? f.devices.find((d) => d.id === item.id) : f.furniture.find((d) => d.id === item.id);
-      if (!thing) return;
-      thing.x = Math.round(x * 100) / 100;
-      thing.z = Math.round(z * 100) / 100;
-      this.queueDragPreview();
+      const thing = find();
+      const from = this.dragFrom;
+      if (!thing || !from) return;
+      const to: Vec2 = [Math.round(x * 100) / 100, Math.round(z * 100) / 100];
+      [thing.x, thing.z] = this.collider ? this.collider.place([thing.x, thing.z], to) : to;
+      this.queueDragFrame(() => view.viewer.moveLifted(thing.x - from[0], thing.z - from[1]));
       return;
     }
+    this.dragFrom = null;
+    this.collider = null;
     if (this.dragStart) {
       const moved = JSON.stringify(this.dragStart) !== JSON.stringify(this.plan);
       if (moved) {
-        const what = item.kind === "corner" ? "a corner" : item.kind === "device"
+        const what = item.kind === "corner" ? "a corner" : item.kind === "opening" ? `a ${f.openings.find((o) => o.id === item.id)?.kind ?? "door"}` : item.kind === "device"
           ? String(this.hass.states[f.devices.find((d) => d.id === item.id)?.entity ?? ""]?.attributes.friendly_name ?? "a device")
           : FURNITURE[f.furniture.find((x) => x.id === item.id)?.type ?? ""]?.name ?? "furniture";
         this.undo.push({ plan: this.dragStart, label: `Move ${what}` });
         this.redo = [];
-        this.dirty = true;
+        this.changed();
+        // the floor is rebuilt with the piece in its new place
         this.apply();
-      }
+      } else view.viewer.dropLifted();
       this.dragStart = null;
     }
   }
 
-  /** Rebuilding a floor costs a few milliseconds: once per frame at most while dragging. */
-  private queueDragPreview(): void {
-    this.pendingDrag = () => this.host.view.previewPlan(this.plan);
+  /** Drag updates run once per frame at most. */
+  private queueDragFrame(fn: () => void): void {
+    this.pendingDrag = fn;
     if (this.dragRaf) return;
     this.dragRaf = requestAnimationFrame(() => {
       this.dragRaf = 0;
@@ -442,6 +555,7 @@ export class Editor {
       (EXTERIOR_FINISHES as Record<string, FinishDef>)[this.plan.settings.exterior_finish ?? "render"]?.tintable
         ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, "Outside wall colour"))
         : null,
+      ...this.energySection(),
       h("h4", {}, "Floors"),
       ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
       h("h4", {}, "Plan file"),
@@ -466,6 +580,65 @@ export class Editor {
       }).catch(() => list.replaceChildren(h("p", { class: "ed-hint" }, "Not available here.")));
     }
     return box;
+  }
+
+  /** Solar, battery and grid: what was found, and a sensor picked by hand where that is wrong. */
+  private energySection(): HTMLElement[] {
+    const hass = this.hass;
+    const auto = this.host.view.energy.automatic();
+    const set = this.plan.settings.energy ?? {};
+    // "FoxESS - Modbus (Inverter) PV1 Power" reads better as "PV1 Power": without its device's name
+    const name = (id: string) => {
+      const full = String(hass.states[id]?.attributes.friendly_name ?? id);
+      const dev = hass.entities?.[id]?.device_id ? hass.devices?.[hass.entities[id].device_id!] : undefined;
+      const prefix = dev?.name_by_user || dev?.name;
+      const short = prefix && full.startsWith(prefix) ? full.slice(prefix.length).replace(/^[\s:\-–]+/, "") : "";
+      return short || full;
+    };
+    const sensors = (ok: (id: string) => boolean): [string, string][] =>
+      Object.keys(hass.states).filter((id) => domainOf(id) === "sensor" && ok(id)).map((id) => [id, name(id)] as [string, string]).sort((a, b) => a[1].localeCompare(b[1]));
+    const dc = (id: string) => hass.states[id].attributes.device_class;
+    const power = sensors((id) => dc(id) === "power");
+    const levels = sensors((id) => dc(id) === "battery");
+    const prices = sensors((id) => /\/kWh$/i.test(String(hass.states[id].attributes.unit_of_measurement ?? "")));
+    const edit = (k: keyof EnergySettings, v: unknown, label: string) =>
+      this.change((p) => {
+        const e = { ...(p.settings.energy ?? {}) } as Record<string, unknown>;
+        if (v === "" || v === null || v === undefined) delete e[k];
+        else e[k] = v;
+        p.settings.energy = Object.keys(e).length ? (e as EnergySettings) : null;
+      }, false, label);
+    const automatic = (...ids: (string | null)[]) => {
+      const found = ids.filter((x): x is string => !!x);
+      return `Automatic: ${found.length ? found.map(name).join(" + ") : "none"}`;
+    };
+    const row = (label: string, k: keyof EnergySettings, options: [string, string][], autoLabel: string) =>
+      h("div", { class: "ed-row" },
+        h("label", {}, label),
+        this.dropdown(options, k === "solar" ? set.solar?.[0] ?? "" : String(set[k] ?? ""), (v) =>
+          edit(k, k === "solar" ? (v ? [v] : null) : v || null, `Energy: ${label.toLowerCase()}`), autoLabel),
+      );
+    return [
+      h("h4", {}, "Energy"),
+      h("p", { class: "ed-hint" }, "Solar, battery and grid are read from Home Assistant's energy settings. Pick a sensor only where the automatic one is wrong. Solar panels placed in the plan shine with what they make."),
+      h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: set.enabled !== false, onchange: (e: Event) => edit("enabled", (e.target as HTMLInputElement).checked ? null : false, "Energy shown") }),
+        " Show solar, battery and grid"),
+      row("Solar", "solar", power, automatic(...auto.solar)),
+      row("House", "home", power, auto.home ? automatic(auto.home) : "Automatic: worked out from the others"),
+      row("Battery in", "battery_charge", power, automatic(auto.batteryCharge ?? auto.battery)),
+      row("Battery out", "battery_discharge", power, automatic(auto.batteryDischarge ?? auto.battery)),
+      row("Battery level", "battery_level", levels, automatic(auto.batteryLevel)),
+      row("Grid import", "grid_import", power, automatic(auto.gridImport ?? auto.grid)),
+      row("Grid export", "grid_export", power, automatic(auto.gridExport ?? auto.grid)),
+      row("Price to buy", "price_import", prices, automatic(auto.priceImport)),
+      row("Price to sell", "price_export", prices, automatic(auto.priceExport)),
+      h("div", { class: "ed-row" },
+        h("label", {}, "Panels' peak (kW)"),
+        h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0", value: set.solar_peak ? String(set.solar_peak) : "", placeholder: "auto",
+          onchange: (e: Event) => edit("solar_peak", Number((e.target as HTMLInputElement).value) || null, "Energy: panels' peak") }),
+      ),
+    ];
   }
 
   private floorRow(f: Floor, i: number): HTMLElement {
@@ -777,8 +950,24 @@ export class Editor {
     const linkable = def?.category === "lights"
       ? this.entities((id) => ["light", "switch"].includes(domainOf(id)))
       : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
+    // a change of size, height, turn or side keeps the piece out of walls and other pieces
+    const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
+      fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
+      settle(p, fi, x.id);
+    }, false, `${label} ${def?.name ?? "item"}`);
     const num = (label: string, key: "w" | "d" | "h" | "y") =>
-      [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(x[key] ?? 0), onchange: (e: Event) => upd((y) => (y[key] = Number((e.target as HTMLInputElement).value))) })];
+      [h("label", {}, label), h("input", {
+        class: "ed-in num", type: "number", step: "0.05",
+        // an empty height above the floor means the type's usual one (a wall cupboard's, a ceiling lamp's)
+        value: key === "y" ? (x.y === null || x.y === undefined ? "" : String(x.y)) : String(x[key]), placeholder: key === "y" ? "auto" : "",
+        onchange: (e: Event) => {
+          const v = (e.target as HTMLInputElement).value;
+          reshape("Resize")((y) => {
+            if (key === "y" && v === "") delete y.y;
+            else y[key] = Number(v);
+          });
+        },
+      })];
     const styles = styleOptions(x.type);
     const finish = x.finish ?? def?.finish ?? "fabric";
     const named = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!), false, `${label} ${def?.name ?? "item"}`);
@@ -791,13 +980,20 @@ export class Editor {
       this.colourPicker(FURNITURE_SWATCHES, x.color, (c) => named("Recolour")((y) => (y.color = c)), "Original"),
       isUpholstered(x.type) ? h("div", { class: "ed-sub" }, "Upholstery") : null,
       isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named("Reupholster")((y) => (y.finish = k as Furniture["finish"]))) : null,
+      ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
       h("div", { class: "ed-row" }, h("label", {}, "Linked to"), this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), "Nothing")),
       h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
       h("div", { class: "ed-row" }, ...num("Height", "h"), ...num("Above floor", "y")),
-      this.turnRow((deg) => named("Turn")((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360))),
-        h("button", { class: `ed-ib${x.mirror ? " on" : ""}`, title: "Mirror", html: svg(mdiFlipHorizontal), onclick: () => named("Mirror")((y) => (y.mirror = !y.mirror)) })),
+      this.turnRow((deg) => reshape("Turn")((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360))),
+        h("button", { class: `ed-ib${x.mirror ? " on" : ""}`, title: "Mirror", html: svg(mdiFlipHorizontal), onclick: () => reshape("Mirror")((y) => (y.mirror = !y.mirror)) })),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost", onclick: () => this.change((p) => p.floors[fi].furniture.push({ ...structuredClone(x), id: newId("f"), x: x.x + 0.3, z: x.z + 0.3 }), false, `Duplicate ${def?.name ?? "item"}`) }, "Duplicate"),
+        h("button", { class: "ed-btn ghost", onclick: () => {
+          const id = newId("f");
+          this.change((p) => {
+            p.floors[fi].furniture.push({ ...structuredClone(x), id, x: x.x + 0.3, z: x.z + 0.3 });
+            settle(p, fi, id);
+          }, false, `Duplicate ${def?.name ?? "item"}`);
+        } }, "Duplicate"),
         h("button", { class: "ed-btn danger", onclick: () => {
           this.change((p) => (p.floors[fi].furniture = p.floors[fi].furniture.filter((y) => y.id !== x.id)));
           this.select(null);
@@ -806,7 +1002,27 @@ export class Editor {
     );
   }
 
-  /** A door, window or opening: kind, size, which way it opens, and what it is linked to. */
+  /** Stairs: the balustrade's style, what it is made of, and which side it is on. */
+  private balustradeRows(x: Furniture, named: (label: string) => (fn: (y: Furniture) => void) => void): (HTMLElement | null)[] {
+    const style = x.balustrade ?? "none";
+    const material = x.balustrade_material ?? (style === "none" ? "primed" : BALUSTRADE_DEFAULT[style]);
+    const side = x.balustrade_side ?? "right";
+    const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
+    const sides: [NonNullable<Furniture["balustrade_side"]>, string][] = [["left", "Left"], ["right", "Right"], ["both", "Both"]];
+    return [
+      h("div", { class: "ed-sub" }, "Balustrade"),
+      h("div", { class: "ed-chips" }, ...Object.entries(BALUSTRADES).map(([k, name]) =>
+        chip(name, style === k, () => named(k === "none" ? "No balustrade on" : `${name} balustrade on`)((y) => (y.balustrade = k as BalustradeStyle))))),
+      style !== "none" ? h("div", { class: "ed-sub" }, style === "glass" ? "Handrail and posts" : "Material") : null,
+      style !== "none" ? h("div", { class: "ed-chips" }, ...Object.entries(BALUSTRADE_MATERIALS).map(([k, m]) =>
+        h("button", { class: `ed-chip${material === k ? " on" : ""}`, onclick: () => material !== k && named(`${m.name} balustrade on`)((y) => (y.balustrade_material = k as BalustradeMaterial)) },
+          h("i", { style: `background:${hexOf(m.color)}` }), m.name))) : null,
+      style !== "none" ? h("div", { class: "ed-row" }, h("label", {}, "Side going up"),
+        ...sides.map(([k, label]) => chip(label, side === k, () => named("Move the balustrade of")((y) => (y.balustrade_side = k))))) : null,
+    ];
+  }
+
+  /** A door, window or opening: kind, style, finish, size, which way it opens, and what it is linked to. */
   private openingPanel(fi: number, o: Opening | undefined): HTMLElement {
     if (!o) return h("div", {});
     const upd = (label: string, fn: (x: Opening) => void) => this.change((p) => fn(p.floors[fi].openings.find((y) => y.id === o.id)!), false, label);
@@ -816,24 +1032,57 @@ export class Editor {
     const num = (label: string, key: "width" | "height" | "sill" | "offset", step = "0.05") =>
       [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step, min: "0", value: String(o[key]), onchange: (e: Event) => upd(`Change ${o.kind} ${label.toLowerCase()}`, (x) => (x[key] = Math.max(0, Number((e.target as HTMLInputElement).value)))) })];
     const names: Record<Opening["kind"], string> = { door: "Door", window: "Window", passage: "Opening", garage: "Garage door" };
+    const what = names[o.kind].toLowerCase();
+    const styles = stylesFor(o.kind);
+    const style = styleOf(o);
+    const ctl = controlsFor(o);
+    const finish = o.finish ?? defaultFinish(o.kind);
+    const def: FinishDef = JOINERY_FINISHES[finish];
+    const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
     return h("div", {},
       h("h4", {}, `${names[o.kind]}${room ? ` · ${room.name}` : ""}`),
       h("div", { class: "ed-chips" }, ...(["door", "window", "passage", "garage"] as Opening["kind"][]).map((k) =>
-        h("button", { class: `ed-chip${o.kind === k ? " on" : ""}`, onclick: () => o.kind !== k && upd(`Make it a ${names[k].toLowerCase()}`, (x) => {
+        chip(names[k], o.kind === k, () => upd(`Make it a ${names[k].toLowerCase()}`, (x) => {
           x.kind = k;
+          x.style = null; // styles differ between kinds
           if (k === "window" && x.sill < 0.3) x.sill = 0.9;
           if (k !== "window") x.sill = 0;
-        }) }, names[k]))),
+        })))),
+      styles ? h("div", { class: "ed-sub" }, "Style") : null,
+      styles ? h("div", { class: "ed-chips" }, ...Object.entries(styles).map(([k, name]) =>
+        chip(name, style === k, () => upd(`${name} ${what}`, (x) => (x.style = k as Opening["style"]))))) : null,
+      styles ? h("div", { class: "ed-sub" }, o.kind === "window" ? "Frame" : "Finish") : null,
+      styles ? this.finishChips(JOINERY_FINISHES, finish, (k) => upd(`${JOINERY_FINISHES[k as keyof typeof JOINERY_FINISHES].name} ${what}`, (x) => (x.finish = k as Opening["finish"]))) : null,
+      styles && def.tintable
+        ? this.colourPicker(JOINERY_SWATCHES, o.color, (c) => upd(`Colour of a ${what}`, (x) => (x.color = c)), finish === "aluminium" ? "Silver" : "White")
+        : null,
+      styles ? h("div", { class: "ed-row" },
+        ctl.bars ? chip("Plain glass", !o.bars, () => upd(`Plain glass in a ${what}`, (x) => (x.bars = false))) : null,
+        ctl.bars ? chip("Glazing bars", !!o.bars, () => upd(`Glazing bars on a ${what}`, (x) => (x.bars = true))) : null,
+        h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
+          for (const fl of p.floors) for (const x of fl.openings) {
+            if (x.kind !== o.kind) continue;
+            x.finish = o.finish ?? null;
+            x.color = o.color ?? null;
+          }
+        }, false, `Same finish on every ${what}`) }, `Same finish on every ${what}`),
+      ) : null,
       h("div", { class: "ed-row" }, ...num("Width", "width"), ...num("Height", "height")),
       h("div", { class: "ed-row" }, ...(o.kind === "window" ? num("Sill", "sill") : []), ...num("From corner", "offset")),
-      o.kind === "door" || o.kind === "garage" ? h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost small", onclick: () => upd("Flip a door's hinge", (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, "Flip hinge"),
-        h("button", { class: "ed-btn ghost small", onclick: () => upd("Swing a door the other way", (x) => (x.swing = x.swing === "out" ? "in" : "out")) }, "Swing other way"),
+      ctl.swing ? h("div", { class: "ed-row" },
+        h("label", {}, "Opens"),
+        chip("Inwards", o.swing !== "out", () => upd(`Open a ${what} inwards`, (x) => (x.swing = "in"))),
+        chip("Outwards", o.swing === "out", () => upd(`Open a ${what} outwards`, (x) => (x.swing = "out"))),
+      ) : null,
+      ctl.hinge || ctl.slide ? h("div", { class: "ed-row" },
+        ctl.hinge ? h("button", { class: "ed-btn ghost small", onclick: () => upd(`Flip a ${what}'s hinge`, (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, "Flip hinge") : null,
+        ctl.slide ? h("button", { class: "ed-btn ghost small", onclick: () => upd(`Slide a ${what} the other way`, (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, "Slide the other way") : null,
       ) : null,
       h("div", { class: "ed-row" }, h("label", {}, "Sensor"), this.dropdown(contacts, o.entity ?? "", (v) => upd("Link a sensor", (x) => (x.entity = v || null)), "None")),
+      o.kind !== "passage" && style !== "fixed" ? h("p", { class: "ed-hint" }, `The ${what} opens in 3D when its sensor does.`) : null,
       o.kind === "window" ? h("div", { class: "ed-row" }, h("label", {}, "Blind"), this.dropdown(covers, o.cover ?? "", (v) => upd("Link a blind", (x) => (x.cover = v || null)), "None")) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
-        this.change((p) => (p.floors[fi].openings = p.floors[fi].openings.filter((x) => x.id !== o.id)), false, `Remove a ${names[o.kind].toLowerCase()}`);
+        this.change((p) => (p.floors[fi].openings = p.floors[fi].openings.filter((x) => x.id !== o.id)), false, `Remove a ${what}`);
         this.select(null);
       } }, "Remove"),
     );
@@ -865,6 +1114,7 @@ export class Editor {
       if (def.y !== undefined) y.y = def.y;
       else delete y.y;
       if (def.finish && !y.finish) y.finish = def.finish;
+      settle(p, fi, y.id);
     }, false, `Change to ${def.name}`);
   }
 
@@ -1056,7 +1306,10 @@ export class Editor {
     const at = labelPoint(room.points);
     const item: Furniture = { id: newId("f"), type, x: at[0], z: at[1], rotation: 0, w: def.size[0], d: def.size[1], h: def.size[2] };
     if (def.y) item.y = def.y;
-    this.change((p) => p.floors[fi].furniture.push(item), false, `Add ${def.name}`);
+    this.change((p) => {
+      p.floors[fi].furniture.push(item);
+      settle(p, fi, item.id);
+    }, false, `Add ${def.name}`);
     this.select({ floor: fi, kind: "furniture", id: item.id });
   }
 

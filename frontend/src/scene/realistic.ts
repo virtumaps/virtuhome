@@ -54,13 +54,17 @@ const ROLE_SPECS: Record<string, SurfaceSpec> = {
   mirror: { rough: 0.02, metal: 1 },
   water: { rough: 0.03, opacity: 0.8 },
   rubber: { rough: 0.85 },
+  pine: { tex: "wood_grain_v", scale: 0.6, rough: 0.5, relief: 0.2 },
+  softwood: { tex: "wood_grain_v", scale: 0.6, rough: 0.7, relief: 0.15 },
+  oak: { tex: "wood_grain_v", scale: 0.6, rough: 0.5, relief: 0.2 },
+  walnut: { tex: "wood_grain_v", scale: 0.6, rough: 0.45, relief: 0.2 },
+  primed: { rough: 0.85 },
+  blackMetal: { rough: 0.4, metal: 0.6 },
 };
 
 const OTHER_SPECS: Record<string, SurfaceSpec> = {
   cap: { rough: 0.9 },
   slab: { tex: "concrete", scale: 3, rough: 0.9, relief: 0.2 },
-  frame: { rough: 0.4 },
-  door: { tex: "wood_grain", scale: 1.6, rough: 0.45, relief: 0.1 },
   blind: { tex: "linen", scale: 0.3, rough: 0.9, relief: 0.2 },
   glass: { rough: 0.04, opacity: 0.3 },
 };

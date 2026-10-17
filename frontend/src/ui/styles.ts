@@ -78,7 +78,7 @@ export const VIEW_CSS = /* css */ `
 .vh-alarm.armed { box-shadow: inset 0 0 0 1.5px #2bb673; }
 .vh-alarm.alert { background: rgba(229,72,77,0.85); color: #fff; animation: vh-pulse 1s ease-in-out infinite alternate; }
 @keyframes vh-pulse { from { opacity: 1; } to { opacity: 0.6; } }
-.vh-status { position: absolute; right: 10px; top: 56px; display: flex; gap: 6px; align-items: center; flex-direction: row-reverse; pointer-events: none; }
+.vh-status { position: absolute; right: 10px; top: 56px; display: flex; gap: 6px; align-items: center; flex-direction: row-reverse; flex-wrap: wrap; max-width: calc(100% - 20px); pointer-events: none; }
 .vh-status > * { pointer-events: auto; }
 .vh-lights span { font-variant-numeric: tabular-nums; }
 .vh-lights svg { color: #f2a33a; }
