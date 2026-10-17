@@ -133,6 +133,12 @@ const ground: Floor = {
     { id: "deck", name: "Deck", kind: "deck", area_id: "garden", points: rect(3.0, -3.2, 6.39, -0.14) },
     { id: "front", name: "Driveway", kind: "driveway", area_id: null, points: rect(-3.24, 7.54, 6.39, 13) },
   ],
+  fences: [
+    // round the back garden with a gate at the end, and low walls either side of the drive
+    { id: "fence_garden", points: [[-3.24, -0.14], [-3.24, -10], [6.39, -10], [6.39, -0.14]], style: "closeboard", height: 1.8, gates: [{ at: 14.68, width: 0.9 }] },
+    { id: "wall_left", points: [[-3.24, 7.54], [-3.24, 13], [-0.6, 13]], style: "brick_wall", height: 0.9, gates: [] },
+    { id: "wall_right", points: [[3.4, 13], [6.39, 13], [6.39, 7.54]], style: "brick_wall", height: 0.9, gates: [] },
+  ],
 };
 
 // garden lights on the ground floor (lamps on smart plugs and a Tapo bulb)

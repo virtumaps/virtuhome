@@ -4,6 +4,7 @@ import { layoutWalls } from "../src/model/walls";
 import { cameraPieces, cameraRig } from "../src/scene/cameras";
 import { separateFaces } from "../src/scene/build";
 import { BALUSTRADES, FURNITURE, type BalustradeStyle, type Part } from "../src/scene/furniture-lib";
+import { FENCE_ORDER, fencePieces } from "../src/scene/fences";
 
 /** Flat faces of the parts that lie in one plane, face the same way and overlap: they would flicker. */
 function fights(parts: Part[]): string[] {
@@ -62,6 +63,21 @@ describe("flicker-free furniture", () => {
     const layout = layoutWalls(f, DEFAULT_SETTINGS);
     for (const d of f.devices) {
       for (const piece of cameraPieces(cameraRig(f, layout, d))) for (const x of fights(separateFaces(piece.parts))) bad.push(`${d.id}: ${x}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("leaves no two parts of a fence's bay, post or gate sharing a face", () => {
+    const bad: string[] = [];
+    for (const style of FENCE_ORDER) {
+      for (const low of [false, true]) {
+        for (const extra of [{}, { gravel_board: true, topper: "trellis" as const }, { posts: "concrete" as const }]) {
+          const fence = { id: "f", points: [[0, 0], [5, 0], [5, 4]] as [number, number][], style, height: 1.8, gates: [{ at: 2.5, width: 1 }, { at: 7, width: 3, double: true }], ...extra };
+          fencePieces(fence, low).forEach((p, i) => {
+            for (const f of fights(separateFaces(p.parts))) bad.push(`${style}${low ? " (low)" : ""} piece ${i}: ${f}`);
+          });
+        }
+      }
     }
     expect(bad).toEqual([]);
   });

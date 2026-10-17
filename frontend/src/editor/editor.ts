@@ -8,15 +8,16 @@ import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelet
 import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
-import { newId, normalizePlan, spaces, splitEdge, type Device, type EnergySettings, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
+import { newId, normalizePlan, spaces, splitEdge, type Device, type EnergySettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
 import { controlsFor, defaultFinish, styleOf, stylesFor } from "../scene/joinery";
-import { pointInPolygon } from "../model/geom";
+import { pointInPolygon, segmentDistance } from "../model/geom";
 import { layoutWalls, openingPoint } from "../model/walls";
 import { CAMERA_NAMES, cameraRig } from "../scene/cameras";
+import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
 import { outdoorTop } from "../scene/build";
 import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
@@ -26,7 +27,7 @@ import { Collider, settle } from "./collide";
 import { Plan2D, PLAN2D_CSS } from "./plan2d";
 
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
-type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening"; id: string } | null;
+type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence"; id: string } | null;
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 
 const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
@@ -209,15 +210,16 @@ export class Editor {
   /** Removes the selected piece, device, door or window (rooms are removed from the drawer, with a confirmation). */
   private removeSelected(): boolean {
     const sel = this.sel;
-    if (!sel || (sel.kind !== "furniture" && sel.kind !== "device" && sel.kind !== "opening")) return false;
+    if (!sel || (sel.kind !== "furniture" && sel.kind !== "device" && sel.kind !== "opening" && sel.kind !== "fence")) return false;
     const f = this.plan.floors[sel.floor];
     const name = sel.kind === "furniture" ? FURNITURE[f?.furniture.find((x) => x.id === sel.id)?.type ?? ""]?.name ?? "furniture"
-      : sel.kind === "device" ? "a device" : "an opening";
+      : sel.kind === "device" ? "a device" : sel.kind === "fence" ? "a fence" : "an opening";
     this.change((p) => {
       const fl = p.floors[sel.floor];
       if (!fl) return;
       if (sel.kind === "furniture") fl.furniture = fl.furniture.filter((x) => x.id !== sel.id);
       else if (sel.kind === "device") fl.devices = fl.devices.filter((x) => x.id !== sel.id);
+      else if (sel.kind === "fence") fl.fences = (fl.fences ?? []).filter((x) => x.id !== sel.id);
       else fl.openings = fl.openings.filter((x) => x.id !== sel.id);
     }, false, `Remove ${name}`);
     this.select(null);
@@ -288,6 +290,7 @@ export class Editor {
     const exists = !!f && (
       s.kind === "room" ? f.rooms.some((r) => r.id === s.id) :
       s.kind === "outdoor" ? (f.outdoor ?? []).some((o) => o.id === s.id) :
+      s.kind === "fence" ? (f.fences ?? []).some((x) => x.id === s.id) :
       s.kind === "device" ? f.devices.some((d) => d.id === s.id) :
       s.kind === "opening" ? f.openings.some((o) => o.id === s.id) : f.furniture.some((x) => x.id === s.id));
     if (!exists) this.sel = null;
@@ -367,7 +370,19 @@ export class Editor {
 
   /** The view tells the editor about taps in edit mode. */
   onHit(hit: Hit): void {
-    if (hit.item?.kind === "corner") return;
+    if (hit.item?.kind === "corner" || hit.item?.kind === "fencepoint") return;
+    if (hit.item?.kind === "fenceedge") {
+      // a tap on a fence's +: a corner in the middle of that stretch
+      const sel = this.sel;
+      const ref = hit.item.id, at = ref.lastIndexOf(":");
+      if (sel) this.change((p) => {
+        const fence = p.floors[sel.floor]?.fences?.find((x) => x.id === ref.slice(0, at));
+        const i = Number(ref.slice(at + 1));
+        const a = fence?.points[i], b = fence?.points[i + 1];
+        if (fence && a && b) fence.points.splice(i + 1, 0, [Math.round(((a[0] + b[0]) / 2) * 100) / 100, Math.round(((a[1] + b[1]) / 2) * 100) / 100]);
+      }, false, "Add a fence corner");
+      return;
+    }
     if (hit.item?.kind === "edge") {
       // a tap on a +: a corner in the middle of that edge (dragging the + puts it anywhere)
       const sel = this.sel;
@@ -415,6 +430,22 @@ export class Editor {
         viewer.overlayMarkers = [...corners, ...plus];
       }
     }
+    if (s && s.kind === "fence") {
+      const f = this.plan.floors[s.floor];
+      const fence = f?.fences?.find((x) => x.id === s.id);
+      if (fence) {
+        const y = f.elevation + 0.08;
+        const pts: MarkerSpec[] = fence.points.map((p, i) => ({
+          key: `__fp${i}`, pos: [p[0], y, p[1]], icon: iconIndex("dot"), color: 0x2f7cf6, size: 20, pulse: 0, alpha: 0.95, item: { kind: "fencepoint", id: `${fence.id}:${i}` },
+        }));
+        const plus: MarkerSpec[] = fence.points.slice(1).flatMap((q, i) => {
+          const p = fence.points[i];
+          if (Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.4) return [];
+          return [{ key: `__fe${i}`, pos: [(p[0] + q[0]) / 2, y, (p[1] + q[1]) / 2], icon: iconIndex("plus"), color: 0x2f7cf6, size: 15, pulse: 0, alpha: 0.8, item: { kind: "fenceedge", id: `${fence.id}:${i}` } }];
+        });
+        viewer.overlayMarkers = [...pts, ...plus];
+      }
+    }
     if (s && (s.kind === "device" || s.kind === "furniture")) {
       const f = this.plan.floors[s.floor];
       const thing = s.kind === "device" ? f?.devices.find((d) => d.id === s.id) : f?.furniture.find((x) => x.id === s.id);
@@ -446,7 +477,7 @@ export class Editor {
    */
   private isHandle(hit: Hit): boolean {
     const item = hit.item, sel = this.sel;
-    return !!item && !!sel && (item.kind === "corner" || item.kind === "edge" || (item.kind === sel.kind && item.id === sel.id));
+    return !!item && !!sel && (item.kind === "corner" || item.kind === "edge" || item.kind === "fencepoint" || item.kind === "fenceedge" || (item.kind === sel.kind && item.id === sel.id));
   }
 
   private onDrag(hit: Hit, x: number, z: number, phase: DragPhase): void {
@@ -458,6 +489,10 @@ export class Editor {
     const f = this.plan.floors[fi];
     if (!f) return;
     const view = this.host.view;
+    if (item.kind === "fence" || item.kind === "fencepoint" || item.kind === "fenceedge") {
+      this.dragFence(item.kind, item.id, f, x, z, phase);
+      return;
+    }
     const find = () => (item.kind === "device" ? f.devices.find((d) => d.id === item.id) : f.furniture.find((d) => d.id === item.id));
     if (phase === "start") {
       this.dragStart = structuredClone(this.plan);
@@ -549,6 +584,52 @@ export class Editor {
       } else view.viewer.dropLifted();
       this.dragStart = null;
     }
+  }
+
+  private fenceDrag: { origin: Vec2 | null; points: Vec2[]; i: number; made: boolean } | null = null;
+
+  /**
+   * A fence's point follows the pointer; a + becomes a new point once it moves; the selected fence
+   * itself moves whole. The floor is drawn again once per frame, like a room's corner.
+   */
+  private dragFence(kind: "fence" | "fencepoint" | "fenceedge", ref: string, f: Floor, x: number, z: number, phase: DragPhase): void {
+    const view = this.host.view;
+    const at = ref.lastIndexOf(":");
+    const id = kind === "fence" ? ref : ref.slice(0, at);
+    const fence = f.fences?.find((y) => y.id === id);
+    if (!fence) return;
+    const snap = (v: number) => Math.round(v * 100) / 100;
+    if (phase === "start") {
+      this.dragStart = structuredClone(this.plan);
+      this.fenceDrag = { origin: null, points: fence.points.map((p) => [p[0], p[1]] as Vec2), i: kind === "fence" ? -1 : Number(ref.slice(at + 1)), made: false };
+      return;
+    }
+    const d = this.fenceDrag;
+    if (phase === "move" && d) {
+      if (kind === "fence") {
+        d.origin ??= [x, z];
+        const dx = snap(x - d.origin[0]), dz = snap(z - d.origin[1]);
+        fence.points = d.points.map((p) => [snap(p[0] + dx), snap(p[1] + dz)] as Vec2);
+      } else {
+        if (kind === "fenceedge" && !d.made) {
+          d.made = true;
+          fence.points.splice(d.i + 1, 0, [snap(x), snap(z)]);
+          d.i += 1;
+        }
+        fence.points[d.i] = [snap(x), snap(z)];
+      }
+      this.queueDragFrame(() => view.previewPlan(this.plan));
+      return;
+    }
+    this.fenceDrag = null;
+    if (!this.dragStart) return;
+    if (JSON.stringify(this.dragStart) !== JSON.stringify(this.plan)) {
+      this.undo.push({ plan: this.dragStart, label: kind === "fence" ? "Move a fence" : kind === "fenceedge" ? "Add a fence corner" : "Move a fence point" });
+      this.redo = [];
+      this.changed();
+      this.apply();
+    }
+    this.dragStart = null;
   }
 
   /** Drag updates run once per frame at most. */
@@ -813,10 +894,16 @@ export class Editor {
         h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom() }, "Add a room"),
         h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("back") }, "Add back garden"),
         h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("front") }, "Add front area"),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.startFence() }, "Draw a fence"),
       ),
     );
     this.plan.floors.forEach((f, fi) => {
       box.append(h("h4", {}, f.name));
+      for (const fence of f.fences ?? []) {
+        box.append(h("div", { class: `ed-card ${this.sel?.id === fence.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "fence", id: fence.id }) },
+          h("div", { class: "ed-row" }, h("b", {}, `${fenceStyle(fence.style).name} fence`), h("small", {}, ` · ${fenceLength(fence).toFixed(1)} m${fence.gates?.length ? `, ${fence.gates.length} gate${fence.gates.length > 1 ? "s" : ""}` : ""}`)),
+        ));
+      }
       for (const o of f.outdoor ?? []) {
         box.append(h("div", { class: `ed-card ${this.sel?.id === o.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "outdoor", id: o.id }) },
           h("div", { class: "ed-row" }, h("b", {}, o.name), h("small", {}, ` · ${o.kind}`)),
@@ -896,6 +983,7 @@ export class Editor {
     if (s.kind === "outdoor") return this.outdoorPanel(fi, f.outdoor?.find((o) => o.id === s.id));
     if (s.kind === "device") return this.devicePanel(fi, f.devices.find((d) => d.id === s.id));
     if (s.kind === "opening") return this.openingPanel(fi, f.openings.find((o) => o.id === s.id));
+    if (s.kind === "fence") return this.fencePanel(fi, f.fences?.find((x) => x.id === s.id));
     return this.furniturePanel(fi, f.furniture.find((x) => x.id === s.id));
   }
 
@@ -988,12 +1076,140 @@ export class Editor {
       ) : null,
       h("div", { class: "ed-row" }, h("label", {}, "Area"), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd((x) => (x.area_id = v || null)), "Not linked")),
       h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost", title: "A fence along its edges, except those along the house", onclick: () => this.fenceRound(fi, o) }, "Fence round it"),
         h("button", { class: "ed-btn danger", onclick: () => {
           this.change((p) => (p.floors[fi].outdoor = (p.floors[fi].outdoor ?? []).filter((x) => x.id !== o.id)));
           this.select(null);
         } }, "Remove"),
       ),
     );
+  }
+
+  private fencePanel(fi: number, fence: Fence | undefined): HTMLElement {
+    if (!fence) return h("div", {});
+    const def = fenceStyle(fence.style);
+    const upd = (label: string, fn: (x: Fence) => void) => this.change((p) => fn(p.floors[fi].fences!.find((y) => y.id === fence.id)!), false, label);
+    const len = fenceLength(fence);
+    const gates = fence.gates ?? [];
+    const num = (value: number | null | undefined, placeholder: string, step: string, onSet: (v: number | null) => void, title = "") =>
+      h("input", { class: "ed-in num", type: "number", step, min: "0", value: value ? String(value) : "", placeholder, title, onchange: (e: Event) => {
+        const v = (e.target as HTMLInputElement).value;
+        onSet(v === "" ? null : Number(v));
+      } });
+    const posts: [FencePost, string][] = [["timber", "timber"], ["concrete", "concrete"], ["metal", "metal"], ["pier", "brick piers"]];
+    // a new gate goes in the middle of the longest stretch without one
+    const freeSpot = (width: number) => {
+      const taken = gates.map((g) => [g.at - g.width / 2, g.at + g.width / 2]).sort((a, b) => a[0] - b[0]);
+      let best = { at: len / 2, room: -1 }, cur = 0;
+      for (const [a, b] of [...taken, [len, len]]) {
+        if (a - cur > best.room) best = { at: (cur + a) / 2, room: a - cur };
+        cur = Math.max(cur, b);
+      }
+      return Math.round(Math.max(width / 2, Math.min(len - width / 2, best.at)) * 100) / 100;
+    };
+    return h("div", {},
+      h("h4", {}, `${def.name} fence`),
+      h("p", { class: "ed-hint" }, `${len.toFixed(1)} m long. Drag its blue points to move them or a + to add a corner; drag the fence itself to move it. In the 2D plan, the fence tool draws new ones.`),
+      h("div", { class: "ed-sub" }, "Style"),
+      h("div", { class: "ed-chips" }, ...FENCE_ORDER.map((k) => h("button", { class: `ed-chip${k === fence.style ? " on" : ""}`, onclick: () => k !== fence.style && upd(`Fence: ${FENCE_STYLES[k].name}`, (x) => {
+        // the new style's usual height, unless the height was picked
+        if (Math.abs(x.height - def.height) < 0.001) x.height = FENCE_STYLES[k].height;
+        if (x.color && x.color === def.color) x.color = null;
+        x.style = k as FenceStyle;
+        x.posts = null;
+        x.spacing = null;
+      }) }, FENCE_STYLES[k].name))),
+      h("div", { class: "ed-row" },
+        h("label", {}, "Height m"),
+        num(fence.height, String(def.height), "0.05", (v) => upd("Fence height", (x) => (x.height = Math.max(0.3, Math.min(3, v ?? def.height))))),
+        ...[0.9, 1.2, 1.5, 1.8, 2.0].map((v) => h("button", { class: `ed-chip${Math.abs(fence.height - v) < 0.001 ? " on" : ""}`, onclick: () => upd("Fence height", (x) => (x.height = v)) }, `${v.toFixed(1)}`)),
+      ),
+      def.paint.length ? h("div", { class: "ed-sub" }, "Colour") : null,
+      def.paint.length ? this.colourPicker(FENCE_SWATCHES, fence.color, (c) => upd("Fence colour", (x) => (x.color = c)), def.color ? "Usual" : "Natural") : null,
+      h("div", { class: "ed-row" },
+        h("label", {}, "Posts"),
+        this.dropdown(posts, fence.posts ?? "", (v) => upd("Fence posts", (x) => (x.posts = (v || null) as FencePost | null)), `usual (${def.posts === "pier" ? "brick piers" : def.posts})`),
+        h("label", {}, "Every m"),
+        num(fence.spacing, String(def.spacing), "0.05", (v) => upd("Post spacing", (x) => (x.spacing = v && v >= 0.6 ? v : null)), "Distance between posts"),
+      ),
+      def.timber ? h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: fence.gravel_board ?? def.gravel, onchange: (e: Event) => upd("Gravel board", (x) => (x.gravel_board = (e.target as HTMLInputElement).checked)) }),
+        " Concrete gravel board along the bottom") : null,
+      def.timber && fence.style !== "trellis" ? h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: fence.topper === "trellis", onchange: (e: Event) => upd("Trellis topper", (x) => (x.topper = (e.target as HTMLInputElement).checked ? "trellis" : null)) }),
+        " Trellis on top (30 cm)") : null,
+      h("div", { class: "ed-sub" }, `Gates (${gates.length})`),
+      ...gates.map((g, gi) => h("div", { class: "ed-row" },
+        h("label", {}, "At m"),
+        num(g.at, "", "0.1", (v) => upd("Move a gate", (x) => (x.gates![gi].at = Math.max(g.width / 2, Math.min(len - g.width / 2, v ?? g.at)))), "Its middle, from the fence's first point"),
+        h("label", {}, "Wide"),
+        num(g.width, "", "0.05", (v) => upd("Gate width", (x) => (x.gates![gi].width = Math.max(0.5, Math.min(6, v ?? g.width))))),
+        h("button", { class: `ed-chip${g.double ? " on" : ""}`, title: "Two leaves meeting in the middle", onclick: () => upd("Gate leaves", (x) => (x.gates![gi].double = !g.double)) }, "Double"),
+        h("button", { class: "ed-ib small", title: "Remove the gate", html: svg(mdiDelete), onclick: () => upd("Remove a gate", (x) => (x.gates = x.gates!.filter((_, k) => k !== gi))) }),
+      )),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost small", onclick: () => upd("Add a gate", (x) => (x.gates = [...(x.gates ?? []), { at: freeSpot(0.9), width: 0.9 }])) }, "Add a gate"),
+        h("button", { class: "ed-btn ghost small", onclick: () => upd("Add a driveway gate", (x) => (x.gates = [...(x.gates ?? []), { at: freeSpot(3), width: 3, double: true }])) }, "Add a driveway gate"),
+      ),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost", onclick: () => {
+          const id = newId("fence");
+          this.change((p) => {
+            const fl = p.floors[fi];
+            fl.fences = [...(fl.fences ?? []), { ...structuredClone(fence), id, points: fence.points.map(([px, pz]) => [px + 0.5, pz + 0.5] as Vec2) }];
+          }, false, "Duplicate a fence");
+          this.select({ floor: fi, kind: "fence", id });
+        } }, "Duplicate"),
+        h("button", { class: "ed-btn danger", onclick: () => {
+          this.change((p) => (p.floors[fi].fences = (p.floors[fi].fences ?? []).filter((x) => x.id !== fence.id)), false, "Remove a fence");
+          this.select(null);
+        } }, "Remove"),
+      ),
+    );
+  }
+
+  /**
+   * A fence along a garden area's edges, leaving out those along the house: round a lawn a timber
+   * fence, round a patio or deck glass, round a front garden or driveway a low brick wall.
+   */
+  private fenceRound(fi: number, o: OutdoorArea): void {
+    const f = this.plan.floors[fi];
+    const reach = this.plan.settings.wall_exterior / 2 + 0.35;
+    const walls = f.rooms.flatMap((r) => r.points.map((a, i) => [a, r.points[(i + 1) % r.points.length]] as [Vec2, Vec2]));
+    const n = o.points.length;
+    const kept = o.points.map((a, i) => {
+      const b = o.points[(i + 1) % n];
+      const mid: Vec2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      return !walls.some(([p, q]) => segmentDistance(mid, p, q).d < reach);
+    });
+    const runs: Vec2[][] = [];
+    if (kept.every(Boolean)) runs.push([...o.points, o.points[0]]);
+    else {
+      const start = kept.indexOf(false);
+      let run: Vec2[] = [];
+      for (let k = 1; k <= n; k++) {
+        const i = (start + k) % n;
+        if (kept[i]) {
+          if (!run.length) run.push(o.points[i]);
+          run.push(o.points[(i + 1) % n]);
+        } else if (run.length) {
+          runs.push(run);
+          run = [];
+        }
+      }
+      if (run.length) runs.push(run);
+    }
+    if (!runs.length) {
+      this.status.textContent = "Every edge of it is along the house.";
+      return;
+    }
+    const style: FenceStyle = o.kind === "patio" || o.kind === "deck" ? "glass" : o.kind === "driveway" || o.kind === "path" ? "brick_wall" : "closeboard";
+    const made = runs.map((points) => ({ id: newId("fence"), points: points.map(([x, z]) => [x, z] as Vec2), style, height: FENCE_STYLES[style].height, gates: [] }) as Fence);
+    this.change((p) => {
+      const fl = p.floors[fi];
+      fl.fences = [...(fl.fences ?? []), ...made];
+    }, false, `Fence round ${o.name}`);
+    this.select({ floor: fi, kind: "fence", id: made[0].id });
   }
 
   private devicePanel(fi: number, d: Device | undefined): HTMLElement {
@@ -1338,6 +1554,12 @@ export class Editor {
     const room: Room = { id: newId("room"), name: "New room", area_id: null, floor: "wood", points: [[x0, b.minZ], [x0 + 3, b.minZ], [x0 + 3, b.minZ + 3], [x0, b.minZ + 3]] };
     this.change((p) => p.floors[fi].rooms.push(room));
     this.select({ floor: fi, kind: "room", id: room.id });
+  }
+
+  /** Opens the 2D plan with its fence tool. */
+  private startFence(): void {
+    this.setPlanMode(true);
+    this.plan2d?.drawFence();
   }
 
   /** A lawn behind the house (top of the plan) or a front area (bottom), as wide as the house. */

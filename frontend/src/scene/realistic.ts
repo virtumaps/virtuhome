@@ -60,6 +60,8 @@ const ROLE_SPECS: Record<string, SurfaceSpec> = {
   walnut: { tex: "wood_grain_v", scale: 0.6, rough: 0.45, relief: 0.2 },
   primed: { rough: 0.85 },
   blackMetal: { rough: 0.4, metal: 0.6 },
+  concrete: { tex: "concrete", scale: 0.8, rough: 0.9, relief: 0.25 },
+  brick: { tex: "brick_red", scale: 1.35, rough: 0.85, relief: 0.9 },
 };
 
 const OTHER_SPECS: Record<string, SurfaceSpec> = {

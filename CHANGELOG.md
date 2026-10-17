@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### New
+- Fences and garden walls in 15 designs: closeboard, lap panel, slatted, venetian, hit and miss,
+  louvre, composite, trellis, picket, post and rail, railings, estate fencing, palisade, glass and a
+  brick wall with piers. Any height and colour; timber, concrete or metal posts at any spacing; a
+  concrete gravel board and a trellis topper on timber panels; single gates and double driveway
+  gates in the fence's own style. Draw them with the fence tool in the 2D plan, or tap "Fence round
+  it" on a garden area to fence every edge that isn't along the house. Drag their points in 3D or 2D,
+  add corners with the +s, or drag a whole fence.
 - Cameras are models of their kind where they hang: a camera on a bracket against its wall (its body
   turned to where it looks), a dome on the ceiling, a doorbell flat on the outside wall, or a camera
   on a stand on a table or the floor. Tap one for its live picture; a pin floats over it while it sees
