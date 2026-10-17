@@ -292,7 +292,8 @@ export class HassLive implements LiveSource {
         if (dc && OPENING_CLASSES.has(dc)) return look(dc === "window" ? (on ? "window-open" : "window") : on ? "door-open" : "door", on ? C.open : C.closed);
         return look("dot", on ? C.on : C.idle);
       case "camera":
-        return look(/doorbell/i.test(d.entity) ? "doorbell" : "camera", s.state === "streaming" || s.state === "recording" ? C.alert : C.camera);
+        // the camera is drawn as a model with its view; a pin only says it is live or sees motion
+        return this.cameraActive(d) ? look(/doorbell/i.test(d.entity) ? "doorbell" : "camera", C.alert) : null;
       case "media_player":
         return look(/tv|television|webos|xbox|plex/i.test(d.entity) ? "tv" : "speaker", ["off", "standby"].includes(s.state) ? C.off : C.media, s.state === "playing" ? 0.35 : 0);
       case "climate": {
@@ -334,6 +335,12 @@ export class HassLive implements LiveSource {
     }
     if (w.motion.some((id) => this.hass!.states[id]?.state === "on")) return [1.0, 0.72, 0.32, 0.09];
     return null;
+  }
+
+  cameraState(d: Device): "idle" | "active" | "offline" {
+    const s = this.state(d.entity);
+    if (!s || isUnavailable(s)) return "offline";
+    return this.cameraActive(d) ? "active" : "idle";
   }
 
   /** A camera that is live or sees motion right now. */

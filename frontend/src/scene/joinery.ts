@@ -43,11 +43,13 @@ const SLIDES = new Set(["sliding", "barn"]);
 const GLAZED_DOORS = new Set(["glazed", "french", "sliding"]);
 
 /** Which of the editor's controls mean something for an opening. */
-export function controlsFor(o: Opening): { hinge: boolean; swing: boolean; slide: boolean; bars: boolean } {
+export function controlsFor(o: Opening): { hinge: boolean; swing: boolean; side: boolean; slide: boolean; bars: boolean } {
   const s = styleOf(o);
   return {
     hinge: HINGED.has(s) && (o.kind !== "window" || paneCount(o.width) === 1),
     swing: SWINGS.has(s),
+    // a barn door hangs on one face of the wall, which `swing` picks: "in" is its own room's
+    side: s === "barn",
     slide: SLIDES.has(s),
     bars: o.kind === "window" || GLAZED_DOORS.has(s),
   };
@@ -344,6 +346,8 @@ function slider(c: JoineryCtx, F: Frame, cell: { u0: number; u1: number; v0: num
 // -------------------------------------------------------------------- doors
 
 const LT = 0.04; // leaf thickness
+const GAP = 0.004; // round a closed leaf
+const STOP = 0.012, STOP_D = 0.025; // a door stop: how far it stands out of the reveal, and how deep it is
 const DOOR_ANGLE = (82 * Math.PI) / 180;
 const DFW = 0.06; // frame of a sliding glass door
 
@@ -368,6 +372,14 @@ function doorFixed(c: JoineryCtx, F: Frame, info: OpeningInfo, style: string): v
     box(c, F, W / 2, W / 2 + aw, 0, H + top, w0, w1, c.look, ALL & ~back & ~NV);
     if (top > 0.005) box(hung(c, H), F, -W / 2, W / 2, H, H + top, w0, w1, c.look, (s > 0 ? PW : NW) | PV | NV);
   }
+  // a stop round the opening, just behind the closed leaf, so the gap round it doesn't show through
+  if (SWINGS.has(style)) {
+    const side = info.opening.swing === "out" ? -1 : 1;
+    const w0 = (side * info.depth) / 2 - side * (LT / 2 + 0.001), w1 = w0 - side * STOP_D;
+    box(c, F, -W / 2, -W / 2 + STOP, 0, H, w0, w1, c.look, ALL & ~NU & ~NV & ~PV);
+    box(c, F, W / 2 - STOP, W / 2, 0, H, w0, w1, c.look, ALL & ~PU & ~NV & ~PV);
+    box(hung(c, H - STOP), F, -W / 2 + STOP, W / 2 - STOP, H - STOP, H, w0, w1, c.look, PW | NW | NV);
+  }
 }
 
 function slidingCell(W: number, H: number) {
@@ -387,13 +399,13 @@ function doorMoving(c: JoineryCtx, F: Frame, info: OpeningInfo, style: string, o
   } else if (style === "barn") {
     barn(c, F, info, open);
   } else if (style === "french") {
-    const L = W / 2 - 0.012;
-    leaf(c, hinged(at(F, -W / 2, 0, face), F.u, toward, angle), L, H - 0.02, "french", bars);
-    leaf(c, hinged(at(F, W / 2, 0, face), neg(F.u), toward, angle), L, H - 0.02, "french", bars);
+    const L = (W - GAP) / 2;
+    leaf(c, hinged(at(F, -W / 2, 0, face), F.u, toward, angle), L, H - GAP, "french", bars);
+    leaf(c, hinged(at(F, W / 2, 0, face), neg(F.u), toward, angle), L, H - GAP, "french", bars);
   } else {
     const atStart = (o.hinge ?? "left") === "left";
     const S = hinged(at(F, atStart ? -W / 2 : W / 2, 0, face), atStart ? F.u : neg(F.u), toward, angle);
-    leaf(c, S, W - 0.03, H - 0.02, style, bars);
+    leaf(c, S, W - GAP, H - GAP, style, bars);
   }
 }
 
@@ -483,8 +495,8 @@ function garageMoving(c: JoineryCtx, F: Frame, info: OpeningInfo, style: string,
   if (style === "side") {
     const toward = side > 0 ? F.w : neg(F.w);
     const angle = open * DOOR_ANGLE;
-    leaf(c, hinged(at(F, -W / 2, 0, face), F.u, toward, angle), W / 2 - 0.012, H - 0.02, "flush", false, false);
-    leaf(c, hinged(at(F, W / 2, 0, face), neg(F.u), toward, angle), W / 2 - 0.012, H - 0.02, "flush", false, false);
+    leaf(c, hinged(at(F, -W / 2, 0, face), F.u, toward, angle), (W - GAP) / 2, H - GAP, "flush", false, false);
+    leaf(c, hinged(at(F, W / 2, 0, face), neg(F.u), toward, angle), (W - GAP) / 2, H - GAP, "flush", false, false);
     return;
   }
   // behind the opening, inside: rises from the bottom

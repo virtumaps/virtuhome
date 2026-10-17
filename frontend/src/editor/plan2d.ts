@@ -2,10 +2,11 @@
 // corners and walls (snapping to the grid and lining up with other corners), lengths typed in,
 // rooms drawn, doors and windows placed and slid along their wall, furniture moved and turned.
 // Every change goes through the editor, so undo, redo and saving work the same as in 3D.
-import { mdiCursorDefault, mdiDoor, mdiFitToPageOutline, mdiPencilOutline, mdiRectangleOutline, mdiWindowClosedVariant } from "@mdi/js";
+import { mdiCursorDefault, mdiDoor, mdiFitToPageOutline, mdiPencilOutline, mdiRectangleOutline, mdiVectorPolylinePlus, mdiWindowClosedVariant } from "@mdi/js";
 import { area, bounds, labelPoint, pointInPolygon, segmentDistance } from "../model/geom";
-import { newId, type Floor, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
+import { groundOf, newId, splitEdge, type Floor, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
 import { layoutWalls } from "../model/walls";
+import { outdoorTop } from "../scene/build";
 import { FLOOR_FINISHES, type FinishDef } from "../scene/finishes";
 import { CEILING_LAMPS, furnitureType } from "../scene/furniture-lib";
 import { styleOf } from "../scene/joinery";
@@ -28,7 +29,7 @@ export interface Plan2DHost {
   status(text: string): void;
 }
 
-type Tool = "select" | "rect" | "draw" | "door" | "window";
+type Tool = "select" | "rect" | "draw" | "door" | "window" | "corner";
 
 const NS = "http://www.w3.org/2000/svg";
 const svgIcon = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
@@ -71,9 +72,10 @@ export class Plan2D {
   private raf = 0;
   private fitted = -1;
   private resizeObs: ResizeObserver;
-  private drag: { kind: string; apply: (x: number, z: number, e: PointerEvent) => void; label: string; moved: boolean } | null = null;
-  /** Dragging the view; a click without moving clears the selection unless it selected something. */
-  private pan: { x: number; y: number; ox: number; oy: number; moved: boolean; keep: boolean } | null = null;
+  /** `made`: the drag began by changing the plan (a new corner), so it is a change even without moving. */
+  private drag: { kind: string; apply: (x: number, z: number, e: PointerEvent) => void; label: string; moved: boolean; made?: boolean } | null = null;
+  /** Dragging the view; a click without moving selects `tap`, or clears the selection unless it selected something. */
+  private pan: { x: number; y: number; ox: number; oy: number; moved: boolean; keep: boolean; tap?: Sel } | null = null;
   private pointers = new Map<number, { x: number; y: number }>();
   private pinch: { d: number; s: number; cx: number; cy: number } | null = null;
   private guides: { x?: number; z?: number } = {};
@@ -157,6 +159,7 @@ export class Plan2D {
       ["draw", mdiPencilOutline, "New room: click its corners, then the first one again"],
       ["door", mdiDoor, "Door: click on a wall"],
       ["window", mdiWindowClosedVariant, "Window: click on a wall"],
+      ["corner", mdiVectorPolylinePlus, "Corner: click on an edge where it goes, drag to place it"],
     ];
     const floors = this.host.plan().floors;
     this.bar.innerHTML = "";
@@ -202,11 +205,12 @@ export class Plan2D {
     this.renderBar();
     this.render();
     this.host.status({
-      select: "Drag corners, walls, doors and furniture. Click a measurement to type it.",
+      select: "Select something, then drag it: furniture, devices, doors, windows, a room's corners and walls. Click a measurement to type it.",
       rect: "Drag out a rectangle for the new room.",
       draw: "Click the corners of the new room; click the first corner again to finish (Esc cancels).",
       door: "Click on a wall to put a door there.",
       window: "Click on a wall to put a window there.",
+      corner: "Click on the edge of a room or garden area where the new corner goes, and drag it into place (Esc when done).",
     }[t]);
   }
 
@@ -232,8 +236,10 @@ export class Plan2D {
     for (const r of below?.rooms ?? []) layers.ghost.append(el("polygon", { points: this.pts(r.points), class: "p2-ghost" }));
 
     const selRoom = sel?.floor === fi && (sel.kind === "room" || sel.kind === "outdoor") ? sel.id : null;
-    for (const o of f.outdoor ?? []) {
-      layers.fill.append(el("polygon", { points: this.pts(o.points), class: `p2-out p2-out-${o.kind}${selRoom === o.id ? " sel" : ""}`, "data-kind": "outdoor", "data-id": o.id }));
+    // stacked as in 3D, so the area on top (a deck on the lawn) is the one a click picks
+    const stack = (f.outdoor ?? []).map((o, k) => ({ o, top: outdoorTop(f, k) })).sort((a, b) => a.top - b.top);
+    for (const { o } of stack) {
+      layers.fill.append(el("polygon", { points: this.pts(o.points), class: `p2-out p2-out-${groundOf(o)}${selRoom === o.id ? " sel" : ""}`, "data-kind": "outdoor", "data-id": o.id }));
     }
     for (const r of f.rooms) {
       const fin = (FLOOR_FINISHES as Record<string, FinishDef>)[r.floor ?? "wood"] ?? FLOOR_FINISHES.wood;
@@ -364,10 +370,11 @@ export class Plan2D {
       this.drawDims(layers.dims, sh, selRoom === sh.id);
     }
 
-    // handles of the selected shape: corners, and the middle of each edge to move that wall
+    // handles of the selected shape: corners, and the middle of each edge to move that wall (the
+    // corner tool shows the corners only: a click near one grabs it)
     const selShape = shapes.find((x) => x.id === selRoom);
-    if (selShape && this.tool === "select") {
-      selShape.points.forEach((p, i) => {
+    if (selShape && (this.tool === "select" || this.tool === "corner")) {
+      if (this.tool === "select") selShape.points.forEach((p, i) => {
         const q = selShape.points[(i + 1) % selShape.points.length];
         const [mx, my] = this.toScreen([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]);
         layers.handles.append(el("rect", { x: mx - 5, y: my - 5, width: 10, height: 10, rx: 2, class: "p2-edge", "data-kind": "edge", "data-id": selShape.id, "data-i": i }));
@@ -423,6 +430,13 @@ export class Plan2D {
       if (hit) {
         const [x, y] = this.toScreen(hit.point);
         layers.guides.append(el("circle", { cx: x, cy: y, r: 6, class: "p2-place" }));
+      }
+    }
+    if (this.tool === "corner" && this.hover && !this.drag) {
+      const hit = this.shapeEdgeAt(this.hover);
+      if (hit) {
+        const [x, y] = this.toScreen(hit.point);
+        layers.guides.append(el("circle", { cx: x, cy: y, r: 7, class: "p2-place" }));
       }
     }
   }
@@ -554,6 +568,37 @@ export class Plan2D {
     return best;
   }
 
+  /**
+   * Where a new corner would go: on the nearest edge of a room or garden area (the selected one
+   * first), lined up with other corners or on the grid along the edge, or an existing corner there.
+   */
+  private shapeEdgeAt(p: Vec2, free = false): { sh: Shape; edge: number; t: number; point: Vec2; corner: number } | null {
+    const sel = this.host.selection();
+    const reach = 14 / this.s;
+    let best: { sh: Shape; edge: number; d: number } | null = null;
+    for (const sh of this.shapes()) {
+      const mine = sel?.floor === this.floorIndex && sel.id === sh.id;
+      sh.points.forEach((a, i) => {
+        const { d } = segmentDistance(p, a, sh.points[(i + 1) % sh.points.length]);
+        // the selected shape wins, then the one the point is in (two shapes can share an edge)
+        const rank = d + (mine ? -1 : 0) + (pointInPolygon(p, sh.points) ? 0 : 0.02);
+        if (d < reach && (!best || rank < best.d)) best = { sh, edge: i, d: rank };
+      });
+    }
+    if (!best) return null;
+    const { sh, edge } = best as { sh: Shape; edge: number };
+    const a = sh.points[edge], b = sh.points[(edge + 1) % sh.points.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < 0.02) return null;
+    const near = sh.points.findIndex((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) * this.s < 10);
+    if (near >= 0) return { sh, edge, t: 0, point: sh.points[near], corner: near };
+    // snap along the edge, then back onto it
+    const q = this.snap(p, new Set(), free);
+    this.guides = {};
+    const t = Math.max(0.01, Math.min(len - 0.01, ((q[0] - a[0]) * (b[0] - a[0]) + (q[1] - a[1]) * (b[1] - a[1])) / len));
+    return { sh, edge, t, point: [a[0] + ((b[0] - a[0]) * t) / len, a[1] + ((b[1] - a[1]) * t) / len], corner: -1 };
+  }
+
   // ------------------------------------------------------------------ pointer
 
   private bindPointer(): void {
@@ -633,15 +678,18 @@ export class Plan2D {
         const d = this.drag;
         this.drag = null;
         this.guides = {};
-        if (d.moved) this.host.dragEnd(d.label);
+        if (d.moved || d.made) this.host.dragEnd(d.label);
         else this.host.dragEnd("");
         this.render();
         return;
       }
       if (this.pan) {
-        const { moved, keep } = this.pan;
+        const { moved, keep, tap } = this.pan;
         this.pan = null;
-        if (!moved && !keep && e.type === "pointerup") this.host.select(null);
+        if (!moved && e.type === "pointerup") {
+          if (tap) this.host.select(tap);
+          else if (!keep) this.host.select(null);
+        }
       }
     };
     svg.addEventListener("pointerup", up);
@@ -667,7 +715,7 @@ export class Plan2D {
     this.render();
   }
 
-  /** Something under the pointer was grabbed: select it and get ready to drag it. */
+  /** Something under the pointer was pressed: the selection gets ready to be dragged, anything else waits for a click. */
   private grab(target: SVGElement, p: Vec2, e: PointerEvent): void {
     const kind = target.dataset.kind!;
     const id = target.dataset.id!;
@@ -684,6 +732,15 @@ export class Plan2D {
       this.pan = { x, y, ox: this.ox, oy: this.oy, moved: false, keep: true };
       void e;
       return;
+    }
+    if (kind === "furniture" || kind === "device" || kind === "opening") {
+      // only the selected thing moves: dragging anything else moves the view, and a click selects it
+      const sel = this.host.selection();
+      if (sel?.floor !== fi || sel.kind !== kind || sel.id !== id) {
+        const [x, y] = this.toScreen(p);
+        this.pan = { x, y, ox: this.ox, oy: this.oy, moved: false, keep: true, tap: { floor: fi, kind, id } };
+        return;
+      }
     }
     if (kind === "corner") {
       const sh = this.shapes().find((x) => x.id === id);
@@ -729,7 +786,6 @@ export class Plan2D {
       return;
     }
     if (kind === "furniture" || kind === "device") {
-      this.host.select({ floor: fi, kind, id });
       const thing = kind === "furniture" ? f.furniture.find((x) => x.id === id) : f.devices.find((d) => d.id === id);
       if (!thing) return;
       const off: Vec2 = [thing.x - p[0], thing.z - p[1]];
@@ -766,7 +822,6 @@ export class Plan2D {
       return;
     }
     if (kind === "opening") {
-      this.host.select({ floor: fi, kind: "opening", id });
       const o = f.openings.find((x) => x.id === id);
       const room = o && f.rooms.find((r) => r.id === o.room_id);
       if (!o || !room) return;
@@ -811,6 +866,35 @@ export class Plan2D {
         return;
       }
       this.drawing.push(q);
+      this.render();
+      return;
+    }
+    if (this.tool === "corner") {
+      const hit = this.shapeEdgeAt(p, e.altKey);
+      if (!hit) {
+        this.host.status("Click on the edge of a room or garden area.");
+        return;
+      }
+      const { sh } = hit;
+      this.host.select({ floor: fi, kind: sh.outdoor ? "outdoor" : "room", id: sh.id });
+      this.host.dragStart();
+      // a new corner on the edge, or the corner already there; dragging then moves it
+      const i = hit.corner >= 0 ? hit.corner : splitEdge(this.host.plan().floors[fi], sh.id, sh.outdoor, hit.edge, hit.t);
+      const group = hit.corner >= 0 ? this.cornersAt(hit.point) : [{ sh, i }];
+      const exclude = new Set(group.map((c) => `${c.sh.id}:${c.i}`));
+      const [sx, sy] = this.toScreen(p);
+      let away = false;
+      this.drag = {
+        kind: "corner", label: hit.corner >= 0 ? "Move a corner" : "Add a corner", moved: false, made: hit.corner < 0,
+        apply: (x, z, ev) => {
+          // a click's wobble leaves the new corner on its edge
+          const [px, py] = this.toScreen([x, z]);
+          if (!away && Math.hypot(px - sx, py - sy) < 5) return;
+          away = true;
+          const q = this.snap([x, z], exclude, ev.altKey);
+          for (const c of this.livePoints(group)) c.pts[c.i] = q;
+        },
+      };
       this.render();
       return;
     }
@@ -997,7 +1081,9 @@ export const PLAN2D_CSS = /* css */ `
 .p2-room { fill-opacity: 0.38; stroke: none; cursor: pointer; }
 .p2-room.sel { fill-opacity: 0.6; }
 .p2-out { fill-opacity: 0.35; cursor: pointer; fill: #9cc27a; }
-.p2-out-patio, .p2-out-path, .p2-out-driveway, .p2-out-gravel { fill: #b9b2a6; }
+.p2-out-patio, .p2-out-path, .p2-out-gravel { fill: #b9b2a6; }
+.p2-out-driveway { fill: #a08877; }
+.p2-out-asphalt { fill: #5d6066; }
 .p2-out-deck { fill: #b58a62; }
 .p2-out.sel { fill-opacity: 0.55; }
 .p2-wall { fill: #3b3f45; }

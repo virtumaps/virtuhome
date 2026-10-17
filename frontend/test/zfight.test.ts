@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { normalizePlan } from "../src/model/plan";
+import { DEFAULT_SETTINGS, normalizePlan, type Floor } from "../src/model/plan";
+import { layoutWalls } from "../src/model/walls";
+import { cameraPieces, cameraRig } from "../src/scene/cameras";
 import { separateFaces } from "../src/scene/build";
 import { BALUSTRADES, FURNITURE, type BalustradeStyle, type Part } from "../src/scene/furniture-lib";
 
@@ -41,6 +43,25 @@ describe("flicker-free furniture", () => {
     for (const [type, def] of Object.entries(FURNITURE)) {
       const [w, d, h] = def.size;
       for (const f of fights(separateFaces(def.build(w, d, h)))) bad.push(`${type}: ${f}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("leaves no two parts of a camera model sharing a face", () => {
+    const bad: string[] = [];
+    const f: Floor = {
+      id: "g", name: "G", elevation: 0, height: 2.5, walls: [], furniture: [], openings: [],
+      rooms: [{ id: "a", name: "A", area_id: null, points: [[0, 0], [4, 0], [4, 3], [0, 3]] }],
+      devices: [
+        { id: "bullet", entity: "camera.a", x: 1, z: 0.1, rotation: 30 },
+        { id: "dome", entity: "camera.b", x: 2, z: 1.5, mount: "ceiling" },
+        { id: "doorbell", entity: "camera.doorbell", x: 1, z: 3.2 },
+        { id: "cube", entity: "camera.c", x: 2, z: 1.5, mount: "table" },
+      ],
+    };
+    const layout = layoutWalls(f, DEFAULT_SETTINGS);
+    for (const d of f.devices) {
+      for (const piece of cameraPieces(cameraRig(f, layout, d))) for (const x of fights(separateFaces(piece.parts))) bad.push(`${d.id}: ${x}`);
     }
     expect(bad).toEqual([]);
   });

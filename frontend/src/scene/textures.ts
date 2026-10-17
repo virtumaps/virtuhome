@@ -521,6 +521,32 @@ const RECIPES: Record<string, Recipe> = {
       };
     },
   },
+  // driveway block paving: 200 × 100 mm blocks in herringbone, brindle tones, sanded joints
+  block_paving: {
+    detail: false,
+    make: (rnd) => {
+      const n = fbm(48, 48, 2, rnd);
+      const cols = [0x8d604d, 0x7e5c4f, 0x96694f, 0x6f5d55, 0x9a735c, 0x845648].map(hex);
+      const sand = hex(0x8a8070);
+      const k = 2, cellsPer = 16;
+      return (u, v) => {
+        const x = u * cellsPer, y = v * cellsPer;
+        const cx = Math.floor(x), cy = Math.floor(y);
+        const fx = frac(x), fy = frac(y);
+        const s = mod(cx + cy, 2 * k);
+        const horiz = s < k;
+        const along = horiz ? (s + fx) / k : (s - k + fy) / k;
+        const across = horiz ? fy : fx;
+        const id = horiz ? hash(mod(cx - s, cellsPer), mod(cy, cellsPer), 5) : hash(mod(cx, cellsPer), mod(cy - (s - k), cellsPer), 6);
+        const base = cols[Math.floor(id * cols.length) % cols.length];
+        const joint = Math.min(groove(across, 0.07), groove(along, 0.035));
+        const bevel = Math.min(groove(across, 0.2), groove(along, 0.1));
+        const f = (0.94 + id * 0.1 + (n(u, v) - 0.5) * 0.2) * mix(0.86, 1, smooth(bevel));
+        const c = mixc(sand, [base[0] * f, base[1] * f, base[2] * f], smooth(joint));
+        return [c[0], c[1], c[2], 0.3 * smooth(joint) + 0.5 * smooth(bevel) + n(u, v) * 0.2];
+      };
+    },
+  },
   tarmac: {
     detail: false,
     make: (rnd) => {

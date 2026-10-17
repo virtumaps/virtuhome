@@ -109,6 +109,10 @@ export interface Device {
 }
 
 export type OutdoorKind = "lawn" | "patio" | "deck" | "path" | "driveway" | "bed" | "gravel";
+/** What a driveway is laid with; null = block paving. */
+export type DrivewaySurface = "blocks" | "asphalt";
+/** What the ground of a garden area looks like: its kind, or an asphalt driveway. */
+export type Ground = OutdoorKind | "asphalt";
 
 /** Ground around the house: a lawn, a patio. Lit by its garden lights, linked to an area like a room. */
 export interface OutdoorArea {
@@ -117,6 +121,12 @@ export interface OutdoorArea {
   kind: OutdoorKind;
   area_id: string | null;
   points: Vec2[];
+  /** Driveways only. */
+  surface?: DrivewaySurface | null;
+}
+
+export function groundOf(o: OutdoorArea): Ground {
+  return o.kind === "driveway" && o.surface === "asphalt" ? "asphalt" : o.kind;
 }
 
 export interface FreeWall {
@@ -255,6 +265,30 @@ export function spaces(floor: Floor): Space[] {
     ...floor.rooms.map((r) => ({ id: r.id, name: r.name, area_id: r.area_id, points: r.points, outdoor: false })),
     ...(floor.outdoor ?? []).map((o) => ({ id: o.id, name: o.name, area_id: o.area_id, points: o.points, outdoor: true })),
   ];
+}
+
+/**
+ * Puts a new corner on edge k of a room or garden area, at distance t from the edge's start.
+ * A room's doors and windows past it move to the edge's second half. Returns the new corner's index.
+ */
+export function splitEdge(floor: Floor, id: string, outdoor: boolean, k: number, t: number): number {
+  const s = outdoor ? floor.outdoor?.find((o) => o.id === id) : floor.rooms.find((r) => r.id === id);
+  if (!s) return -1;
+  const a = s.points[k], b = s.points[(k + 1) % s.points.length];
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  s.points.splice(k + 1, 0, [r2(a[0] + ((b[0] - a[0]) * t) / len), r2(a[1] + ((b[1] - a[1]) * t) / len)]);
+  if (!outdoor) {
+    for (const o of floor.openings) {
+      if (o.room_id !== id) continue;
+      if (o.edge > k) o.edge += 1;
+      else if (o.edge === k && o.offset > t) {
+        o.edge = k + 1;
+        o.offset = r2(o.offset - t);
+      }
+    }
+  }
+  return k + 1;
 }
 
 let counter = 0;

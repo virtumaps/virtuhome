@@ -8,15 +8,17 @@ import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelet
 import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
-import { newId, normalizePlan, spaces, type Device, type EnergySettings, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
+import { newId, normalizePlan, spaces, splitEdge, type Device, type EnergySettings, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
 import { controlsFor, defaultFinish, styleOf, stylesFor } from "../scene/joinery";
 import { pointInPolygon } from "../model/geom";
-import { openingPoint } from "../model/walls";
-import { iconIndex } from "../scene/markers";
+import { layoutWalls, openingPoint } from "../model/walls";
+import { CAMERA_NAMES, cameraRig } from "../scene/cameras";
+import { outdoorTop } from "../scene/build";
+import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import { EDITOR_CSS } from "./styles";
@@ -26,7 +28,6 @@ import { Plan2D, PLAN2D_CSS } from "./plan2d";
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
 type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening"; id: string } | null;
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
-const SLAB = 0.18;
 
 const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
@@ -94,6 +95,8 @@ export class Editor {
   private dragStart: Plan | null = null;
   /** Corners that move together with the dragged one (shared by neighbouring rooms). */
   private dragCorners: { outdoor: boolean; id: string; i: number }[] = [];
+  /** A + being pressed: the edge its corner goes on, made once the + moves. */
+  private dragEdge: { outdoor: boolean; id: string; k: number; len: number } | null = null;
   private dragRaf = 0;
   private pendingDrag: (() => void) | null = null;
   /** Where the dragged piece stood when the drag began, and what it must keep out of. */
@@ -132,6 +135,7 @@ export class Editor {
     const viewer = host.view.viewer;
     viewer.editMode = true;
     viewer.onDrag = (hit, x, z, phase) => this.onDrag(hit, x, z, phase);
+    viewer.canDrag = (hit) => this.isHandle(hit);
     window.addEventListener("keydown", this.onKey);
     this.render();
     this.updateHistoryButtons();
@@ -176,7 +180,7 @@ export class Editor {
         status: (text) => (this.status.textContent = text),
       });
       root.append(this.plan2d.el);
-      this.status.textContent = "Drag corners, walls, doors and furniture. Click a measurement to type it.";
+      this.status.textContent = "Select something, then drag it: furniture, devices, doors, windows, a room's corners and walls. Click a measurement to type it.";
     } else if (!on && this.plan2d) {
       this.plan2d.dispose();
       this.plan2d = null;
@@ -319,13 +323,14 @@ export class Editor {
     this.updateSaveButton();
     this.status.textContent = "Saving…";
     try {
-      await this.host.save(this.plan, this.host.revision);
+      // our own save is the base for the next one, so only someone else's save is a conflict
+      this.host.revision = await this.host.save(this.plan, this.host.revision);
       saved();
     } catch (err) {
       const msg = String((err as { message?: string })?.message ?? err);
       if (/changed meanwhile|conflict/i.test(msg)) {
         this.confirm("Someone else saved the plan meanwhile. Save yours over it?", "Save mine", async () => {
-          await this.host.save(this.plan, null);
+          this.host.revision = await this.host.save(this.plan, null);
           saved();
         });
       } else this.status.textContent = `Not saved: ${msg}`;
@@ -347,6 +352,7 @@ export class Editor {
     const viewer = this.host.view.viewer;
     viewer.editMode = false;
     viewer.onDrag = null;
+    viewer.canDrag = null;
     viewer.overlayMarkers = [];
     viewer.refreshMarkers();
     viewer.raiseOpening(0, null);
@@ -362,6 +368,13 @@ export class Editor {
   /** The view tells the editor about taps in edit mode. */
   onHit(hit: Hit): void {
     if (hit.item?.kind === "corner") return;
+    if (hit.item?.kind === "edge") {
+      // a tap on a +: a corner in the middle of that edge (dragging the + puts it anywhere)
+      const sel = this.sel;
+      const e = sel && this.edgeOf(hit.item.id, sel.floor);
+      if (sel && e) this.change((p) => splitEdge(p.floors[sel.floor], e.id, e.outdoor, e.k, e.len / 2), false, "Add a corner");
+      return;
+    }
     if (hit.item) this.select({ floor: hit.floor, kind: hit.item.kind, id: hit.item.id });
     else if (hit.kind === "room" && hit.room >= 0) {
       const s = spaces(this.plan.floors[hit.floor])[hit.room];
@@ -385,11 +398,21 @@ export class Editor {
       const f = this.plan.floors[s.floor];
       const space = s.kind === "room" ? f?.rooms.find((r) => r.id === s.id) : f?.outdoor?.find((o) => o.id === s.id);
       if (space) {
-        const y = f.elevation + (s.kind === "outdoor" ? -SLAB : 0) + 0.06;
-        viewer.overlayMarkers = space.points.map((p, i) => ({
-          key: `__corner${i}`, pos: [p[0], y, p[1]] as [number, number, number], icon: iconIndex("dot"), color: 0x2f7cf6,
-          size: 20, pulse: 0, alpha: 0.95, item: { kind: "corner" as const, id: `${space.id}:${i}` },
+        const y = f.elevation + (s.kind === "outdoor" ? outdoorTop(f, f.outdoor!.indexOf(space as OutdoorArea)) : 0) + 0.06;
+        const corners: MarkerSpec[] = space.points.map((p, i) => ({
+          key: `__corner${i}`, pos: [p[0], y, p[1]], icon: iconIndex("dot"), color: 0x2f7cf6,
+          size: 20, pulse: 0, alpha: 0.95, item: { kind: "corner", id: `${space.id}:${i}` },
         }));
+        // a + in the middle of each edge: drag it out to where a new corner goes, or tap it
+        const plus: MarkerSpec[] = space.points.flatMap((p, i) => {
+          const q = space.points[(i + 1) % space.points.length];
+          if (Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.4) return [];
+          return [{
+            key: `__edge${i}`, pos: [(p[0] + q[0]) / 2, y, (p[1] + q[1]) / 2], icon: iconIndex("plus"), color: 0x2f7cf6,
+            size: 15, pulse: 0, alpha: 0.8, item: { kind: "edge", id: `${space.id}:${i}` },
+          }];
+        });
+        viewer.overlayMarkers = [...corners, ...plus];
       }
     }
     if (s && (s.kind === "device" || s.kind === "furniture")) {
@@ -417,11 +440,20 @@ export class Editor {
 
   // ------------------------------------------------------------------ dragging
 
+  /**
+   * Only the selection moves: its corners and +s, its dot, the piece itself. Pressing on anything else
+   * turns the view, and a tap selects it, so turning the view never shifts a piece by mistake.
+   */
+  private isHandle(hit: Hit): boolean {
+    const item = hit.item, sel = this.sel;
+    return !!item && !!sel && (item.kind === "corner" || item.kind === "edge" || (item.kind === sel.kind && item.id === sel.id));
+  }
+
   private onDrag(hit: Hit, x: number, z: number, phase: DragPhase): void {
     const item = hit.item;
     if (!item) return;
-    // handles (corners, the selected piece's dot) belong to the selection, whichever floor is in view
-    const handle = this.sel && (item.kind === "corner" || (item.kind === this.sel.kind && item.id === this.sel.id));
+    // handles (corners, +s, the selected piece's dot) belong to the selection, whichever floor is in view
+    const handle = this.isHandle(hit);
     const fi = handle && this.sel ? this.sel.floor : hit.floor;
     const f = this.plan.floors[fi];
     if (!f) return;
@@ -429,6 +461,12 @@ export class Editor {
     const find = () => (item.kind === "device" ? f.devices.find((d) => d.id === item.id) : f.furniture.find((d) => d.id === item.id));
     if (phase === "start") {
       this.dragStart = structuredClone(this.plan);
+      if (item.kind === "edge") {
+        // the corner is made once the + moves: a tap adds one in the middle instead (onHit)
+        this.dragEdge = this.edgeOf(item.id, fi);
+        this.dragCorners = [];
+        return;
+      }
       if (item.kind === "corner") {
         const [sid, idx] = [item.id.slice(0, item.id.lastIndexOf(":")), Number(item.id.slice(item.id.lastIndexOf(":") + 1))];
         const all = [...f.rooms.map((r) => ({ outdoor: false, s: r as { id: string; points: Vec2[] } })), ...(f.outdoor ?? []).map((o) => ({ outdoor: true, s: o }))];
@@ -458,7 +496,12 @@ export class Editor {
       view.viewer.liftItem(fi, item);
       return;
     }
-    if (phase === "move" && item.kind === "corner") {
+    if (phase === "move" && item.kind === "edge" && this.dragEdge) {
+      const e = this.dragEdge;
+      this.dragEdge = null;
+      this.dragCorners = [{ outdoor: e.outdoor, id: e.id, i: splitEdge(f, e.id, e.outdoor, e.k, e.len / 2) }];
+    }
+    if (phase === "move" && (item.kind === "corner" || item.kind === "edge")) {
       const snap = (v: number) => Math.round(v * 100) / 100;
       for (const c of this.dragCorners) {
         const s = c.outdoor ? f.outdoor?.find((o) => o.id === c.id) : f.rooms.find((r) => r.id === c.id);
@@ -491,13 +534,14 @@ export class Editor {
     }
     this.dragFrom = null;
     this.collider = null;
+    this.dragEdge = null;
     if (this.dragStart) {
       const moved = JSON.stringify(this.dragStart) !== JSON.stringify(this.plan);
       if (moved) {
         const what = item.kind === "corner" ? "a corner" : item.kind === "opening" ? `a ${f.openings.find((o) => o.id === item.id)?.kind ?? "door"}` : item.kind === "device"
           ? String(this.hass.states[f.devices.find((d) => d.id === item.id)?.entity ?? ""]?.attributes.friendly_name ?? "a device")
           : FURNITURE[f.furniture.find((x) => x.id === item.id)?.type ?? ""]?.name ?? "furniture";
-        this.undo.push({ plan: this.dragStart, label: `Move ${what}` });
+        this.undo.push({ plan: this.dragStart, label: item.kind === "edge" ? "Add a corner" : `Move ${what}` });
         this.redo = [];
         this.changed();
         // the floor is rebuilt with the piece in its new place
@@ -764,7 +808,7 @@ export class Editor {
   private roomsTab(): HTMLElement {
     const areas = Object.values(this.hass.areas ?? {}).sort((a, b) => a.name.localeCompare(b.name));
     const box = h("div", {},
-      h("p", { class: "ed-hint" }, "Tap a room or garden area in 3D, then drag its blue corners to reshape it. Corners shared with a neighbour move together."),
+      h("p", { class: "ed-hint" }, "Tap a room or garden area in 3D, then drag its blue corners to reshape it. Corners shared with a neighbour move together. To add a corner, drag a + from the middle of an edge to where it goes."),
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom() }, "Add a room"),
         h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("back") }, "Add back garden"),
@@ -844,7 +888,7 @@ export class Editor {
 
   private selectedTab(): HTMLElement {
     const s = this.sel;
-    if (!s) return h("p", { class: "ed-hint" }, "Tap a room, a device or a piece of furniture in 3D. Drag devices, lamps and furniture to move them.");
+    if (!s) return h("p", { class: "ed-hint" }, "Tap a room, a device or a piece of furniture in 3D. Once it is selected, drag it to move it; dragging anything else turns the view.");
     const fi = s.floor;
     const f = this.plan.floors[fi];
     if (!f) return h("div", {});
@@ -915,8 +959,8 @@ export class Editor {
           }) }, "Swing other way"),
         ) : null,
       )),
+      h("p", { class: "ed-hint" }, "To add a corner, drag a + from the middle of a wall to where it goes; a tap puts it in the middle. In the 2D plan, the corner tool puts it where you click."),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost small", onclick: () => this.addCorner(fi, room.id, false) }, "Add a corner"),
         h("button", { class: "ed-btn ghost small", onclick: () => this.confirm(`Remove ${room.name} with its doors and windows?`, "Remove", () => {
           this.change((p) => {
             const fl = p.floors[fi];
@@ -935,12 +979,15 @@ export class Editor {
     const upd = (fn: (x: OutdoorArea) => void) => this.change((p) => fn(p.floors[fi].outdoor!.find((y) => y.id === o.id)!));
     return h("div", {},
       h("h4", {}, "Garden area"),
-      h("p", { class: "ed-hint" }, "Drag the blue corners to shape it. Lights of its area light it up at night."),
+      h("p", { class: "ed-hint" }, "Drag the blue corners to shape it. To add a corner, drag a + from the middle of an edge to where it goes; a tap puts it in the middle. Lights of its area light it up at night."),
       h("div", { class: "ed-row" }, h("label", {}, "Name"), h("input", { class: "ed-in", value: o.name, onchange: (e: Event) => upd((x) => (x.name = (e.target as HTMLInputElement).value)) })),
       h("div", { class: "ed-row" }, h("label", {}, "Ground"), this.dropdown(OUTDOOR_KINDS.map((k) => [k, k]), o.kind, (v) => upd((x) => (x.kind = v as OutdoorKind)))),
+      o.kind === "driveway" ? h("div", { class: "ed-row" },
+        h("label", {}, "Surface"),
+        this.dropdown([["blocks", "block paving"], ["asphalt", "asphalt"]], o.surface ?? "blocks", (v) => upd((x) => (x.surface = v === "asphalt" ? "asphalt" : null))),
+      ) : null,
       h("div", { class: "ed-row" }, h("label", {}, "Area"), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd((x) => (x.area_id = v || null)), "Not linked")),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost", onclick: () => this.addCorner(fi, o.id, true) }, "Add a corner"),
         h("button", { class: "ed-btn danger", onclick: () => {
           this.change((p) => (p.floors[fi].outdoor = (p.floors[fi].outdoor ?? []).filter((x) => x.id !== o.id)));
           this.select(null);
@@ -953,6 +1000,8 @@ export class Editor {
     if (!d) return h("div", {});
     const all = this.entities(() => true);
     const upd = (fn: (x: Device) => void) => this.change((p) => fn(p.floors[fi].devices.find((y) => y.id === d.id)!));
+    const floor = this.plan.floors[fi];
+    const rig = domainOf(d.entity) === "camera" ? cameraRig(floor, layoutWalls(floor, this.plan.settings), d) : null;
     return h("div", {},
       h("h4", {}, String(this.hass.states[d.entity]?.attributes.friendly_name ?? d.entity)),
       h("div", { class: "ed-row" }, h("label", {}, "Entity"), this.entityInput(all, d.entity, (v) => upd((x) => (x.entity = v)))),
@@ -965,7 +1014,21 @@ export class Editor {
           upd((x) => (x.y = v === "" ? null : Number(v)));
         } }),
       ),
-      this.turnRow((deg) => upd((x) => (x.rotation = ((x.rotation ?? 0) + deg + 360) % 360))),
+      // a camera without a set direction looks away from its wall: turning starts from there
+      this.turnRow((deg) => upd((x) => (x.rotation = ((x.rotation ?? rig?.heading ?? 0) + deg + 360) % 360))),
+      rig ? h("div", { class: "ed-row" },
+        h("label", {}, "View °"),
+        h("input", { class: "ed-in num", type: "number", step: "5", min: "20", max: "360", value: d.fov ? String(d.fov) : "", placeholder: String(rig.fov), title: "Field of view in degrees (360: all round)", onchange: (e: Event) => {
+          const v = (e.target as HTMLInputElement).value;
+          upd((x) => (x.fov = v === "" ? null : Math.max(20, Math.min(360, Number(v)))));
+        } }),
+        h("label", {}, "Reach m"),
+        h("input", { class: "ed-in num", type: "number", step: "0.5", min: "0.5", max: "30", value: d.reach ? String(d.reach) : "", placeholder: String(rig.reach), title: "How far it sees, in metres", onchange: (e: Event) => {
+          const v = (e.target as HTMLInputElement).value;
+          upd((x) => (x.reach = v === "" ? null : Math.max(0.5, Math.min(30, Number(v)))));
+        } }),
+      ) : null,
+      rig ? h("p", { class: "ed-hint" }, `Shown as ${CAMERA_NAMES[rig.kind]}. Mount it on the ceiling for a dome, or on a table or the floor for a camera on a stand. Empty fields use the usual values.`) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
         this.change((p) => (p.floors[fi].devices = p.floors[fi].devices.filter((x) => x.id !== d.id)));
         this.select(null);
@@ -1094,13 +1157,16 @@ export class Editor {
       styles ? h("div", { class: "ed-row" },
         ctl.bars ? chip("Plain glass", !o.bars, () => upd(`Plain glass in a ${what}`, (x) => (x.bars = false))) : null,
         ctl.bars ? chip("Glazing bars", !!o.bars, () => upd(`Glazing bars on a ${what}`, (x) => (x.bars = true))) : null,
+        // the whole look: style, finish, colour and glazing bars (hinge, swing and size stay each one's own)
         h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
           for (const fl of p.floors) for (const x of fl.openings) {
             if (x.kind !== o.kind) continue;
+            x.style = o.style ?? null;
             x.finish = o.finish ?? null;
             x.color = o.color ?? null;
+            x.bars = !!o.bars;
           }
-        }, false, `Same finish on every ${what}`) }, `Same finish on every ${what}`),
+        }, false, `Same style on every ${what}`) }, `Same style on every ${what}`),
       ) : null,
       h("div", { class: "ed-row" }, ...num("Width", "width"), ...num("Height", "height")),
       h("div", { class: "ed-row" }, ...(o.kind === "window" ? num("Sill", "sill") : []), ...num("From corner", "offset")),
@@ -1108,6 +1174,11 @@ export class Editor {
         h("label", {}, "Opens"),
         chip("Inwards", o.swing !== "out", () => upd(`Open a ${what} inwards`, (x) => (x.swing = "in"))),
         chip("Outwards", o.swing === "out", () => upd(`Open a ${what} outwards`, (x) => (x.swing = "out"))),
+      ) : null,
+      ctl.side ? h("div", { class: "ed-row" },
+        h("label", {}, "Hangs"),
+        chip(room ? `In ${room.name}` : "Inside", o.swing !== "out", () => upd(`Hang a ${what} inside the room`, (x) => (x.swing = "in"))),
+        chip(room ? `Outside ${room.name}` : "Outside", o.swing === "out", () => upd(`Hang a ${what} outside the room`, (x) => (x.swing = "out"))),
       ) : null,
       ctl.hinge || ctl.slide ? h("div", { class: "ed-row" },
         ctl.hinge ? h("button", { class: "ed-btn ghost small", onclick: () => upd(`Flip a ${what}'s hinge`, (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, "Flip hinge") : null,
@@ -1292,38 +1363,16 @@ export class Editor {
     this.select({ floor: 0, kind: "outdoor", id: o.id });
   }
 
-  /** Splits the longest edge, so the shape gets a corner to drag (L-shapes, bays). */
-  private addCorner(fi: number, id: string, outdoor: boolean): void {
-    this.change((p) => {
-      const f = p.floors[fi];
-      const s = outdoor ? f.outdoor?.find((o) => o.id === id) : f.rooms.find((r) => r.id === id);
-      if (!s) return;
-      const pts = s.points;
-      let k = 0;
-      let best = -1;
-      pts.forEach((a, i) => {
-        const b = pts[(i + 1) % pts.length];
-        const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (l > best) {
-          best = l;
-          k = i;
-        }
-      });
-      const a = pts[k];
-      const b = pts[(k + 1) % pts.length];
-      pts.splice(k + 1, 0, [Math.round(((a[0] + b[0]) / 2) * 100) / 100, Math.round(((a[1] + b[1]) / 2) * 100) / 100]);
-      if (!outdoor) {
-        // doors and windows behind the new corner move to the second half of the edge
-        for (const o of f.openings) {
-          if (o.room_id !== id) continue;
-          if (o.edge > k) o.edge += 1;
-          else if (o.edge === k && o.offset > best / 2) {
-            o.edge = k + 1;
-            o.offset -= best / 2;
-          }
-        }
-      }
-    });
+  /** The edge behind a + handle ("<space id>:<edge index>"), with its length. */
+  private edgeOf(ref: string, fi: number): { outdoor: boolean; id: string; k: number; len: number } | null {
+    const at = ref.lastIndexOf(":");
+    const id = ref.slice(0, at), k = Number(ref.slice(at + 1));
+    const f = this.plan.floors[fi];
+    const room = f?.rooms.find((r) => r.id === id);
+    const s = room ?? f?.outdoor?.find((o) => o.id === id);
+    const a = s?.points[k], b = s && s.points[(k + 1) % s.points.length];
+    if (!s || !a || !b) return null;
+    return { outdoor: !room, id, k, len: Math.hypot(b[0] - a[0], b[1] - a[1]) };
   }
 
   private addDevice(fi: number, room: Room, entity: string): void {

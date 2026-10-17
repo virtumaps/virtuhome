@@ -74,7 +74,8 @@ const OUTDOOR_SPECS: Record<string, SurfaceSpec> = {
   patio: { tex: "patio", scale: 1.2, rough: 0.8, relief: 0.6 },
   deck: { tex: "deck", scale: 1.2, rough: 0.7, relief: 0.6 },
   path: { tex: "pavers", scale: 1.0, rough: 0.8, relief: 0.6 },
-  driveway: { tex: "pavers", scale: 1.2, rough: 0.8, relief: 0.6 },
+  driveway: { tex: "block_paving", scale: 1.6, rough: 0.8, relief: 0.6 },
+  asphalt: { tex: "tarmac", scale: 2.5, rough: 0.85, relief: 0.35 },
   bed: { tex: "soil", scale: 1.5, rough: 1, relief: 0.6 },
   gravel: { tex: "gravel", scale: 1.0, rough: 0.9, relief: 0.9 },
 };

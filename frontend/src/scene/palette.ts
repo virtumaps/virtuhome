@@ -4,7 +4,7 @@ import type { Role } from "./furniture-lib";
 
 export interface Palette {
   name: "day" | "night";
-  outdoor: Record<import("../model/plan").OutdoorKind, number>;
+  outdoor: Record<import("../model/plan").Ground, number>;
   background: number;
   ground: number;
   wallInner: number;
@@ -64,7 +64,7 @@ const DAY_ROLES: Record<Role, number> = {
 
 export const DAY: Palette = {
   name: "day",
-  outdoor: { lawn: 0x9cc27a, patio: 0xc9c2b5, deck: 0xb58a62, path: 0xbab3a6, driveway: 0x9a9a9a, bed: 0x7b5e45, gravel: 0xcfc8bb },
+  outdoor: { lawn: 0x9cc27a, patio: 0xc9c2b5, deck: 0xb58a62, path: 0xbab3a6, driveway: 0x9e8f84, asphalt: 0x63666b, bed: 0x7b5e45, gravel: 0xcfc8bb },
   background: 0xe9edf1,
   ground: 0xd8dfd3,
   wallInner: 0xf4f2ee,
@@ -83,7 +83,7 @@ export const DAY: Palette = {
 
 export const NIGHT: Palette = {
   name: "night",
-  outdoor: { lawn: 0x41603a, patio: 0x6e6a63, deck: 0x6a5240, path: 0x66625b, driveway: 0x55575b, bed: 0x4a3a2c, gravel: 0x6f6b64 },
+  outdoor: { lawn: 0x41603a, patio: 0x6e6a63, deck: 0x6a5240, path: 0x66625b, driveway: 0x5c5650, asphalt: 0x37393d, bed: 0x4a3a2c, gravel: 0x6f6b64 },
   background: 0x0c1220,
   ground: 0x141c2c,
   wallInner: 0x9aa3b2,

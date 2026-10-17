@@ -17,8 +17,9 @@ On a computer or a recent iPad it switches to a realistic look with textures, su
   thermostats and plugs are placed in their rooms, door and window sensors attach to their doors and
   windows, the TV to its screen.
 - **Live:** lights glow and light their rooms (and spill through open doors), lit windows glow at night,
-  doors swing, curtains move, motion and alarms show where they happen, camera views show on the floor
-  and turn red on motion, leaks and smoke raise a banner, a temperature map colours the rooms, room
+  doors swing, curtains move, motion and alarms show where they happen, every camera hangs where it is
+  (on a bracket, as a ceiling dome, as a doorbell) with what it sees lit up to the first walls, red on
+  motion and grey while offline, leaks and smoke raise a banner, a temperature map colours the rooms, room
   temperatures sit on the labels, who is home sits in the corner, and one tap turns off the lights.
 - **Solar, battery and grid:** what the panels make sits in the corner; tap it for the power flowing
   between solar, battery, grid and the house, the price now and today's totals. Found from Home
@@ -84,11 +85,14 @@ open it, double-tap a room to switch all its lights, double-tap empty space for 
 
 Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
 
-- **3D view:** tap rooms, devices and furniture to select them; drag devices, lamps and furniture; drag
-  a room's blue corners to reshape it.
+- **3D view:** tap rooms, devices and furniture to select them, then drag the selected one to move it
+  (dragging anything else turns the view, so nothing moves by mistake); drag a room's blue corners to
+  reshape it, and drag a + from the middle of an edge to add a corner there.
 - **2D plan:** every wall measured. Drag corners or whole walls (they snap to the grid and line up with
   other corners), click a measurement to type the exact length, draw rooms as rectangles or corner by
-  corner, click a wall to add a door or window and slide it along, turn furniture with its handle.
+  corner, add a corner exactly where you click an edge with the corner tool, click a wall to add a door
+  or window and slide it along, turn furniture with its handle.
+  As in 3D, furniture, devices, doors and windows move only once they are selected.
   Arrow keys nudge, R turns, Delete removes.
 - **Looks:** a room's floor and wall finish and paint colour, the outside walls (also per storey), and
   for furniture its style, colour, upholstery and mirroring. Add items from a searchable catalogue.

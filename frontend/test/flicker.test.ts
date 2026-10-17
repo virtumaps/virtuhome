@@ -99,12 +99,18 @@ function flicker(plan: Plan, cut: number | null): string[] {
 }
 
 // two rooms side by side (their shared wall meets the outside walls in T-junctions), a door
-// between them, a window with its board, and a run of kitchen units standing flush
+// between them, a window with its board, a run of kitchen units standing flush, and cameras
+// against the walls (one on a bracket, a doorbell by the front door) and on the ceiling
 const house = (): Plan => ({
   version: 1,
   settings: { ...DEFAULT_SETTINGS },
   floors: [{
-    id: "g", name: "G", elevation: 0, height: 2.5, walls: [], devices: [],
+    id: "g", name: "G", elevation: 0, height: 2.5, walls: [],
+    devices: [
+      { id: "c1", entity: "camera.room", x: 0.1, z: 2.5, rotation: 60 },
+      { id: "c2", entity: "camera.doorbell", x: 5.2, z: 3.1 },
+      { id: "c3", entity: "camera.dome", x: 1.5, z: 1.5, mount: "ceiling" },
+    ],
     rooms: [
       { id: "a", name: "A", area_id: null, points: [[0, 0], [3, 0], [3, 3], [0, 3]] },
       { id: "b", name: "B", area_id: null, points: [[3, 0], [6, 0], [6, 3], [3, 3]] },
