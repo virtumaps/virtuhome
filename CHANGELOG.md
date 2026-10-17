@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 ### New
 - Fences and garden walls in 15 designs: closeboard, lap panel, slatted, venetian, hit and miss,
