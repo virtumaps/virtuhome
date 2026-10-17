@@ -30,3 +30,25 @@ devices sit at plan points. Floors stack by elevation and link to HA floors; roo
   room and spills one bounce through open doors.
 - **Per-vertex extras only.** Cutaway and room tints run in the vertex shader from small uniform arrays.
 - **Tablet tier** (auto on Fire/low-memory devices): pixel ratio 1, no MSAA, coarser grids, fewer segments.
+
+## Looks and graphics levels
+
+`scene/tier.ts` decides the level per device (Tablet, Standard, Realistic, Ultra). Tablet and Standard
+draw the model look: `MeshBasicMaterial` with colours lit on the CPU. Realistic and Ultra load
+`scene/realistic.ts` on demand (tablets never download it):
+
+- Every vertex the builder makes carries a surface key (`floor:oak`, `wall:wallpaper_damask`,
+  `ext:brick`, `role:wood`, `uph:leather`, `out:lawn`) and planar texture coordinates in metres; the
+  realistic geometry has one draw group per surface.
+- `scene/textures.ts` draws the textures pixel by pixel (tiling seamlessly, with normal maps from
+  their height); finishes that take a colour are detail maps the vertex colour shows through.
+- Materials are `MeshStandardMaterial` with the same cutaway and room tint injection as the model
+  look, plus the CPU lamp light (lamps still light only their room) and the glow of shades, screens
+  and lit windows. The sun is a directional light placed from `sun.sun`; its shadow map is redrawn
+  only when something in the scene moves, not when the camera does.
+- Ultra renders through an `EffectComposer` with ambient occlusion (at half resolution, fed with
+  normals drawn with the walls lowered as the cutaway shows them) and bloom.
+
+`scene/finishes.ts` lists the finishes; `scene/furniture-lib.ts` the furniture, in families whose
+styles can be swapped. The editor's 2D plan is `editor/plan2d.ts` (SVG, redrawn per frame while
+dragging), going through the same change and undo path as the 3D editor.

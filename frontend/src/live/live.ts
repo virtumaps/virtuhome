@@ -10,7 +10,26 @@ import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
 
-export type Change = "lighting" | "openings" | "markers" | "tints" | "labels";
+export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status";
+
+/** Something that needs attention now: a leak, smoke, a triggered alarm. */
+export interface Alert {
+  id: string;
+  text: string;
+}
+
+export interface Person {
+  id: string;
+  name: string;
+  home: boolean;
+  /** Where they are: "Home", "Away" or a zone's name. */
+  where: string;
+  picture: string | null;
+}
+
+const ALERT_NAMES: Record<string, string> = {
+  smoke: "Smoke", gas: "Gas", moisture: "Water leak", carbon_monoxide: "Carbon monoxide", safety: "Safety alert",
+};
 
 interface RoomWatch {
   temperature: string | null;
@@ -53,6 +72,10 @@ export class HassLive implements LiveSource {
   private regRef: unknown = null;
   /** The index picks sensors by their state attributes, so it is redone once states exist. */
   private indexedWithStates = false;
+  /** Rooms tinted by temperature (blue cold, red warm). */
+  heatmap = false;
+  /** Motion sensors of each camera's own device (a doorbell's motion turns its view cone red). */
+  private cameraMotion = new Map<string, string[]>();
 
   constructor(plan: Plan) {
     this.plan = plan;
@@ -73,7 +96,7 @@ export class HassLive implements LiveSource {
       this.regRef = hass.entities;
       this.indexedWithStates = hasStates;
       this.reindex(hass);
-      for (const c of ["lighting", "openings", "markers", "tints", "labels"] as Change[]) changes.add(c);
+      for (const c of ["lighting", "openings", "markers", "tints", "labels", "status"] as Change[]) changes.add(c);
       for (const id of this.kinds.keys()) this.seen.set(id, hass.states[id]);
       return changes;
     }
@@ -97,6 +120,13 @@ export class HassLive implements LiveSource {
   private reindex(hass: Hass): void {
     this.kinds.clear();
     this.rooms.clear();
+    this.cameraMotion.clear();
+    // people, and alarms anywhere in the house, feed the top bar
+    for (const id of Object.keys(hass.states)) {
+      const dom = domainOf(id);
+      if (dom === "person" || dom === "alarm_control_panel") this.watch(id, "status");
+      else if (dom === "binary_sensor" && ALERT_CLASSES.has(String(hass.states[id].attributes.device_class))) this.watch(id, "status");
+    }
     const byArea = new Map<string, string[]>();
     for (const id of Object.keys(hass.entities ?? {})) {
       const reg = hass.entities![id];
@@ -122,15 +152,24 @@ export class HassLive implements LiveSource {
           lights: ids.filter((id) => domainOf(id) === "light"),
         };
         this.rooms.set(`${floor.id}/${room.id}`, w);
-        this.watch(w.temperature, "labels");
+        this.watch(w.temperature, "labels", "tints");
         this.watch(w.humidity, "labels");
+        for (const id of w.lights) this.watch(id, "status");
         for (const id of w.alerts) this.watch(id, "tints");
         for (const id of w.motion) this.watch(id, "tints");
       }
       for (const d of floor.devices) {
         const dom = domainOf(d.entity);
-        if (dom === "light" || dom === "switch") this.watch(d.entity, "lighting", "markers");
+        if (dom === "light" || dom === "switch") this.watch(d.entity, "lighting", "markers", "status");
         else this.watch(d.entity, "markers");
+        if (dom === "camera") {
+          const dev = hass.entities?.[d.entity]?.device_id;
+          const motion = dev ? Object.values(hass.entities ?? {})
+            .filter((e) => e.device_id === dev && domainOf(e.entity_id) === "binary_sensor" && MOTION_CLASSES.has(String(hass.states[e.entity_id]?.attributes.device_class)))
+            .map((e) => e.entity_id) : [];
+          this.cameraMotion.set(d.entity, motion);
+          for (const id of motion) this.watch(id, "markers");
+        }
       }
       for (const f of floor.furniture) this.watch(f.entity, "lighting", "markers");
       for (const o of floor.openings) {
@@ -250,8 +289,69 @@ export class HassLive implements LiveSource {
     const w = this.rooms.get(`${floor.id}/${room.id}`);
     if (!w || !this.hass) return null;
     if (w.alerts.some((id) => this.hass!.states[id]?.state === "on")) return [0.9, 0.12, 0.1, 0.42];
+    if (this.heatmap) {
+      const t = this.state(w.temperature);
+      const v = t && !isUnavailable(t) ? parseFloat(t.state) : NaN;
+      if (!isNaN(v)) return [...heatColour(v), 0.42];
+      return null;
+    }
     if (w.motion.some((id) => this.hass!.states[id]?.state === "on")) return [1.0, 0.72, 0.32, 0.09];
     return null;
+  }
+
+  /** A camera that is live or sees motion right now. */
+  cameraActive(d: Device): boolean {
+    const s = this.state(d.entity);
+    if (s && (s.state === "streaming" || s.state === "recording")) return true;
+    return (this.cameraMotion.get(d.entity) ?? []).some((id) => this.hass?.states[id]?.state === "on");
+  }
+
+  /** Leaks, smoke, gas anywhere in the house, and a triggered alarm. */
+  alerts(): Alert[] {
+    const hass = this.hass;
+    if (!hass) return [];
+    const out: Alert[] = [];
+    for (const [id, s] of Object.entries(hass.states)) {
+      const dom = domainOf(id);
+      if (dom === "alarm_control_panel" && s.state === "triggered") out.push({ id, text: `Alarm triggered: ${s.attributes.friendly_name ?? id}` });
+      else if (dom === "binary_sensor" && s.state === "on") {
+        const dc = String(s.attributes.device_class);
+        if (ALERT_CLASSES.has(dc)) {
+          const area = areaOf(hass, id);
+          const where = area ? hass.areas?.[area]?.name : null;
+          out.push({ id, text: `${ALERT_NAMES[dc] ?? "Alert"}${where ? ` in ${where}` : ""}` });
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Lights of the plan that are on, on one floor or (null) in the whole house. */
+  lightsOn(floorIndex: number | null): string[] {
+    const hass = this.hass;
+    if (!hass) return [];
+    const ids = new Set<string>();
+    this.plan.floors.forEach((f, i) => {
+      if (floorIndex !== null && i !== floorIndex) return;
+      for (const d of f.devices) if (domainOf(d.entity) === "light") ids.add(d.entity);
+      for (const x of f.furniture) if (x.entity && domainOf(x.entity) === "light") ids.add(x.entity);
+      for (const sp of spaces(f)) for (const id of this.rooms.get(`${f.id}/${sp.id}`)?.lights ?? []) ids.add(id);
+    });
+    return [...ids].filter((id) => hass.states[id]?.state === "on");
+  }
+
+  people(): Person[] {
+    const hass = this.hass;
+    if (!hass) return [];
+    return Object.entries(hass.states)
+      .filter(([id]) => domainOf(id) === "person")
+      .map(([id, s]) => ({
+        id,
+        name: String(s.attributes.friendly_name ?? id.slice(7)),
+        home: s.state === "home",
+        where: s.state === "home" ? "Home" : s.state === "not_home" ? "Away" : isUnavailable(s) ? "Unknown" : s.state,
+        picture: typeof s.attributes.entity_picture === "string" ? s.attributes.entity_picture : null,
+      }));
   }
 
   roomText(floor: Floor, room: { id: string }): string | null {
@@ -269,6 +369,18 @@ export class HassLive implements LiveSource {
   roomLights(floor: Floor, room: { id: string }): string[] {
     return this.rooms.get(`${floor.id}/${room.id}`)?.lights ?? [];
   }
+}
+
+/** Room temperature to a colour: blue below 17°, green around 20°, red from 25°. */
+export function heatColour(t: number): [number, number, number] {
+  const x = Math.max(0, Math.min(1, (t - 16) / 10));
+  // blue -> cyan -> green -> yellow -> red
+  const stops: [number, number, number][] = [[0.15, 0.35, 1], [0.1, 0.8, 0.95], [0.3, 0.85, 0.35], [1, 0.8, 0.15], [1, 0.25, 0.12]];
+  const f = x * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(f));
+  const k = f - i;
+  const a = stops[i], b = stops[i + 1];
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 }
 
 function coverLevel(s: HassEntity): number | null {

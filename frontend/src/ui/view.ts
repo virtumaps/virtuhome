@@ -1,5 +1,5 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiWallSconceFlat, mdiWeatherNight, mdiWeatherSunny, mdiClose, mdiTune, mdiCheck, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiWallSconceFlat, mdiWeatherNight, mdiWeatherSunny, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
 import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
 import { HassLive, toggleEntity, type Change } from "../live/live";
@@ -21,6 +21,8 @@ export interface ViewConfig {
   editable?: boolean;
   /** Alarm panel shown in the top bar (default: the first alarm_control_panel; "none" hides it). */
   alarm?: string;
+  /** Who is home, as avatars in the corner (default on). */
+  people?: boolean;
   /** Dev harness: extension modules to load without the integration. */
   dev_extensions?: string[];
   /** Options of extensions (e.g. Wall Tablet's popup, idle_return) live in the same config. */
@@ -68,6 +70,9 @@ export class VhView {
   /** The tier was picked automatically (it may step down when the device struggles). */
   private tierAuto = true;
   private menu: HTMLDivElement;
+  private alertEl: HTMLButtonElement;
+  private statusEl: HTMLDivElement;
+  private statusKey = "";
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
@@ -82,8 +87,11 @@ export class VhView {
         <button class="vh-icon" data-act="walls" title="Walls">${svg(mdiWallSconceFlat)}</button>
         <button class="vh-icon" data-act="theme" title="Day / night">${svg(mdiWeatherNight)}</button>
         <button class="vh-icon" data-act="frame" title="Show all">${svg(mdiArrowExpandAll)}</button>
+        <button class="vh-icon" data-act="heat" title="Temperature map">${svg(mdiThermometer)}</button>
         <button class="vh-icon" data-act="graphics" title="Graphics">${svg(mdiTune)}</button>
       </div>
+      <button class="vh-alert" hidden></button>
+      <div class="vh-status"></div>
       <div class="vh-menu" hidden></div>
       <div class="vh-sheet"></div>
       <div class="vh-empty" hidden></div>
@@ -100,6 +108,18 @@ export class VhView {
     this.wallsBtn = this.root.querySelector('[data-act="walls"]')!;
     this.themeBtn = this.root.querySelector('[data-act="theme"]')!;
     this.menu = this.root.querySelector(".vh-menu")!;
+    this.alertEl = this.root.querySelector(".vh-alert")!;
+    this.statusEl = this.root.querySelector(".vh-status")!;
+    this.alertEl.onclick = () => {
+      const first = this.live.alerts()[0];
+      if (first) moreInfo(this.root, first.id);
+    };
+    this.statusEl.addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>("[data-status]");
+      if (!b) return;
+      if (b.dataset.status === "lights") this.lightsOff();
+      else if (b.dataset.status) moreInfo(this.root, b.dataset.status);
+    });
 
     const { tier, auto } = resolveTier(parseTierSetting(config.quality));
     this.tierAuto = auto;
@@ -124,6 +144,7 @@ export class VhView {
       if (act === "theme") this.cycleTheme();
       if (act === "frame") this.viewer.frame(true);
       if (act === "graphics") this.toggleGraphicsMenu();
+      if (act === "heat") this.toggleHeatmap();
     });
     this.menu.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest<HTMLElement>("[data-tier]")?.dataset.tier;
@@ -248,7 +269,57 @@ export class VhView {
     if (changes.has("markers")) this.viewer.refreshMarkers();
     if (changes.has("tints")) this.viewer.refreshTints();
     if (changes.has("labels")) this.viewer.refreshLabels();
+    if (changes.has("status") || changes.has("lighting")) this.renderStatus();
     if (this.sheetRoom && changes.size) this.renderSheet();
+  }
+
+  // ------------------------------------------------------------------ status: alerts, lights, people
+
+  /** The alert banner, the lights-on chip and who is home (only redrawn when something shown changed). */
+  private renderStatus(): void {
+    const alerts = this.live.alerts();
+    this.alertEl.hidden = !alerts.length;
+    if (alerts.length) {
+      this.alertEl.innerHTML = `${svg(mdiAlert)}<span></span>`;
+      this.alertEl.querySelector("span")!.textContent = alerts.length > 1 ? `${alerts[0].text} · and ${alerts.length - 1} more` : alerts[0].text;
+    }
+    const floor = this.viewer.mode === "floor" ? this.viewer.activeFloor : null;
+    const on = this.live.lightsOn(floor).length;
+    const people = this.config.people === false ? [] : this.live.people();
+    const key = JSON.stringify([on, floor, people]);
+    if (key === this.statusKey) return;
+    this.statusKey = key;
+    const parts: string[] = [];
+    if (on) parts.push(`<button class="vh-chip vh-lights" data-status="lights" title="Turn them off">${svg(mdiLightbulbOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span>${on} on</span></button>`);
+    for (const p of people) {
+      const initials = p.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+      parts.push(`<button class="vh-person ${p.home ? "home" : "away"}" data-status="${p.id}" title="">${p.picture ? `<img alt="" src="${p.picture.replace(/"/g, "")}">` : `<i>${initials}</i>`}</button>`);
+    }
+    this.statusEl.innerHTML = parts.join("");
+    // names and places as text, never as markup
+    this.statusEl.querySelectorAll<HTMLElement>(".vh-person").forEach((b, i) => (b.title = `${people[i].name}: ${people[i].where}`));
+  }
+
+  /** Turns off the lights that are on, on the shown floor (or in the whole house). */
+  private async lightsOff(): Promise<void> {
+    const h = this._hass;
+    if (!h) return;
+    const floor = this.viewer.mode === "floor" ? this.viewer.activeFloor : null;
+    const ids = this.live.lightsOn(floor);
+    if (!ids.length) return;
+    try {
+      await h.callService("light", "turn_off", {}, { entity_id: ids });
+      this.toast(`Turned off ${ids.length} light${ids.length === 1 ? "" : "s"}${floor !== null ? ` on ${this.plan?.floors[floor]?.name ?? "this floor"}` : ""}`);
+    } catch (err) {
+      this.toast(`Could not turn them off: ${String((err as { message?: string }).message ?? err)}`);
+    }
+  }
+
+  private toggleHeatmap(): void {
+    this.live.heatmap = !this.live.heatmap;
+    this.root.querySelector('[data-act="heat"]')?.classList.toggle("on", this.live.heatmap);
+    this.viewer.refreshTints();
+    this.toast(this.live.heatmap ? "Temperature map: blue is cold, red is warm" : "Temperature map off");
   }
 
   private async subscribe(): Promise<void> {
@@ -524,12 +595,14 @@ export class VhView {
     this.closeSheet();
     this.viewer.setMode("house");
     this.renderChips();
+    this.renderStatus();
   }
 
   showFloor(i: number): void {
     this.closeSheet();
     this.viewer.setMode("floor", i);
     this.renderChips();
+    this.renderStatus();
   }
 
   private openRoom(floor: number, room: number): void {

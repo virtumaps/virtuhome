@@ -381,8 +381,8 @@ export class RealisticLook {
     this.gtao = new GTAOPass(this.scene, this.camera, 1, 1);
     (this.gtao as unknown as { _renderGBuffer: boolean })._renderGBuffer = false;
     this.normalTarget = (this.gtao as unknown as { normalRenderTarget: WebGLRenderTarget }).normalRenderTarget;
-    this.gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.6, thickness: 1.2, scale: 1.0, samples: 16 });
-    this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+    this.gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.6, thickness: 1.2, scale: 1.0, samples: 12 });
+    this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, rings: 2, samples: 12 });
     this.gtao.blendIntensity = 0.85;
     this.composer.addPass(this.gtao);
     this.bloom = new UnrealBloomPass(new Vector2(1, 1), 0.12, 0.35, 0.98);
@@ -394,6 +394,8 @@ export class RealisticLook {
     if (!this.composer) return;
     this.composer.setPixelRatio(pr);
     this.composer.setSize(w, h);
+    // ambient occlusion is soft anyway: half the resolution costs a quarter and looks the same
+    this.gtao?.setSize(Math.max(1, Math.round((w * pr) / 2)), Math.max(1, Math.round((h * pr) / 2)));
   }
 
   render(): void {

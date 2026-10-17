@@ -2,7 +2,7 @@
 // into a couple of meshes, and lights them on the CPU.
 import {
   Color, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer,
-  CircleGeometry, BufferGeometry, BufferAttribute, type Material,
+  CircleGeometry, BufferGeometry, BufferAttribute, DoubleSide, type Material,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
@@ -42,6 +42,8 @@ export interface LiveSource {
   tint(floor: Floor, room: { id: string }): [number, number, number, number] | null;
   /** Short text under the room name, e.g. "21.4° · 48 %". */
   roomText(floor: Floor, room: { id: string }): string | null;
+  /** A camera that is live or sees motion (its view cone turns red). */
+  cameraActive?(d: Device): boolean;
 }
 
 export interface Hit {
@@ -110,6 +112,8 @@ export class Viewer {
   private markers: Markers;
   private halos: Halos;
   private ground: Mesh;
+  /** What the cameras of the shown floor see, on the floor. */
+  private cones: Mesh;
   private live: LiveSource | null = null;
   private raf = 0;
   private dirty = true;
@@ -156,7 +160,9 @@ export class Viewer {
     this.halos = new Halos();
     this.ground = new Mesh(new CircleGeometry(1, 64), this.basicGround);
     this.ground.rotation.x = -Math.PI / 2;
-    this.scene.add(this.ground, this.halos.mesh, this.markers.mesh);
+    this.cones = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide }));
+    this.cones.renderOrder = 3;
+    this.scene.add(this.ground, this.cones, this.halos.mesh, this.markers.mesh);
     this.setupLook();
     this.applyPalette();
 
@@ -686,7 +692,64 @@ export class Viewer {
       }
     });
     this.markers.set(specs.concat(this.overlayMarkers));
+    this.refreshCones();
     this.invalidate();
+  }
+
+  /**
+   * Camera view cones on the floor of the shown storey: each ray stops at the first wall it meets
+   * (doorways let it through), red while the camera is live or sees motion.
+   */
+  private refreshCones(): void {
+    const pos: number[] = [];
+    const col: number[] = [];
+    const f = this.mode === "floor" ? this.floors[this.activeFloor] : undefined;
+    if (f && this.live && !this.editMode) {
+      const walls = f.fb.layout.walls;
+      for (const d of f.fb.floor.devices) {
+        if (!d.entity.startsWith("camera.") || d.rotation === null || d.rotation === undefined) continue;
+        const active = this.live.cameraActive?.(d) ?? false;
+        const c = active ? [0.95, 0.22, 0.2] : [0.24, 0.55, 0.99];
+        const fov = ((d.fov ?? 90) * Math.PI) / 180;
+        const reach = d.reach ?? 7;
+        const h = (d.rotation * Math.PI) / 180;
+        const outside = this.roomAt(this.activeFloor, [d.x, d.z]) < 0 || this.roomAt(this.activeFloor, [d.x, d.z]) >= f.fb.floor.rooms.length;
+        const y = f.fb.floor.elevation + f.offset + (outside ? -SLAB : 0) + 0.035;
+        const n = 28;
+        const rim: [number, number][] = [];
+        for (let k = 0; k <= n; k++) {
+          const a = h - fov / 2 + (fov * k) / n;
+          const rx = -Math.sin(a), rz = Math.cos(a);
+          let t = reach;
+          for (const w of walls) {
+            // ray o + t r against the wall's centre line a + u (b - a)
+            const ex = w.b[0] - w.a[0], ez = w.b[1] - w.a[1];
+            const den = rx * ez - rz * ex;
+            if (Math.abs(den) < 1e-6) continue;
+            const ox = w.a[0] - d.x, oz = w.a[1] - d.z;
+            const tt = (ox * ez - oz * ex) / den;
+            const u = (ox * rz - oz * rx) / den;
+            if (tt < 0.35 || tt >= t || u < 0 || u > 1) continue;
+            const along = u * w.length;
+            if (w.openings.some((o) => o.opening.kind !== "window" && along > o.t0 && along < o.t1)) continue;
+            t = tt;
+          }
+          rim.push([d.x + rx * t, d.z + rz * t]);
+        }
+        for (let k = 0; k < n; k++) {
+          pos.push(d.x, y, d.z, rim[k][0], y, rim[k][1], rim[k + 1][0], y, rim[k + 1][1]);
+          col.push(c[0], c[1], c[2], active ? 0.34 : 0.13, c[0], c[1], c[2], 0.02, c[0], c[1], c[2], 0.02);
+        }
+      }
+    }
+    const old = this.cones.geometry;
+    const g = new BufferGeometry();
+    if (pos.length) {
+      g.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
+      g.setAttribute("color", new BufferAttribute(new Float32Array(col), 4));
+    }
+    this.cones.geometry = g;
+    old.dispose();
   }
 
   /** World position of a device's marker. */
@@ -978,7 +1041,7 @@ export class Viewer {
     this.height = h;
     // a large Retina window needs no 4+ million pixels for the model look: about 2.5 million is plenty
     const want = Math.min(window.devicePixelRatio || 1, this.low ? 1 : 2);
-    const budget = this.tier === "ultra" ? 4_000_000 : this.tier === "high" ? 3_000_000 : 2_500_000;
+    const budget = this.tier === "ultra" ? 3_500_000 : this.tier === "high" ? 3_000_000 : 2_500_000;
     const cap = Math.sqrt(budget / (w * h));
     const ratio = Math.max(1, Math.min(want, cap));
     if (Math.abs(ratio - this.pixelRatio) > 0.01) {

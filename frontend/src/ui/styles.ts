@@ -78,6 +78,26 @@ export const VIEW_CSS = /* css */ `
 .vh-alarm.armed { box-shadow: inset 0 0 0 1.5px #2bb673; }
 .vh-alarm.alert { background: rgba(229,72,77,0.85); color: #fff; animation: vh-pulse 1s ease-in-out infinite alternate; }
 @keyframes vh-pulse { from { opacity: 1; } to { opacity: 0.6; } }
+.vh-status { position: absolute; right: 10px; top: 56px; display: flex; gap: 6px; align-items: center; flex-direction: row-reverse; pointer-events: none; }
+.vh-status > * { pointer-events: auto; }
+.vh-lights span { font-variant-numeric: tabular-nums; }
+.vh-lights svg { color: #f2a33a; }
+.vh-person {
+  width: 32px; height: 32px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; overflow: hidden; display: grid; place-items: center;
+  background: var(--vh-glass); color: var(--vh-text); box-shadow: 0 0 0 2px #2bb673, 0 1px 6px rgba(0,0,0,0.2); font: 600 12px/1 system-ui, sans-serif;
+}
+.vh-person.away { box-shadow: 0 0 0 2px var(--vh-dim), 0 1px 6px rgba(0,0,0,0.2); opacity: 0.7; }
+.vh-person img { width: 100%; height: 100%; object-fit: cover; }
+.vh-person.away img { filter: grayscale(1); }
+.vh-person i { font-style: normal; }
+.vh-alert {
+  position: absolute; left: 50%; top: 54px; transform: translateX(-50%); display: inline-flex; gap: 8px; align-items: center; z-index: 4;
+  border: 0; border-radius: 18px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; max-width: calc(100% - 40px);
+  background: #e5484d; color: #fff; box-shadow: 0 4px 18px rgba(229,72,77,0.45); animation: vh-pulse 1.2s ease-in-out infinite alternate;
+}
+.vh-alert svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+.vh-alert span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vh-root.editing .vh-status, .vh-root.editing .vh-alert { display: none; }
 .vh-menu {
   position: absolute; right: 60px; bottom: 12px; width: 250px; padding: 6px; border-radius: 16px;
   background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -93,6 +113,26 @@ export const VIEW_CSS = /* css */ `
 .vh-menu-row small { display: block; font-size: 11px; color: var(--vh-dim); }
 .vh-menu-row .tick { width: 18px; height: 18px; flex: none; color: var(--vh-accent); }
 .vh-menu-row .tick svg { width: 18px; height: 18px; fill: currentColor; }
-@media (min-width: 601px) { .vh-root.editing .vh-menu { right: calc(min(380px, 100%) + 60px); } }
+@media (min-width: 601px) { .vh-root.editing .vh-status { position: absolute; right: 10px; top: 56px; display: flex; gap: 6px; align-items: center; flex-direction: row-reverse; pointer-events: none; }
+.vh-status > * { pointer-events: auto; }
+.vh-lights span { font-variant-numeric: tabular-nums; }
+.vh-lights svg { color: #f2a33a; }
+.vh-person {
+  width: 32px; height: 32px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; overflow: hidden; display: grid; place-items: center;
+  background: var(--vh-glass); color: var(--vh-text); box-shadow: 0 0 0 2px #2bb673, 0 1px 6px rgba(0,0,0,0.2); font: 600 12px/1 system-ui, sans-serif;
+}
+.vh-person.away { box-shadow: 0 0 0 2px var(--vh-dim), 0 1px 6px rgba(0,0,0,0.2); opacity: 0.7; }
+.vh-person img { width: 100%; height: 100%; object-fit: cover; }
+.vh-person.away img { filter: grayscale(1); }
+.vh-person i { font-style: normal; }
+.vh-alert {
+  position: absolute; left: 50%; top: 54px; transform: translateX(-50%); display: inline-flex; gap: 8px; align-items: center; z-index: 4;
+  border: 0; border-radius: 18px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; max-width: calc(100% - 40px);
+  background: #e5484d; color: #fff; box-shadow: 0 4px 18px rgba(229,72,77,0.45); animation: vh-pulse 1.2s ease-in-out infinite alternate;
+}
+.vh-alert svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+.vh-alert span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vh-root.editing .vh-status, .vh-root.editing .vh-alert { display: none; }
+.vh-menu { right: calc(min(380px, 100%) + 60px); } }
 .vh-stats { position: absolute; left: 10px; bottom: 10px; font: 11px/1.3 ui-monospace, monospace; color: var(--vh-dim); pointer-events: none; }
 `;

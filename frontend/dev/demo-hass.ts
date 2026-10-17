@@ -58,7 +58,13 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
       else put(id, "on");
     }
   }
-  put("sun.sun", night ? "below_horizon" : "above_horizon");
+  put("sun.sun", night ? "below_horizon" : "above_horizon", { azimuth: night ? 320 : 200, elevation: night ? -20 : 38 });
+  // two people, and a leak sensor (?leak turns it on to show the alert banner)
+  put("person.alex", "home", { friendly_name: "Alex" });
+  put("person.sam", "not_home", { friendly_name: "Sam" });
+  const kitchenArea = plan.floors[0]?.rooms.find((r) => /kitchen/i.test(r.name))?.area_id ?? null;
+  put("binary_sensor.kitchen_leak", new URLSearchParams(location.search).has("leak") ? "on" : "off", { device_class: "moisture", friendly_name: "Kitchen leak" });
+  entities["binary_sensor.kitchen_leak"] = { entity_id: "binary_sensor.kitchen_leak", area_id: kitchenArea };
 
   const hass: Hass = {
     states,
