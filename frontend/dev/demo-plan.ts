@@ -195,6 +195,6 @@ const first: Floor = {
 export const DEMO_PLAN: Plan = {
   version: 1,
   name: "Demo house",
-  settings: { wall_exterior: 0.28, wall_interior: 0.12, north: 0, theme: "auto" },
+  settings: { wall_exterior: 0.28, wall_interior: 0.12, north: 0, theme: "auto", exterior_finish: "brick" },
   floors: [ground, first],
 };

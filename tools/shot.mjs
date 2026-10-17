@@ -1,7 +1,7 @@
 // Screenshots of the dev harness with your local Chrome:
 //   node tools/shot.mjs "<query string>" <out.png> [width] [height] [scale]
 // e.g. node tools/shot.mjs "theme=night&floor=0" /tmp/a.png 1280 800
-// Prints the page's console errors and the frame rate it reached.
+// Prints the page's console errors and the frame rate it reached. EVAL=<js> runs code first.
 import { chromium } from "../frontend/node_modules/playwright-core/index.mjs";
 
 const [query = "", out = "shot.png", w = "1280", h = "800", scale = "1"] = process.argv.slice(2);
@@ -16,6 +16,8 @@ page.on("console", (m) => (m.type() === "error" || m.type() === "warning") && lo
 page.on("pageerror", (e) => logs.push(`pageerror: ${e.message}`));
 await page.goto(`http://127.0.0.1:5173/?${query}`);
 await page.evaluate(() => new Promise((r) => (window.vh ? r() : window.addEventListener("virtuhome-ready", r, { once: true }))));
+// EVAL="vh.viewer.selectRoom(0, 2)" runs code on the page before the picture
+if (process.env.EVAL) await page.evaluate(process.env.EVAL);
 await page.waitForTimeout(Number(process.env.WAIT ?? 1800));
 const info = await page.evaluate(() => {
   const gl = document.createElement("canvas").getContext("webgl2");

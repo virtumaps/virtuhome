@@ -7,7 +7,10 @@
 
 export type Vec2 = [number, number];
 
-export type FloorMaterial = "wood" | "oak" | "tiles" | "carpet" | "stone" | "concrete";
+import type { ExteriorFinish, FloorFinish, Upholstery, WallFinish } from "../scene/finishes";
+
+export type FloorMaterial = FloorFinish;
+export type { ExteriorFinish, FloorFinish, Upholstery, WallFinish };
 export type OpeningKind = "door" | "window" | "passage" | "garage";
 export type Mount = "ceiling" | "wall" | "floor" | "table";
 export type ThemeName = "auto" | "night" | "day";
@@ -19,6 +22,9 @@ export interface Room {
   area_id: string | null;
   points: Vec2[];
   floor?: FloorMaterial;
+  /** Inside face of the room's walls: a finish and, for paint-like finishes, a colour ("#rrggbb"). */
+  wall_finish?: WallFinish;
+  wall_color?: string | null;
   /** Sensors for the room's climate label (null = picked automatically from the area). */
   temperature?: string | null;
   humidity?: string | null;
@@ -61,7 +67,12 @@ export interface Furniture {
   y?: number;
   /** Linked entity: a TV's media player, a lamp's light, a washer's power switch. */
   entity?: string | null;
+  /** Main colour ("#rrggbb"): the upholstery, else the wood or the body. */
   color?: string | null;
+  /** Upholstered pieces: fabric, linen, velvet, bouclé or leather. */
+  finish?: Upholstery | null;
+  /** Mirrored left to right (which side a corner sofa's chaise is on). */
+  mirror?: boolean;
 }
 
 export interface Device {
@@ -114,6 +125,9 @@ export interface Floor {
   walls: FreeWall[];
   /** Garden areas (usually on the ground floor only). */
   outdoor?: OutdoorArea[];
+  /** This storey's outside walls, when they differ from the house's (e.g. cladding upstairs). */
+  exterior_finish?: ExteriorFinish | null;
+  exterior_color?: string | null;
 }
 
 export interface PlanSettings {
@@ -123,6 +137,9 @@ export interface PlanSettings {
   /** Degrees the plan is turned from north (0 = up the plan is north). */
   north: number;
   theme: ThemeName;
+  /** Outside walls: brick, render, cladding... and a colour for paintable finishes. */
+  exterior_finish: ExteriorFinish;
+  exterior_color?: string | null;
 }
 
 export interface Plan {
@@ -137,6 +154,7 @@ export const DEFAULT_SETTINGS: PlanSettings = {
   wall_interior: 0.12,
   north: 0,
   theme: "auto",
+  exterior_finish: "render",
 };
 
 export function emptyPlan(): Plan {
@@ -150,7 +168,7 @@ export function normalizePlan(raw: unknown): Plan {
   const floors = (p.floors ?? []).map((f) => ({
     ...f,
     ha_floor: f.ha_floor ?? null,
-    rooms: (f.rooms ?? []).map((r) => ({ ...r, area_id: r.area_id ?? null, floor: r.floor ?? "wood" })),
+    rooms: (f.rooms ?? []).map((r) => ({ ...r, area_id: r.area_id ?? null, floor: r.floor ?? "wood", wall_finish: r.wall_finish ?? "paint" })),
     openings: (f.openings ?? []).map((o) => ({ hinge: "left" as const, swing: "in" as const, ...o })),
     furniture: f.furniture ?? [],
     devices: f.devices ?? [],

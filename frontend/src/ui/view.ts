@@ -1,10 +1,11 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiWallSconceFlat, mdiWeatherNight, mdiWeatherSunny, mdiClose, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiWallSconceFlat, mdiWeatherNight, mdiWeatherSunny, mdiClose, mdiTune, mdiCheck, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
 import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
 import { HassLive, toggleEntity, type Change } from "../live/live";
 import { loadExtensions, registerView, type ViewHandle } from "../ext/api";
-import { Viewer, type Hit, type Quality, type WallMode } from "../scene/viewer";
+import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
+import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { VIEW_CSS } from "./styles";
 
 export interface ViewConfig {
@@ -29,6 +30,12 @@ export interface ViewConfig {
 }
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+
+let realisticModule: RealisticModule | null = null;
+/** The realistic look's code, fetched the first time a view needs it. */
+function loadRealistic(): Promise<RealisticModule> {
+  return realisticModule ? Promise.resolve(realisticModule) : import("../scene/realistic").then((m) => (realisticModule = m));
+}
 
 export class VhView {
   readonly root: HTMLDivElement;
@@ -58,6 +65,9 @@ export class VhView {
   private toastTimer = 0;
   private statsTimer = 0;
   private started = false;
+  /** The tier was picked automatically (it may step down when the device struggles). */
+  private tierAuto = true;
+  private menu: HTMLDivElement;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
@@ -72,7 +82,9 @@ export class VhView {
         <button class="vh-icon" data-act="walls" title="Walls">${svg(mdiWallSconceFlat)}</button>
         <button class="vh-icon" data-act="theme" title="Day / night">${svg(mdiWeatherNight)}</button>
         <button class="vh-icon" data-act="frame" title="Show all">${svg(mdiArrowExpandAll)}</button>
+        <button class="vh-icon" data-act="graphics" title="Graphics">${svg(mdiTune)}</button>
       </div>
+      <div class="vh-menu" hidden></div>
       <div class="vh-sheet"></div>
       <div class="vh-empty" hidden></div>
       <div class="vh-toast"></div>
@@ -87,8 +99,13 @@ export class VhView {
     this.statsEl = this.root.querySelector(".vh-stats")!;
     this.wallsBtn = this.root.querySelector('[data-act="walls"]')!;
     this.themeBtn = this.root.querySelector('[data-act="theme"]')!;
+    this.menu = this.root.querySelector(".vh-menu")!;
 
-    this.viewer = new Viewer(canvas, overlay, { quality: config.quality ?? "auto", theme: "night" });
+    const { tier, auto } = resolveTier(parseTierSetting(config.quality));
+    this.tierAuto = auto;
+    this.viewer = new Viewer(canvas, overlay, { tier, theme: "night", realistic: realisticModule });
+    this.viewer.onSlow = () => this.onSlow();
+    this.ensureLook();
     this.viewer.walls = config.walls ?? "smart";
     this.live = new HassLive(normalizePlan({ version: 1, floors: [] }));
     this.viewer.onHit = (hit, gesture) => this.onHit(hit, gesture);
@@ -106,11 +123,19 @@ export class VhView {
       if (act === "walls") this.cycleWalls();
       if (act === "theme") this.cycleTheme();
       if (act === "frame") this.viewer.frame(true);
+      if (act === "graphics") this.toggleGraphicsMenu();
+    });
+    this.menu.addEventListener("click", (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>("[data-tier]")?.dataset.tier;
+      if (t) this.setGraphics(t as TierSetting);
+    });
+    this.root.addEventListener("pointerdown", (e) => {
+      if (!this.menu.hidden && !(e.target as HTMLElement).closest(".vh-menu, [data-act=graphics]")) this.menu.hidden = true;
     });
     if (config.stats) {
       this.statsEl.hidden = false;
       this.statsTimer = window.setInterval(() => {
-        this.statsEl.textContent = `${this.viewer.fps.toFixed(0)} fps${this.viewer.low ? " · tablet" : ""}`;
+        this.statsEl.textContent = `${this.viewer.fps.toFixed(0)} fps · ${TIER_NAMES[this.viewer.tier]}`;
       }, 1000);
     }
     this.updateWallsButton();
@@ -124,6 +149,8 @@ export class VhView {
     this.subscribe();
     const changes = this.live.update(h);
     this.applyTheme();
+    const sun = h.states["sun.sun"]?.attributes;
+    if (sun && typeof sun.azimuth === "number" && typeof sun.elevation === "number") this.viewer.setSun(sun.azimuth, sun.elevation);
     if (this.plan && this.plan.floors.length) this.apply(changes);
     this.updateAlarm(h);
     if (!this.unregister) {
@@ -330,6 +357,60 @@ export class VhView {
     this.themeOverride = this.themeName() === "night" ? "day" : "night";
     this.applyTheme();
     this.toast(this.themeOverride === "night" ? "Night look" : "Day look");
+  }
+
+  // ------------------------------------------------------------------ graphics
+
+  /** Fetches the realistic look when the tier needs it (the view shows the model look meanwhile). */
+  private ensureLook(): void {
+    const t = this.viewer.tier;
+    if ((t === "high" || t === "ultra") && !this.viewer.realisticLook) {
+      loadRealistic()
+        .then((m) => this.viewer.setTier(this.viewer.tier, m))
+        .catch((err) => {
+          console.warn("VirtuHome: realistic look unavailable", err);
+          this.viewer.setTier("medium");
+        });
+    }
+  }
+
+  private setGraphics(choice: TierSetting): void {
+    setDeviceTier(choice);
+    const { tier, auto } = resolveTier(parseTierSetting(this.config.quality));
+    this.tierAuto = auto;
+    this.menu.hidden = true;
+    this.viewer.setTier(tier);
+    this.ensureLook();
+    this.toast(`Graphics: ${TIER_NAMES[tier]}${auto ? " (auto)" : ""}`);
+  }
+
+  private toggleGraphicsMenu(): void {
+    if (!this.menu.hidden) {
+      this.menu.hidden = true;
+      return;
+    }
+    const picked = deviceTier();
+    const autoTier = resolveTier(parseTierSetting(this.config.quality));
+    const row = (value: TierSetting, name: string, hint: string) =>
+      `<button class="vh-menu-row${picked === value ? " on" : ""}" data-tier="${value}">
+        <span class="tick">${picked === value ? svg(mdiCheck) : ""}</span>
+        <span><b>${name}</b><small>${hint}</small></span></button>`;
+    const autoName = parseTierSetting(this.config.quality) !== "auto" ? `card setting: ${TIER_NAMES[autoTier.tier]}` : TIER_NAMES[autoTier.tier];
+    this.menu.innerHTML = `<div class="vh-menu-title">Graphics on this device</div>` +
+      row("auto", "Automatic", autoName) +
+      TIERS.map((t: Tier) => row(t, TIER_NAMES[t], TIER_HINTS[t])).join("");
+    this.menu.hidden = false;
+  }
+
+  /** The device can't keep up: step down a tier (only when the tier was picked automatically). */
+  private onSlow(): void {
+    if (!this.tierAuto) return;
+    const i = TIERS.indexOf(this.viewer.tier);
+    if (i <= 0) return;
+    const next = TIERS[i - 1];
+    capTier(next);
+    this.viewer.setTier(next);
+    this.toast(`Switched to ${TIER_NAMES[next]} graphics to keep it smooth`);
   }
 
   private cycleWalls(): void {

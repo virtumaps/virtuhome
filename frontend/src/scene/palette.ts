@@ -1,6 +1,5 @@
 // Colours of the two looks. Day is a soft architectural model, Night a dark house where the
 // lights carry the picture. Colours are sRGB hex; the mesh builder converts them to linear.
-import type { FloorMaterial } from "../model/plan";
 import type { Role } from "./furniture-lib";
 
 export interface Palette {
@@ -8,7 +7,6 @@ export interface Palette {
   outdoor: Record<import("../model/plan").OutdoorKind, number>;
   background: number;
   ground: number;
-  floors: Record<FloorMaterial, number>;
   wallInner: number;
   wallOuter: number;
   wallCap: number;
@@ -47,6 +45,15 @@ const DAY_ROLES: Record<Role, number> = {
   rug: 0xc8b9a6,
   mattress: 0xf4f1ec,
   bulb: 0xf3ead8,
+  leaf: 0x4f7f45,
+  soil: 0x4e3c2e,
+  red: 0xb5483b,
+  blue: 0x4a6fa5,
+  paper: 0xece7dc,
+  canvas: 0xd9c3a0,
+  mirror: 0xcfdde6,
+  water: 0x6fb3c9,
+  rubber: 0x2b2c2f,
 };
 
 export const DAY: Palette = {
@@ -54,7 +61,6 @@ export const DAY: Palette = {
   outdoor: { lawn: 0x9cc27a, patio: 0xc9c2b5, deck: 0xb58a62, path: 0xbab3a6, driveway: 0x9a9a9a, bed: 0x7b5e45, gravel: 0xcfc8bb },
   background: 0xe9edf1,
   ground: 0xd8dfd3,
-  floors: { wood: 0xd8b98f, oak: 0xc9a275, tiles: 0xdadbd8, carpet: 0xb9b2a8, stone: 0xb7b3ab, concrete: 0xbdbdbd },
   wallInner: 0xf4f2ee,
   wallOuter: 0xe6dccf,
   wallCap: 0x5c5f66,
@@ -74,7 +80,6 @@ export const NIGHT: Palette = {
   outdoor: { lawn: 0x41603a, patio: 0x6e6a63, deck: 0x6a5240, path: 0x66625b, driveway: 0x55575b, bed: 0x4a3a2c, gravel: 0x6f6b64 },
   background: 0x0c1220,
   ground: 0x141c2c,
-  floors: { wood: 0x8a7458, oak: 0x80684d, tiles: 0x8b8e93, carpet: 0x77716a, stone: 0x77746f, concrete: 0x7b7d80 },
   wallInner: 0x9aa3b2,
   wallOuter: 0x6e7787,
   wallCap: 0x2b3240,
@@ -88,6 +93,21 @@ export const NIGHT: Palette = {
   text: 0xe8eef8,
   accent: 0x56c7ff,
 };
+
+/**
+ * A day colour as the night look shows it (custom paint, finishes): about two thirds as bright,
+ * cooler, darker still outside.
+ */
+export function nightify(hex: number, outside = false): number {
+  const r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255;
+  const k = outside ? [0.44, 0.48, 0.52] : [0.63, 0.66, 0.74];
+  return (Math.round(r * k[0]) << 16) | (Math.round(g * k[1]) << 8) | Math.round(b * k[2]);
+}
+
+/** A palette's version of a day colour. */
+export function inPalette(pal: Palette, hex: number, outside = false): number {
+  return pal.name === "night" ? nightify(hex, outside) : hex;
+}
 
 export function paletteFor(name: "day" | "night"): Palette {
   return name === "night" ? NIGHT : DAY;

@@ -2,19 +2,24 @@
 // into a couple of meshes, and lights them on the CPU.
 import {
   Color, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer,
-  CircleGeometry, BufferGeometry, BufferAttribute,
+  CircleGeometry, BufferGeometry, BufferAttribute, type Material,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
 import { buildFloor, lin, SLAB, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { Geo, type V3 } from "./geo";
-import { relight, roomGlow, roomLights, type LampState, type LightingState } from "./lighting";
+import { relight, relightRealistic, roomGlow, roomLights, type LampState, type LightingState } from "./lighting";
 import { Halos, Markers, type HaloSpec, type MarkerSpec } from "./markers";
 import { floorUniforms, getCut, glassMaterial, opaqueMaterial, setCut, setTint, type FloorUniforms } from "./materials";
-import { paletteFor, type Palette } from "./palette";
+import { DAY, paletteFor, type Palette } from "./palette";
+import type { RealisticLook } from "./realistic";
+import type { Tier, TierSetting } from "./tier";
 
+export { detectLowEnd } from "./tier";
 export type WallMode = "smart" | "low" | "full";
-export type Quality = "auto" | "low" | "high";
+export type Quality = TierSetting;
+/** The realistic look's module, loaded on demand. */
+export type RealisticModule = typeof import("./realistic");
 
 export interface MarkerLook {
   icon: number;
@@ -76,21 +81,12 @@ const DOOR_OPEN = (82 * Math.PI) / 180;
 const DOOR_UNKNOWN = (28 * Math.PI) / 180;
 const EXPLODE_GAP = 2.2;
 
-export function detectLowEnd(): boolean {
-  const nav = navigator as Navigator & { deviceMemory?: number };
-  return (
-    /Silk|KF[A-Z]{2,4}\b|; KF|Android [5-9]\b/.test(navigator.userAgent) ||
-    (nav.deviceMemory !== undefined && nav.deviceMemory <= 3) ||
-    (navigator.hardwareConcurrency || 8) <= 4
-  );
-}
-
 export class Viewer {
-  readonly renderer: WebGLRenderer;
+  renderer: WebGLRenderer;
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(38, 1, 0.1, 400);
   readonly controls: OrbitControls;
-  readonly low: boolean;
+  tier: Tier;
   plan: Plan | null = null;
   pal: Palette;
   mode: "house" | "floor" = "house";
@@ -107,6 +103,8 @@ export class Viewer {
   onDrag: ((hit: Hit, x: number, z: number, phase: DragPhase) => void) | null = null;
   /** Extra markers drawn on top (the editor's selection). */
   overlayMarkers: MarkerSpec[] = [];
+  /** Called once when moving the view stays slow (under ~22 frames per second). */
+  onSlow: (() => void) | null = null;
 
   private floors: FloorView[] = [];
   private markers: Markers;
@@ -126,21 +124,20 @@ export class Viewer {
   private disposed = false;
   private stats = { frames: 0, last: 0, fps: 0, ms: 0 };
   private lastPulseCheck = 0;
+  private look: RealisticLook | null = null;
+  private realistic: RealisticModule | null;
+  private basicGround = new MeshBasicMaterial({ color: 0xffffff });
+  /** Something moved in the scene (not just the camera): shadows need redrawing. */
+  private sceneChanged = true;
+  private sun: { azimuth: number | null; elevation: number | null } = { azimuth: null, elevation: null };
+  private slowWatch = { frames: 0, time: 0, fired: false };
 
-  constructor(private container: HTMLElement, private overlay: HTMLElement, opts: { quality?: Quality; theme?: "day" | "night" } = {}) {
-    this.low = opts.quality === "low" || (opts.quality !== "high" && detectLowEnd());
+  constructor(private container: HTMLElement, private overlay: HTMLElement, opts: { tier: Tier; realistic?: RealisticModule | null; theme?: "day" | "night" }) {
+    this.tier = opts.tier;
+    this.realistic = opts.realistic ?? null;
     this.pal = paletteFor(opts.theme ?? "night");
-    this.renderer = new WebGLRenderer({
-      antialias: !this.low,
-      powerPreference: this.low ? "low-power" : "default",
-      alpha: false,
-      stencil: false,
-    });
     this.pixelRatio = Math.min(window.devicePixelRatio || 1, this.low ? 1 : 2);
-    this.renderer.setPixelRatio(this.pixelRatio);
-    this.renderer.domElement.style.display = "block";
-    this.renderer.domElement.style.touchAction = "none";
-    container.appendChild(this.renderer.domElement);
+    this.renderer = this.createRenderer();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -155,9 +152,10 @@ export class Viewer {
 
     this.markers = new Markers(this.pixelRatio);
     this.halos = new Halos();
-    this.ground = new Mesh(new CircleGeometry(1, 48), new MeshBasicMaterial({ color: 0xffffff }));
+    this.ground = new Mesh(new CircleGeometry(1, 64), this.basicGround);
     this.ground.rotation.x = -Math.PI / 2;
     this.scene.add(this.ground, this.halos.mesh, this.markers.mesh);
+    this.setupLook();
     this.applyPalette();
 
     this.resizeObs = new ResizeObserver(() => this.resize());
@@ -168,10 +166,83 @@ export class Viewer {
     });
     this.interObs.observe(container);
     document.addEventListener("visibilitychange", this.onVisibility);
-    this.renderer.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
-    this.renderer.domElement.addEventListener("webglcontextrestored", () => this.plan && this.setPlan(this.plan, true));
     this.bindPointer();
     this.resize();
+  }
+
+  /** Fire-class tablets: the cheapest way of drawing everything. */
+  get low(): boolean {
+    return this.tier === "low";
+  }
+
+  get realisticLook(): boolean {
+    return this.look !== null;
+  }
+
+  private createRenderer(): WebGLRenderer {
+    const r = new WebGLRenderer({
+      // Ultra antialiases in its own multisampled buffer
+      antialias: this.tier === "medium" || this.tier === "high",
+      powerPreference: this.low ? "low-power" : this.tier === "medium" ? "default" : "high-performance",
+      alpha: false,
+      stencil: false,
+    });
+    r.setPixelRatio(this.pixelRatio);
+    r.domElement.style.display = "block";
+    r.domElement.style.touchAction = "none";
+    r.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
+    r.domElement.addEventListener("webglcontextrestored", () => this.plan && this.setPlan(this.plan, true));
+    this.container.appendChild(r.domElement);
+    return r;
+  }
+
+  private setupLook(): void {
+    const wantsLook = (this.tier === "high" || this.tier === "ultra") && this.realistic;
+    this.look = wantsLook ? new this.realistic!.RealisticLook(this.renderer, this.scene, this.camera, this.tier === "ultra") : null;
+    if (this.look) {
+      this.ground.material = this.look.groundMaterial;
+      this.look.attachGround(this.ground);
+      this.look.setSun(this.sun.azimuth, this.sun.elevation, this.plan?.settings.north ?? 0);
+    } else {
+      this.ground.material = this.basicGround;
+      this.ground.receiveShadow = false;
+    }
+  }
+
+  /** Switches to another tier: a new renderer (antialiasing is fixed per renderer), same view. */
+  setTier(tier: Tier, realistic?: RealisticModule | null): void {
+    if (realistic) this.realistic = realistic;
+    const wantsLook = (tier === "high" || tier === "ultra") && !!this.realistic;
+    const sameRenderer = tier === this.tier;
+    if (sameRenderer && wantsLook === !!this.look) return;
+    for (const f of this.floors) this.disposeFloor(f);
+    this.floors = [];
+    this.look?.dispose();
+    this.look = null;
+    this.tier = tier;
+    this.slowWatch = { frames: 0, time: 0, fired: false };
+    if (!sameRenderer) {
+      this.controls.disconnect();
+      this.renderer.dispose();
+      this.renderer.domElement.remove();
+      this.renderer = this.createRenderer();
+      this.controls.connect(this.renderer.domElement);
+    }
+    this.setupLook();
+    this.applyPalette();
+    this.width = this.height = 0;
+    this.resize();
+    if (this.plan) this.setPlan(this.plan, true);
+  }
+
+  /** Where the sun is (degrees), for the realistic look's daylight and shadows. */
+  setSun(azimuth: number | null, elevation: number | null): void {
+    if (azimuth === this.sun.azimuth && elevation === this.sun.elevation) return;
+    this.sun = { azimuth, elevation };
+    if (this.look) {
+      this.look.setSun(azimuth, elevation, this.plan?.settings.north ?? 0);
+      this.invalidate();
+    }
   }
 
   // ------------------------------------------------------------------ plan and looks
@@ -200,20 +271,34 @@ export class Viewer {
   }
 
   private applyPalette(): void {
-    this.scene.background = new Color(this.pal.background);
-    (this.ground.material as MeshBasicMaterial).color.setHex(this.pal.ground);
+    this.basicGround.color.setHex(this.pal.ground);
+    if (this.look) this.look.setNight(this.pal.name === "night");
+    else {
+      this.scene.background = new Color(this.pal.background);
+      this.scene.fog = null;
+    }
   }
 
   private makeFloor(i: number): FloorView {
-    const fb = buildFloor(this.plan!, i, this.pal, { low: this.low });
+    // the realistic look lights true colours; the model look bakes the palette's mood into them
+    const fb = buildFloor(this.plan!, i, this.look ? DAY : this.pal, { low: this.low });
     const u = floorUniforms();
-    u.uCutColor.value.setHex(this.pal.wallCut);
+    u.uCutColor.value.setHex(this.look ? 0x2c2f34 : this.pal.wallCut);
     u.uCutY.value = fb.floor.elevation + this.cutHeight;
-    const opaque = new Mesh(fb.opaque.toBufferGeometry(), opaqueMaterial(u));
-    const glass = new Mesh(fb.glass.toBufferGeometry(), glassMaterial(u));
-    glass.renderOrder = 2;
     const dynGeo = new Geo();
-    const dyn = new Mesh(new BufferGeometry(), opaqueMaterial(u));
+    let opaque: Mesh, glass: Mesh, dyn: Mesh;
+    if (this.look) {
+      opaque = new Mesh(this.look.geometry(fb.opaque), this.look.materials(fb.opaque, u));
+      glass = new Mesh(this.look.geometry(fb.glass), this.look.glassMaterial(fb.glass, u));
+      dyn = new Mesh(new BufferGeometry(), [] as Material[]);
+      this.look.attach(opaque, u, true);
+      this.look.attach(dyn, u, true);
+    } else {
+      opaque = new Mesh(fb.opaque.toBufferGeometry(), opaqueMaterial(u));
+      glass = new Mesh(fb.glass.toBufferGeometry(), glassMaterial(u));
+      dyn = new Mesh(new BufferGeometry(), opaqueMaterial(u));
+    }
+    glass.renderOrder = 2;
     const group = new Group();
     group.add(opaque, dyn, glass);
     this.scene.add(group);
@@ -234,8 +319,10 @@ export class Viewer {
     this.scene.remove(f.group);
     for (const m of [f.opaque, f.glass, f.dyn]) {
       m.geometry.dispose();
-      (m.material as MeshBasicMaterial).dispose();
+      if (this.look) this.look.detach(m);
+      else (m.material as Material).dispose();
     }
+    this.look?.releaseFloor(f.u);
     for (const l of f.labels) l.remove();
   }
 
@@ -298,10 +385,19 @@ export class Viewer {
     const groundY = (this.floors[0]?.fb.floor.elevation ?? 0) - SLAB - 0.01;
     this.ground.position.y = groundY;
     const b = this.planBounds();
-    const r = Math.max(b.maxX - b.minX, b.maxZ - b.minZ, 6) * 2.4;
+    // the realistic look fades the ground into the fog far away; the model look keeps a disc
+    const r = Math.max(b.maxX - b.minX, b.maxZ - b.minZ, 6) * (this.look ? 9 : 2.4);
     this.ground.scale.set(r, r, 1);
     this.ground.position.x = (b.minX + b.maxX) / 2;
     this.ground.position.z = (b.minZ + b.maxZ) / 2;
+    if (this.look) {
+      // the shadow covers the house as stacked now, garden included
+      const visible = this.floors.filter((f) => f.group.visible);
+      const top = visible.reduce((m, f) => Math.max(m, f.fb.floor.elevation + f.offset + f.fb.floor.height), 3);
+      const half = Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ) / 2 + 2;
+      this.look.fit(new Vector3((b.minX + b.maxX) / 2, (groundY + top) / 2, (b.minZ + b.maxZ) / 2), Math.max(half, (top - groundY) / 2 + 2));
+    }
+    this.sceneChanged = true;
     this.updateCutTargets(true);
   }
 
@@ -421,12 +517,7 @@ export class Viewer {
       const st = this.lightingFor(f);
       const lights = roomLights(f.fb, this.pal, st);
       f.roomGlow = roomGlow(lights);
-      const fill = (mesh: Mesh, geo: Geo) => {
-        const attr = mesh.geometry.getAttribute("color") as BufferAttribute | undefined;
-        if (!attr || attr.count !== geo.vertexCount) return;
-        relight(geo, attr.array as Float32Array, lights, st, this.pal);
-        attr.needsUpdate = true;
-      };
+      const fill = (mesh: Mesh, geo: Geo) => this.fillLight(f, mesh, geo, lights, st);
       fill(f.opaque, f.fb.opaque);
       fill(f.glass, f.fb.glass);
       fill(f.dyn, f.dynGeo);
@@ -435,7 +526,8 @@ export class Viewer {
         const s = st.lamp(lamp);
         if (!s?.on || s.level <= 0) continue;
         if (this.pal.name === "day") continue; // by day a halo reads as haze, not light
-        const k = 0.55 * (0.4 + 0.6 * s.level);
+        // Ultra's bloom already makes lit shades glow
+        const k = 0.55 * (0.4 + 0.6 * s.level) * (this.tier === "ultra" ? 0.45 : 1);
         halos.push({
           pos: [lamp.pos[0], lamp.pos[1] + f.offset - 0.05, lamp.pos[2]],
           rgb: [s.rgb[0] * k, s.rgb[1] * k, s.rgb[2] * k],
@@ -445,6 +537,29 @@ export class Viewer {
     }
     this.halos.set(this.low ? halos.slice(0, 24) : halos);
     this.invalidate();
+  }
+
+  /** Writes a mesh's lighting: lit colours (model look) or lamp light and glow (realistic). */
+  private fillLight(f: FloorView, mesh: Mesh, geo: Geo, lights: ReturnType<typeof roomLights>, st: LightingState): void {
+    if (this.look) {
+      const lamp = mesh.geometry.getAttribute("aLamp") as BufferAttribute | undefined;
+      const emis = mesh.geometry.getAttribute("aEmis") as BufferAttribute | undefined;
+      if (!lamp || !emis || lamp.count !== geo.vertexCount) return;
+      const night = this.pal.name === "night";
+      relightRealistic(geo, lamp.array as Float32Array, emis.array as Float32Array, lights, st, (slot) => {
+        const kind = f.fb.glows[slot]?.kind;
+        if (kind === "lamp") return night ? 1.8 : 1.0;
+        if (kind === "window") return 0.9;
+        return 0.8;
+      });
+      lamp.needsUpdate = true;
+      emis.needsUpdate = true;
+      return;
+    }
+    const attr = mesh.geometry.getAttribute("color") as BufferAttribute | undefined;
+    if (!attr || attr.count !== geo.vertexCount) return;
+    relight(geo, attr.array as Float32Array, lights, st, this.pal);
+    attr.needsUpdate = true;
   }
 
   /** Doors swing to their contact's state, blinds move to their cover's position. */
@@ -469,7 +584,9 @@ export class Viewer {
 
   private rebuildDynamic(f: FloorView): void {
     const g = new Geo();
-    const wood = lin(this.pal.roles.white);
+    g.uvY0 = f.fb.floor.elevation;
+    g.useSurface("door");
+    const wood = lin((this.look ? DAY : this.pal).roles.white);
     const y0 = f.fb.floor.elevation;
     f.fb.doors.forEach((d, i) => {
       const a = f.doorAngle[i];
@@ -505,20 +622,26 @@ export class Viewer {
       const half = w.width / 2 + 0.06;
       const top = y0 + w.top + 0.06;
       const bot = y0 + Math.min(w.top, yb);
-      const fabric = lin(this.pal.roles.fabric);
+      g.useSurface("blind");
+      const fabric = lin((this.look ? DAY : this.pal).roles.fabric);
       const slot = w.wallSlot >= 0 ? w.wallSlot * 2 : -1;
       g.quad(P(-half, bot), P(half, bot), P(half, top), P(-half, top), [w.normal[0], 0, w.normal[1]], fabric, w.room, slot, -1, 2, 2);
       g.quad(P(half, bot), P(-half, bot), P(-half, top), P(half, top), [-w.normal[0], 0, -w.normal[1]], fabric, w.room, slot, -1, 2, 2);
     });
     f.dynGeo = g;
     const old = f.dyn.geometry;
-    f.dyn.geometry = g.vertexCount ? g.toBufferGeometry() : new BufferGeometry();
+    if (this.look) {
+      f.dyn.geometry = g.vertexCount ? this.look.geometry(g) : new BufferGeometry();
+      f.dyn.material = this.look.materials(g, f.u);
+    } else {
+      f.dyn.geometry = g.vertexCount ? g.toBufferGeometry() : new BufferGeometry();
+    }
     old.dispose();
     if (this.live && g.vertexCount) {
       const st = this.lightingFor(f);
-      const attr = f.dyn.geometry.getAttribute("color") as BufferAttribute;
-      relight(g, attr.array as Float32Array, roomLights(f.fb, this.pal, st), st, this.pal);
+      this.fillLight(f, f.dyn, g, roomLights(f.fb, this.pal, st), st);
     }
+    this.sceneChanged = true;
   }
 
   refreshMarkers(): void {
@@ -731,14 +854,21 @@ export class Viewer {
     // damping keeps the camera gliding after a swipe; update() says whether it still moves
     const moved = this.controls.update(dt);
     if (moved || this.flight) this.updateCutTargets();
-    if (this.animate(dt)) again = true;
+    if (this.animate(dt)) {
+      again = true;
+      this.sceneChanged = true;
+    }
     if (moved) again = true;
     const pulsing = this.markers.pulsing;
     if (pulsing) this.markers.setTime(now / 1000);
 
     if ((this.dirty || again || pulsing) && this.visible && !document.hidden) {
       const t0 = performance.now();
-      this.renderer.render(this.scene, this.camera);
+      if (this.look) {
+        if (this.sceneChanged) this.look.markShadows();
+        this.look.render();
+      } else this.renderer.render(this.scene, this.camera);
+      this.sceneChanged = false;
       this.positionLabels();
       this.onFrame?.();
       this.dirty = false;
@@ -751,6 +881,7 @@ export class Viewer {
         s.last = now;
       }
     }
+    this.watchSpeed(again, dt);
     // one pending frame at most: OrbitControls' change event may already have asked for it
     if (again) {
       if (!this.raf) this.raf = requestAnimationFrame(this.tick);
@@ -770,21 +901,44 @@ export class Viewer {
     return this.stats.fps;
   }
 
+  /** Tells onSlow once when two seconds of continuous movement averaged under ~22 frames per second. */
+  private watchSpeed(moving: boolean, dt: number): void {
+    const w = this.slowWatch;
+    if (w.fired || !this.onSlow) return;
+    if (!moving || !this.visible || document.hidden) {
+      w.frames = 0;
+      w.time = 0;
+      return;
+    }
+    w.frames++;
+    w.time += dt;
+    if (w.time > 2 && w.frames > 10) {
+      if (w.time / w.frames > 0.045) {
+        w.fired = true;
+        this.onSlow();
+      }
+      w.frames = 0;
+      w.time = 0;
+    }
+  }
+
   private resize(): void {
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
     if (w === this.width && h === this.height) return;
     this.width = w;
     this.height = h;
-    // a large Retina window needs no 4+ million pixels for this look: about 2.5 million is plenty
+    // a large Retina window needs no 4+ million pixels for the model look: about 2.5 million is plenty
     const want = Math.min(window.devicePixelRatio || 1, this.low ? 1 : 2);
-    const cap = Math.sqrt(2_500_000 / (w * h));
+    const budget = this.tier === "ultra" ? 4_000_000 : this.tier === "high" ? 3_000_000 : 2_500_000;
+    const cap = Math.sqrt(budget / (w * h));
     const ratio = Math.max(1, Math.min(want, cap));
     if (Math.abs(ratio - this.pixelRatio) > 0.01) {
       this.pixelRatio = ratio;
       this.renderer.setPixelRatio(ratio);
     }
     this.renderer.setSize(w, h, true);
+    this.look?.setSize(w, h, this.pixelRatio);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.markers.setViewport(w, h, this.pixelRatio);
@@ -798,7 +952,8 @@ export class Viewer {
   // ------------------------------------------------------------------ picking
 
   private bindPointer(): void {
-    const el = this.renderer.domElement;
+    // on the container: the canvas is replaced when the tier changes
+    const el = this.container;
     let down: { x: number; y: number; t: number; id: number } | null = null;
     let longTimer = 0;
     let longFired = false;
@@ -995,6 +1150,7 @@ export class Viewer {
     this.interObs.disconnect();
     document.removeEventListener("visibilitychange", this.onVisibility);
     for (const f of this.floors) this.disposeFloor(f);
+    this.look?.dispose();
     this.markers.dispose();
     this.halos.dispose();
     this.controls.dispose();

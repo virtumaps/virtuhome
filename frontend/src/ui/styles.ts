@@ -78,5 +78,21 @@ export const VIEW_CSS = /* css */ `
 .vh-alarm.armed { box-shadow: inset 0 0 0 1.5px #2bb673; }
 .vh-alarm.alert { background: rgba(229,72,77,0.85); color: #fff; animation: vh-pulse 1s ease-in-out infinite alternate; }
 @keyframes vh-pulse { from { opacity: 1; } to { opacity: 0.6; } }
+.vh-menu {
+  position: absolute; right: 60px; bottom: 12px; width: 250px; padding: 6px; border-radius: 16px;
+  background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25); z-index: 3;
+}
+.vh-menu-title { font-size: 12px; color: var(--vh-dim); padding: 6px 10px 4px; }
+.vh-menu-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; color: inherit; font: inherit;
+  text-align: left; padding: 7px 8px; border-radius: 10px; cursor: pointer;
+}
+.vh-menu-row:hover, .vh-menu-row.on { background: var(--vh-chip); }
+.vh-menu-row b { display: block; font-size: 13px; font-weight: 600; }
+.vh-menu-row small { display: block; font-size: 11px; color: var(--vh-dim); }
+.vh-menu-row .tick { width: 18px; height: 18px; flex: none; color: var(--vh-accent); }
+.vh-menu-row .tick svg { width: 18px; height: 18px; fill: currentColor; }
+@media (min-width: 601px) { .vh-root.editing .vh-menu { right: calc(min(380px, 100%) + 60px); } }
 .vh-stats { position: absolute; left: 10px; bottom: 10px; font: 11px/1.3 ui-monospace, monospace; color: var(--vh-dim); pointer-events: none; }
 `;

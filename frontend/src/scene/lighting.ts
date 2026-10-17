@@ -168,3 +168,56 @@ export function kelvinToRgb(k: number): V3 {
 }
 
 const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+
+/**
+ * The realistic look's lighting pass: lamp light per vertex (the GPU adds it to the sky and sun
+ * light it computes itself) and the glow of lit shades, screens and windows as emitted light.
+ */
+export function relightRealistic(geo: Geo, lamp: Float32Array, emis: Float32Array, lights: Light[][], st: LightingState, glowGain: (slot: number) => number): void {
+  const pos = geo.pos, nrm = geo.nrm, room = geo.room, glow = geo.glow;
+  const n = geo.vertexCount;
+  const glowCache = new Map<number, V3 | null>();
+  for (let v = 0; v < n; v++) {
+    const i3 = v * 3;
+    const slot = glow[v];
+    emis[i3] = emis[i3 + 1] = emis[i3 + 2] = 0;
+    if (slot >= 0) {
+      let c = glowCache.get(slot);
+      if (c === undefined) {
+        c = st.glow(slot);
+        glowCache.set(slot, c);
+      }
+      if (c) {
+        const k = glowGain(slot);
+        emis[i3] = c[0] * k;
+        emis[i3 + 1] = c[1] * k;
+        emis[i3 + 2] = c[2] * k;
+      }
+    }
+    let lr = 0, lg = 0, lb = 0;
+    const ri = room[v];
+    if (ri >= 0) {
+      const list = lights[ri];
+      if (list && list.length) {
+        const px = pos[i3], py = pos[i3 + 1], pz = pos[i3 + 2];
+        const nx = nrm[i3], ny = nrm[i3 + 1], nz = nrm[i3 + 2];
+        for (let k = 0; k < list.length; k++) {
+          const l = list[k];
+          const dx = l.x - px, dy = l.y - py, dz = l.z - pz;
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 >= l.r2) continue;
+          const q = 1 - d2 / l.r2;
+          const d = Math.sqrt(d2) || 1;
+          const ndl = (dx * nx + dy * ny + dz * nz) / d;
+          const f = q * q * (0.25 + 0.75 * Math.max(0, ndl));
+          lr += l.r * f;
+          lg += l.g * f;
+          lb += l.b * f;
+        }
+      }
+    }
+    lamp[i3] = lr;
+    lamp[i3 + 1] = lg;
+    lamp[i3 + 2] = lb;
+  }
+}

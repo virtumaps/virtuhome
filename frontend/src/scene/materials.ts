@@ -29,7 +29,7 @@ export function floorUniforms(): FloorUniforms {
   };
 }
 
-const VERT_HEAD = /* glsl */ `
+export const VERT_HEAD = /* glsl */ `
 attribute float aRoom;
 attribute float aWall;
 uniform float uCut[${MAX_WALLS}];
@@ -39,7 +39,7 @@ varying vec4 vTint;
 varying float vCapCut;
 `;
 
-const VERT_BODY = /* glsl */ `
+export const VERT_BODY = /* glsl */ `
 vCapCut = 0.0;
 if (aWall >= 0.0) {
   float slot = floor(aWall * 0.5 + 0.01);
@@ -52,14 +52,14 @@ if (aWall >= 0.0) {
 vTint = aRoom >= -0.5 ? uTint[int(aRoom + 0.5)] : vec4(0.0);
 `;
 
-const FRAG_HEAD = /* glsl */ `
+export const FRAG_HEAD = /* glsl */ `
 uniform vec3 uCutColor;
 uniform float uDim;
 varying vec4 vTint;
 varying float vCapCut;
 `;
 
-const FRAG_BODY = /* glsl */ `
+export const FRAG_BODY = /* glsl */ `
 diffuseColor.rgb = mix(diffuseColor.rgb, uCutColor, vCapCut);
 diffuseColor.rgb = mix(diffuseColor.rgb, vTint.rgb, vTint.a);
 diffuseColor.rgb *= uDim;

@@ -8,7 +8,7 @@ const SCHEMA = [
     type: "grid", name: "", schema: [
       { name: "theme", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Auto (day/night by the sun)" }, { value: "day", label: "Day" }, { value: "night", label: "Night" }] } } },
       { name: "walls", selector: { select: { mode: "dropdown", options: [{ value: "smart", label: "Smart cutaway" }, { value: "low", label: "Low" }, { value: "full", label: "Full height" }] } } },
-      { name: "quality", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Auto" }, { value: "low", label: "Tablet" }, { value: "high", label: "High" }] } } },
+      { name: "quality", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Automatic" }, { value: "low", label: "Tablet (fastest)" }, { value: "medium", label: "Standard" }, { value: "high", label: "Realistic" }, { value: "ultra", label: "Ultra" }] } } },
       { name: "height", selector: { number: { min: 200, max: 1600, step: 10, unit_of_measurement: "px", mode: "box" } } },
     ],
   },
@@ -22,7 +22,7 @@ const SCHEMA = [
 
 const LABELS: Record<string, string> = {
   floor: "Open on floor (name, id or number; empty = whole house)",
-  theme: "Look", walls: "Walls", quality: "Quality", height: "Height",
+  theme: "Look", walls: "Walls", quality: "Graphics", height: "Height",
   room_panel: "Tap a room to open it", floor_chips: "Floor buttons", fill: "Fill the screen",
   alarm: "Alarm panel in the top bar",
 };
