@@ -1,8 +1,9 @@
 // Solar, battery and the grid: which sensors tell what (set in the plan, else found from Home
 // Assistant's energy settings), what they read now, how the power flows between them, and today's
-// totals from the recorder's statistics.
+// totals from the recorder's statistics. Car chargers (live/ev.ts) come along as part of the house.
 import type { EnergySettings } from "../model/plan";
-import { domainOf, type Hass, type HassEntity } from "./hass";
+import { chargerEntities, findChargers, readEv, type EvCharger, type EvNow } from "./ev";
+import { domainOf, isPower, kw, type Hass, type HassEntity } from "./hass";
 
 /** The sensors the house's energy is read from. */
 export interface EnergySources {
@@ -19,6 +20,8 @@ export interface EnergySources {
   batteryLevel: string | null;
   priceImport: string | null;
   priceExport: string | null;
+  /** Car chargers (their power is part of the house's). */
+  ev: EvCharger[];
   /** Energy statistics (kWh) of the energy dashboard, for today's totals. */
   stats: EnergyStats;
 }
@@ -29,6 +32,9 @@ export interface EnergyStats {
   gridOut: string[];
   batteryIn: string[];
   batteryOut: string[];
+  /** The chargers' energy, and the power of those without an energy sensor (added up over the day). */
+  ev: string[];
+  evPower: string[];
 }
 
 /** Power between the sources and the house now (kW, all positive). */
@@ -62,6 +68,8 @@ export interface EnergyNow {
   priceImport: Price | null;
   priceExport: Price | null;
   flows: Flows;
+  /** Each charger and its car. */
+  ev: EvNow[];
 }
 
 /** Today's energy (kWh), from midnight. */
@@ -72,6 +80,8 @@ export interface EnergyToday {
   batteryIn: number | null;
   batteryOut: number | null;
   home: number | null;
+  /** Into the cars (part of the house's). */
+  car: number | null;
 }
 
 /** The parts of Home Assistant's energy settings (energy/get_prefs) this reads. */
@@ -84,12 +94,13 @@ export interface EnergyPrefs {
     flow_from?: { stat_energy_from?: string | null; entity_energy_price?: string | null }[];
     flow_to?: { stat_energy_to?: string | null; entity_energy_price?: string | null }[];
   }[];
+  device_consumption?: { stat_consumption?: string | null }[];
 }
 
 const none = (): EnergySources => ({
   solar: [], home: null, battery: null, grid: null, batteryCharge: null, batteryDischarge: null, gridImport: null,
-  gridExport: null, batteryLevel: null, priceImport: null, priceExport: null,
-  stats: { solar: [], gridIn: [], gridOut: [], batteryIn: [], batteryOut: [] },
+  gridExport: null, batteryLevel: null, priceImport: null, priceExport: null, ev: [],
+  stats: { solar: [], gridIn: [], gridOut: [], batteryIn: [], batteryOut: [], ev: [], evPower: [] },
 });
 
 /** Words that say what kind of reading a sensor is, not what it measures. */
@@ -107,9 +118,6 @@ function likeness(a: string, b: string): number {
   const any = A.size + B.size - both;
   return any ? both / any : 0;
 }
-
-const isPower = (s: HassEntity | undefined) =>
-  !!s && domainOf(s.entity_id) === "sensor" && s.attributes.device_class === "power" && /^(m|k|M|G)?W$/.test(String(s.attributes.unit_of_measurement ?? ""));
 
 /** The power sensors of an entity's device (all of them when it has none). */
 function powerSensorsNear(hass: Hass, entityId: string): string[] {
@@ -210,6 +218,12 @@ export function findSources(hass: Hass, prefs: EnergyPrefs | null, set: EnergySe
   // one signed sensor or two one-way ones, not both
   if (src.battery && (src.batteryCharge || src.batteryDischarge)) src.battery = null;
   if (src.grid && (src.gridImport || src.gridExport)) src.grid = null;
+
+  src.ev = findChargers(hass, prefs, set, new Set([src.batteryLevel].filter((x): x is string => !!x)));
+  for (const c of src.ev) {
+    if (c.energy) src.stats.ev.push(c.energy);
+    else if (c.power) src.stats.evPower.push(c.power);
+  }
   return src;
 }
 
@@ -252,17 +266,6 @@ function priceSensor(hass: Hass, exp: boolean): string | null {
     if (/gas|previous|next|standing/.test(id)) return false;
     return /current_rate|current_price|electricity_price/.test(id) && /export|feed_in|outgoing/.test(id) === exp;
   }) ?? null;
-}
-
-/** A power sensor's reading in kW, or null. */
-export function kw(hass: Hass, id: string | null): number | null {
-  const s = id ? hass.states[id] : undefined;
-  if (!s) return null;
-  const v = parseFloat(s.state);
-  if (!isFinite(v)) return null;
-  const unit = String(s.attributes.unit_of_measurement ?? "kW");
-  const k = unit === "W" ? 1e-3 : unit === "mW" ? 1e-6 : unit === "MW" ? 1e3 : unit === "GW" ? 1e6 : 1;
-  return v * k;
 }
 
 function price(hass: Hass, id: string | null): Price | null {
@@ -313,18 +316,19 @@ export function readNow(hass: Hass, src: EnergySources): EnergyNow {
     priceImport: price(hass, src.priceImport),
     priceExport: price(hass, src.priceExport),
     flows: flows(solar ?? 0, battery ?? 0, grid ?? 0),
+    ev: src.ev.map((c) => readEv(hass, c)),
   };
 }
 
 export function hasEnergy(src: EnergySources): boolean {
-  return !!(src.solar.length || src.home || src.battery || src.batteryCharge || src.batteryDischarge || src.grid || src.gridImport || src.gridExport);
+  return !!(src.solar.length || src.home || src.battery || src.batteryCharge || src.batteryDischarge || src.grid || src.gridImport || src.gridExport || src.ev.length);
 }
 
 /** Every entity the readings come from (to spot changes). */
 export function sourceEntities(src: EnergySources): string[] {
   return [
     ...src.solar, src.home, src.battery, src.grid, src.batteryCharge, src.batteryDischarge, src.gridImport,
-    src.gridExport, src.batteryLevel, src.priceImport, src.priceExport,
+    src.gridExport, src.batteryLevel, src.priceImport, src.priceExport, ...src.ev.flatMap(chargerEntities),
   ].filter((x): x is string => !!x);
 }
 
@@ -370,14 +374,34 @@ export async function readToday(hass: Hass, stats: EnergyStats): Promise<EnergyT
     const ok = v.filter((x): x is number => x !== null);
     return ok.length ? ok.reduce((a, b) => a + b, 0) : null;
   };
-  const [solar, gridIn, gridOut, batteryIn, batteryOut] = await Promise.all([
+  // power sensors' five-minute means, added up since midnight
+  const integrate = async (ids: string[]): Promise<number | null> => {
+    if (!ids.length) return null;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    type Row = { start: number | string; end: number | string; mean?: number | null };
+    const r = await hass.callWS<Record<string, Row[]>>({
+      type: "recorder/statistics_during_period", start_time: midnight.toISOString(), statistic_ids: ids, period: "5minute", types: ["mean"], units: { power: "kW" },
+    }).catch(() => null);
+    let kwh = 0, any = false;
+    for (const row of ids.flatMap((id) => r?.[id] ?? [])) {
+      if (typeof row.mean !== "number") continue;
+      const hours = (new Date(row.end).getTime() - new Date(row.start).getTime()) / 3_600_000;
+      kwh += Math.max(0, row.mean) * (hours > 0 && hours < 1 ? hours : 1 / 12);
+      any = true;
+    }
+    return any ? kwh : null;
+  };
+  const [solar, gridIn, gridOut, batteryIn, batteryOut, carStats, carPower] = await Promise.all([
     change(stats.solar), change(stats.gridIn), change(stats.gridOut), change(stats.batteryIn), change(stats.batteryOut),
+    change(stats.ev), integrate(stats.evPower),
   ]);
   const parts = [solar, gridIn, gridOut, batteryIn, batteryOut];
   const home = parts.some((x) => x !== null)
     ? Math.max(0, (solar ?? 0) + (gridIn ?? 0) - (gridOut ?? 0) + (batteryOut ?? 0) - (batteryIn ?? 0))
     : null;
-  return { solar, gridIn, gridOut, batteryIn, batteryOut, home };
+  const car = carStats === null && carPower === null ? null : (carStats ?? 0) + (carPower ?? 0);
+  return { solar, gridIn, gridOut, batteryIn, batteryOut, home, car };
 }
 
 /**

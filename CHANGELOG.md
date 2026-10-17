@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Car charging: EV chargers (Ohme, Zappi, Hypervolt, Pod Point, Wallbox, Easee, OCPP and others) are
+  found by themselves. The energy sheet shows the car next to the house with what it draws, a card
+  per car with its battery, the level and time it charges to, what the charger is doing and its
+  charge modes to pick from (and Approve for a charge that waits), and today's energy into the car.
+  The corner chip shows the car's battery while it is plugged in. The charger and the car's battery
+  can be changed in Edit → Home → Energy.
+- An EV charger (on the wall or on a post) to place on the driveway: its light is green while
+  charging, blue while plugged in and amber while waiting. A car's charging port lights up the same
+  way, and the driveway's label says how full the car is.
+- Place devices automatically puts the charger on the house's wall at the driveway with a car in
+  front of it, instead of the charger's switches as plugs.
+
 ## 0.3.1
 - Nothing changes in VirtuHome itself. Releases are now also checked with Home Assistant's hassfest.
 

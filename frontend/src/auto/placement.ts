@@ -5,10 +5,13 @@
 //   * lights, cameras, motion sensors, thermostats, plugs, speakers… get a sensible spot in their
 //     room: ceiling lights spread over the ceiling, cameras in corners looking in, motion sensors
 //     high in a corner, floor lamps by a wall
+//   * a car charger goes on the house's wall at the driveway, with a car parked in front of it
 // It never moves what is already placed, so it can run again after new devices were added.
-import { bounds, centroid, labelPoint, outwardNormal, pointInPolygon } from "../model/geom";
+import { bounds, centroid, labelPoint, outwardNormal, pointInPolygon, segmentDistance } from "../model/geom";
 import { newId, type Device, type Floor, type Mount, type Opening, type OutdoorArea, type Plan, type Room, type Vec2 } from "../model/plan";
 import { domainOf, type Hass, type HassEntity } from "../live/hass";
+import { findChargers, type EvCharger } from "../live/ev";
+import { FURNITURE } from "../scene/furniture-lib";
 
 export interface PlacementReport {
   roomsLinked: string[];
@@ -73,10 +76,15 @@ export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: Placeme
     }
   }
 
+  // ---------------------------------------------------------------- the car charger (a piece of its own, not markers)
+  const chargers = findChargers(hass, null, p.settings.energy);
+  const chargerDevices = new Set(chargers.map((c) => c.device).filter(Boolean));
+  if (chargers.length && !p.floors.some((f) => f.furniture.some((x) => FURNITURE[x.type]?.family === "ev_charger"))) placeCharger(p, hass, chargers[0], report);
+
   // ---------------------------------------------------------------- devices per area
   const byArea = new Map<string, Map<string, Candidate>>();
   for (const [id, reg] of Object.entries(hass.entities ?? {})) {
-    if (reg.hidden || reg.entity_category) continue;
+    if (reg.hidden || reg.entity_category || (reg.device_id && chargerDevices.has(reg.device_id))) continue;
     const s = hass.states[id];
     if (!s) continue;
     const dom = domainOf(id);
@@ -247,6 +255,57 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
     return add({ entity: id, x: at[0], z: at[1], y: dom === "assist_satellite" ? 0.8 : 1.4 });
   }
   return false;
+}
+
+/**
+ * A charger on the house's wall where the driveway meets it (on a post when the house is not there),
+ * and a car parked in front of it, its nose to the house, when the plan has no car yet.
+ */
+function placeCharger(p: Plan, hass: Hass, c: EvCharger, report: PlacementReport): void {
+  const link = c.status ?? c.power ?? c.level;
+  const area = c.device ? hass.devices?.[c.device]?.area_id ?? null : null;
+  const floor = p.floors.find((f) => (f.outdoor ?? []).length);
+  const spot = floor?.outdoor?.find((o) => o.kind === "driveway") ?? floor?.outdoor?.find((o) => o.area_id && o.area_id === area);
+  if (!floor || !spot) {
+    if (link) report.unplaced.push({ entity: link, area });
+    return;
+  }
+  // the driveway's edge nearest the house
+  const walls = floor.rooms.flatMap((r) => r.points.map((a, i) => [a, r.points[(i + 1) % r.points.length]] as [Vec2, Vec2]));
+  const toHouse = (q: Vec2) => walls.reduce((m, [a, b]) => Math.min(m, segmentDistance(q, a, b).d), Infinity);
+  const pts = spot.points;
+  let edge = 0, near = Infinity;
+  pts.forEach((a, i) => {
+    const b = pts[(i + 1) % pts.length];
+    const d = toHouse([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+    if (d < near) [edge, near] = [i, d];
+  });
+  const a = pts[edge], b = pts[(edge + 1) % pts.length];
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const dir: Vec2 = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+  const out = outwardNormal(pts, edge);
+  const n: Vec2 = [-out[0], -out[1]];
+  const along = (t: number, off: number): Vec2 => [a[0] + dir[0] * t + n[0] * off, a[1] + dir[1] * t + n[1] * off];
+
+  // the car in the middle of the edge, the charger beside its nose
+  const [cw, cd, ch] = FURNITURE.car.size;
+  const tc = l >= cw + 1 ? l / 2 - cw / 2 - 0.35 : l / 2;
+  const wall = toHouse(along(tc, 0)) - p.settings.wall_exterior / 2;
+  const onWall = wall < 0.5;
+  const type = onWall ? "ev_charger" : "ev_charger_post";
+  const [w, d, h] = FURNITURE[type].size;
+  // back against the wall's face (the edge may stop short of it), or on a post a little way in
+  const at = along(tc, (onWall ? -wall : 0.3) + d / 2);
+  floor.furniture.push({ id: newId("f"), type, x: at[0], z: at[1], rotation: heading(n[0], n[1]), w, d, h, entity: link });
+  report.placed.push(`${c.name} → ${spot.name}`);
+
+  if (p.floors.some((f) => f.furniture.some((x) => x.type === "car")) || l < cw + 1) return;
+  const gap = Math.max(0, -wall) + 0.6 + cd / 2;
+  const mid = along(l / 2, gap);
+  const corners: Vec2[] = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([s, t]) => along(l / 2 + (s * cw) / 2, gap + (t * cd) / 2));
+  if (!corners.every((q) => pointInPolygon(q, pts))) return;
+  floor.furniture.push({ id: newId("f"), type: "car", x: mid[0], z: mid[1], rotation: (heading(-n[0], -n[1]) + 360) % 360, w: cw, d: cd, h: ch, entity: link });
+  report.placed.push(`Car → ${spot.name}`);
 }
 
 /** Garden areas take part like rooms (their lights, cameras and plugs go there). */

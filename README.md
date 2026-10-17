@@ -23,6 +23,9 @@ On a computer or a recent iPad it switches to a realistic look with textures, su
 - **Solar, battery and grid:** what the panels make sits in the corner; tap it for the power flowing
   between solar, battery, grid and the house, the price now and today's totals. Found from Home
   Assistant's energy settings; solar panels placed in the plan shine with what they make.
+- **Car charging:** Ohme, Zappi, Hypervolt, Pod Point, Wallbox, Easee and OCPP chargers are found by
+  themselves. The car's battery, what it is charging to and by when, and its charge modes are in the
+  energy sheet; the charger on the driveway lights up while it charges.
 - **Make it look like home:** floor finishes, wall paint and wallpaper, the outside in brick, render,
   stone or cladding, and about 110 pieces of furniture and decor in swappable styles, colours and
   fabrics.
@@ -90,7 +93,7 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   for furniture its style, colour, upholstery and mirroring. Add items from a searchable catalogue.
 - **Energy:** Edit → Home → Energy shows the solar, house, battery and grid sensors found from the
   energy settings, and takes another where one is wrong. Panels' peak sets how brightly placed solar
-  panels shine (otherwise the best output seen).
+  panels shine (otherwise the best output seen). Charger and Car battery do the same for car charging.
 - **Undo / Redo** in the header, or Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z. Every save keeps a restore point.
 
 ## Scanning with House Scan

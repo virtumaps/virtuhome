@@ -68,6 +68,21 @@ export interface Hass {
 
 export const domainOf = (entityId: string): string => entityId.slice(0, entityId.indexOf("."));
 
+/** A sensor of power (W, kW, MW…). */
+export const isPower = (s: HassEntity | undefined): boolean =>
+  !!s && domainOf(s.entity_id) === "sensor" && s.attributes.device_class === "power" && /^(m|k|M|G)?W$/.test(String(s.attributes.unit_of_measurement ?? ""));
+
+/** A power sensor's reading in kW, or null. */
+export function kw(hass: Hass, id: string | null): number | null {
+  const s = id ? hass.states[id] : undefined;
+  if (!s) return null;
+  const v = parseFloat(s.state);
+  if (!isFinite(v)) return null;
+  const unit = String(s.attributes.unit_of_measurement ?? "kW");
+  const k = unit === "W" ? 1e-3 : unit === "mW" ? 1e-6 : unit === "MW" ? 1e3 : unit === "GW" ? 1e6 : 1;
+  return v * k;
+}
+
 /** The area an entity belongs to: its own, or its device's. */
 export function areaOf(hass: Hass, entityId: string): string | null {
   const reg = hass.entities?.[entityId];

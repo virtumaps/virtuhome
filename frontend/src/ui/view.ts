@@ -7,7 +7,8 @@ import { EnergyLive, type EnergyNow } from "../live/energy";
 import { loadExtensions, registerView, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
 import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
-import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection } from "./energy";
+import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
+import { EV_TYPES } from "../scene/furniture-lib";
 import { VIEW_CSS } from "./styles";
 
 export interface ViewConfig {
@@ -44,6 +45,12 @@ const WALL_ICONS: Record<WallMode, string> = {
   low: "M2,10H8V15H2V10M9,10H15V15H9V10M16,10H22V15H16V10M3,16H12V21H3V16M13,16H21V21H13V16Z",
 };
 const WALL_NAMES: Record<WallMode, string> = { smart: "Walls: smart cutaway", low: "Walls: low", full: "Walls: full height" };
+
+/** What the chargers' lights show, and what the cars' labels say (redrawn only when these change). */
+function evKeys(now: EnergyNow | null): [string, string] {
+  const ev = now?.ev ?? [];
+  return [ev.map((c) => c.state).join("|"), ev.map((c) => `${c.state}:${c.level === null ? "" : Math.round(c.level)}`).join("|")];
+}
 
 let realisticModule: RealisticModule | null = null;
 /** The realistic look's code, fetched the first time a view needs it. */
@@ -93,6 +100,10 @@ export class VhView {
   /** The plan has solar panels, and how brightly they shine now (in steps). */
   private hasPanels = false;
   private panelStep = -1;
+  /** The plan has a car or a charger: what the chargers do (their lights) and the cars' levels (their labels). */
+  private hasEv = false;
+  private evGlowKey = "";
+  private evLabelKey = "";
   private barWatch: ResizeObserver | null = null;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
@@ -420,17 +431,56 @@ export class VhView {
         }
       }
     }
+    let relight = false;
     if (this.hasPanels && this.started) {
       const step = solarStep(this.energy.solarLevel());
       if (step !== this.panelStep) {
         this.panelStep = step;
-        this.viewer.refreshLighting();
+        relight = true;
       }
     }
+    // a charger's light changes when it starts or stops; the driveway's label when a level moves
+    if (this.hasEv && this.started && now) {
+      const [glow, label] = evKeys(now);
+      if (glow !== this.evGlowKey) {
+        this.evGlowKey = glow;
+        relight = true;
+      }
+      if (label !== this.evLabelKey) {
+        this.evLabelKey = label;
+        this.viewer.refreshLabels();
+      }
+    }
+    if (relight) this.viewer.refreshLighting();
   }
 
   private renderEnergy(): void {
-    renderEnergySheet(this.sheet, this.energy, this.energySections, () => this.closeSheet());
+    renderEnergySheet(this.sheet, this.energy, this.energySections, () => this.closeSheet(), this.evActions);
+  }
+
+  /** Taps on a car's card: its charge mode, approving a charge, its charger's own dialog. */
+  private evActions: EvActions = {
+    setMode: (i, option) => {
+      const id = this.energy.sources.ev[i]?.mode;
+      if (id) this.callFromSheet("select", "select_option", { option }, id, "Could not change the charge mode");
+    },
+    approve: (i) => {
+      const id = this.energy.sources.ev[i]?.approve;
+      if (id) this.callFromSheet("button", "press", {}, id, "Could not approve the charge");
+    },
+    open: (i) => {
+      const c = this.energy.sources.ev[i];
+      const id = c?.status ?? c?.power ?? c?.level;
+      if (id) moreInfo(this.root, id);
+    },
+  };
+
+  private async callFromSheet(domain: string, service: string, data: Record<string, unknown>, entity: string, failed: string): Promise<void> {
+    try {
+      await this._hass?.callService(domain, service, data, { entity_id: entity });
+    } catch (err) {
+      this.toast(`${failed}: ${String((err as { message?: string }).message ?? err)}`);
+    }
   }
 
   /** The energy sheet: the flow between solar, battery, grid and the house, and today's totals. */
@@ -496,6 +546,9 @@ export class VhView {
     }
     this.empty.hidden = true;
     this.hasPanels = plan.floors.some((f) => f.furniture.some((x) => x.type === "solar_panels"));
+    this.hasEv = plan.floors.some((f) => f.furniture.some((x) => EV_TYPES.has(x.type)));
+    // the plan is drawn with the chargers as they are now
+    [this.evGlowKey, this.evLabelKey] = evKeys(this.energy.now);
     this.applyTheme();
     this.viewer.setPlan(plan, !first);
     if (this._hass) {

@@ -845,6 +845,31 @@ export const FURNITURE: Record<string, FurnitureType> = {
       return out;
     },
   },
+  ev_charger: {
+    // a wall box with a tethered cable coiled under it; its light shows what it is doing
+    name: "EV charger", category: "outdoor", family: "ev_charger", size: [0.24, 0.13, 0.36], y: 0.95, paint: ["white"],
+    build: (w, d, h) => [
+      box(0, 0, 0, w, h, d, "white"),
+      box(0, h * 0.1, d / 2 + 0.002, w * 0.78, h * 0.8, 0.008, "dark"),
+      { ...rod("z", 0, h * 0.42, d / 2 + 0.0095, 0.1, 0.1, 0.006, "screen", 16), glow: "screen" },
+      rod("z", 0, -0.17, -d * 0.1, 0.17, 0.17, 0.035, "rubber", 14),
+      box(w / 2 + 0.025, h * 0.2, 0, 0.05, 0.11, 0.06, "dark"),
+    ],
+  },
+  ev_charger_post: {
+    name: "Charging post", category: "outdoor", family: "ev_charger", size: [0.26, 0.2, 1.3], paint: ["white"],
+    build: (w, d, h) => {
+      const head = 0.4;
+      return [
+        box(0, 0, 0, w, 0.04, d, "metal"),
+        box(0, 0.04, 0, w * 0.55, h - head - 0.04, d * 0.6, "metal"),
+        box(0, h - head, 0, w, head, d, "white"),
+        box(0, h - head + 0.04, d / 2 + 0.002, w * 0.78, head - 0.08, 0.008, "dark"),
+        { ...rod("z", 0, h - head * 0.62, d / 2 + 0.0095, 0.1, 0.1, 0.006, "screen", 16), glow: "screen" },
+        box(w / 2 + 0.025, h - head * 0.75, 0, 0.05, 0.11, 0.06, "dark"),
+      ];
+    },
+  },
   trampoline: {
     name: "Trampoline", category: "outdoor", family: "play", size: [3.0, 3.0, 0.9], paint: ["blue"],
     build: (w, d, h) => [cyl(0, h - 0.06, 0, w, 0.06, d, "blue", undefined, 24), cyl(0, h - 0.055, 0, w * 0.86, 0.008, d * 0.86, "rubber", undefined, 24), ...[0, 1, 2, 3, 4, 5].map((i) => cyl(Math.cos(i * 1.047) * w * 0.47, 0, Math.sin(i * 1.047) * d * 0.47, 0.05, h - 0.06, 0.05, "metal", undefined, 5))],
@@ -875,6 +900,8 @@ export const FURNITURE: Record<string, FurnitureType> = {
       box(w * 0.32, h * 0.32, d / 2, 0.28, 0.08, 0.02, "bulb"),
       box(-w * 0.32, h * 0.32, -d / 2, 0.28, 0.08, 0.02, "red"),
       box(w * 0.32, h * 0.32, -d / 2, 0.28, 0.08, 0.02, "red"),
+      // the charging port in the nose: lit while the car is plugged in
+      box(0, h * 0.24, d / 2, 0.16, 0.05, 0.02, "screen", "screen"),
     ],
   },
   bicycle: {
@@ -922,6 +949,9 @@ export const FURNITURE: Record<string, FurnitureType> = {
   stairs: { name: "Stairs", category: "structure", family: "stairs", size: [0.9, 3.0, 2.6], build: steps },
   column: { name: "Column", category: "structure", family: "column", size: [0.3, 0.3, 2.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white")] },
 };
+
+/** Pieces that show a car charger's state: the chargers' lights, the cars' charging ports. */
+export const EV_TYPES = new Set(["car", "ev_charger", "ev_charger_post"]);
 
 /** Light fixtures follow a light entity's state. */
 export const LAMP_TYPES = Object.keys(FURNITURE).filter((k) => FURNITURE[k].category === "lights");

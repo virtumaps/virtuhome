@@ -11,7 +11,7 @@ import { labelPoint } from "../model/geom";
 import { newId, normalizePlan, spaces, type Device, type EnergySettings, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
-import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CATEGORY_NAMES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
+import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
 import { controlsFor, defaultFinish, styleOf, stylesFor } from "../scene/joinery";
 import { pointInPolygon } from "../model/geom";
@@ -620,7 +620,7 @@ export class Editor {
       );
     return [
       h("h4", {}, "Energy"),
-      h("p", { class: "ed-hint" }, "Solar, battery and grid are read from Home Assistant's energy settings. Pick a sensor only where the automatic one is wrong. Solar panels placed in the plan shine with what they make."),
+      h("p", { class: "ed-hint" }, "Solar, battery and grid are read from Home Assistant's energy settings, and car chargers from their integrations. Pick a sensor only where the automatic one is wrong. Solar panels placed in the plan shine with what they make; EV chargers and cars light up while charging."),
       h("label", { class: "ed-check" },
         h("input", { type: "checkbox", checked: set.enabled !== false, onchange: (e: Event) => edit("enabled", (e.target as HTMLInputElement).checked ? null : false, "Energy shown") }),
         " Show solar, battery and grid"),
@@ -638,6 +638,12 @@ export class Editor {
         h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0", value: set.solar_peak ? String(set.solar_peak) : "", placeholder: "auto",
           onchange: (e: Event) => edit("solar_peak", Number((e.target as HTMLInputElement).value) || null, "Energy: panels' peak") }),
       ),
+      h("div", { class: "ed-sub" }, "Car charging"),
+      h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: set.ev_enabled !== false, onchange: (e: Event) => edit("ev_enabled", (e.target as HTMLInputElement).checked ? null : false, "Car charging shown") }),
+        " Show the car charger"),
+      row("Charger", "ev_charger", power, auto.ev.length ? `Automatic: ${auto.ev.map((c) => c.name).join(" + ")}` : "Automatic: none found"),
+      row("Car battery", "ev_level", levels, automatic(auto.ev[0]?.level ?? null)),
     ];
   }
 
@@ -947,9 +953,12 @@ export class Editor {
     if (!x) return h("div", {});
     const def = FURNITURE[x.type];
     const upd = (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!));
+    const chargers = this.host.view.energy.sources.ev;
     const linkable = def?.category === "lights"
       ? this.entities((id) => ["light", "switch"].includes(domainOf(id)))
-      : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
+      : EV_TYPES.has(x.type)
+        ? chargers.map((c) => [c.status ?? c.power ?? c.level ?? "", c.name] as [string, string]).filter(([id]) => id)
+        : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
     // a change of size, height, turn or side keeps the piece out of walls and other pieces
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
       fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
@@ -981,7 +990,8 @@ export class Editor {
       isUpholstered(x.type) ? h("div", { class: "ed-sub" }, "Upholstery") : null,
       isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named("Reupholster")((y) => (y.finish = k as Furniture["finish"]))) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
-      h("div", { class: "ed-row" }, h("label", {}, "Linked to"), this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), "Nothing")),
+      h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? "Charger" : "Linked to"),
+        this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? "The house's charger" : "None found") : "Nothing")),
       h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
       h("div", { class: "ed-row" }, ...num("Height", "h"), ...num("Above floor", "y")),
       this.turnRow((deg) => reshape("Turn")((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360))),
