@@ -20,6 +20,11 @@ To see your own home in the dev harness, start it with your Home Assistant in th
 
 Python: `pip install cryptography pytest && pytest tests`.
 
+## How work flows
+
+Issues, labels, branches, the definition of done and the release steps are in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ## Ground rules
 
 - **Performance first.** VirtuHome runs on cheap wall tablets. Read the performance rules in
