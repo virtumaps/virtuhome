@@ -1,0 +1,854 @@
+// The editor: a drawer next to the 3D view (loaded only when an admin taps Edit).
+//   Home     import a scan, place devices automatically, floors, plan files, restore points
+//   Rooms    names, Home Assistant areas, floor materials
+//   Devices  what is placed, and what of Home Assistant is not yet
+//   Selected the tapped room, device or furniture: link entities, move, turn, remove
+// In edit mode a tap selects instead of switching, and devices, lamps and furniture can be dragged.
+import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelete, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
+import { autoPlace } from "../auto/placement";
+import { importRoomPlan, isRoomPlan, type Manifest } from "../import/roomplan";
+import { labelPoint } from "../model/geom";
+import { newId, normalizePlan, spaces, type Device, type Floor, type FloorMaterial, type Furniture, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
+import { bounds } from "../model/geom";
+import { domainOf, type Hass } from "../live/hass";
+import { FURNITURE } from "../scene/furniture-lib";
+import { iconIndex } from "../scene/markers";
+import type { DragPhase, Hit } from "../scene/viewer";
+import type { VhView } from "../ui/view";
+import { EDITOR_CSS } from "./styles";
+
+type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
+type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture"; id: string } | null;
+const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
+const SLAB = 0.18;
+
+const FLOOR_MATERIALS: FloorMaterial[] = ["wood", "oak", "tiles", "carpet", "stone", "concrete"];
+const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
+
+/** Tiny DOM helper: h("div", { class: "x", onclick }, child, "text") */
+function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, unknown> = {}, ...children: (Node | string | null | undefined | false)[]): HTMLElementTagNameMap[K] {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v as EventListener);
+    else if (k === "class") el.className = String(v);
+    else if (k === "html") el.innerHTML = String(v);
+    else if (k in el && k !== "list") (el as unknown as Record<string, unknown>)[k] = v;
+    else el.setAttribute(k, String(v));
+  }
+  for (const c of children) if (c !== null && c !== undefined && c !== false) el.append(c);
+  return el;
+}
+
+export interface EditorHost {
+  view: VhView;
+  hass: Hass;
+  plan: Plan;
+  revision: number | null;
+  save(plan: Plan, baseRevision: number | null): Promise<number>;
+  restorePoints?(): Promise<{ id: string; time: number; label: string | null; floors: number }[]>;
+  restore?(id: string): Promise<void>;
+  close(): void;
+}
+
+export class Editor {
+  readonly el: HTMLDivElement;
+  private plan: Plan;
+  private undo: Plan[] = [];
+  private redo: Plan[] = [];
+  private dirty = false;
+  private tab: Tab = "home";
+  private sel: Selection = null;
+  private body: HTMLDivElement;
+  private status: HTMLSpanElement;
+  private dragStart: Plan | null = null;
+  /** Corners that move together with the dragged one (shared by neighbouring rooms). */
+  private dragCorners: { outdoor: boolean; id: string; i: number }[] = [];
+  private dragRaf = 0;
+  private pendingDrag: (() => void) | null = null;
+
+  constructor(private host: EditorHost) {
+    this.plan = structuredClone(host.plan);
+    const style = h("style", {}, EDITOR_CSS);
+    this.status = h("span", { class: "ed-status" });
+    this.body = h("div", { class: "ed-body" });
+    this.el = h("div", { class: "ed" },
+      style,
+      h("div", { class: "ed-head" },
+        h("b", {}, "Edit home"),
+        h("button", { class: "ed-ib", title: "Undo", html: svg(mdiArrowULeftTop), onclick: () => this.doUndo() }),
+        h("button", { class: "ed-ib", title: "Redo", html: svg(mdiArrowURightTop), onclick: () => this.doRedo() }),
+        h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, onclick: () => this.save() }),
+        h("button", { class: "ed-ib", title: "Close", html: svg(mdiClose), onclick: () => this.close() }),
+      ),
+      h("div", { class: "ed-tabs" },
+        ...(["home", "rooms", "devices", "selected", "extensions"] as Tab[]).map((t) =>
+          h("button", { class: "ed-tab", "data-tab": t, onclick: () => this.show(t) }, { home: "Home", rooms: "Rooms", devices: "Devices", selected: "Selected", extensions: "Extras" }[t]),
+        ),
+      ),
+      this.body,
+      h("div", { class: "ed-foot" }, this.status),
+    );
+    const viewer = host.view.viewer;
+    viewer.editMode = true;
+    viewer.setWalls("low");
+    viewer.onDrag = (hit, x, z, phase) => this.onDrag(hit, x, z, phase);
+    this.render();
+  }
+
+  // ------------------------------------------------------------------ plan changes
+
+  private get hass(): Hass {
+    return this.host.view.hass ?? this.host.hass;
+  }
+
+  /** Applies a change with undo; `quiet` skips re-rendering the drawer (while dragging). */
+  private change(fn: (p: Plan) => void, quiet = false): void {
+    this.undo.push(structuredClone(this.plan));
+    if (this.undo.length > 100) this.undo.shift();
+    this.redo = [];
+    fn(this.plan);
+    this.dirty = true;
+    this.apply(quiet);
+  }
+
+  private apply(quiet = false): void {
+    this.host.view.previewPlan(this.plan);
+    this.updateSelectionMarker();
+    if (!quiet) this.render();
+    this.status.textContent = this.dirty ? "Unsaved changes" : "Saved";
+  }
+
+  private doUndo(): void {
+    const prev = this.undo.pop();
+    if (!prev) return;
+    this.redo.push(this.plan);
+    this.plan = prev;
+    this.dirty = true;
+    this.apply();
+  }
+
+  private doRedo(): void {
+    const next = this.redo.pop();
+    if (!next) return;
+    this.undo.push(this.plan);
+    this.plan = next;
+    this.dirty = true;
+    this.apply();
+  }
+
+  private async save(): Promise<void> {
+    this.status.textContent = "Saving…";
+    try {
+      await this.host.save(this.plan, this.host.revision);
+      this.dirty = false;
+      this.status.textContent = "Saved";
+    } catch (err) {
+      const msg = String((err as { message?: string })?.message ?? err);
+      if (/changed meanwhile|conflict/i.test(msg)) {
+        this.confirm("Someone else saved the plan meanwhile. Save yours over it?", "Save mine", async () => {
+          await this.host.save(this.plan, null);
+          this.dirty = false;
+          this.status.textContent = "Saved";
+        });
+      } else this.status.textContent = `Not saved: ${msg}`;
+    }
+  }
+
+  close(): void {
+    if (this.dirty) {
+      this.confirm("Close without saving? Your changes are lost.", "Discard", () => this.finish());
+      return;
+    }
+    this.finish();
+  }
+
+  private finish(): void {
+    const viewer = this.host.view.viewer;
+    viewer.editMode = false;
+    viewer.onDrag = null;
+    viewer.overlayMarkers = [];
+    cancelAnimationFrame(this.dragRaf);
+    this.el.remove();
+    this.host.close();
+  }
+
+  /** The view tells the editor about taps in edit mode. */
+  onHit(hit: Hit): void {
+    if (hit.item?.kind === "corner") return;
+    if (hit.item) this.select({ floor: hit.floor, kind: hit.item.kind as "device" | "furniture", id: hit.item.id });
+    else if (hit.kind === "room" && hit.room >= 0) {
+      const s = spaces(this.plan.floors[hit.floor])[hit.room];
+      if (s) this.select({ floor: hit.floor, kind: s.outdoor ? "outdoor" : "room", id: s.id });
+    } else this.select(null);
+  }
+
+  private select(sel: Selection): void {
+    this.sel = sel;
+    this.updateSelectionMarker();
+    if (sel) this.show("selected");
+    else this.render();
+  }
+
+  private updateSelectionMarker(): void {
+    const viewer = this.host.view.viewer;
+    viewer.overlayMarkers = [];
+    const s = this.sel;
+    if (s && (s.kind === "room" || s.kind === "outdoor")) {
+      const f = this.plan.floors[s.floor];
+      const space = s.kind === "room" ? f?.rooms.find((r) => r.id === s.id) : f?.outdoor?.find((o) => o.id === s.id);
+      if (space) {
+        const y = f.elevation + (s.kind === "outdoor" ? -SLAB : 0) + 0.06;
+        viewer.overlayMarkers = space.points.map((p, i) => ({
+          key: `__corner${i}`, pos: [p[0], y, p[1]] as [number, number, number], icon: iconIndex("dot"), color: 0x2f7cf6,
+          size: 20, pulse: 0, alpha: 0.95, item: { kind: "corner" as const, id: `${space.id}:${i}` },
+        }));
+      }
+    }
+    if (s && (s.kind === "device" || s.kind === "furniture")) {
+      const f = this.plan.floors[s.floor];
+      const thing = s.kind === "device" ? f?.devices.find((d) => d.id === s.id) : f?.furniture.find((x) => x.id === s.id);
+      if (thing) {
+        const y = (f.elevation ?? 0) + 0.05;
+        viewer.overlayMarkers = [{ key: "__sel", pos: [thing.x, y, thing.z], icon: iconIndex("dot"), color: 0x2f7cf6, size: 18, pulse: 0.6, alpha: 0.9 }];
+      }
+    }
+    viewer.refreshMarkers();
+  }
+
+  // ------------------------------------------------------------------ dragging
+
+  private onDrag(hit: Hit, x: number, z: number, phase: DragPhase): void {
+    const item = hit.item;
+    if (!item) return;
+    const f = this.plan.floors[hit.floor];
+    if (phase === "start") {
+      this.dragStart = structuredClone(this.plan);
+      if (item.kind === "corner") {
+        const [sid, idx] = [item.id.slice(0, item.id.lastIndexOf(":")), Number(item.id.slice(item.id.lastIndexOf(":") + 1))];
+        const all = [...f.rooms.map((r) => ({ outdoor: false, s: r as { id: string; points: Vec2[] } })), ...(f.outdoor ?? []).map((o) => ({ outdoor: true, s: o }))];
+        const owner = all.find((x) => x.s.id === sid);
+        const at = owner?.s.points[idx];
+        this.dragCorners = [];
+        if (at) {
+          for (const x of all) {
+            x.s.points.forEach((p, i) => {
+              if (Math.hypot(p[0] - at[0], p[1] - at[1]) < 0.015) this.dragCorners.push({ outdoor: x.outdoor, id: x.s.id, i });
+            });
+          }
+        }
+        return;
+      }
+      this.select({ floor: hit.floor, kind: item.kind, id: item.id });
+      return;
+    }
+    if (phase === "move" && item.kind === "corner") {
+      const snap = (v: number) => Math.round(v * 100) / 100;
+      for (const c of this.dragCorners) {
+        const s = c.outdoor ? f.outdoor?.find((o) => o.id === c.id) : f.rooms.find((r) => r.id === c.id);
+        if (s) s.points[c.i] = [snap(x), snap(z)];
+      }
+      this.queueDragPreview();
+      return;
+    }
+    if (phase === "move") {
+      const thing = item.kind === "device" ? f.devices.find((d) => d.id === item.id) : f.furniture.find((d) => d.id === item.id);
+      if (!thing) return;
+      thing.x = Math.round(x * 100) / 100;
+      thing.z = Math.round(z * 100) / 100;
+      this.queueDragPreview();
+      return;
+    }
+    if (this.dragStart) {
+      const moved = JSON.stringify(this.dragStart) !== JSON.stringify(this.plan);
+      if (moved) {
+        this.undo.push(this.dragStart);
+        this.redo = [];
+        this.dirty = true;
+        this.apply();
+      }
+      this.dragStart = null;
+    }
+  }
+
+  /** Rebuilding a floor costs a few milliseconds: once per frame at most while dragging. */
+  private queueDragPreview(): void {
+    this.pendingDrag = () => this.host.view.previewPlan(this.plan);
+    if (this.dragRaf) return;
+    this.dragRaf = requestAnimationFrame(() => {
+      this.dragRaf = 0;
+      this.pendingDrag?.();
+      this.pendingDrag = null;
+      this.updateSelectionMarker();
+    });
+  }
+
+  // ------------------------------------------------------------------ drawer
+
+  private show(tab: Tab): void {
+    this.tab = tab;
+    this.render();
+  }
+
+  private render(): void {
+    this.el.querySelectorAll<HTMLElement>(".ed-tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === this.tab));
+    this.body.replaceChildren(
+      this.tab === "home" ? this.homeTab() :
+      this.tab === "rooms" ? this.roomsTab() :
+      this.tab === "devices" ? this.devicesTab() :
+      this.tab === "extensions" ? this.extensionsTab() : this.selectedTab(),
+    );
+    this.status.textContent = this.dirty ? "Unsaved changes" : "Saved";
+  }
+
+  private homeTab(): HTMLElement {
+    const fileIn = h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
+    const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
+    const box = h("div", {},
+      h("h4", {}, "Scan"),
+      h("p", { class: "ed-hint" }, "Choose the scan's house.json, together with its manifest.json for the room names. Rooms, doors, windows and furniture come from the scan."),
+      h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan…"),
+      fileIn,
+      h("h4", {}, "Devices"),
+      h("p", { class: "ed-hint" }, "Links rooms to areas, contacts to doors and windows, and puts lights, cameras and sensors into their rooms. Keeps what is already placed."),
+      h("button", { class: "ed-btn", onclick: () => this.runAutoPlace() }, "Place devices automatically"),
+      h("div", { class: "ed-report" }),
+      h("h4", {}, "Floors"),
+      ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
+      h("h4", {}, "Plan file"),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost", onclick: () => this.downloadPlan() }, "Download"),
+        h("button", { class: "ed-btn ghost", onclick: () => planIn.click() }, "Load…"),
+        planIn,
+      ),
+    );
+    if (this.host.restorePoints) {
+      const list = h("div", { class: "ed-list" }, h("p", { class: "ed-hint" }, "Loading…"));
+      box.append(h("h4", {}, "Restore points"), list);
+      this.host.restorePoints().then((points) => {
+        list.replaceChildren(...(points.length ? points.map((p) =>
+          h("div", { class: "ed-item" },
+            h("span", {}, `${new Date(p.time * 1000).toLocaleString()}${p.label ? ` · ${p.label}` : ""}`),
+            h("button", { class: "ed-btn ghost small", onclick: () => this.confirm("Go back to this version of the plan?", "Restore", async () => {
+              await this.host.restore!(p.id);
+              this.finish();
+            }) }, "Restore"),
+          )) : [h("p", { class: "ed-hint" }, "None yet: every save keeps the version before it.")]));
+      }).catch(() => list.replaceChildren(h("p", { class: "ed-hint" }, "Not available here.")));
+    }
+    return box;
+  }
+
+  private floorRow(f: Floor, i: number): HTMLElement {
+    const haFloors = Object.values(this.hass.floors ?? {});
+    return h("div", { class: "ed-card" },
+      h("input", { class: "ed-in", value: f.name, onchange: (e: Event) => this.change((p) => (p.floors[i].name = (e.target as HTMLInputElement).value)) }),
+      h("div", { class: "ed-row" },
+        h("label", {}, "HA floor"),
+        this.dropdown(haFloors.map((x) => [x.floor_id, x.name]), f.ha_floor ?? "", (v) => this.change((p) => (p.floors[i].ha_floor = v || null)), "—"),
+      ),
+      h("div", { class: "ed-row" },
+        h("label", {}, "Level (m)"),
+        h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(f.elevation), onchange: (e: Event) => this.change((p) => (p.floors[i].elevation = Number((e.target as HTMLInputElement).value))) }),
+        h("label", {}, "Height"),
+        h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(f.height), onchange: (e: Event) => this.change((p) => (p.floors[i].height = Number((e.target as HTMLInputElement).value))) }),
+      ),
+    );
+  }
+
+  /** Licence key and extensions. Buying shows up only once VirtuMaps opens the shop on the server. */
+  private extensionsTab(): HTMLElement {
+    const box = h("div", {}, h("p", { class: "ed-hint" }, "Loading…"));
+    const hass = this.hass;
+    type Summary = { status: string; error: string | null; key_hint: string | null; extensions: { id: string; name: string; version: string }[] };
+    type Catalog = { id: string; name: string; description?: string; price?: string; checkout_url?: string }[];
+    const render = (s: Summary | null, catalog: Catalog, note = "") => {
+      const installed = new Set(s?.extensions.map((x) => x.id));
+      const input = h("input", { class: "ed-in", placeholder: "Licence key", autocomplete: "off", spellcheck: false });
+      const status = h("p", { class: "ed-hint" }, note);
+      const busy = (b: HTMLButtonElement, text: string) => {
+        b.disabled = true;
+        b.textContent = text;
+      };
+      const parts: (Node | null)[] = [
+        h("h4", {}, "Licence"),
+        s && s.status !== "none"
+          ? h("div", { class: "ed-card" },
+            h("div", { class: "ed-row" }, h("b", {}, s.status === "active" ? "Active" : s.status === "expired" ? "Expired — renews online" : "Not valid"), h("small", {}, s.key_hint ?? "")),
+            s.error ? h("p", { class: "ed-hint" }, s.error) : null,
+            ...s.extensions.map((x) => h("div", { class: "ed-item" }, h("span", {}, x.name), h("small", {}, x.version))),
+            h("div", { class: "ed-row" },
+              h("button", { class: "ed-btn ghost small", onclick: async (ev: Event) => {
+                busy(ev.target as HTMLButtonElement, "Checking…");
+                try {
+                  render(await hass.callWS<Summary>({ type: "virtuhome/licence/refresh" }), catalog, "Up to date. Reload the page to use new versions.");
+                } catch (err) {
+                  render(s, catalog, String((err as { message?: string }).message ?? err));
+                }
+              } }, "Check for updates"),
+              h("button", { class: "ed-btn ghost small", onclick: () => this.confirm("Remove the licence from this Home Assistant? Its extensions stop working here, and the activation is freed for another one.", "Remove", async () => {
+                render(await hass.callWS<Summary>({ type: "virtuhome/licence/remove" }), catalog, "Licence removed.");
+              }) }, "Remove licence"),
+            ))
+          : h("p", { class: "ed-hint" }, "Extensions add features such as the wall tablet mode. Enter the licence key you got from VirtuMaps."),
+        h("div", { class: "ed-row" },
+          input,
+          h("button", { class: "ed-btn small", onclick: async (ev: Event) => {
+            const key = input.value.trim();
+            if (key.length < 8) return;
+            busy(ev.target as HTMLButtonElement, "Activating…");
+            try {
+              const next = await hass.callWS<Summary>({ type: "virtuhome/licence/activate", key });
+              render(next, catalog, "Activated. Reload the page to start using the extensions.");
+            } catch (err) {
+              render(s, catalog, String((err as { message?: string }).message ?? err));
+            }
+          } }, "Activate"),
+        ),
+        status,
+        note.includes("Reload") ? h("button", { class: "ed-btn ghost small", onclick: () => location.reload() }, "Reload now") : null,
+        h("h4", {}, "Available extensions"),
+        ...(catalog.length ? catalog.map((c) => h("div", { class: "ed-card" },
+          h("div", { class: "ed-row" }, h("b", {}, c.name), installed.has(c.id) ? h("small", {}, "· installed") : null),
+          c.description ? h("p", { class: "ed-hint" }, c.description) : null,
+          !installed.has(c.id) && c.checkout_url ? h("a", { class: "ed-btn small", href: c.checkout_url, target: "_blank", rel: "noopener" }, `Get it${c.price ? ` · ${c.price}` : ""}`) : null,
+        )) : [h("p", { class: "ed-hint" }, "The list of extensions could not be loaded right now.")]),
+        !catalog.some((c) => c.checkout_url) ? h("p", { class: "ed-hint" }, "Extensions are currently available to VirtuMaps installation clients.") : null,
+      ];
+      box.replaceChildren(...parts.filter((x): x is Node => x !== null));
+    };
+    Promise.all([
+      hass.callWS<Summary>({ type: "virtuhome/licence/get" }).catch(() => null),
+      hass.callWS<Catalog>({ type: "virtuhome/catalog" }).catch(() => [] as Catalog),
+    ]).then(([s, c]) => render(s, c, s ? "" : "Extensions need the VirtuHome integration."));
+    return box;
+  }
+
+  private roomsTab(): HTMLElement {
+    const areas = Object.values(this.hass.areas ?? {}).sort((a, b) => a.name.localeCompare(b.name));
+    const box = h("div", {},
+      h("p", { class: "ed-hint" }, "Tap a room or garden area in 3D, then drag its blue corners to reshape it. Corners shared with a neighbour move together."),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom() }, "Add a room"),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("back") }, "Add back garden"),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("front") }, "Add front area"),
+      ),
+    );
+    this.plan.floors.forEach((f, fi) => {
+      box.append(h("h4", {}, f.name));
+      for (const o of f.outdoor ?? []) {
+        box.append(h("div", { class: `ed-card ${this.sel?.id === o.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "outdoor", id: o.id }) },
+          h("div", { class: "ed-row" }, h("b", {}, o.name), h("small", {}, ` · ${o.kind}`)),
+        ));
+      }
+      f.rooms.forEach((r, ri) => {
+        box.append(h("div", { class: `ed-card ${this.sel?.kind === "room" && this.sel.id === r.id ? "on" : ""}` },
+          h("div", { class: "ed-row" },
+            h("input", { class: "ed-in", value: r.name, onchange: (e: Event) => this.change((p) => (p.floors[fi].rooms[ri].name = (e.target as HTMLInputElement).value)) }),
+            h("button", { class: "ed-btn ghost small", onclick: () => {
+              this.host.view.viewer.selectRoom(fi, ri);
+              this.select({ floor: fi, kind: "room", id: r.id });
+            } }, "Show"),
+          ),
+          h("div", { class: "ed-row" },
+            h("label", {}, "Area"),
+            this.dropdown(areas.map((a) => [a.area_id, a.name]), r.area_id ?? "", (v) => this.change((p) => (p.floors[fi].rooms[ri].area_id = v || null)), "Not linked"),
+          ),
+          h("div", { class: "ed-row" },
+            h("label", {}, "Floor"),
+            this.dropdown(FLOOR_MATERIALS.map((m) => [m, m]), r.floor ?? "wood", (v) => this.change((p) => (p.floors[fi].rooms[ri].floor = v as FloorMaterial))),
+          ),
+        ));
+      });
+    });
+    return box;
+  }
+
+  private devicesTab(): HTMLElement {
+    const hass = this.hass;
+    const name = (id: string) => String(hass.states[id]?.attributes.friendly_name ?? id);
+    const box = h("div", {});
+    // what is not in the plan yet, by area of a linked room
+    const inPlan = new Set(this.plan.floors.flatMap((f) => [
+      ...f.devices.map((d) => d.entity), ...f.furniture.map((x) => x.entity), ...f.openings.flatMap((o) => [o.entity, o.cover]),
+    ]).filter(Boolean) as string[]);
+    const roomByArea = new Map<string, { fi: number; room: Room }>();
+    this.plan.floors.forEach((f, fi) => [...f.rooms, ...(f.outdoor ?? []) as unknown as Room[]].forEach((r) => r.area_id && !roomByArea.has(r.area_id) && roomByArea.set(r.area_id, { fi, room: r })));
+    const missing: { id: string; fi: number; room: Room }[] = [];
+    for (const [id, reg] of Object.entries(hass.entities ?? {})) {
+      if (reg.hidden || reg.entity_category || inPlan.has(id) || !hass.states[id]) continue;
+      if (!["light", "camera", "binary_sensor", "climate", "media_player", "switch", "cover", "lock", "fan", "vacuum", "alarm_control_panel"].includes(domainOf(id))) continue;
+      const area = reg.area_id ?? (reg.device_id ? hass.devices?.[reg.device_id]?.area_id : null);
+      const target = area ? roomByArea.get(area) : undefined;
+      if (target) missing.push({ id, ...target });
+    }
+    box.append(h("h4", {}, `Not placed (${missing.length})`));
+    if (!missing.length) box.append(h("p", { class: "ed-hint" }, "Everything in the linked areas is in the plan."));
+    for (const m of missing.slice(0, 80)) {
+      box.append(h("div", { class: "ed-item" },
+        h("span", {}, name(m.id), h("small", {}, ` · ${m.room.name}`)),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addDevice(m.fi, m.room, m.id) }, "Add"),
+      ));
+    }
+    this.plan.floors.forEach((f, fi) => {
+      box.append(h("h4", {}, `${f.name}: placed`));
+      for (const d of f.devices) {
+        box.append(h("div", { class: "ed-item", onclick: () => this.select({ floor: fi, kind: "device", id: d.id }) },
+          h("span", {}, name(d.entity)),
+          h("button", { class: "ed-ib small", title: "Remove", html: svg(mdiDelete), onclick: (e: Event) => {
+            e.stopPropagation();
+            this.change((p) => (p.floors[fi].devices = p.floors[fi].devices.filter((x) => x.id !== d.id)));
+          } }),
+        ));
+      }
+    });
+    return box;
+  }
+
+  private selectedTab(): HTMLElement {
+    const s = this.sel;
+    if (!s) return h("p", { class: "ed-hint" }, "Tap a room, a device or a piece of furniture in 3D. Drag devices, lamps and furniture to move them.");
+    const fi = s.floor;
+    const f = this.plan.floors[fi];
+    if (!f) return h("div", {});
+    if (s.kind === "room") return this.roomPanel(fi, f.rooms.find((r) => r.id === s.id));
+    if (s.kind === "outdoor") return this.outdoorPanel(fi, f.outdoor?.find((o) => o.id === s.id));
+    if (s.kind === "device") return this.devicePanel(fi, f.devices.find((d) => d.id === s.id));
+    return this.furniturePanel(fi, f.furniture.find((x) => x.id === s.id));
+  }
+
+  private roomPanel(fi: number, room: Room | undefined): HTMLElement {
+    if (!room) return h("div", {});
+    const f = this.plan.floors[fi];
+    const contacts = this.entities((id, s) => domainOf(id) === "binary_sensor" && ["door", "window", "opening", "garage_door"].includes(String(s.attributes.device_class)));
+    const covers = this.entities((id) => domainOf(id) === "cover");
+    const openings = f.openings.filter((o) => o.room_id === room.id);
+    const types = Object.entries(FURNITURE).sort((a, b) => a[1].category.localeCompare(b[1].category) || a[1].name.localeCompare(b[1].name));
+    let addType = "sofa";
+    return h("div", {},
+      h("h4", {}, room.name),
+      h("p", { class: "ed-hint" }, `${openings.length} doors and windows`),
+      ...openings.map((o) => h("div", { class: "ed-card" },
+        h("div", { class: "ed-row" }, h("b", {}, o.kind), h("small", {}, `${o.width.toFixed(2)} m wide`)),
+        h("div", { class: "ed-row" },
+          h("label", {}, "Sensor"),
+          this.dropdown(contacts, o.entity ?? "", (v) => this.change((p) => {
+            const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
+            x.entity = v || null;
+          }), "None"),
+        ),
+        o.kind === "window" ? h("div", { class: "ed-row" },
+          h("label", {}, "Blind"),
+          this.dropdown(covers, o.cover ?? "", (v) => this.change((p) => {
+            const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
+            x.cover = v || null;
+          }), "None"),
+        ) : null,
+        o.kind === "door" ? h("div", { class: "ed-row" },
+          h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
+            const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
+            x.hinge = x.hinge === "right" ? "left" : "right";
+          }) }, "Flip hinge"),
+          h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
+            const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
+            x.swing = x.swing === "out" ? "in" : "out";
+          }) }, "Swing other way"),
+        ) : null,
+      )),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addCorner(fi, room.id, false) }, "Add a corner"),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.confirm(`Remove ${room.name} with its doors and windows?`, "Remove", () => {
+          this.change((p) => {
+            const fl = p.floors[fi];
+            fl.rooms = fl.rooms.filter((r) => r.id !== room.id);
+            fl.openings = fl.openings.filter((x) => x.room_id !== room.id);
+          });
+          this.select(null);
+        }) }, "Remove room"),
+      ),
+      h("h4", {}, "Add furniture"),
+      h("div", { class: "ed-row" },
+        this.dropdown(types.map(([k, t]) => [k, `${t.name} (${t.category})`]), addType, (v) => (addType = v)),
+        h("button", { class: "ed-btn small", onclick: () => this.addFurniture(fi, room, addType) }, "Add"),
+      ),
+    );
+  }
+
+  private outdoorPanel(fi: number, o: OutdoorArea | undefined): HTMLElement {
+    if (!o) return h("div", {});
+    const areas = Object.values(this.hass.areas ?? {}).sort((a, b) => a.name.localeCompare(b.name));
+    const upd = (fn: (x: OutdoorArea) => void) => this.change((p) => fn(p.floors[fi].outdoor!.find((y) => y.id === o.id)!));
+    return h("div", {},
+      h("h4", {}, "Garden area"),
+      h("p", { class: "ed-hint" }, "Drag the blue corners to shape it. Lights of its area light it up at night."),
+      h("div", { class: "ed-row" }, h("label", {}, "Name"), h("input", { class: "ed-in", value: o.name, onchange: (e: Event) => upd((x) => (x.name = (e.target as HTMLInputElement).value)) })),
+      h("div", { class: "ed-row" }, h("label", {}, "Ground"), this.dropdown(OUTDOOR_KINDS.map((k) => [k, k]), o.kind, (v) => upd((x) => (x.kind = v as OutdoorKind)))),
+      h("div", { class: "ed-row" }, h("label", {}, "Area"), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd((x) => (x.area_id = v || null)), "Not linked")),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost", onclick: () => this.addCorner(fi, o.id, true) }, "Add a corner"),
+        h("button", { class: "ed-btn danger", onclick: () => {
+          this.change((p) => (p.floors[fi].outdoor = (p.floors[fi].outdoor ?? []).filter((x) => x.id !== o.id)));
+          this.select(null);
+        } }, "Remove"),
+      ),
+    );
+  }
+
+  private devicePanel(fi: number, d: Device | undefined): HTMLElement {
+    if (!d) return h("div", {});
+    const all = this.entities(() => true);
+    const upd = (fn: (x: Device) => void) => this.change((p) => fn(p.floors[fi].devices.find((y) => y.id === d.id)!));
+    return h("div", {},
+      h("h4", {}, String(this.hass.states[d.entity]?.attributes.friendly_name ?? d.entity)),
+      h("div", { class: "ed-row" }, h("label", {}, "Entity"), this.entityInput(all, d.entity, (v) => upd((x) => (x.entity = v)))),
+      h("div", { class: "ed-row" },
+        h("label", {}, "Mount"),
+        this.dropdown([["ceiling", "ceiling"], ["wall", "wall"], ["floor", "floor"], ["table", "table"]], d.mount ?? "", (v) => upd((x) => (x.mount = (v || null) as Device["mount"])), "auto"),
+        h("label", {}, "Height"),
+        h("input", { class: "ed-in num", type: "number", step: "0.1", value: d.y === null || d.y === undefined ? "" : String(d.y), placeholder: "auto", onchange: (e: Event) => {
+          const v = (e.target as HTMLInputElement).value;
+          upd((x) => (x.y = v === "" ? null : Number(v)));
+        } }),
+      ),
+      this.turnRow((deg) => upd((x) => (x.rotation = ((x.rotation ?? 0) + deg + 360) % 360))),
+      h("button", { class: "ed-btn danger", onclick: () => {
+        this.change((p) => (p.floors[fi].devices = p.floors[fi].devices.filter((x) => x.id !== d.id)));
+        this.select(null);
+      } }, "Remove from plan"),
+    );
+  }
+
+  private furniturePanel(fi: number, x: Furniture | undefined): HTMLElement {
+    if (!x) return h("div", {});
+    const def = FURNITURE[x.type];
+    const upd = (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!));
+    const linkable = def?.category === "lights"
+      ? this.entities((id) => ["light", "switch"].includes(domainOf(id)))
+      : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
+    const num = (label: string, key: "w" | "d" | "h" | "y") =>
+      [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(x[key] ?? 0), onchange: (e: Event) => upd((y) => (y[key] = Number((e.target as HTMLInputElement).value))) })];
+    return h("div", {},
+      h("h4", {}, def?.name ?? x.type),
+      h("div", { class: "ed-row" }, h("label", {}, "Linked to"), this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), "Nothing")),
+      h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
+      h("div", { class: "ed-row" }, ...num("Height", "h"), ...num("Above floor", "y")),
+      this.turnRow((deg) => upd((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360)))),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost", onclick: () => this.change((p) => p.floors[fi].furniture.push({ ...structuredClone(x), id: newId("f"), x: x.x + 0.3, z: x.z + 0.3 })) }, "Duplicate"),
+        h("button", { class: "ed-btn danger", onclick: () => {
+          this.change((p) => (p.floors[fi].furniture = p.floors[fi].furniture.filter((y) => y.id !== x.id)));
+          this.select(null);
+        } }, "Remove"),
+      ),
+    );
+  }
+
+  private turnRow(turn: (deg: number) => void): HTMLElement {
+    return h("div", { class: "ed-row" },
+      h("label", {}, "Turn"),
+      h("button", { class: "ed-ib", title: "-90°", html: svg(mdiRotateLeft), onclick: () => turn(-90) }),
+      h("button", { class: "ed-btn ghost small", onclick: () => turn(-15) }, "-15°"),
+      h("button", { class: "ed-btn ghost small", onclick: () => turn(15) }, "+15°"),
+      h("button", { class: "ed-ib", title: "+90°", html: svg(mdiRotateRight), onclick: () => turn(90) }),
+    );
+  }
+
+  // ------------------------------------------------------------------ actions
+
+  private async importFiles(files: FileList | null): Promise<void> {
+    if (!files?.length) return;
+    let house: unknown = null;
+    let manifest: Manifest | null = null;
+    for (const file of Array.from(files)) {
+      const data = JSON.parse(await file.text());
+      if (isRoomPlan(data)) house = data;
+      else if (Array.isArray((data as Manifest).rooms) && (data as Manifest).rooms.every((r) => typeof r.name === "string")) manifest = data as Manifest;
+    }
+    if (!house) {
+      this.toastInDrawer("None of the files is a RoomPlan scan (house.json).");
+      return;
+    }
+    const front = manifest?.rooms.find((r) => /hall|entrance|porch|front/i.test(r.name))?.name;
+    const { plan, report } = importRoomPlan(house as never, manifest, { frontDoorRoom: front });
+    const go = () => {
+      this.change((p) => {
+        p.floors = plan.floors;
+        p.settings = { ...p.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior };
+      });
+      this.host.view.viewer.setMode("house");
+      const placed = autoPlace(this.plan, this.hass);
+      this.change((p) => Object.assign(p, placed.plan), false);
+      this.showReport([
+        `${report.rooms} rooms on ${report.floors} floor${report.floors === 1 ? "" : "s"}, ${report.openings} doors and windows, ${report.furniture} pieces of furniture.`,
+        `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
+        ...report.warnings,
+      ]);
+    };
+    if (this.plan.floors.length) this.confirm("Replace the current plan with this scan?", "Replace", go);
+    else go();
+  }
+
+  private runAutoPlace(): void {
+    const { plan, report } = autoPlace(this.plan, this.hass);
+    this.change((p) => Object.assign(p, plan));
+    this.showReport([
+      `${report.placed.length} devices placed, ${report.linked.length} linked, ${report.roomsLinked.length} rooms linked to areas.`,
+      ...(report.unplaced.length ? [`${report.unplaced.length} devices are in areas without a room in the plan.`] : []),
+      ...report.placed.slice(0, 30),
+    ]);
+  }
+
+  private showReport(lines: string[]): void {
+    this.show("home");
+    const r = this.body.querySelector(".ed-report");
+    r?.replaceChildren(...lines.map((l) => h("div", {}, l)));
+  }
+
+  /** A 3 x 3 m room beside the house on the current floor. */
+  private addRoom(): void {
+    const fi = this.host.view.viewer.mode === "floor" ? this.host.view.viewer.activeFloor : 0;
+    const f = this.plan.floors[fi];
+    if (!f) return;
+    const all = f.rooms.flatMap((r) => r.points);
+    const b = all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 0, maxZ: 3 };
+    const x0 = b.maxX;
+    const room: Room = { id: newId("room"), name: "New room", area_id: null, floor: "wood", points: [[x0, b.minZ], [x0 + 3, b.minZ], [x0 + 3, b.minZ + 3], [x0, b.minZ + 3]] };
+    this.change((p) => p.floors[fi].rooms.push(room));
+    this.select({ floor: fi, kind: "room", id: room.id });
+  }
+
+  /** A lawn behind the house (top of the plan) or a front area (bottom), as wide as the house. */
+  private addGarden(where: "back" | "front"): void {
+    const f = this.plan.floors[0];
+    if (!f) return;
+    const all = f.rooms.flatMap((r) => r.points);
+    if (!all.length) return;
+    const b = bounds(all);
+    const half = this.plan.settings.wall_exterior / 2;
+    const depth = where === "back" ? 9 : 5;
+    const z0 = where === "back" ? b.minZ - half - depth : b.maxZ + half;
+    const z1 = where === "back" ? b.minZ - half : b.maxZ + half + depth;
+    const area = Object.values(this.hass.areas ?? {}).find((a) => /garden|yard|outside|patio/i.test(a.name));
+    const o: OutdoorArea = {
+      id: newId("out"), name: where === "back" ? "Garden" : "Front", kind: where === "back" ? "lawn" : "driveway",
+      area_id: where === "back" ? area?.area_id ?? null : null,
+      points: [[b.minX - half, z0], [b.maxX + half, z0], [b.maxX + half, z1], [b.minX - half, z1]],
+    };
+    this.change((p) => {
+      p.floors[0].outdoor = [...(p.floors[0].outdoor ?? []), o];
+    });
+    this.select({ floor: 0, kind: "outdoor", id: o.id });
+  }
+
+  /** Splits the longest edge, so the shape gets a corner to drag (L-shapes, bays). */
+  private addCorner(fi: number, id: string, outdoor: boolean): void {
+    this.change((p) => {
+      const f = p.floors[fi];
+      const s = outdoor ? f.outdoor?.find((o) => o.id === id) : f.rooms.find((r) => r.id === id);
+      if (!s) return;
+      const pts = s.points;
+      let k = 0;
+      let best = -1;
+      pts.forEach((a, i) => {
+        const b = pts[(i + 1) % pts.length];
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (l > best) {
+          best = l;
+          k = i;
+        }
+      });
+      const a = pts[k];
+      const b = pts[(k + 1) % pts.length];
+      pts.splice(k + 1, 0, [Math.round(((a[0] + b[0]) / 2) * 100) / 100, Math.round(((a[1] + b[1]) / 2) * 100) / 100]);
+      if (!outdoor) {
+        // doors and windows behind the new corner move to the second half of the edge
+        for (const o of f.openings) {
+          if (o.room_id !== id) continue;
+          if (o.edge > k) o.edge += 1;
+          else if (o.edge === k && o.offset > best / 2) {
+            o.edge = k + 1;
+            o.offset -= best / 2;
+          }
+        }
+      }
+    });
+  }
+
+  private addDevice(fi: number, room: Room, entity: string): void {
+    const at = labelPoint(room.points);
+    const dom = domainOf(entity);
+    this.change((p) => p.floors[fi].devices.push({
+      id: newId("d"), entity, x: at[0] + (Math.random() - 0.5) * 0.4, z: at[1] + (Math.random() - 0.5) * 0.4,
+      mount: dom === "light" ? "ceiling" : null, y: dom === "camera" ? 2.2 : null,
+    }));
+  }
+
+  private addFurniture(fi: number, room: Room, type: string): void {
+    const def = FURNITURE[type];
+    if (!def) return;
+    const at = labelPoint(room.points);
+    const item: Furniture = { id: newId("f"), type, x: at[0], z: at[1], rotation: 0, w: def.size[0], d: def.size[1], h: def.size[2] };
+    if (def.y) item.y = def.y;
+    this.change((p) => p.floors[fi].furniture.push(item));
+    this.select({ floor: fi, kind: "furniture", id: item.id });
+  }
+
+  private downloadPlan(): void {
+    const blob = new Blob([JSON.stringify(this.plan, null, 1)], { type: "application/json" });
+    const a = h("a", { href: URL.createObjectURL(blob), download: "virtuhome-plan.json" });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  private async loadPlanFile(file: File | undefined): Promise<void> {
+    if (!file) return;
+    const plan = normalizePlan(JSON.parse(await file.text()));
+    this.confirm("Replace the current plan with this file?", "Replace", () => this.change((p) => Object.assign(p, plan)));
+  }
+
+  // ------------------------------------------------------------------ small widgets
+
+  private entities(filter: (id: string, s: Hass["states"][string]) => boolean): [string, string][] {
+    const states = this.hass.states;
+    return Object.keys(states)
+      .filter((id) => filter(id, states[id]))
+      .map((id) => [id, String(states[id].attributes.friendly_name ?? id)] as [string, string])
+      .sort((a, b) => a[1].localeCompare(b[1]));
+  }
+
+  private dropdown(options: [string, string][], value: string, onChange: (v: string) => void, empty?: string): HTMLSelectElement {
+    const sel = h("select", { class: "ed-in", onchange: (e: Event) => onChange((e.target as HTMLSelectElement).value) });
+    if (empty !== undefined) sel.append(h("option", { value: "" }, empty));
+    for (const [v, label] of options) sel.append(h("option", { value: v, selected: v === value }, label));
+    if (value && !options.some(([v]) => v === value)) sel.append(h("option", { value, selected: true }, value));
+    sel.value = value;
+    return sel;
+  }
+
+  private entityInput(options: [string, string][], value: string, onChange: (v: string) => void): HTMLElement {
+    const id = `ents-${Math.random().toString(36).slice(2)}`;
+    const list = h("datalist", { id }, ...options.slice(0, 1500).map(([v, label]) => h("option", { value: v }, label)));
+    const input = h("input", { class: "ed-in", value, onchange: (e: Event) => onChange((e.target as HTMLInputElement).value.trim()) });
+    input.setAttribute("list", id);
+    return h("span", { class: "ed-grow" }, input, list);
+  }
+
+  /** An in-page confirmation (browser dialogs would block a wall tablet's view). */
+  private confirm(text: string, action: string, onYes: () => void | Promise<void>): void {
+    const box = h("div", { class: "ed-confirm" },
+      h("p", {}, text),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost", onclick: () => box.remove() }, "Cancel"),
+        h("button", { class: "ed-btn danger", onclick: async () => {
+          box.remove();
+          await onYes();
+        } }, action),
+      ),
+    );
+    this.el.append(box);
+  }
+
+  private toastInDrawer(text: string): void {
+    this.status.textContent = text;
+  }
+}

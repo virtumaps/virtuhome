@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "VirtuHome",
+        "description": "Adds the VirtuHome 3D view to the sidebar and the VirtuHome card to your dashboards. Open VirtuHome in the sidebar afterwards to import a scan or draw your home."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "VirtuHome is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "VirtuHome",
+        "description": "Advanced: the server licence keys are checked with and extensions come from. Leave as it is unless VirtuMaps support asks you to change it.",
+        "data": {
+          "licence_server": "Licence server"
+        }
+      }
+    }
+  }
+}

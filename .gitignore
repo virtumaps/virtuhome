@@ -1,0 +1,13 @@
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+frontend/.cache/
+frontend/dev/local.env.js
+tools/out/
+*.log
+frontend/dev/out/
+frontend/dev/scans/
+frontend/dev/ext/
+frontend/dev/plans/home.json

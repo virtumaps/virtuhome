@@ -1,0 +1,25 @@
+{
+  "name": "virtuhome-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --dev",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p .",
+    "shot": "node ../tools/shot.mjs"
+  },
+  "dependencies": {
+    "@mdi/js": "^7.4.47",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "esbuild": "^0.28.2",
+    "home-assistant-js-websocket": "^9.7.1",
+    "playwright-core": "^1.64.1",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  }
+}
