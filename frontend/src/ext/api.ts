@@ -7,15 +7,17 @@
 //
 // API 2 adds tools, room tints and texts, and the house's energy (solar, battery, grid; car chargers
 // in sources.ev and now.ev).
+// API 3 adds replays of the past (the view draws states an extension gives it, from the recorder's
+// history, and switches nothing meanwhile), where entities are in the plan, and floor and room moves.
 import * as THREE from "three";
 import type { EnergyNow, EnergySources, EnergyToday } from "../live/energy";
-import type { Hass } from "../live/hass";
+import type { Hass, HassEntity } from "../live/hass";
 import type { RoomText, RoomTint } from "../live/live";
 import type { Plan } from "../model/plan";
 import type { Viewer } from "../scene/viewer";
 import type { EnergySection } from "../ui/energy";
 
-export const EXT_API_VERSION = 2;
+export const EXT_API_VERSION = 3;
 
 /** A round button in the view's tool column. */
 export interface Tool {
@@ -43,6 +45,47 @@ export interface EnergyHandle {
   addSection(section: EnergySection): () => void;
   /** Opens the energy sheet. */
   open(): void;
+}
+
+/** Where an entity is in the plan. Rooms count as the view does: a floor's rooms, then its garden areas. */
+export interface Place {
+  floor: number;
+  /** -1 when only the floor is known. */
+  room: number;
+  floorName: string;
+  roomName: string | null;
+}
+
+/** What a tap on the house hit while a replay shows. */
+export interface ReplayHit {
+  floor: number;
+  room: number;
+  entity: string | null;
+}
+
+export interface ReplayOptions {
+  /** Colours and texts for the rooms while the replay shows (other extensions' wait meanwhile). */
+  tint?: RoomTint | null;
+  text?: RoomText | null;
+  /** A tap on the house: nothing is switched or opened while a replay shows. */
+  onHit?(hit: ReplayHit, gesture: "tap" | "long" | "double"): void;
+  /** The replay ended, by end() or by the view (editing began, another replay started, the view went away). */
+  onEnd?(): void;
+}
+
+/** The view showing the past instead of now. */
+export interface ReplaySession {
+  /**
+   * Shows the house with these states, as it was at `time` (ms). Hand over the same state object
+   * for an entity that did not change: only what changed is redrawn. Entities left out show as
+   * unknown, so include every watched entity.
+   */
+  show(states: Record<string, HassEntity>, time: number): void;
+  /** Redraws the rooms' tints alone, for a replay tint that changed without a state changing (a fading trail). */
+  refreshTints(): void;
+  /** Back to live. */
+  end(): void;
+  readonly active: boolean;
 }
 
 /** One live view (a card or the panel) as an extension sees it. */
@@ -76,6 +119,19 @@ export interface ViewHandle {
   /** Redraws the rooms' tints and labels. */
   refreshRooms(): void;
   readonly energy: EnergyHandle;
+
+  // API 3
+  /** The entities whose states the 3D view shows: replay their history to show the house as it was. */
+  watchedEntities(): string[];
+  /** The floor and room an entity is in, as placed in the plan or by its area; null when it is not in the house. */
+  locate(entityId: string): Place | null;
+  /** Starts showing the past (ending a replay already showing). Live states wait until it ends. */
+  replay(options?: ReplayOptions): ReplaySession;
+  readonly replaying: boolean;
+  showFloor(index: number): void;
+  showHouse(): void;
+  /** Picks out a room on its floor (-1: none), flying to it unless fly is false. */
+  selectRoom(floor: number, room: number, fly?: boolean): void;
 }
 
 export interface ExtensionContext {

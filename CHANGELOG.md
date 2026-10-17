@@ -19,6 +19,12 @@
   boxy car becomes the hatchback). "Shape it like…" in Edit fits a car to its charger's car.
 - A car can be shown only while it is here: while plugged in, or while a tracker (a tag in the car,
   the car's own integration) or a sensor says so. Away, it is left out of the 3D view.
+- Extension API 3: replays of the past. An extension can show the house as it was at any moment
+  from Home Assistant's history (doors, windows, lights, motion, cameras, the alarm and who was
+  home, day or night as it was then), while live states wait and nothing can be switched. It can
+  also ask where an entity is in the plan and move between floors and rooms. The Security
+  extension's timeline uses it.
+- Dev harness: the demo house has a pretend day of history to replay, and an alarm.
 
 ## 0.3.1
 - Nothing changes in VirtuHome itself. Releases are now also checked with Home Assistant's hassfest.
