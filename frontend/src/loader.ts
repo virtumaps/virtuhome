@@ -98,8 +98,19 @@ class VirtuHomePanel extends LazyElement {
   }
 }
 
-if (!customElements.get("virtuhome-card")) customElements.define("virtuhome-card", VirtuHomeCard);
-if (!customElements.get("virtuhome-panel")) customElements.define("virtuhome-panel", VirtuHomePanel);
+// Some dashboard plugins swap window.customElements for a polyfill after we defined ours, and
+// dashboards then no longer find the card. Define again (a fresh subclass) on whatever registry is
+// current, for a while after loading.
+const ensureDefined = () => {
+  try {
+    if (!customElements.get("virtuhome-card")) customElements.define("virtuhome-card", class extends VirtuHomeCard {});
+    if (!customElements.get("virtuhome-panel")) customElements.define("virtuhome-panel", class extends VirtuHomePanel {});
+  } catch (err) {
+    // the native registry already has it under this name: nothing more to do
+  }
+};
+ensureDefined();
+for (const ms of [250, 1000, 3000, 8000, 20000]) window.setTimeout(ensureDefined, ms);
 
 const w = window as unknown as { customCards?: { type: string; name: string; description: string; preview?: boolean }[] };
 w.customCards = w.customCards || [];

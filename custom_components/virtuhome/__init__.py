@@ -8,10 +8,11 @@ from pathlib import Path
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import CoreState, Event, HomeAssistant
 from homeassistant.loader import async_get_integration
 
-from . import websocket
+from . import card_resource, websocket
 from .const import (
     CONF_LICENCE_SERVER, DEFAULT_LICENCE_SERVER, DOMAIN, EXT_URL_BASE, LOADER_FILE, PANEL_ELEMENT, PANEL_ICON,
     PANEL_PATH, PANEL_TITLE, URL_BASE,
@@ -50,10 +51,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DATA_STATIC] = True
 
     # the loader is tiny; it defines the card and panel elements and fetches the 3D engine only
-    # where one of them is actually shown
+    # where one of them is actually shown. Dashboards get it as a Lovelace resource, the panel directly.
     loader_url = f"{URL_BASE}/{LOADER_FILE}?v={version}"
-    frontend.add_extra_js_url(hass, loader_url)
-    hass.data[f"{DOMAIN}_loader_url"] = loader_url
+
+    async def _register_card(_event: Event | None = None) -> None:
+        try:
+            await card_resource.async_register(hass, version)
+        except Exception:  # noqa: BLE001 - the card can still be added as a resource by hand
+            _LOGGER.exception("Could not add the VirtuHome card to the dashboard resources")
+
+    if hass.state is CoreState.running:
+        await _register_card()
+    else:
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register_card)
 
     await panel_custom.async_register_panel(
         hass,
@@ -78,7 +88,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if store and store.extension_manager:
         store.extension_manager.async_unload()
     frontend.async_remove_panel(hass, PANEL_PATH)
-    if loader_url := hass.data.pop(f"{DOMAIN}_loader_url", None):
-        frontend.remove_extra_js_url(hass, loader_url)
     hass.data.pop(DOMAIN, None)
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """The integration is removed: take the card out of the dashboard resources."""
+    await card_resource.async_unregister(hass)
