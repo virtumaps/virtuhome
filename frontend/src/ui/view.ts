@@ -602,25 +602,50 @@ export class VhView {
     });
   }
 
-  /** The useful entities of an area, most important first. */
+  /**
+   * What a room's sheet shows: one tile per device (its most useful entity; all lights of a
+   * multi-gang switch), plus the room's own entities. No dead battery sensors, no media-player
+   * wrappers (Plex clients, Music Assistant), no diagnostics.
+   */
   private areaEntities(area: string | null): string[] {
     const hass = this._hass;
     if (!hass || !area) return [];
     const order = ["light", "switch", "cover", "climate", "fan", "media_player", "lock", "camera", "vacuum", "binary_sensor", "sensor"];
-    const ids = Object.keys(hass.entities ?? {}).filter((id) => {
-      const reg = hass.entities![id];
-      if (reg.hidden || reg.entity_category) return false;
-      if (!order.includes(domainOf(id))) return false;
-      if (!hass.states[id]) return false;
-      return areaOf(hass, id) === area;
-    });
+    // what a device is shown by; 100 and above is not shown at all
     const rank = (id: string) => {
       const dom = domainOf(id);
-      const dc = hass.states[id]?.attributes.device_class;
-      let r = order.indexOf(dom) * 10;
-      if (dom === "sensor" && dc !== "temperature" && dc !== "humidity") r += 5;
-      return r;
+      const dc = String(hass.states[id]?.attributes.device_class ?? "");
+      const base: Record<string, number> = { light: 0, camera: 5, climate: 10, media_player: 15, cover: 20, lock: 25, fan: 30, vacuum: 35 };
+      if (base[dom] !== undefined) return base[dom];
+      if (dom === "binary_sensor") return /door|window|opening|garage|motion|occupancy|presence|smoke|moisture|gas|carbon/.test(dc) ? 40 : 200;
+      if (dom === "switch") return /do_not_disturb|snooze|home_mode|_led\b|child_lock|sync_|nightlight|freeze|reverse|detection|play_.*sound/.test(id) ? 200 : dc === "outlet" ? 45 : 60;
+      if (dom === "sensor") return /temperature|humidity/.test(dc) ? 70 : 200;
+      return 200;
     };
-    return ids.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).slice(0, 40);
+    const byDevice = new Map<string, string[]>();
+    for (const [id, reg] of Object.entries(hass.entities ?? {})) {
+      if (reg.hidden || reg.entity_category || !hass.states[id]) continue;
+      const dom = domainOf(id);
+      if (!order.includes(dom)) continue;
+      if (dom === "media_player" && ["plex", "music_assistant", "group"].includes(String(reg.platform))) continue;
+      if (areaOf(hass, id) !== area) continue;
+      const key = reg.device_id ?? id;
+      if (!byDevice.has(key)) byDevice.set(key, []);
+      byDevice.get(key)!.push(id);
+    }
+    const picked: string[] = [];
+    for (const ids of byDevice.values()) {
+      const lights = ids.filter((id) => domainOf(id) === "light");
+      if (lights.length) {
+        picked.push(...lights);
+        continue;
+      }
+      const best = ids.sort((a, b) => rank(a) - rank(b))[0];
+      const s = hass.states[best];
+      const dead = (s?.state === "unavailable" || s?.state === "unknown") && /sensor/.test(domainOf(best));
+      if (best && rank(best) < 100 && !dead) picked.push(best);
+    }
+    return picked.sort((a, b) => rank(a) - rank(b) || this.nameOf(a).localeCompare(this.nameOf(b))).slice(0, 24);
   }
+
 }
