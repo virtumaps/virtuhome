@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1
+- Nothing changes in VirtuHome itself. Releases are now also checked with Home Assistant's hassfest.
+
 ## 0.3.0
 
 VirtuHome is now licensed under the GNU GPL v3 (it was PolyForm Shield). The paid extensions are
