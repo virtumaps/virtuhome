@@ -13,6 +13,8 @@
   extensions, for attaching to an issue. Names, entity ids and the licence key stay out of it.
 
 ### Fixed
+- Picking a garden area or the driveway flies the view to it, as it does for a room; it used to stay
+  where it was.
 - A new home's Edit button can be tapped: the "No home yet" text lay over it, so a fresh install
   couldn't start editing.
 
