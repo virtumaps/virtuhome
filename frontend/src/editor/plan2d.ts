@@ -467,6 +467,26 @@ export class Plan2D {
         layers.guides.append(el("circle", { cx: x, cy: y, r: 7, class: "p2-place" }));
       }
     }
+    layers.handles.append(this.compass(plan.settings.north ?? 0));
+  }
+
+  /** Where the compass sits: the bottom left corner. */
+  private compassAt(): [number, number] {
+    return [44, this.h - 44];
+  }
+
+  /** North on the plan: an arrow to drag round (Shift snaps to 15°); the sun and the wind follow it. */
+  private compass(north: number): SVGGElement {
+    const [cx, cy] = this.compassAt();
+    const g = el("g", { class: "p2-north", "data-kind": "north", "data-id": "north", transform: `translate(${cx} ${cy})` });
+    g.append(el("title", {}, `North: the top of the plan faces ${Math.round(north)}°. Drag the arrow to where north is.`));
+    g.append(el("circle", { r: 26 }));
+    const rose = el("g", { transform: `rotate(${-north})` });
+    rose.append(el("path", { d: "M0 -20 L6 1 L0 -3 L-6 1 Z", class: "n" }), el("path", { d: "M0 20 L6 -1 L0 3 L-6 -1 Z", class: "s" }));
+    g.append(rose);
+    const r = (north * Math.PI) / 180;
+    g.append(el("text", { x: (-35 * Math.sin(r)).toFixed(1), y: (-35 * Math.cos(r) + 4).toFixed(1) }, "N"));
+    return g;
   }
 
   private drawGrid(g: SVGGElement): void {
@@ -655,6 +675,11 @@ export class Plan2D {
       svg.setPointerCapture(e.pointerId);
       const target = (e.target as Element).closest("[data-kind]") as SVGElement | null;
       const p = this.toPlan(x, y);
+      // the compass turns with any tool
+      if (target?.dataset.kind === "north") {
+        this.grab(target, p, e);
+        return;
+      }
       if (this.tool !== "select") {
         this.toolDown(p, e);
         return;
@@ -755,6 +780,20 @@ export class Plan2D {
     const f = this.floor!;
     if (kind === "dim") {
       this.editLength(id, Number(target.dataset.i), target);
+      return;
+    }
+    if (kind === "north") {
+      this.host.dragStart();
+      this.drag = {
+        kind, label: "North", moved: false,
+        apply: (x, z, ev) => {
+          const [sx, sy] = this.toScreen([x, z]);
+          const [cx, cy] = this.compassAt();
+          const a = (Math.atan2(sx - cx, -(sy - cy)) * 180) / Math.PI;
+          const n = (((-a % 360) + 360) % 360);
+          this.host.plan().settings.north = ev.shiftKey ? (Math.round(n / 15) * 15) % 360 : Math.round(n);
+        },
+      };
       return;
     }
     if (kind === "room" || kind === "outdoor" || kind === "fence") {
@@ -1257,6 +1296,12 @@ export const PLAN2D_CSS = /* css */ `
 .p2-drawing.fill { fill: rgba(47,124,246,0.12); }
 .p2-draw-pt { fill: #2f7cf6; }
 .p2-place { fill: rgba(47,124,246,0.35); stroke: #2f7cf6; stroke-width: 2; }
+.p2-north { cursor: grab; }
+.p2-north circle { fill: rgba(255,255,255,0.85); stroke: rgba(0,0,0,0.15); }
+.vh-root:not(.day) .p2-north circle { fill: rgba(30,36,48,0.85); stroke: rgba(255,255,255,0.15); }
+.p2-north .n { fill: #e5484d; }
+.p2-north .s { fill: rgba(127,127,127,0.6); }
+.p2-north text { fill: #e5484d; font-weight: 700; font-size: 12px; text-anchor: middle; }
 .p2-empty { fill: #8b8d98; font-size: 14px; }
 .p2-bar { position: absolute; left: 10px; top: 10px; display: flex; gap: 8px; flex-wrap: wrap; pointer-events: none; }
 .p2-group { display: flex; gap: 2px; padding: 3px; border-radius: 14px; background: var(--vh-glass); box-shadow: 0 1px 6px rgba(0,0,0,0.16); pointer-events: auto; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }

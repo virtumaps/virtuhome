@@ -35,6 +35,17 @@ export interface Detections {
     story?: number | null;
     aligned?: "verified" | "assumed";
   }[];
+  /**
+   * The phone's compass while scanning (House Scan): the bearing the scan's -Z axis points to, in
+   * degrees clockwise from north ("true" north, or "magnetic" when the phone had no location).
+   */
+  compass?: {
+    structure_minus_z_bearing?: number | null;
+    reference?: "true" | "magnetic";
+    samples?: number;
+    /** How much the readings varied (degrees). */
+    spread?: number | null;
+  } | null;
 }
 
 interface CapturedRoomJson {
@@ -72,6 +83,8 @@ export interface ImportReport {
   /** Plants, dumbbells, pictures... from detections.json. */
   decor: number;
   warnings: string[];
+  /** North from the phone's compass (PlanSettings.north), when the scan has a reading. */
+  north?: { bearing: number; spread: number | null; magnetic: boolean } | null;
 }
 
 /** detections.json labels to furniture types. */
@@ -546,10 +559,16 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
     if (assumed) warnings.push(`${assumed} decor item${assumed === 1 ? "" : "s"} could not be lined up exactly: check where they stand.`);
   }
 
-  const plan = normalizePlan({ version: 1, settings: { ...DEFAULT_SETTINGS, wall_exterior: wallExt, wall_interior: round(wallInterior) }, floors });
+  // north: the scan's -Z axis ends up turned by straighten + turn on the plan (clockwise from its top)
+  const c = opt.detections?.space !== "arsession" ? opt.detections?.compass : null;
+  const north = c && typeof c.structure_minus_z_bearing === "number" && (c.samples ?? 0) >= 10
+    ? { bearing: Math.round((((c.structure_minus_z_bearing - straighten - turn) % 360) + 360) % 360 * 10) / 10, spread: c.spread ?? null, magnetic: c.reference === "magnetic" }
+    : null;
+  const settings = { ...DEFAULT_SETTINGS, wall_exterior: wallExt, wall_interior: round(wallInterior), north: north?.bearing ?? 0 };
+  const plan = normalizePlan({ version: 1, settings, floors });
   return {
     plan,
-    report: { rooms: rooms.length, floors: floors.length, openings: openingCount, furniture: furnitureCount, decor: decorCount, warnings },
+    report: { rooms: rooms.length, floors: floors.length, openings: openingCount, furniture: furnitureCount, decor: decorCount, warnings, north },
   };
 }
 

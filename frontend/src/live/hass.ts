@@ -59,6 +59,8 @@ export interface Hass {
   user?: { id: string; name: string; is_admin: boolean };
   themes?: { darkMode?: boolean };
   language?: string;
+  /** The home's location and time zone (Settings → System → General). */
+  config?: { latitude?: number; longitude?: number; elevation?: number; time_zone?: string };
   callService(domain: string, service: string, data?: Record<string, unknown>, target?: Record<string, unknown>): Promise<unknown>;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
   connection: {

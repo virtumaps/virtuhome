@@ -25,6 +25,9 @@ import type { VhView } from "../ui/view";
 import { EDITOR_CSS } from "./styles";
 import { Collider, settle } from "./collide";
 import { Plan2D, PLAN2D_CSS } from "./plan2d";
+import { fetchBuildings, northFits, pickBuilding, type Footprint, type NorthFit } from "./north";
+import { compassName } from "../live/sun";
+import { location as homeLocation } from "../live/sky";
 
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
 type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence"; id: string } | null;
@@ -94,6 +97,8 @@ export class Editor {
   private body: HTMLDivElement;
   private status: HTMLSpanElement;
   private dragStart: Plan | null = null;
+  /** The last "Line up with the map": the building found and the ways the plan fits it. */
+  private mapFit: { building: Footprint; fits: NorthFit[] } | { error: string } | { busy: true } | null = null;
   /** Corners that move together with the dragged one (shared by neighbouring rooms). */
   private dragCorners: { outdoor: boolean; id: string; i: number }[] = [];
   /** A + being pressed: the edge its corner goes on, made once the + moves. */
@@ -681,6 +686,7 @@ export class Editor {
         ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, "Outside wall colour"))
         : null,
       ...this.energySection(),
+      ...this.skySection(),
       h("h4", {}, "Floors"),
       ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
       h("h4", {}, "Plan file"),
@@ -770,6 +776,141 @@ export class Editor {
       row("Charger", "ev_charger", power, auto.ev.length ? `Automatic: ${auto.ev.map((c) => c.name).join(" + ")}` : "Automatic: none found"),
       row("Car battery", "ev_level", levels, automatic(auto.ev[0]?.level ?? null)),
     ];
+  }
+
+  /** Which way the house faces (for the sun and the wind) and which weather it shows. */
+  private skySection(): HTMLElement[] {
+    const set = this.plan.settings;
+    const sky = set.sky ?? {};
+    const north = set.north ?? 0;
+    const editSky = (k: "enabled" | "weather", v: unknown, label: string) =>
+      this.change((p) => {
+        const e = { ...(p.settings.sky ?? {}) } as Record<string, unknown>;
+        if (v === "" || v === null || v === undefined) delete e[k];
+        else e[k] = v;
+        p.settings.sky = Object.keys(e).length ? e : null;
+      }, false, label);
+    const weathers = this.entities((id) => domainOf(id) === "weather");
+    const autoWeather = this.host.view.skyLive.weatherEntity(this.hass);
+    const fit = this.mapFit;
+    let mapRows: (HTMLElement | null)[] = [];
+    if (fit && "busy" in fit) mapRows = [h("p", { class: "ed-hint" }, "Asking OpenStreetMap…")];
+    else if (fit && "error" in fit) mapRows = [h("p", { class: "ed-hint" }, fit.error)];
+    else if (fit && "building" in fit) {
+      const b = fit.building;
+      const where = b.distance < 1 ? "at the home location" : `${Math.round(b.distance)} m from the home location`;
+      mapRows = [
+        h("p", { class: "ed-hint" }, `Found a building ${where}, ${b.size[0].toFixed(1)} × ${b.size[1].toFixed(1)} m. If the house faces another way, pick it:`),
+        h("div", { class: "ed-row" }, ...fit.fits.map((f) =>
+          h("button", { class: `ed-btn small${Math.abs(f.north - north) < 0.5 ? "" : " ghost"}`, onclick: () => this.setNorth(f.north) }, `${Math.round(f.north)}° ${compassName(f.north)}`))),
+      ];
+    }
+    return [
+      h("h4", {}, "Sun and weather"),
+      h("p", { class: "ed-hint" }, "Which way the top of the plan faces. With it right, the sun lights the house and casts its shadows as it does outside, at every hour and season. Drag the N to where north is."),
+      h("div", { class: "ed-row" },
+        this.northDial(north),
+        h("div", { class: "ed-col" },
+          h("div", { class: "ed-row" },
+            h("label", {}, "Faces"),
+            h("input", { class: "ed-in num", type: "number", step: "1", min: "0", max: "359", value: String(Math.round(north * 10) / 10),
+              onchange: (e: Event) => this.setNorth(Number((e.target as HTMLInputElement).value) || 0) }),
+            h("span", {}, `° ${compassName(north)}`)),
+          h("button", { class: "ed-btn ghost", onclick: () => this.lineUpWithMap() }, "Line up with the map"),
+        ),
+      ),
+      h("p", { class: "ed-hint" }, "Line up with the map sends Home Assistant's home location to a public OpenStreetMap server (overpass-api.de, or overpass.kumi.systems when that one is busy) for the outline of the building there, and turns the plan to match its walls. Map data © OpenStreetMap contributors."),
+      ...mapRows.filter((e): e is HTMLElement => !!e),
+      h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: sky.enabled !== false, onchange: (e: Event) => editSky("enabled", (e.target as HTMLInputElement).checked ? null : false, "Weather shown") }),
+        " Show the weather: clouds, rain, snow, fog and wind"),
+      h("div", { class: "ed-row" },
+        h("label", {}, "Weather"),
+        this.dropdown(weathers, sky.weather ?? "", (v) => editSky("weather", v || null, "Weather entity"), `Automatic: ${autoWeather ? weathers.find(([id]) => id === autoWeather)?.[1] ?? autoWeather : "none"}`)),
+    ];
+  }
+
+  private setNorth(n: number): void {
+    const v = Math.round((((n % 360) + 360) % 360) * 10) / 10;
+    this.change((p) => (p.settings.north = v), false, "North");
+  }
+
+  /** A compass to drag: the N goes where north is on the plan (the plan's top is up). Shift snaps to 15°. */
+  private northDial(north: number): HTMLElement {
+    const dial = h("div", { class: "ed-compass", title: "Drag the N to where north is on the plan" });
+    const draw = (n: number) => {
+      const ticks = Array.from({ length: 12 }, (_, i) => `<line x1="42" y1="6" x2="42" y2="${i % 3 ? 10 : 13}" transform="rotate(${i * 30} 42 42)"/>`).join("");
+      // the letters stay upright as the rose turns
+      const letters = ([["N", 0], ["E", 90], ["S", 180], ["W", 270]] as const).map(([l, a]) => {
+        const r = ((a - n) * Math.PI) / 180;
+        return `<text x="${(42 + 21 * Math.sin(r)).toFixed(1)}" y="${(46 - 21 * Math.cos(r)).toFixed(1)}" class="${l === "N" ? "n" : ""}">${l}</text>`;
+      }).join("");
+      dial.innerHTML = `<svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="38"/><g transform="rotate(${-n} 42 42)">${ticks}</g>${letters}`
+        + `<path class="up" d="M42 34 L47 46 L42 43 L37 46 Z"/></svg>`;
+    };
+    draw(north);
+    let start: Plan | null = null;
+    const angle = (e: PointerEvent) => {
+      const r = dial.getBoundingClientRect();
+      const a = (Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180) / Math.PI;
+      const n = (((-a % 360) + 360) % 360);
+      return e.shiftKey ? (Math.round(n / 15) * 15) % 360 : Math.round(n);
+    };
+    dial.addEventListener("pointerdown", (e) => {
+      start = structuredClone(this.plan);
+      dial.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    dial.addEventListener("pointermove", (e) => {
+      if (!start) return;
+      // the 3D view's sun turns with it; one undo step when the drag ends
+      this.plan.settings.north = angle(e);
+      draw(this.plan.settings.north);
+      this.host.view.previewPlan(this.plan);
+    });
+    const end = (e: PointerEvent) => {
+      if (!start) return;
+      const before = start;
+      start = null;
+      this.plan.settings.north = angle(e);
+      if (before.settings.north !== this.plan.settings.north) {
+        this.undo.push({ plan: before, label: "North" });
+        this.redo = [];
+        this.changed();
+      }
+      this.apply();
+    };
+    dial.addEventListener("pointerup", end);
+    dial.addEventListener("pointercancel", end);
+    return dial;
+  }
+
+  /** Turns the plan to match the building at the home location on OpenStreetMap. */
+  private async lineUpWithMap(): Promise<void> {
+    const loc = homeLocation(this.hass);
+    if (!loc) {
+      this.mapFit = { error: "Home Assistant has no home location: set it under Settings → System → General." };
+      this.render();
+      return;
+    }
+    this.mapFit = { busy: true };
+    this.render();
+    try {
+      const buildings = await fetchBuildings(loc.lat, loc.lon);
+      const building = pickBuilding(this.plan, buildings);
+      if (!building) {
+        this.mapFit = { error: "OpenStreetMap has no building outline near the home location. Set north by hand." };
+        this.render();
+        return;
+      }
+      const fits = northFits(this.plan, building);
+      this.mapFit = { building, fits };
+      if (fits[0]) this.setNorth(fits[0].north);
+      else this.render();
+    } catch (err) {
+      this.mapFit = { error: `OpenStreetMap could not be reached (${(err as Error).message ?? err}). Try again later, or set north by hand.` };
+      this.render();
+    }
   }
 
   /** A car: when it shows (it can leave the drive), and its charger's car's own shape and size. */
@@ -1513,6 +1654,8 @@ export class Editor {
       this.change((p) => {
         p.floors = plan.floors;
         p.settings = { ...p.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior };
+        // a new scan faces its own way: the phone's compass, or unknown (north up) until set
+        p.settings.north = report.north?.bearing ?? 0;
       });
       this.host.view.viewer.setMode("house");
       const placed = autoPlace(this.plan, this.hass);
@@ -1520,6 +1663,9 @@ export class Editor {
       this.showReport([
         `${report.rooms} rooms on ${report.floors} floor${report.floors === 1 ? "" : "s"}, ${report.openings} doors and windows, ${report.furniture} pieces of furniture${report.decor ? `, ${report.decor} decorations` : ""}.`,
         `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
+        report.north
+          ? `North from the phone's compass: the top of the plan faces ${Math.round(report.north.bearing)}° (${compassName(report.north.bearing)})${report.north.spread !== null ? `, readings within ±${Math.round(report.north.spread)}°` : ""}${report.north.magnetic ? ", magnetic north" : ""}. Indoors a compass can be off: check it under Sun and weather.`
+          : "The scan has no compass reading: set north under Sun and weather for the sun's shadows.",
         ...report.warnings,
       ]);
     };

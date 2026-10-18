@@ -10,6 +10,7 @@ export type Vec2 = [number, number];
 import type { ExteriorFinish, FloorFinish, JoineryFinish, Upholstery, WallFinish } from "../scene/finishes";
 import type { DoorStyle, GarageStyle, WindowStyle } from "../scene/joinery";
 import { CEILING_LAMPS, FURNITURE, type BalustradeMaterial, type BalustradeStyle } from "../scene/furniture-lib";
+import type { SkySettings } from "../live/sky";
 
 export type FloorMaterial = FloorFinish;
 export type { DoorStyle, ExteriorFinish, FloorFinish, GarageStyle, JoineryFinish, Upholstery, WallFinish, WindowStyle };
@@ -198,7 +199,7 @@ export interface PlanSettings {
   /** Wall thickness of outside walls and inside walls (m). */
   wall_exterior: number;
   wall_interior: number;
-  /** Degrees the plan is turned from north (0 = up the plan is north). */
+  /** The compass bearing the top of the plan faces, in degrees (0: up the plan is north, 90: east). */
   north: number;
   theme: ThemeName;
   /** Outside walls: brick, render, cladding... and a colour for paintable finishes. */
@@ -206,6 +207,8 @@ export interface PlanSettings {
   exterior_color?: string | null;
   /** Solar, battery, grid and car charger sensors; anything unset is found from Home Assistant. */
   energy?: EnergySettings | null;
+  /** The weather shown in 3D: which weather entity, or none. */
+  sky?: SkySettings | null;
 }
 
 /**

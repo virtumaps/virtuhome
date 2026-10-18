@@ -60,6 +60,15 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
     }
   }
   put("sun.sun", night ? "below_horizon" : "above_horizon", { azimuth: night ? 320 : 200, elevation: night ? -20 : 38 });
+  // the weather (?weather=rainy, snowy, pouring, fog, lightning-rainy...; ?weather=none leaves it out)
+  const weather = new URLSearchParams(location.search).get("weather") ?? "partlycloudy";
+  if (weather !== "none") {
+    const cloud: Record<string, number> = { sunny: 5, "clear-night": 5, partlycloudy: 45, cloudy: 95, fog: 100, rainy: 100, pouring: 100, snowy: 100, "lightning-rainy": 100 };
+    put("weather.forecast_home", weather, {
+      friendly_name: "Forecast Home", temperature: /snow/.test(weather) ? -1 : 12, temperature_unit: "°C", humidity: 78,
+      cloud_coverage: cloud[weather] ?? 50, wind_bearing: 240, wind_speed: weather === "lightning-rainy" ? 38 : 14, wind_speed_unit: "km/h",
+    });
+  }
   // two people and the alarm, where the pretend day (demo-history.ts) has them now
   const story = (id: string, fallback: string) => storyState(id, Date.now())?.s ?? fallback;
   put("person.alex", story("person.alex", "home"), { friendly_name: "Alex" });
@@ -93,6 +102,8 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
     areas,
     floors: {},
     user: { id: "demo", name: "Demo", is_admin: true },
+    // a house in London: the sun is where it is there now
+    config: { latitude: 51.5072, longitude: -0.1276, time_zone: "Europe/London" },
     async callService(domain, service, _data, target) {
       const ids = ([] as string[]).concat((target?.entity_id as string | string[]) ?? []);
       for (const id of ids) {

@@ -1,7 +1,7 @@
 // The 3D view. Draws only when something changed (zero GPU work while idle), merges each floor
 // into a couple of meshes, and lights them on the CPU.
 import {
-  Color, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer,
+  Box3, Color, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Plane, Raycaster, Scene, ShapeUtils, Vector2, Vector3, WebGLRenderer,
   CircleGeometry, BufferGeometry, BufferAttribute, DoubleSide, LineSegments, LineBasicMaterial, AdditiveBlending, NormalBlending,
   type Material,
 } from "three";
@@ -19,6 +19,7 @@ import { floorUniforms, getCut, glassMaterial, opaqueMaterial, setCut, setTint, 
 import { DAY, paletteFor, type Palette } from "./palette";
 import type { RealisticLook } from "./realistic";
 import type { Tier, TierSetting } from "./tier";
+import { quietSky, type Sky } from "../live/sky";
 
 export { detectLowEnd } from "./tier";
 export type WallMode = "smart" | "low" | "full";
@@ -79,6 +80,13 @@ interface FloorView {
   dynGlassGeo: Geo;
   u: FloorUniforms;
   offset: number;
+  /**
+   * Realistic look, shadows only: the storey's ceiling (the sun lights its rooms through their
+   * windows, not over cut walls), and the storey as a shell for when it is hidden above the one shown
+   * (its shadow still falls on the garden).
+   */
+  shade: Mesh | null;
+  ghost: Mesh | null;
   /** Target and current cut per wall slot. */
   cutTarget: Float32Array;
   /** How far each door and window is open (0..1) and where it is going. */
@@ -151,9 +159,13 @@ export class Viewer {
   private look: RealisticLook | null = null;
   private realistic: RealisticModule | null;
   private basicGround = new MeshBasicMaterial({ color: 0xffffff });
+  /** The storeys hidden above the one shown, as shadow casters (realistic look). */
+  private ghosts = new Group();
   /** Something moved in the scene (not just the camera): shadows need redrawing. */
   private sceneChanged = true;
-  private sun: { azimuth: number | null; elevation: number | null } = { azimuth: null, elevation: null };
+  private sky: Sky | null = null;
+  /** The weather wants frames (rain, snow, wind, lightning): when the next one is due. */
+  private fxTimer = 0;
   private slowWatch = { frames: 0, time: 0, fired: false };
   /** Measured once per label element (reading sizes every frame would force layouts). */
   private labelSize = new WeakMap<HTMLElement, number[]>();
@@ -184,7 +196,7 @@ export class Viewer {
     this.cones.renderOrder = 3;
     this.coneLines = new LineSegments(new BufferGeometry(), new LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
     this.coneLines.renderOrder = 3;
-    this.scene.add(this.ground, this.cones, this.coneLines, this.halos.mesh, this.markers.mesh);
+    this.scene.add(this.ground, this.cones, this.coneLines, this.halos.mesh, this.markers.mesh, this.ghosts);
     this.setupLook();
     this.applyPalette();
 
@@ -232,7 +244,7 @@ export class Viewer {
     if (this.look) {
       this.ground.material = this.look.groundMaterial;
       this.look.attachGround(this.ground);
-      this.look.setSun(this.sun.azimuth, this.sun.elevation, this.plan?.settings.north ?? 0);
+      if (this.sky) this.look.setSky(this.sky, this.plan?.settings.north ?? 0);
     } else {
       this.ground.material = this.basicGround;
       this.ground.receiveShadow = false;
@@ -265,14 +277,21 @@ export class Viewer {
     if (this.plan) this.setPlan(this.plan, true);
   }
 
-  /** Where the sun is (degrees), for the realistic look's daylight and shadows. */
+  /** Where the sun is (degrees), for the realistic look's daylight and shadows (the sky's weather stays). */
   setSun(azimuth: number | null, elevation: number | null): void {
-    if (azimuth === this.sun.azimuth && elevation === this.sun.elevation) return;
-    this.sun = { azimuth, elevation };
-    if (this.look) {
-      this.look.setSun(azimuth, elevation, this.plan?.settings.north ?? 0);
-      this.invalidate();
-    }
+    this.setSky({ ...(this.sky ?? quietSky()), sun: azimuth === null || elevation === null ? null : { azimuth, elevation } });
+  }
+
+  /** The sky over the house: the sun's and the moon's light and the weather (the realistic look); the sky's colour (the model look). */
+  setSky(sky: Sky): void {
+    this.sky = sky;
+    if (this.look) this.look.setSky(sky, this.plan?.settings.north ?? 0);
+    else this.applyPalette();
+    this.invalidate();
+  }
+
+  get currentSky(): Sky | null {
+    return this.sky;
   }
 
   // ------------------------------------------------------------------ plan and looks
@@ -284,7 +303,10 @@ export class Viewer {
    */
   setPlan(plan: Plan, keepView = false, reuse = true): void {
     this.dropLifted();
+    const turned = (this.plan?.settings.north ?? 0) !== plan.settings.north;
     this.plan = plan;
+    // turning the plan to north moves the sun, nothing else
+    if (turned && this.look && this.sky) this.look.setSky(this.sky, plan.settings.north);
     if (!reuse) {
       for (const f of this.floors) this.disposeFloor(f);
       this.floors = [];
@@ -320,7 +342,16 @@ export class Viewer {
     this.basicGround.color.setHex(this.pal.ground);
     if (this.look) this.look.setNight(this.pal.name === "night");
     else {
-      this.scene.background = new Color(this.pal.background);
+      // the model look shows the weather in its sky only: greyer under cloud, darker in a storm, white ground under snow
+      const sky = this.sky;
+      const bg = new Color(this.pal.background);
+      if (sky && sky.source !== "none") {
+        const night = this.pal.name === "night";
+        bg.lerp(new Color(night ? 0x1a1f29 : 0xd3d8dd), sky.cloud * 0.7);
+        bg.lerp(new Color(night ? 0x0b0e14 : 0x9aa1a8), Math.max(sky.rain * 0.45, sky.storm ? 0.5 : 0));
+        if (sky.snowCover > 0) this.basicGround.color.lerp(new Color(night ? 0x5f6878 : 0xf3f5f8), sky.snowCover * 0.85);
+      }
+      this.scene.background = bg;
       this.scene.fog = null;
     }
   }
@@ -328,8 +359,9 @@ export class Viewer {
   /** Everything a floor's build depends on. */
   private floorKey(i: number): string {
     const plan = this.plan!;
-    // stairs on the storey below cut the stairwell in this one's floor
-    return JSON.stringify([plan.settings, plan.floors[i], stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.pal.name, !!this.look, this.low]);
+    // stairs on the storey below cut the stairwell in this one's floor; north and the weather only move the light
+    const { north: _north, sky: _sky, ...settings } = plan.settings;
+    return JSON.stringify([settings, plan.floors[i], stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.pal.name, !!this.look, this.low]);
   }
 
   private buildFloor(i: number): FloorBuild {
@@ -344,6 +376,7 @@ export class Viewer {
     u.uCutColor.value.setHex(this.look ? 0x2c2f34 : this.pal.wallCut);
     u.uCutY.value = fb.floor.elevation + this.cutHeight;
     u.uFloorY.value = fb.floor.elevation;
+    u.uIndoor.value = fb.floor.rooms.length;
     const dynGeo = new Geo();
     const dynGlassGeo = new Geo();
     let opaque: Mesh, glass: Mesh, dyn: Mesh, dynGlass: Mesh;
@@ -366,8 +399,9 @@ export class Viewer {
     group.add(opaque, dyn, glass, dynGlass);
     this.scene.add(group);
     const slots = 128;
+    const [shade, ghost] = this.makeShadowShells(fb, group);
     return {
-      fb, key, group, opaque, glass, dyn, dynGeo, dynGlass, dynGlassGeo, u, offset: 0,
+      fb, key, group, opaque, glass, dyn, dynGeo, dynGlass, dynGlassGeo, u, offset: 0, shade, ghost,
       cutTarget: new Float32Array(slots),
       doorPos: doorRest(fb),
       doorTarget: doorRest(fb),
@@ -404,6 +438,9 @@ export class Viewer {
     f.key = this.floorKey(i);
     f.u.uCutY.value = fb.floor.elevation + this.cutHeight;
     f.u.uFloorY.value = fb.floor.elevation;
+    f.u.uIndoor.value = fb.floor.rooms.length;
+    this.disposeShells(f);
+    [f.shade, f.ghost] = this.makeShadowShells(fb, f.group);
     if (!sameDoors) {
       f.doorPos = doorRest(fb);
       f.doorTarget = doorRest(fb);
@@ -415,6 +452,56 @@ export class Viewer {
       f.coverTarget = new Float32Array(fb.windows.length).fill(1);
     }
     this.rebuildDynamic(f);
+  }
+
+  /**
+   * The realistic look's shadow-only shells of a storey: its ceiling, in its group (light gets into
+   * its rooms through the windows), and the whole storey (outside walls and roof) for when it is
+   * hidden above the one shown.
+   */
+  private makeShadowShells(fb: FloorBuild, group: Group): [Mesh | null, Mesh | null] {
+    if (!this.look) return [null, null];
+    const top = fb.floor.elevation + fb.floor.height - 0.02;
+    const pos: number[] = [];
+    for (const r of fb.floor.rooms) {
+      if (r.points.length < 3) continue;
+      const tris = ShapeUtils.triangulateShape(r.points.map(([x, z]) => new Vector2(x, z)), []);
+      for (const t of tris) for (const k of t) pos.push(r.points[k][0], top, r.points[k][1]);
+    }
+    if (!pos.length) return [null, null];
+    const mesh = (p: number[]) => {
+      const g = new BufferGeometry();
+      g.setAttribute("position", new BufferAttribute(new Float32Array(p), 3));
+      g.computeVertexNormals();
+      const m = new Mesh(g, this.look!.castOnly);
+      m.castShadow = true;
+      return m;
+    };
+    const shade = mesh(pos);
+    group.add(shade);
+    const shell = pos.slice();
+    const y0 = fb.floor.elevation;
+    for (const w of fb.layout.walls) {
+      if (!w.exterior) continue;
+      const [a, b] = [w.a, w.b];
+      shell.push(a[0], y0, a[1], b[0], y0, b[1], b[0], top, b[1], a[0], y0, a[1], b[0], top, b[1], a[0], top, a[1]);
+    }
+    const ghost = mesh(shell);
+    ghost.visible = false;
+    this.ghosts.add(ghost);
+    return [shade, ghost];
+  }
+
+  private disposeShells(f: FloorView): void {
+    if (f.shade) {
+      f.shade.removeFromParent();
+      f.shade.geometry.dispose();
+    }
+    if (f.ghost) {
+      f.ghost.removeFromParent();
+      f.ghost.geometry.dispose();
+    }
+    f.shade = f.ghost = null;
   }
 
   // ------------------------------------------------------------------ dragging a piece
@@ -519,6 +606,7 @@ export class Viewer {
 
   private disposeFloor(f: FloorView): void {
     this.scene.remove(f.group);
+    this.disposeShells(f);
     for (const m of [f.opaque, f.glass, f.dyn, f.dynGlass]) {
       m.geometry.dispose();
       if (this.look) this.look.detach(m);
@@ -602,11 +690,27 @@ export class Viewer {
     this.ground.position.x = (b.minX + b.maxX) / 2;
     this.ground.position.z = (b.minZ + b.maxZ) / 2;
     if (this.look) {
-      // the shadow covers the house as stacked now, garden included
-      const visible = this.floors.filter((f) => f.group.visible);
-      const top = visible.reduce((m, f) => Math.max(m, f.fb.floor.elevation + f.offset + f.fb.floor.height), 3);
-      const half = Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ) / 2 + 2;
-      this.look.fit(new Vector3((b.minX + b.maxX) / 2, (groundY + top) / 2, (b.minZ + b.maxZ) / 2), Math.max(half, (top - groundY) / 2 + 2));
+      // the shadow covers what casts it: the house as stacked now (storeys hidden above the one shown
+      // still stand there for the sun), its garden, fences and garden furniture
+      let top = groundY + 3;
+      const box = new Box3();
+      for (const f of this.floors) {
+        const shown = f.group.visible;
+        if (f.ghost) f.ghost.visible = !shown;
+        top = Math.max(top, f.fb.floor.elevation + (shown ? f.offset : 0) + f.fb.floor.height);
+        const pts = [...f.fb.floor.rooms.flatMap((r) => r.points), ...(f.fb.floor.outdoor ?? []).flatMap((o) => o.points), ...(f.fb.floor.fences ?? []).flatMap((x) => x.points)];
+        for (const p of pts) box.expandByPoint(new Vector3(p[0], groundY, p[1]));
+      }
+      if (box.isEmpty()) box.set(new Vector3(b.minX, groundY, b.minZ), new Vector3(b.maxX, groundY, b.maxZ));
+      box.expandByScalar(1);
+      box.min.y = groundY;
+      box.max.y = top + 0.5;
+      this.look.fit(box, groundY);
+      // where rain may fall: around the house, never in a room of any storey
+      this.look.setWeatherArea({
+        rooms: this.floors.flatMap((f) => f.fb.floor.rooms.map((r) => r.points)),
+        minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z, ground: groundY, top: top + 5,
+      });
     }
     this.sceneChanged = true;
     this.updateCutTargets(true);
@@ -1271,6 +1375,14 @@ export class Viewer {
       }
     }
     this.watchSpeed(again, dt);
+    // the weather asks for its own frames, at most about 30 a second, and none while unseen
+    const fx = this.look && this.visible && !document.hidden ? this.look.animate(now) : 0;
+    if (fx && !again && !this.fxTimer) {
+      this.fxTimer = window.setTimeout(() => {
+        this.fxTimer = 0;
+        this.invalidate();
+      }, fx);
+    }
     // one pending frame at most: OrbitControls' change event may already have asked for it
     if (again) {
       if (!this.raf) this.raf = requestAnimationFrame(this.tick);
@@ -1559,6 +1671,7 @@ export class Viewer {
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
+    window.clearTimeout(this.fxTimer);
     this.resizeObs.disconnect();
     this.interObs.disconnect();
     document.removeEventListener("visibilitychange", this.onVisibility);
