@@ -61,6 +61,7 @@ async function liveHass(onChange: (h: Hass) => void): Promise<Hass> {
     callService: (domain, service, data, target) =>
       conn.sendMessagePromise({ type: "call_service", domain, service, service_data: data ?? {}, target }),
     callWS: <T>(msg: Record<string, unknown>) => conn.sendMessagePromise<T>(msg as never),
+    hassUrl: (path = "") => cfg.HA_URL.replace(/\/$/, "") + path,
     connection: {
       subscribeMessage: (cb, msg) => conn.subscribeMessage(cb as never, msg as never) as never,
     },

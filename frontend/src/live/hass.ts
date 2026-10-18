@@ -63,6 +63,8 @@ export interface Hass {
   config?: { latitude?: number; longitude?: number; elevation?: number; time_zone?: string };
   callService(domain: string, service: string, data?: Record<string, unknown>, target?: Record<string, unknown>): Promise<unknown>;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
+  /** A path on Home Assistant as a full address (Home Assistant's frontend has it, and so does the dev harness). */
+  hassUrl?(path?: string): string;
   connection: {
     subscribeMessage<T>(cb: (msg: T) => void, msg: Record<string, unknown>): Promise<() => Promise<void>>;
   };

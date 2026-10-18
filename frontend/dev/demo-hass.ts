@@ -124,6 +124,12 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
     async callWS<T>(msg: Record<string, unknown>) {
       // replays read the recorder's history; the demo has a pretend day for them
       if (msg.type === "history/history_during_period") return demoHistory(msg as Parameters<typeof demoHistory>[0], states) as T;
+      if (msg.type === "virtuhome/background/upload") return demoUpload(msg) as T;
+      if (msg.type === "auth/sign_path") {
+        const file = decodeURIComponent(String(msg.path).split("/").pop() ?? "");
+        if (!demoImages.has(file)) throw new Error("not found");
+        return { path: demoImages.get(file) } as T;
+      }
       throw new Error("demo");
     },
     connection: {
@@ -133,6 +139,27 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
     },
   };
   return hass;
+}
+
+/** Floor plan pictures "stored" by the demo: file name -> a blob: URL of this page. */
+const demoImages = new Map<string, string>();
+const demoUploads = new Map<string, string[]>();
+
+function demoUpload(msg: Record<string, unknown>): { upload_id?: string; file?: string; bytes: number } {
+  const id = (msg.upload_id as string | undefined) ?? Math.random().toString(16).slice(2, 18).padEnd(16, "0");
+  const parts = demoUploads.get(id) ?? [];
+  parts.push(String(msg.data));
+  demoUploads.set(id, parts);
+  const bytes = parts.map((b) => atob(b)).join("");
+  if (!msg.done) return { upload_id: id, bytes: bytes.length };
+  demoUploads.delete(id);
+  const raw = Uint8Array.from(bytes, (c) => c.charCodeAt(0));
+  const png = raw[0] === 0x89;
+  let hash = 0;
+  for (const b of raw) hash = (hash * 31 + b) >>> 0;
+  const file = `${msg.floor_id}-${hash.toString(16).padStart(12, "0").slice(-12)}.${png ? "png" : "jpg"}`;
+  demoImages.set(file, URL.createObjectURL(new Blob([raw], { type: png ? "image/png" : "image/jpeg" })));
+  return { file, bytes: raw.length };
 }
 
 function pretty(id: string): string {

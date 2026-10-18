@@ -706,7 +706,7 @@ export class VhView {
     }
     if (!plan.floors.length) {
       if (this.editor) return;
-      this.showEmpty("No home yet", this.canEdit() ? "Tap Edit to import a scan of your home." : "Open VirtuHome in the sidebar to import a scan of your home or draw it.");
+      this.showEmpty("No home yet", this.canEdit() ? "Tap Edit to import a scan of your home, or trace an estate agent's floor plan in the 2D plan." : "Open VirtuHome in the sidebar to import a scan of your home or draw it.");
       this.renderChips();
       return;
     }
