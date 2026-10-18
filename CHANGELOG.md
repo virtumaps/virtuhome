@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 ### New
 - The sun where it really is. VirtuHome works out the sun's and the moon's position itself from Home
