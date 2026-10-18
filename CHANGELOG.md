@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 ### New
 - Trace a floor plan picture in the 2D plan: put an estate agent's plan (or a photo of a sketch) under
