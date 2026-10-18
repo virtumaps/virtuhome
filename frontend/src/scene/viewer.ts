@@ -784,7 +784,8 @@ export class Viewer {
 
   frameRoom(floor: number, room: number): void {
     const f = this.floors[floor];
-    const r = f?.fb.floor.rooms[room];
+    // rooms count as everywhere else: the floor's rooms, then its garden areas
+    const r = f ? spaces(f.fb.floor)[room] : undefined;
     if (!r) return;
     const xs = r.points.map((p) => p[0]);
     const zs = r.points.map((p) => p[1]);
