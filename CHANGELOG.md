@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Download diagnostics (Settings → Devices & services → VirtuHome → ⋮): versions, the plan's size and
+  counts per floor, linked entities that no longer exist, the dashboard card's resource and the
+  extensions, for attaching to an issue. Names, entity ids and the licence key stay out of it.
+
 ## 0.6.0
 
 ### New

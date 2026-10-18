@@ -128,6 +128,13 @@ The app also notes which way the phone's compass points, so the imported plan fa
 (allow the location for true north; indoors a compass can be some degrees off, so check it with **Line
 up with the map**).
 
+## Problems and support
+
+Open an [issue](https://github.com/virtumaps/virtuhome/issues) and attach the diagnostics file: Settings →
+Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds the versions, the plan's size and
+what each floor counts, how the card reaches your dashboards and which extensions are loaded. It has no
+room, device or entity names, and no licence key or token.
+
 ## Development
 
 ```bash

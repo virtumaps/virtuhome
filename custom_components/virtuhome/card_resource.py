@@ -98,6 +98,26 @@ async def async_register(hass: HomeAssistant, version: str) -> None:
         await resources.async_create_item({"res_type": "module", "url": url})
 
 
+async def async_state(hass: HomeAssistant, version: str) -> dict[str, Any]:
+    """How the card reaches dashboards, for diagnostics: the resource URLs and whether they're current."""
+    resources = _resources(hass)
+    loader = Path(hass.config.path("www", WWW_DIR, WWW_FILE))
+    www_loader = await hass.async_add_executor_job(loader.is_file)
+    if resources is None:
+        mode = "not loaded" if hass.data.get("lovelace") is None else "yaml"
+        return {"mode": mode, "www_loader": www_loader}
+    if not resources.loaded:
+        await resources.async_load()
+        resources.loaded = True
+    urls = [i.get("url", "") for i in resources.async_items() if _ours(i.get("url", ""))]
+    return {
+        "mode": "storage",
+        "urls": urls,
+        "current": len(urls) == 1 and urls[0].endswith(f"?v={version}"),
+        "www_loader": www_loader,
+    }
+
+
 async def async_unregister(hass: HomeAssistant) -> None:
     """Removes the resource and the loader (when the integration is removed)."""
     resources = _resources(hass)
