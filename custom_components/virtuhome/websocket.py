@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Any
 
 import voluptuous as vol
@@ -10,8 +12,9 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.loader import async_get_integration
 
+from .backgrounds import CHUNK_BYTES, MAX_BYTES, BackgroundError
 from .const import DOMAIN
-from .schema import PLAN
+from .schema import ID, PLAN
 from .licensing import LicenceError
 from .storage import PlanStore
 
@@ -20,6 +23,7 @@ def async_register(hass: HomeAssistant) -> None:
     for command in (
         ws_info, ws_get, ws_save, ws_subscribe, ws_history_list, ws_history_restore,
         ws_licence_get, ws_licence_activate, ws_licence_refresh, ws_licence_remove, ws_catalog,
+        ws_background_upload,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -132,6 +136,45 @@ async def ws_history_restore(
         return
     revision = await store.async_save(snapshot["plan"], label=f"Restored {snapshot['id']}")
     connection.send_result(msg["id"], {"revision": revision})
+
+
+# ---------------------------------------------------------------------------- floor plan images
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "virtuhome/background/upload",
+        vol.Required("floor_id"): ID,
+        # missing on the first piece: the answer gives the id for the rest
+        vol.Optional("upload_id"): vol.All(str, vol.Match(r"^[0-9a-f]{16}$")),
+        vol.Required("offset"): vol.All(int, vol.Range(min=0, max=MAX_BYTES)),
+        # base64 of at most CHUNK_BYTES
+        vol.Required("data"): vol.All(str, vol.Length(max=(CHUNK_BYTES + 2) // 3 * 4)),
+        vol.Optional("done", default=False): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_background_upload(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """One piece of a floor plan image. The last one (`done`) answers with the file's name for the plan."""
+    if (store := _store(hass, connection, msg)) is None:
+        return
+    images = store.backgrounds
+    try:
+        data = base64.b64decode(msg["data"], validate=True)
+    except (binascii.Error, ValueError):
+        connection.send_error(msg["id"], "invalid_format", "The upload is not base64")
+        return
+    run = hass.async_add_executor_job
+    try:
+        upload_id = msg.get("upload_id") or await run(images.begin, msg["floor_id"])
+        size = await run(images.append, upload_id, msg["offset"], data)
+        if msg["done"]:
+            connection.send_result(msg["id"], {"file": await run(images.finish, upload_id), "bytes": size})
+        else:
+            connection.send_result(msg["id"], {"upload_id": upload_id, "bytes": size})
+    except BackgroundError as err:
+        connection.send_error(msg["id"], "invalid_image", str(err))
 
 
 # ---------------------------------------------------------------------------- licence and extensions

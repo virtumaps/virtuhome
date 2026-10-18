@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 
+from .backgrounds import referenced
 from .const import HISTORY_KEY, HISTORY_LIMIT, STORAGE_KEY, STORAGE_VERSION
 from .schema import empty_plan
 
@@ -24,8 +25,9 @@ class PlanStore:
         self.revision = 0
         self.snapshots: list[dict[str, Any]] = []
         self._listeners: list[Callable[[], None]] = []
-        # set up by __init__: licence and downloaded extensions
+        # set up by __init__: licence and downloaded extensions, and the floor plan images
         self.extension_manager = None
+        self.backgrounds = None
 
     async def async_load(self) -> None:
         data = await self._store.async_load()
@@ -45,9 +47,13 @@ class PlanStore:
             )
             del self.snapshots[HISTORY_LIMIT:]
             await self._history.async_save({"snapshots": self.snapshots})
+        before = self.plan
         self.plan = plan
         self.revision += 1
         await self._store.async_save({"plan": self.plan, "revision": self.revision})
+        if self.backgrounds is not None:
+            keep = referenced(plan)
+            await self.hass.async_add_executor_job(self.backgrounds.cleanup, keep, referenced(before) - keep)
         for listener in list(self._listeners):
             listener()
         return self.revision
