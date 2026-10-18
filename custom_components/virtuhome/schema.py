@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import voluptuous as vol
 
+from .backgrounds import FILE_PATTERN
+
 MAX_FLOORS = 20
 MAX_ROOMS = 200
 MAX_POINTS = 200
 MAX_ITEMS = 2000
 
-_ID = vol.All(str, vol.Length(min=1, max=64), vol.Match(r"^[A-Za-z0-9_\-.]+$"))
+ID = vol.All(str, vol.Length(min=1, max=64), vol.Match(r"^[A-Za-z0-9_\-.]+$"))
 _NAME = vol.All(str, vol.Length(max=100))
 _COORD = vol.All(vol.Coerce(float), vol.Range(min=-2000, max=2000))
 _LENGTH = vol.All(vol.Coerce(float), vol.Range(min=0, max=200))
@@ -22,7 +24,7 @@ _ENTITY = vol.Any(None, vol.All(str, vol.Length(max=255)))
 
 ROOM = vol.Schema(
     {
-        vol.Required("id"): _ID,
+        vol.Required("id"): ID,
         vol.Required("name"): _NAME,
         vol.Optional("area_id", default=None): _ENTITY,
         vol.Required("points"): vol.All([_POINT], vol.Length(min=3, max=MAX_POINTS)),
@@ -35,8 +37,8 @@ ROOM = vol.Schema(
 
 OPENING = vol.Schema(
     {
-        vol.Required("id"): _ID,
-        vol.Required("room_id"): _ID,
+        vol.Required("id"): ID,
+        vol.Required("room_id"): ID,
         vol.Required("edge"): vol.All(int, vol.Range(min=0, max=MAX_POINTS)),
         vol.Required("offset"): _LENGTH,
         vol.Required("width"): _LENGTH,
@@ -51,7 +53,7 @@ OPENING = vol.Schema(
 
 FURNITURE = vol.Schema(
     {
-        vol.Required("id"): _ID,
+        vol.Required("id"): ID,
         vol.Required("type"): vol.All(str, vol.Length(max=64)),
         vol.Required("x"): _COORD,
         vol.Required("z"): _COORD,
@@ -68,7 +70,7 @@ FURNITURE = vol.Schema(
 
 DEVICE = vol.Schema(
     {
-        vol.Required("id"): _ID,
+        vol.Required("id"): ID,
         vol.Required("entity"): vol.All(str, vol.Length(min=3, max=255)),
         vol.Required("x"): _COORD,
         vol.Required("z"): _COORD,
@@ -81,7 +83,7 @@ DEVICE = vol.Schema(
 
 FREE_WALL = vol.Schema(
     {
-        vol.Required("id"): _ID,
+        vol.Required("id"): ID,
         vol.Required("a"): _POINT,
         vol.Required("b"): _POINT,
         vol.Optional("thickness", default=None): vol.Any(None, _LENGTH),
@@ -90,9 +92,26 @@ FREE_WALL = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+# a floor plan image under the 2D plan (only the 2D editor shows it)
+BACKGROUND = vol.Schema(
+    {
+        vol.Required("file"): vol.All(str, vol.Match(FILE_PATTERN)),
+        # the image's size in pixels, and metres per pixel
+        vol.Required("width"): vol.All(int, vol.Range(min=1, max=20000)),
+        vol.Required("height"): vol.All(int, vol.Range(min=1, max=20000)),
+        vol.Required("scale"): vol.All(vol.Coerce(float), vol.Range(min=0.00001, max=1)),
+        # where the image's middle is on the plan, its turn (degrees, clockwise) and how strongly it shows
+        vol.Optional("x", default=0): _COORD,
+        vol.Optional("z", default=0): _COORD,
+        vol.Optional("rotation", default=0): vol.All(vol.Coerce(float), vol.Range(min=-360, max=360)),
+        vol.Optional("opacity", default=0.5): vol.All(vol.Coerce(float), vol.Range(min=0, max=1)),
+    },
+    extra=vol.ALLOW_EXTRA,
+)
+
 FLOOR = vol.Schema(
     {
-        vol.Required("id"): _ID,
+        vol.Required("id"): ID,
         vol.Required("name"): _NAME,
         vol.Optional("ha_floor", default=None): _ENTITY,
         vol.Required("elevation"): vol.All(vol.Coerce(float), vol.Range(min=-100, max=500)),
@@ -102,6 +121,7 @@ FLOOR = vol.Schema(
         vol.Optional("furniture", default=list): vol.All([FURNITURE], vol.Length(max=MAX_ITEMS)),
         vol.Optional("devices", default=list): vol.All([DEVICE], vol.Length(max=MAX_ITEMS)),
         vol.Optional("walls", default=list): vol.All([FREE_WALL], vol.Length(max=MAX_ITEMS)),
+        vol.Optional("background", default=None): vol.Any(None, BACKGROUND),
     },
     extra=vol.ALLOW_EXTRA,
 )

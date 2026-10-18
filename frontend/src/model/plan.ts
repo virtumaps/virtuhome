@@ -159,6 +159,27 @@ export interface Floor {
   /** This storey's outside walls, when they differ from the house's (e.g. cladding upstairs). */
   exterior_finish?: ExteriorFinish | null;
   exterior_color?: string | null;
+  /** A floor plan image to trace over in the 2D editor (the 3D view never loads it). */
+  background?: FloorBackground | null;
+}
+
+/**
+ * An image under the 2D plan, stored by the integration. Its middle sits at (x, z) on the plan,
+ * turned `rotation` degrees clockwise, each pixel `scale` metres wide.
+ */
+export interface FloorBackground {
+  /** The file's name in the integration's image folder. */
+  file: string;
+  /** The image's size in pixels. */
+  width: number;
+  height: number;
+  /** Metres per pixel. */
+  scale: number;
+  x: number;
+  z: number;
+  rotation: number;
+  /** 0 hides it, 1 shows it fully. */
+  opacity: number;
 }
 
 /** The fence designs (scene/fences.ts builds them). */
@@ -274,9 +295,23 @@ export function normalizePlan(raw: unknown): Plan {
     walls: f.walls ?? [],
     outdoor: (f.outdoor ?? []).map((o) => ({ ...o, area_id: o.area_id ?? null, kind: o.kind ?? "lawn" })),
     fences: (f.fences ?? []).filter((x) => (x.points ?? []).length >= 2).map((x) => ({ ...x, gates: x.gates ?? [] })),
+    background: normalizeBackground(f.background),
   }));
   floors.sort((a, b) => a.elevation - b.elevation);
   return { version: 1, name: p.name, settings, floors };
+}
+
+/** A usable background, or null: it needs a file, a size and a scale. */
+function normalizeBackground(b: FloorBackground | null | undefined): FloorBackground | null {
+  if (!b || typeof b.file !== "string" || !b.file || !(b.width > 0) || !(b.height > 0) || !(b.scale > 0)) return null;
+  const num = (v: unknown, d: number) => (typeof v === "number" && isFinite(v) ? v : d);
+  return {
+    ...b,
+    x: num(b.x, 0),
+    z: num(b.z, 0),
+    rotation: num(b.rotation, 0),
+    opacity: Math.max(0, Math.min(1, num(b.opacity, 0.5))),
+  };
 }
 
 /**

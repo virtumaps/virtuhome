@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groundOf, splitEdge, type Floor } from "../src/model/plan";
+import { groundOf, normalizePlan, splitEdge, type Floor } from "../src/model/plan";
 
 const floor = (): Floor => ({
   id: "g", name: "Ground", elevation: 0, height: 2.5, walls: [], furniture: [], devices: [],
@@ -43,5 +43,23 @@ describe("groundOf", () => {
     expect(groundOf(d)).toBe("driveway");
     expect(groundOf({ ...d, surface: "asphalt" })).toBe("asphalt");
     expect(groundOf({ ...d, kind: "path", surface: "asphalt" })).toBe("path");
+  });
+});
+
+describe("floor backgrounds", () => {
+  const withBackground = (background: unknown) => normalizePlan({ version: 1, floors: [{ ...floor(), background }] }).floors[0].background;
+
+  it("keeps a usable image and fills in its placement", () => {
+    expect(withBackground({ file: "g-0123456789ab.png", width: 1200, height: 800, scale: 0.01 })).toEqual({
+      file: "g-0123456789ab.png", width: 1200, height: 800, scale: 0.01, x: 0, z: 0, rotation: 0, opacity: 0.5,
+    });
+    expect(withBackground({ file: "g-0123456789ab.png", width: 10, height: 10, scale: 0.01, opacity: 3 })?.opacity).toBe(1);
+  });
+
+  it("drops one without a file, a size or a scale", () => {
+    expect(withBackground(undefined)).toBeNull();
+    expect(withBackground({ file: "", width: 10, height: 10, scale: 0.01 })).toBeNull();
+    expect(withBackground({ file: "g-0123456789ab.png", width: 0, height: 10, scale: 0.01 })).toBeNull();
+    expect(withBackground({ file: "g-0123456789ab.png", width: 10, height: 10, scale: 0 })).toBeNull();
   });
 });

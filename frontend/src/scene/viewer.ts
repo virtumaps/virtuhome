@@ -359,9 +359,11 @@ export class Viewer {
   /** Everything a floor's build depends on. */
   private floorKey(i: number): string {
     const plan = this.plan!;
-    // stairs on the storey below cut the stairwell in this one's floor; north and the weather only move the light
+    // stairs on the storey below cut the stairwell in this one's floor; north and the weather only move
+    // the light, and the floor plan image is only in the 2D editor
     const { north: _north, sky: _sky, ...settings } = plan.settings;
-    return JSON.stringify([settings, plan.floors[i], stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.pal.name, !!this.look, this.low]);
+    const { background: _background, ...floor } = plan.floors[i];
+    return JSON.stringify([settings, floor, stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.pal.name, !!this.look, this.low]);
   }
 
   private buildFloor(i: number): FloorBuild {

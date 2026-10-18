@@ -4,7 +4,7 @@
 
 | Path | What |
 |---|---|
-| `custom_components/virtuhome/` | Home Assistant integration: stores the plan (`.storage/virtuhome.plan` + restore points), WebSocket API (`virtuhome/plan/get|save|subscribe`, `virtuhome/history/*`, `virtuhome/info`), sidebar panel, serves the frontend. |
+| `custom_components/virtuhome/` | Home Assistant integration: stores the plan (`.storage/virtuhome.plan` + restore points), WebSocket API (`virtuhome/plan/get|save|subscribe`, `virtuhome/history/*`, `virtuhome/info`, `virtuhome/background/upload`), sidebar panel, serves the frontend. Floor plan images to trace over sit in `.virtuhome/backgrounds/` and are served to signed-in users at `/api/virtuhome/background/<file>`; a save that stops using one deletes it. |
 | `frontend/src/loader.ts` | ~2 KB, loaded on every HA page. Defines `virtuhome-card` and `virtuhome-panel`; imports the engine only when one is shown. |
 | `frontend/src/model/` | The plan format (`plan.ts`), 2D geometry, and wall layout derived from room outlines (`walls.ts`). |
 | `frontend/src/scene/` | The 3D engine: mesh building, CPU lighting, materials, markers, the `Viewer`. |
@@ -18,6 +18,8 @@ Metres; x right, z down the plan, y up. Rooms are polygons along the middle of t
 are not stored but derived: room edges on the same line become one inside wall, edges with one room
 become outside walls. Doors and windows reference a room edge and an offset along it. Furniture and
 devices sit at plan points. Floors stack by elevation and link to HA floors; rooms link to HA areas.
+A floor can carry a `background` image (only the 2D editor shows it; `floorKey` leaves it out, so
+moving or fading it never rebuilds the 3D floor).
 
 ## Performance rules (Fire HD 8 class tablets)
 

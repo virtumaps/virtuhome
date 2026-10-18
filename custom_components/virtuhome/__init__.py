@@ -13,22 +13,29 @@ from homeassistant.core import CoreState, Event, HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from . import card_resource, websocket
+from .backgrounds import Backgrounds
 from .const import (
     CONF_LICENCE_SERVER, DEFAULT_LICENCE_SERVER, DOMAIN, EXT_URL_BASE, LOADER_FILE, PANEL_ELEMENT, PANEL_ICON,
     PANEL_PATH, PANEL_TITLE, URL_BASE,
 )
 from .extensions import ExtensionManager
 from .storage import PlanStore
+from .views import BackgroundView
 
 _LOGGER = logging.getLogger(__name__)
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 DATA_STATIC = f"{DOMAIN}_static_registered"
+DATA_BACKGROUNDS = f"{DOMAIN}_backgrounds"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store = PlanStore(hass)
     await store.async_load()
+    # floor plan images to trace over; kept across reloads, like the view that serves them
+    if DATA_BACKGROUNDS not in hass.data:
+        hass.data[DATA_BACKGROUNDS] = Backgrounds(Path(hass.config.path(".virtuhome", "backgrounds")))
+    store.backgrounds = hass.data[DATA_BACKGROUNDS]
     hass.data[DOMAIN] = store
     ext = ExtensionManager(hass, entry.options.get(CONF_LICENCE_SERVER) or DEFAULT_LICENCE_SERVER)
     await ext.async_load()
@@ -47,6 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # extension files carry their version in the name, so caching them is safe
             StaticPathConfig(EXT_URL_BASE, str(ext_dir), cache_headers=True),
         ])
+        hass.http.register_view(BackgroundView(hass, hass.data[DATA_BACKGROUNDS]))
         websocket.async_register(hass)
         hass.data[DATA_STATIC] = True
 
