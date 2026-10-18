@@ -109,6 +109,47 @@ BACKGROUND = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+_COLOR = vol.Any(None, vol.All(str, vol.Match(r"^#[0-9a-fA-F]{6}$")))
+_SMALL = vol.All(vol.Coerce(float), vol.Range(min=0, max=50))
+
+# something on a roof: a window, chimney, dormer, solar panels or a lantern
+ROOF_ITEM = vol.Schema(
+    {
+        vol.Required("id"): ID,
+        vol.Required("kind"): vol.In(["window", "chimney", "dormer", "solar", "lantern"]),
+        vol.Required("x"): _COORD,
+        vol.Required("z"): _COORD,
+        vol.Required("w"): _SMALL,
+        vol.Required("d"): _SMALL,
+        vol.Optional("cols"): vol.Any(None, vol.All(int, vol.Range(min=1, max=50))),
+        vol.Optional("rows"): vol.Any(None, vol.All(int, vol.Range(min=1, max=20))),
+        vol.Optional("entity"): _ENTITY,
+        vol.Optional("cover"): _ENTITY,
+        vol.Optional("color"): _COLOR,
+    },
+    extra=vol.ALLOW_EXTRA,
+)
+
+# a roof over a rectangle of a storey's walls
+ROOF = vol.Schema(
+    {
+        vol.Required("id"): ID,
+        vol.Required("x"): _COORD,
+        vol.Required("z"): _COORD,
+        vol.Required("w"): _LENGTH,
+        vol.Required("d"): _LENGTH,
+        vol.Optional("rotation", default=0): vol.Coerce(float),
+        vol.Required("shape"): vol.All(str, vol.Length(max=32)),
+        vol.Optional("pitch", default=35): vol.All(vol.Coerce(float), vol.Range(min=0, max=80)),
+        vol.Optional("party"): vol.Any(None, vol.In(["left", "right", "both"])),
+        vol.Optional("covering", default="concrete_tiles"): vol.All(str, vol.Length(max=32)),
+        vol.Optional("color"): _COLOR,
+        vol.Optional("trim"): _COLOR,
+        vol.Optional("items", default=list): vol.All([ROOF_ITEM], vol.Length(max=200)),
+    },
+    extra=vol.ALLOW_EXTRA,
+)
+
 FLOOR = vol.Schema(
     {
         vol.Required("id"): ID,
@@ -122,6 +163,7 @@ FLOOR = vol.Schema(
         vol.Optional("devices", default=list): vol.All([DEVICE], vol.Length(max=MAX_ITEMS)),
         vol.Optional("walls", default=list): vol.All([FREE_WALL], vol.Length(max=MAX_ITEMS)),
         vol.Optional("background", default=None): vol.Any(None, BACKGROUND),
+        vol.Optional("roofs", default=list): vol.All([ROOF], vol.Length(max=50)),
     },
     extra=vol.ALLOW_EXTRA,
 )

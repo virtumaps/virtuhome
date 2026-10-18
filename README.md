@@ -32,6 +32,12 @@ and shadows, and the weather.
 - **Fences and garden walls:** 15 designs from closeboard and lap panels to picket, railings,
   palisade, glass and brick walls, in any height and colour, with gravel boards, trellis toppers and
   gates. Fence a garden in one tap, or draw fences in the 2D plan.
+- **Roofs:** gable, hipped, half-hipped, Dutch gable, pyramid, mansard, gambrel, lean-to, flat,
+  butterfly and M-shaped, in concrete or clay tiles, slate, pantiles, thatch, metal, felt, rubber,
+  fibreglass, lead, sedum or conservatory glass. Semi-detached and terraced roofs carry on over the
+  party wall. Add roof windows, chimneys, dormers, roof lanterns and solar panels (they shine with what
+  their string makes). One tap works out the roofs from the plan: the main roof, and lean-tos where an
+  extension stands against the house. The roof button takes them off to look in from above.
 - **Sun and weather:** the sun lights the house from where it really is, at every hour and season,
   and comes into rooms through their windows. Clouds, fog, rain, snow and wind come from your weather
   entity (and your solar panels know whether the sun is out). See the house at any date and time, or
@@ -41,7 +47,8 @@ and shadows, and the weather.
   fabrics.
 - **Free and open source** under the GPL-3.0 licence, and open to contributions. Extensions such as Wall Tablet
   (doorbell camera takeover, screensaver, night dimming), Energy (rooms coloured by their power,
-  the biggest users and what is not measured yet) and Security (what happened played back on the
+  the biggest users and what is not measured yet, and how good each part of the roof is for solar
+  panels) and Security (what happened played back on the
   house: doors, motion, cameras, the doorbell and the alarm on a timeline, and what happened while
   everyone was out) are available to VirtuMaps installation clients.
 
@@ -71,6 +78,7 @@ room_panel: true       # tapping a room opens its devices
 floor_chips: true
 people: true           # who is home, in the corner
 energy: true           # solar, battery and grid in the corner (when the house has them)
+roof: true             # roofs over the house (the roof button changes it on each device)
 alarm: alarm_control_panel.home   # optional; default: the first alarm panel, "none" hides it
 ```
 
@@ -117,6 +125,12 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
 - **Energy:** Edit → Home → Energy shows the solar, house, battery and grid sensors found from the
   energy settings, and takes another where one is wrong. Panels' peak sets how brightly placed solar
   panels shine (otherwise the best output seen). Charger and Car battery do the same for car charging.
+- **Roofs:** Edit → Home → Roof works them out from the plan: say whether the house is detached,
+  semi-detached (and on which side it joins) or terraced, pick the main roof's shape and covering, and
+  tap Add the roof. Tap a roof in 3D for its shape, pitch, party wall ends, covering, colours, eaves
+  and size; drag its blue corners to size it. Add solar panels (they go on the sunniest slope, as many
+  as fit), roof windows, a chimney (on the ridge), a dormer or a lantern, then drag them along the roof.
+  Link a string's power sensor to its panels and they shine with what it makes.
 - **Sun and weather:** Edit → Home → Sun and weather sets which way the top of the plan faces: drag
   the compass, type the bearing, or tap **Line up with the map** (it asks a public OpenStreetMap
   server for the building at Home Assistant's home location and matches its walls; pick another of

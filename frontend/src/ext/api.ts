@@ -9,15 +9,20 @@
 // in sources.ev and now.ev).
 // API 3 adds replays of the past (the view draws states an extension gives it, from the recorder's
 // history, and switches nothing meanwhile), where entities are in the plan, and floor and room moves.
+// API 4 adds the roofs: their slopes and solar panels, what can shade them, the home's place, and
+// colours painted over them (a solar map).
 import * as THREE from "three";
 import type { EnergyNow, EnergySources, EnergyToday } from "../live/energy";
 import type { Hass, HassEntity } from "../live/hass";
 import type { RoomText, RoomTint } from "../live/live";
 import type { Plan } from "../model/plan";
+import type { RoofFaceInfo, SolarArrayInfo } from "../scene/roof-info";
 import type { Viewer } from "../scene/viewer";
 import type { EnergySection } from "../ui/energy";
 
-export const EXT_API_VERSION = 3;
+export const EXT_API_VERSION = 4;
+
+export type { RoofFaceInfo, SolarArrayInfo };
 
 /** A round button in the view's tool column. */
 export interface Tool {
@@ -132,6 +137,22 @@ export interface ViewHandle {
   showHouse(): void;
   /** Picks out a room on its floor (-1: none), flying to it unless fly is false. */
   selectRoom(floor: number, room: number, fly?: boolean): void;
+
+  // API 4
+  /** The roofs' slopes (empty without roofs). World metres, the storeys standing together. */
+  roofFaces(): RoofFaceInfo[];
+  /** Solar panels placed on the roofs. */
+  solarArrays(): SolarArrayInfo[];
+  /** What can shade the roofs (roofs, chimneys, dormers, walls, tall garden things) as triangles, 9 numbers each. */
+  shadeGeometry(): Float32Array;
+  /** The plan's north (degrees, the bearing the plan's top faces) and Home Assistant's home location. */
+  site(): { north: number; lat: number; lon: number } | null;
+  /** Colours over the roofs: `fn` gives a point's colour (linear RGB 0..1) or null; null takes them off. */
+  paintRoofs(fn: ((face: RoofFaceInfo, p: [number, number, number]) => [number, number, number] | null) | null, spacing?: number): void;
+  /** Shows the roofs whatever the roof button says, or hides them; null hands them back to it. */
+  showRoofs(on: boolean | null): void;
+  /** Called when the plan changes (the roofs or what is on them may have); returns an unsubscribe. */
+  onPlan(cb: (plan: Plan) => void): () => void;
 }
 
 export interface ExtensionContext {

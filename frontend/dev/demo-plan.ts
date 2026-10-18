@@ -2,7 +2,7 @@
 // harness, screenshots and the online demo. Entity ids are made up; the pretend Home Assistant
 // (demo-hass.ts) creates states for them. To try your own home, put a plan file in dev/plans/
 // (git-ignored) and open ?plan=<name>&hass=live.
-import type { Device, Floor, Furniture, Opening, Plan, Room, Vec2 } from "../src/model/plan";
+import { solarSize, type Device, type Floor, type Furniture, type Opening, type Plan, type Roof, type RoofItem, type Room, type Vec2 } from "../src/model/plan";
 
 const rect = (x0: number, z0: number, x1: number, z1: number): Vec2[] => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
 
@@ -54,8 +54,14 @@ const wc = room("WC", "wc", rect(-2.05, 0, -1.05, 1.95), "tiles");
 const store = room("Store", null, rect(-2.05, 1.95, -1.05, 2.95), "concrete");
 const shed = room("Utility", "utility", rect(-3.1, 2.95, -1.05, 5.3), "concrete");
 
+// the side extension: lean-tos against the house's side wall (turned a quarter, their backs face it)
+const leanTo = (x0: number, z0: number, x1: number, z1: number): Roof => ({
+  id: id("roof"), x: (x0 + x1) / 2, z: (z0 + z1) / 2, w: z1 - z0, d: x1 - x0, rotation: 90, shape: "lean_to", pitch: 17, covering: "concrete_tiles",
+});
+
 const ground: Floor = {
   id: "ground", name: "Ground Floor", ha_floor: "ground_floor", elevation: 0, height: 2.6,
+  roofs: [leanTo(-2.05, 0, 0, 2.95), leanTo(-3.1, 2.95, 0, 5.3)],
   rooms: [kitchen, dining, living, hall, side, wc, store, shed],
   openings: [
     on(hall, "door", 1.35, 7.4, 0.86, { entity: "binary_sensor.front_door" }),
@@ -158,8 +164,25 @@ const landing = room("Landing", "hallway", rect(0, 1.95, 2.3, 4.5), "carpet");
 const bed3 = room("Bedroom 3", "bedroom_3", rect(0, 4.5, 2.3, 7.4), "carpet");
 const bed1 = room("Bedroom 1", "bedroom", rect(2.3, 3.05, 6.25, 7.4), "carpet");
 
+const panels = (x: number, z: number, cols: number, rows: number, entity: string): RoofItem => ({
+  id: id("pv"), kind: "solar", x, z, cols, rows, portrait: true, watts: 430, entity, ...solarSize({ cols, rows }),
+});
+
+// semi-detached: hipped at the free end, cut off at the party wall on the right
+const mainRoof: Roof = {
+  id: "main_roof", x: 3.125, z: 3.7, w: 6.25, d: 7.4, rotation: 0, shape: "hip", pitch: 35, party: "right", covering: "concrete_tiles",
+  items: [
+    panels(3.8, 6.88, 3, 1, "sensor.solar_pv1_power"),
+    panels(4.5, 5.45, 2, 1, "sensor.solar_pv1_power"),
+    panels(3.75, 1.2, 3, 1, "sensor.solar_pv2_power"),
+    { id: "chimney", kind: "chimney", x: 6.0, z: 3.7, w: 0.9, d: 0.55, h: 0.9, pots: 2 },
+    { id: "roof_window", kind: "window", x: 1.5, z: 1.1, w: 0.78, d: 0.98 },
+  ],
+};
+
 const first: Floor = {
   id: "first", name: "First Floor", ha_floor: "first_floor", elevation: 2.6, height: 2.5,
+  roofs: [mainRoof],
   rooms: [bath, bed2, landing, bed3, bed1],
   openings: [
     on(bath, "window", 1.2, 0, 0.8, { sill: 1.25, height: 0.9, entity: "binary_sensor.bathroom_window" }),

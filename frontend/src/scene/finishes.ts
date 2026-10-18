@@ -83,11 +83,28 @@ export const JOINERY_FINISHES = {
   walnut: f("Walnut", 0x6e4f38, "wood_grain_v", 0.9, 0.45, false, 0.25),
 } satisfies Record<string, FinishDef>;
 
+/** What a roof is covered with: the UK's usual tiles and slates, thatch, and flat roofs' coverings. */
+export const ROOF_COVERINGS = {
+  concrete_tiles: f("Concrete tiles", 0x6a625c, "roof_interlocking", 1.5, 0.85, true, 0.9),
+  clay_plain: f("Clay plain tiles", 0x9a553a, "roof_plain", 1.2, 0.8, true, 0.8),
+  slate: f("Slate", 0x4b4f58, "roof_slate", 1.5, 0.6, false, 0.7),
+  pantiles: f("Clay pantiles", 0xb0603d, "roof_pantile", 1.4, 0.75, true, 1.0),
+  thatch: f("Thatch", 0xb39a62, "roof_thatch", 2.0, 1.0, false, 1.0),
+  metal: { ...f("Standing seam metal", 0x3e4348, "roof_seam", 1.6, 0.45, true, 0.5), metalness: 0.4 },
+  felt: f("Mineral felt", 0x3b3d40, "roof_felt", 2.0, 0.95, true, 0.4),
+  epdm: f("Rubber (EPDM)", 0x2b2c2f, "roof_epdm", 3.0, 0.8, false, 0.15),
+  grp: f("Fibreglass (GRP)", 0x5e6268, "roof_grp", 3.0, 0.5, true, 0.15),
+  lead: f("Lead", 0x7c8288, "roof_lead", 1.6, 0.6, false, 0.4),
+  sedum: f("Green roof (sedum)", 0x6c8b4a, "roof_sedum", 1.5, 1.0, false, 0.8),
+  glass: f("Glass (conservatory)", 0xa9cfe2, "", 1.0, 0.05, false),
+} satisfies Record<string, FinishDef>;
+
 export type FloorFinish = keyof typeof FLOOR_FINISHES;
 export type WallFinish = keyof typeof WALL_FINISHES;
 export type ExteriorFinish = keyof typeof EXTERIOR_FINISHES;
 export type Upholstery = keyof typeof UPHOLSTERY;
 export type JoineryFinish = keyof typeof JOINERY_FINISHES;
+export type RoofCovering = keyof typeof ROOF_COVERINGS;
 
 /** Paint colours offered as swatches (any colour can be typed in too). */
 export const PAINT_SWATCHES: [string, string][] = [
@@ -114,6 +131,18 @@ export const JOINERY_SWATCHES: [string, string][] = [
   ["Pink", "#d9a9a3"],
 ];
 
+/** Roof colours: the usual tile and slate shades, Staffordshire blue among them. */
+export const ROOF_SWATCHES: [string, string][] = [
+  ["Slate grey", "#4b4f58"], ["Charcoal", "#35373b"], ["Staffordshire blue", "#3c4049"], ["Smooth brown", "#5e4a3f"],
+  ["Rustic red", "#8f4a34"], ["Terracotta", "#b0603d"], ["Antique brown", "#6e5345"], ["Sandfaced", "#a0765a"],
+  ["Anthracite", "#383e42"], ["Moss green", "#5d6b4f"],
+];
+
+/** Fascias, soffits and bargeboards. */
+export const TRIM_SWATCHES: [string, string][] = [
+  ["White", "#f3f2ee"], ["Black", "#26272a"], ["Anthracite", "#383e42"], ["Brown", "#5a4636"], ["Rosewood", "#6b3a2e"], ["Cream", "#e8e1d0"],
+];
+
 /** Every surface the builder can tag, as "<group>:<name>", with its finish (for the textured look). */
 export function finishFor(key: string): FinishDef | null {
   const [group, name] = key.split(":");
@@ -123,6 +152,7 @@ export function finishFor(key: string): FinishDef | null {
     case "ext": return (EXTERIOR_FINISHES as Record<string, FinishDef>)[name] ?? EXTERIOR_FINISHES.render;
     case "uph": return (UPHOLSTERY as Record<string, FinishDef>)[name] ?? UPHOLSTERY.fabric;
     case "jn": return (JOINERY_FINISHES as Record<string, FinishDef>)[name] ?? JOINERY_FINISHES.painted;
+    case "roof": return (ROOF_COVERINGS as Record<string, FinishDef>)[name] ?? ROOF_COVERINGS.concrete_tiles;
     default: return null;
   }
 }

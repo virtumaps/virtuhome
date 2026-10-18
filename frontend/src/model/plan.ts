@@ -7,13 +7,13 @@
 
 export type Vec2 = [number, number];
 
-import type { ExteriorFinish, FloorFinish, JoineryFinish, Upholstery, WallFinish } from "../scene/finishes";
+import type { ExteriorFinish, FloorFinish, JoineryFinish, RoofCovering, Upholstery, WallFinish } from "../scene/finishes";
 import type { DoorStyle, GarageStyle, WindowStyle } from "../scene/joinery";
 import { CEILING_LAMPS, FURNITURE, type BalustradeMaterial, type BalustradeStyle } from "../scene/furniture-lib";
 import type { SkySettings } from "../live/sky";
 
 export type FloorMaterial = FloorFinish;
-export type { DoorStyle, ExteriorFinish, FloorFinish, GarageStyle, JoineryFinish, Upholstery, WallFinish, WindowStyle };
+export type { DoorStyle, ExteriorFinish, FloorFinish, GarageStyle, JoineryFinish, RoofCovering, Upholstery, WallFinish, WindowStyle };
 export type OpeningKind = "door" | "window" | "passage" | "garage";
 export type Mount = "ceiling" | "wall" | "floor" | "table";
 export type ThemeName = "auto" | "night" | "day";
@@ -161,6 +161,93 @@ export interface Floor {
   exterior_color?: string | null;
   /** A floor plan image to trace over in the 2D editor (the 3D view never loads it). */
   background?: FloorBackground | null;
+  /** Roofs over this storey's walls (scene/roofs.ts builds them). */
+  roofs?: Roof[];
+}
+
+/**
+ * Roof shapes. Gable, hip, half-hip (jerkinhead) and Dutch (gablet) differ in their ends; mansard
+ * (hipped) and gambrel (gable ends) have a steep lower slope under a shallow upper one; a lean-to
+ * has one slope, rising to its back; a butterfly two falling to a valley; M-shaped two gables side
+ * by side.
+ */
+export type RoofShape =
+  | "gable" | "hip" | "half_hip" | "dutch" | "pyramid" | "mansard" | "gambrel" | "lean_to" | "flat" | "butterfly" | "m_shaped";
+
+/** Ends of a roof that carry on next door (a semi-detached or terraced house): cut off flush there. */
+export type PartyEnds = "left" | "right" | "both";
+
+/**
+ * A roof over a rectangle of walls: `w` along its ridge, `d` across it, measured like rooms along
+ * the middle of the walls, its middle at (x, z), turned `rotation` degrees clockwise. Unturned, the
+ * ridge runs across the plan (along x) and the front slope faces down the plan (+z); a lean-to
+ * rises towards its back (-z). Its left and right ends are at -x and +x.
+ */
+export interface Roof {
+  id: string;
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+  rotation: number;
+  shape: RoofShape;
+  /** Slope in degrees (the upper slope of a mansard or gambrel). */
+  pitch: number;
+  party?: PartyEnds | null;
+  /** The eaves' height above the storey's floor (m); null: the top of its walls. */
+  eaves?: number | null;
+  /** How far the eaves reach past the walls (m); null: the usual for the shape. */
+  overhang?: number | null;
+  covering: RoofCovering;
+  /** The covering's colour, for coverings that take one ("#rrggbb"). */
+  color?: string | null;
+  /** Fascias, soffits and bargeboards ("#rrggbb"); null: white. */
+  trim?: string | null;
+  /** Flat roofs: a low wall round the edge instead of overhanging eaves. */
+  parapet?: boolean;
+  /** Roof windows, chimneys, dormers, solar panels and lanterns on it. */
+  items?: RoofItem[];
+}
+
+export type RoofItemKind = "window" | "chimney" | "dormer" | "solar" | "lantern";
+export type RoofWindowStyle = "pivot" | "conservation";
+export type DormerStyle = "box" | "gable" | "hipped";
+export type ChimneyStyle = "brick" | "render" | "stone";
+/** All-black panels, or blue cells in silver frames. */
+export type SolarStyle = "black" | "blue";
+
+/**
+ * Something on a roof, its middle at (x, z) on the plan. On a slope it lies along the slope:
+ * `w` across it and `d` up it; on a flat roof it is turned `rotation` degrees clockwise like
+ * furniture. A chimney's and a dormer's `w` x `d` is their size on the plan, a dormer reaching `d`
+ * from its front back into the roof.
+ */
+export interface RoofItem {
+  id: string;
+  kind: RoofItemKind;
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+  /** Chimneys: the top above the roof at its middle; dormers: the front wall's height; lanterns: their rise. */
+  h?: number | null;
+  rotation?: number | null;
+  style?: RoofWindowStyle | DormerStyle | ChimneyStyle | SolarStyle | null;
+  /** Chimneys: pots on the stack. */
+  pots?: number | null;
+  /** Solar panels: panels across and up the slope, portrait (long side up the slope), each one's peak power (W). */
+  cols?: number | null;
+  rows?: number | null;
+  portrait?: boolean | null;
+  watts?: number | null;
+  /** Solar panels on a flat roof: frames tilting them up (degrees) towards `rotation`'s front; null lies flat. */
+  tilt?: number | null;
+  /** Solar panels: the power sensor of their string (they shine with it). Roof windows: a contact sensor. */
+  entity?: string | null;
+  /** Roof windows: a blind. */
+  cover?: string | null;
+  /** Window frames, dormer cheeks, chimney brick ("#rrggbb"). */
+  color?: string | null;
 }
 
 /**
@@ -296,9 +383,40 @@ export function normalizePlan(raw: unknown): Plan {
     outdoor: (f.outdoor ?? []).map((o) => ({ ...o, area_id: o.area_id ?? null, kind: o.kind ?? "lawn" })),
     fences: (f.fences ?? []).filter((x) => (x.points ?? []).length >= 2).map((x) => ({ ...x, gates: x.gates ?? [] })),
     background: normalizeBackground(f.background),
+    roofs: (f.roofs ?? []).filter((r) => r.w > 0.2 && r.d > 0.2).map(normalizeRoof),
   }));
   floors.sort((a, b) => a.elevation - b.elevation);
   return { version: 1, name: p.name, settings, floors };
+}
+
+const ROOF_SHAPES = new Set<RoofShape>(["gable", "hip", "half_hip", "dutch", "pyramid", "mansard", "gambrel", "lean_to", "flat", "butterfly", "m_shaped"]);
+
+/** A roof with its shape, slope and covering set, and its solar panels sized from their panels. */
+function normalizeRoof(r: Roof): Roof {
+  const shape = ROOF_SHAPES.has(r.shape) ? r.shape : "gable";
+  const pitch = typeof r.pitch === "number" && isFinite(r.pitch) ? Math.max(0, Math.min(75, r.pitch)) : 35;
+  return {
+    ...r,
+    rotation: r.rotation ?? 0,
+    shape,
+    pitch,
+    covering: r.covering ?? "concrete_tiles",
+    items: (r.items ?? []).map((it) => (it.kind === "solar" ? { ...it, ...solarSize(it) } : it)),
+  };
+}
+
+/** A typical panel today: 1.72 x 1.13 m, about 430 W. */
+export const PANEL = { long: 1.722, short: 1.134, gap: 0.02, watts: 430 };
+
+/** A solar array's size from its panels: `w` across the slope, `d` up it. */
+export function solarSize(it: Pick<RoofItem, "cols" | "rows" | "portrait">): { w: number; d: number } {
+  const cols = Math.max(1, Math.round(it.cols ?? 1));
+  const rows = Math.max(1, Math.round(it.rows ?? 1));
+  const portrait = it.portrait ?? true;
+  const across = portrait ? PANEL.short : PANEL.long;
+  const up = portrait ? PANEL.long : PANEL.short;
+  const r3 = (v: number) => Math.round(v * 1000) / 1000;
+  return { w: r3(cols * across + (cols - 1) * PANEL.gap), d: r3(rows * up + (rows - 1) * PANEL.gap) };
 }
 
 /** A usable background, or null: it needs a file, a size and a scale. */

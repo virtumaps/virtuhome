@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Roofs: gable, hipped, half-hipped, Dutch gable, pyramid, mansard, gambrel, lean-to, flat (with
+  eaves or a parapet), butterfly and M-shaped, with ridge and hip tiles, fascias, soffits and gutters.
+  Coverings: concrete and clay plain tiles, slate, clay pantiles, thatch, standing seam metal, mineral
+  felt, rubber, fibreglass, lead, sedum and conservatory glass, in the realistic look too. Semi-detached
+  and terraced roofs are cut off at the party wall.
+- Edit → Home → Roof works the roofs out from the plan: a main roof over the top storey, and a lean-to
+  (or a flat roof when deep) over each part of a lower storey that stands against the house. It sees
+  from the walls whether the house is detached, semi-detached or terraced.
+- On a roof: solar panels (on the sunniest slope, as many as fit, shining with their string's power
+  sensor), roof windows (centre-pivot or conservation, lit from the room under them at night), chimneys
+  with pots, box, gable and hipped dormers, and roof lanterns. Drag them along the roof.
+- A roof button beside the view takes the roofs off to look in from above. With the roofs on, the
+  whole-house view shows the storeys standing together as the house does outside.
+- Extension API 4: the roofs' slopes and solar panels, what can shade them, the home's location and
+  north, and colours painted over the roofs.
+
 ## 0.7.0
 
 ### New

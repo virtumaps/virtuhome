@@ -8,11 +8,19 @@ import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelet
 import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
-import { newId, normalizePlan, spaces, splitEdge, type Device, type EnergySettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial, type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type Plan, type Room, type Vec2 } from "../model/plan";
+import {
+  newId, normalizePlan, PANEL, solarSize, spaces, splitEdge, type Device, type EnergySettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
+  type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type PartyEnds, type Plan, type Roof, type RoofCovering, type RoofItem, type RoofShape, type Room, type Vec2,
+} from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
-import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
+import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
+import {
+  faceBearing, fitPanels, floorRoofs, fromRoofFrame, itemFrame, planeHeight, polyArea, ROOF_ITEM_DEFAULTS, ROOF_SHAPE_ORDER, ROOF_SHAPES, sunniestFace,
+  type RoofFace, type RoofModel,
+} from "../scene/roofs";
+import { suggestRoofs, type HouseKind, type RoofChoice } from "../auto/roof";
 import { controlsFor, defaultFinish, styleOf, stylesFor } from "../scene/joinery";
 import { pointInPolygon, segmentDistance } from "../model/geom";
 import { layoutWalls, openingPoint } from "../model/walls";
@@ -31,7 +39,7 @@ import { compassName } from "../live/sun";
 import { location as homeLocation } from "../live/sky";
 
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
-type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence"; id: string } | null;
+type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 
 const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
@@ -109,6 +117,8 @@ export class Editor {
   /** Where the dragged piece stood when the drag began, and what it must keep out of. */
   private dragFrom: Vec2 | null = null;
   private collider: Collider | null = null;
+  /** The Home tab's choices for working out a roof. */
+  private roofChoice: RoofChoice = {};
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
@@ -220,16 +230,19 @@ export class Editor {
   /** Removes the selected piece, device, door or window (rooms are removed from the drawer, with a confirmation). */
   private removeSelected(): boolean {
     const sel = this.sel;
-    if (!sel || (sel.kind !== "furniture" && sel.kind !== "device" && sel.kind !== "opening" && sel.kind !== "fence")) return false;
+    if (!sel || (sel.kind !== "furniture" && sel.kind !== "device" && sel.kind !== "opening" && sel.kind !== "fence" && sel.kind !== "roof" && sel.kind !== "roofitem")) return false;
     const f = this.plan.floors[sel.floor];
     const name = sel.kind === "furniture" ? FURNITURE[f?.furniture.find((x) => x.id === sel.id)?.type ?? ""]?.name ?? "furniture"
-      : sel.kind === "device" ? "a device" : sel.kind === "fence" ? "a fence" : "an opening";
+      : sel.kind === "device" ? "a device" : sel.kind === "fence" ? "a fence" : sel.kind === "roof" ? "a roof"
+      : sel.kind === "roofitem" ? this.roofItemName(this.roofItemOf(this.plan, sel.id)?.item ?? ({ kind: "window" } as RoofItem)).toLowerCase() : "an opening";
     this.change((p) => {
       const fl = p.floors[sel.floor];
       if (!fl) return;
       if (sel.kind === "furniture") fl.furniture = fl.furniture.filter((x) => x.id !== sel.id);
       else if (sel.kind === "device") fl.devices = fl.devices.filter((x) => x.id !== sel.id);
       else if (sel.kind === "fence") fl.fences = (fl.fences ?? []).filter((x) => x.id !== sel.id);
+      else if (sel.kind === "roof") fl.roofs = (fl.roofs ?? []).filter((x) => x.id !== sel.id);
+      else if (sel.kind === "roofitem") for (const r of fl.roofs ?? []) r.items = (r.items ?? []).filter((x) => x.id !== sel.id);
       else fl.openings = fl.openings.filter((x) => x.id !== sel.id);
     }, false, `Remove ${name}`);
     this.select(null);
@@ -301,6 +314,8 @@ export class Editor {
       s.kind === "room" ? f.rooms.some((r) => r.id === s.id) :
       s.kind === "outdoor" ? (f.outdoor ?? []).some((o) => o.id === s.id) :
       s.kind === "fence" ? (f.fences ?? []).some((x) => x.id === s.id) :
+      s.kind === "roof" ? (f.roofs ?? []).some((x) => x.id === s.id) :
+      s.kind === "roofitem" ? (f.roofs ?? []).some((r) => (r.items ?? []).some((x) => x.id === s.id)) :
       s.kind === "device" ? f.devices.some((d) => d.id === s.id) :
       s.kind === "opening" ? f.openings.some((o) => o.id === s.id) : f.furniture.some((x) => x.id === s.id));
     if (!exists) this.sel = null;
@@ -369,6 +384,7 @@ export class Editor {
     viewer.overlayMarkers = [];
     viewer.refreshMarkers();
     viewer.raiseOpening(0, null);
+    viewer.editRoof(false);
     cancelAnimationFrame(this.dragRaf);
     window.removeEventListener("keydown", this.onKey);
     this.plan2d?.dispose();
@@ -380,7 +396,7 @@ export class Editor {
 
   /** The view tells the editor about taps in edit mode. */
   onHit(hit: Hit): void {
-    if (hit.item?.kind === "corner" || hit.item?.kind === "fencepoint") return;
+    if (hit.item?.kind === "corner" || hit.item?.kind === "fencepoint" || hit.item?.kind === "roofcorner") return;
     if (hit.item?.kind === "fenceedge") {
       // a tap on a fence's +: a corner in the middle of that stretch
       const sel = this.sel;
@@ -409,6 +425,11 @@ export class Editor {
 
   private select(sel: Selection): void {
     this.sel = sel;
+    // a roof, or something on one, is shown: the roofs come on, over the whole house
+    const onRoof = sel?.kind === "roof" || sel?.kind === "roofitem";
+    const viewer = this.host.view.viewer;
+    viewer.editRoof(onRoof);
+    if (onRoof && viewer.mode === "floor" && viewer.activeFloor <= sel!.floor) viewer.setMode("house");
     this.updateSelectionMarker();
     this.plan2d?.render();
     if (sel) this.show("selected");
@@ -474,6 +495,30 @@ export class Editor {
         viewer.overlayMarkers = [{ key: "__sel", pos: [at[0], y, at[1]], icon: iconIndex("dot"), color: 0x2f7cf6, size: 18, pulse: 0.6, alpha: 0.9, item: { kind: "opening", id: o.id } }];
       }
     }
+    if (s && s.kind === "roof") {
+      const found = this.roofOf(this.plan, s.id);
+      if (found) {
+        const f = this.plan.floors[found.fi];
+        const y = f.elevation + (found.roof.eaves ?? f.height) + 0.05;
+        viewer.overlayMarkers = this.roofCorners(found.roof).map((p, i) => ({
+          key: `__rc${i}`, pos: [p[0], y, p[1]], icon: iconIndex("dot"), color: 0x2f7cf6, size: 20, pulse: 0, alpha: 0.95, item: { kind: "roofcorner", id: `${found.roof.id}:${i}` },
+        }));
+      }
+    }
+    if (s && s.kind === "roofitem") {
+      const found = this.roofItemOf(this.plan, s.id);
+      const m = found && this.roofModelOf(found.fi, found.roof.id);
+      const fr = m && found ? itemFrame(m, found.item) : null;
+      if (found && fr) {
+        // its handle floats over its middle; dragging it follows the slope
+        const lift = found.item.kind === "chimney" ? (found.item.h ?? 1) + 0.3 : 0.35;
+        const pos: [number, number, number] = [fr.c[0] + fr.n[0] * lift, fr.c[1] + fr.n[1] * lift, fr.c[2] + fr.n[2] * lift];
+        viewer.overlayMarkers = [{
+          key: "__sel", pos, icon: iconIndex("dot"), color: 0x2f7cf6, size: 18, pulse: 0.6, alpha: 0.9, item: { kind: "roofitem", id: s.id },
+          plane: found.item.kind === "chimney" ? undefined : { normal: fr.n, point: pos },
+        }];
+      }
+    }
     // a selected door or window is shown whole: its wall slides up out of the cutaway
     viewer.raiseOpening(s?.floor ?? 0, s?.kind === "opening" ? s.id : null);
     viewer.refreshMarkers();
@@ -487,7 +532,8 @@ export class Editor {
    */
   private isHandle(hit: Hit): boolean {
     const item = hit.item, sel = this.sel;
-    return !!item && !!sel && (item.kind === "corner" || item.kind === "edge" || item.kind === "fencepoint" || item.kind === "fenceedge" || (item.kind === sel.kind && item.id === sel.id));
+    return !!item && !!sel && (item.kind === "corner" || item.kind === "edge" || item.kind === "fencepoint" || item.kind === "fenceedge" || item.kind === "roofcorner"
+      || (item.kind === sel.kind && item.id === sel.id));
   }
 
   private onDrag(hit: Hit, x: number, z: number, phase: DragPhase): void {
@@ -501,6 +547,10 @@ export class Editor {
     const view = this.host.view;
     if (item.kind === "fence" || item.kind === "fencepoint" || item.kind === "fenceedge") {
       this.dragFence(item.kind, item.id, f, x, z, phase);
+      return;
+    }
+    if (item.kind === "roof" || item.kind === "roofitem" || item.kind === "roofcorner") {
+      this.dragRoof(item.kind, item.id, x, z, phase);
       return;
     }
     const find = () => (item.kind === "device" ? f.devices.find((d) => d.id === item.id) : f.furniture.find((d) => d.id === item.id));
@@ -690,6 +740,7 @@ export class Editor {
       (EXTERIOR_FINISHES as Record<string, FinishDef>)[this.plan.settings.exterior_finish ?? "render"]?.tintable
         ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, "Outside wall colour"))
         : null,
+      ...this.roofSection(),
       ...this.energySection(),
       ...this.skySection(),
       h("h4", {}, "Floors"),
@@ -1130,6 +1181,8 @@ export class Editor {
     if (s.kind === "device") return this.devicePanel(fi, f.devices.find((d) => d.id === s.id));
     if (s.kind === "opening") return this.openingPanel(fi, f.openings.find((o) => o.id === s.id));
     if (s.kind === "fence") return this.fencePanel(fi, f.fences?.find((x) => x.id === s.id));
+    if (s.kind === "roof") return this.roofPanel(fi, f.roofs?.find((x) => x.id === s.id));
+    if (s.kind === "roofitem") return this.roofItemPanel(fi, this.roofItemOf(this.plan, s.id)?.item);
     return this.furniturePanel(fi, f.furniture.find((x) => x.id === s.id));
   }
 
@@ -1629,6 +1682,462 @@ export class Editor {
     } }, c === "all" ? "All" : CATEGORY_NAMES[c])));
     draw();
     return h("div", {}, h("div", { class: "ed-search" }, h("span", { html: svg(mdiMagnify) }), search), chips, results);
+  }
+
+  // ------------------------------------------------------------------ roofs
+
+  /** A roof and its storey by id. */
+  private roofOf(p: Plan, id: string): { fi: number; roof: Roof } | null {
+    for (const [fi, f] of p.floors.entries()) {
+      const roof = (f.roofs ?? []).find((r) => r.id === id);
+      if (roof) return { fi, roof };
+    }
+    return null;
+  }
+
+  /** Something on a roof by id, with its roof. */
+  private roofItemOf(p: Plan, id: string): { fi: number; roof: Roof; item: RoofItem } | null {
+    for (const [fi, f] of p.floors.entries()) {
+      for (const roof of f.roofs ?? []) {
+        const item = (roof.items ?? []).find((it) => it.id === id);
+        if (item) return { fi, roof, item };
+      }
+    }
+    return null;
+  }
+
+  private roofModelOf(fi: number, id: string): RoofModel | null {
+    return floorRoofs(this.plan, fi).find((m) => m.roof.id === id) ?? null;
+  }
+
+  /** The Home tab's roofs: worked out from the plan, or the list of those there are. */
+  private roofSection(): HTMLElement[] {
+    const all = this.plan.floors.flatMap((f, fi) => (f.roofs ?? []).map((r) => ({ fi, r, f })));
+    const chip = (label: string, on: boolean, onclick: () => void, title = "") => h("button", { class: `ed-chip${on ? " on" : ""}`, title, onclick: () => !on && onclick() }, label);
+    const out: (HTMLElement | null)[] = [h("h4", {}, "Roof")];
+    if (!all.length) {
+      const seen = suggestRoofs(this.plan, {});
+      const c = this.roofChoice;
+      const kind = c.kind ?? seen.kind;
+      const set = (patch: Partial<RoofChoice>) => {
+        this.roofChoice = { ...c, ...patch };
+        this.render();
+      };
+      const kinds: [HouseKind, string][] = [["detached", "Detached"], ["semi", "Semi-detached"], ["terrace", "Terraced"]];
+      const shape = c.shape ?? (kind === "terrace" ? "gable" : "hip");
+      const side = c.side ?? (seen.party === "left" ? "left" : "right");
+      out.push(
+        h("p", { class: "ed-hint" }, "A roof over the top storey, and one over every part of a lower storey with nothing above it (an extension leans on the house). Semi-detached and terraced roofs carry on over the party wall."),
+        h("div", { class: "ed-sub" }, "The house"),
+        h("div", { class: "ed-chips" }, ...kinds.map(([k, name]) => chip(name + (k === seen.kind ? " ✓" : ""), kind === k, () => set({ kind: k }), k === seen.kind ? "How its walls look" : ""))),
+        kind === "semi" ? h("div", { class: "ed-row" }, h("label", {}, "Joined on the"),
+          chip("Left", side === "left", () => set({ side: "left" })), chip("Right", side === "right", () => set({ side: "right" }))) : null,
+        h("div", { class: "ed-sub" }, "Main roof"),
+        h("div", { class: "ed-chips" }, ...(["hip", "gable", "half_hip", "dutch", "mansard", "gambrel", "pyramid", "m_shaped", "flat", "butterfly", "lean_to"] as RoofShape[]).map((k) =>
+          chip(ROOF_SHAPES[k].name, shape === k, () => set({ shape: k }), ROOF_SHAPES[k].hint))),
+        h("div", { class: "ed-sub" }, "Covering"),
+        this.finishChips(ROOF_COVERINGS, c.covering ?? "concrete_tiles", (k) => set({ covering: k as RoofCovering })),
+        h("button", { class: "ed-btn", onclick: () => this.addRoofs({ ...c, kind, side: kind === "semi" ? side : null, shape }) }, "Add the roof"),
+      );
+      return out.filter((e): e is HTMLElement => !!e);
+    }
+    out.push(h("p", { class: "ed-hint" }, "Tap a roof in 3D to change its shape, slope and covering, or to put solar panels, roof windows, a chimney or a dormer on it. The roof button beside the view takes the roofs off to look in from above."));
+    for (const { fi, r, f } of all) {
+      const items = r.items ?? [];
+      const panels = items.filter((it) => it.kind === "solar").reduce((n, it) => n + (it.cols ?? 1) * (it.rows ?? 1), 0);
+      out.push(h("div", { class: `ed-card ${this.sel?.id === r.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "roof", id: r.id }) },
+        h("div", { class: "ed-row" }, h("b", {}, `${ROOF_SHAPES[r.shape]?.name ?? r.shape} roof`),
+          h("small", {}, ` · ${f.name} · ${r.w.toFixed(1)} × ${r.d.toFixed(1)} m${panels ? ` · ${panels} panels` : ""}${items.length - (panels ? items.filter((it) => it.kind === "solar").length : 0) ? ` · ${items.filter((it) => it.kind !== "solar").length} more` : ""}`)),
+      ));
+    }
+    out.push(h("div", { class: "ed-row" },
+      h("button", { class: "ed-btn ghost small", onclick: () => this.addOneRoof() }, "Add a roof"),
+      h("button", { class: "ed-btn ghost small", onclick: () => this.confirm("Take every roof off, with what is on them, and work them out again?", "Start again", () => {
+        this.change((p) => p.floors.forEach((f) => (f.roofs = [])), false, "Take the roofs off");
+        this.select(null);
+      }) }, "Start again"),
+    ));
+    return out.filter((e): e is HTMLElement => !!e);
+  }
+
+  /** Puts the worked-out roofs on. */
+  private addRoofs(choice: RoofChoice): void {
+    const { roofs } = suggestRoofs(this.plan, choice);
+    if (!roofs.length) {
+      this.toastInDrawer("The plan has no rooms to put a roof over.");
+      return;
+    }
+    this.change((p) => {
+      for (const { floor, roof } of roofs) p.floors[floor].roofs = [...(p.floors[floor].roofs ?? []), roof];
+    }, false, "Add the roof");
+    this.host.view.viewer.setMode("house");
+    this.select({ floor: roofs[0].floor, kind: "roof", id: roofs[0].roof.id });
+  }
+
+  /** One more roof: a gable over the shown storey, beside what is there; move and size it after. */
+  private addOneRoof(): void {
+    const viewer = this.host.view.viewer;
+    const fi = viewer.mode === "floor" ? viewer.activeFloor : Math.max(0, this.plan.floors.length - 1);
+    const f = this.plan.floors[fi];
+    if (!f) return;
+    const pts = f.rooms.flatMap((r) => r.points);
+    const b = pts.length ? bounds(pts) : { minX: 0, minZ: 0, maxX: 4, maxZ: 4 };
+    const roof: Roof = {
+      id: newId("roof"), x: Math.round(((b.minX + b.maxX) / 2) * 100) / 100, z: Math.round(((b.minZ + b.maxZ) / 2) * 100) / 100,
+      w: Math.max(1, Math.round((b.maxX - b.minX) * 100) / 100), d: Math.max(1, Math.round((b.maxZ - b.minZ) * 100) / 100),
+      rotation: 0, shape: "gable", pitch: 35, covering: "concrete_tiles", items: [],
+    };
+    this.change((p) => (p.floors[fi].roofs = [...(p.floors[fi].roofs ?? []), roof]), false, "Add a roof");
+    viewer.setMode("house");
+    this.select({ floor: fi, kind: "roof", id: roof.id });
+  }
+
+  private roofPanel(fi: number, roof: Roof | undefined): HTMLElement {
+    if (!roof) return h("div", {});
+    const upd = (label: string, fn: (r: Roof) => void) => this.change((p) => fn(this.roofOf(p, roof.id)!.roof), false, label);
+    const chip = (label: string, on: boolean, onclick: () => void, title = "") => h("button", { class: `ed-chip${on ? " on" : ""}`, title, onclick: () => !on && onclick() }, label);
+    const num = (value: number | null | undefined, placeholder: string, step: string, onSet: (v: number | null) => void, title = "") =>
+      h("input", { class: "ed-in num", type: "number", step, value: value === null || value === undefined ? "" : String(value), placeholder, title, onchange: (e: Event) => {
+        const v = (e.target as HTMLInputElement).value;
+        onSet(v === "" ? null : Number(v));
+      } });
+    const def = (ROOF_COVERINGS as Record<string, FinishDef>)[roof.covering] ?? ROOF_COVERINGS.concrete_tiles;
+    const f = this.plan.floors[fi];
+    const pitched = roof.shape !== "flat";
+    const m = this.roofModelOf(fi, roof.id);
+    const parties: [PartyEnds | null, string][] = [[null, "None"], ["left", "Left end"], ["right", "Right end"], ["both", "Both ends"]];
+    const kinds: [RoofItem["kind"], string][] = [["solar", "Solar panels"], ["window", "Roof window"], ["chimney", "Chimney"], ...(pitched ? [["dormer", "Dormer"]] as [RoofItem["kind"], string][] : [["lantern", "Roof lantern"]] as [RoofItem["kind"], string][])];
+    const items = roof.items ?? [];
+    return h("div", {},
+      h("h4", {}, `${ROOF_SHAPES[roof.shape]?.name ?? roof.shape} roof · ${f?.name ?? ""}`),
+      h("p", { class: "ed-hint" }, "Drag the blue corners to size it, or the roof itself to move it. Lengths are along the middle of the walls under it, like the rooms'."),
+      h("div", { class: "ed-chips" }, ...ROOF_SHAPE_ORDER.map((k) => chip(ROOF_SHAPES[k].name, roof.shape === k, () => upd(`${ROOF_SHAPES[k].name} roof`, (r) => {
+        r.shape = k;
+        if (k === "flat") r.pitch = 0;
+        else if (!r.pitch || r.shape === "flat" || Math.abs(r.pitch - ROOF_SHAPES[roof.shape].pitch) < 0.01) r.pitch = ROOF_SHAPES[k].pitch;
+      }), ROOF_SHAPES[k].hint))),
+      pitched ? h("div", { class: "ed-row" },
+        h("label", {}, "Pitch °"),
+        num(roof.pitch, "35", "1", (v) => upd("Roof pitch", (r) => (r.pitch = Math.max(5, Math.min(70, v ?? 35))))),
+        ...[15, 22.5, 30, 35, 40, 45].map((v) => chip(String(v), Math.abs(roof.pitch - v) < 0.01, () => upd("Roof pitch", (r) => (r.pitch = v)))),
+      ) : h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: !!roof.parapet, onchange: (e: Event) => upd("Parapet", (r) => (r.parapet = (e.target as HTMLInputElement).checked)) }),
+        " A parapet round it instead of eaves"),
+      h("div", { class: "ed-row" }, h("label", {}, "Joined next door"),
+        ...parties.map(([k, label]) => chip(label, (roof.party ?? null) === k, () => upd(k ? "Party wall" : "No party wall", (r) => (r.party = k)),
+          k ? "A semi-detached or terraced house: the roof carries on over the party wall there" : ""))),
+      h("div", { class: "ed-sub" }, "Covering"),
+      this.finishChips(ROOF_COVERINGS, roof.covering, (k) => upd(`Roof: ${(ROOF_COVERINGS as Record<string, FinishDef>)[k].name}`, (r) => (r.covering = k as RoofCovering))),
+      def.tintable ? this.colourPicker(ROOF_SWATCHES, roof.color, (c) => upd("Roof colour", (r) => (r.color = c)), "Usual") : null,
+      roof.covering !== "glass" ? h("div", { class: "ed-sub" }, "Fascias and soffits") : null,
+      this.colourPicker(TRIM_SWATCHES, roof.trim, (c) => upd("Fascia colour", (r) => (r.trim = c)), "White"),
+      h("div", { class: "ed-row" },
+        h("label", {}, "Eaves out"), num(roof.overhang, pitched ? "0.3" : "0.1", "0.05", (v) => upd("Eaves overhang", (r) => (r.overhang = v === null ? null : Math.max(0, Math.min(1.5, v)))), "How far the roof reaches past the walls (m)"),
+        h("label", {}, "Eaves at"), num(roof.eaves, String(f?.height ?? 2.5), "0.05", (v) => upd("Eaves height", (r) => (r.eaves = v === null ? null : Math.max(0, Math.min(20, v)))), "Height of the eaves above the storey's floor (m); empty: the top of its walls"),
+      ),
+      h("div", { class: "ed-row" },
+        h("label", {}, "Length"), num(roof.w, "", "0.05", (v) => v && upd("Roof length", (r) => (r.w = Math.max(0.5, v)))),
+        h("label", {}, "Span"), num(roof.d, "", "0.05", (v) => v && upd("Roof span", (r) => (r.d = Math.max(0.5, v)))),
+      ),
+      this.turnRow((deg) => upd("Turn a roof", (r) => {
+        // the roof turns round its middle, and what is on it with it
+        const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+        for (const it of r.items ?? []) {
+          const dx = it.x - r.x, dz = it.z - r.z;
+          it.x = Math.round((r.x + c * dx - s * dz) * 100) / 100;
+          it.z = Math.round((r.z + s * dx + c * dz) * 100) / 100;
+          if (it.rotation !== null && it.rotation !== undefined) it.rotation = (it.rotation + deg + 360) % 360;
+        }
+        r.rotation = ((r.rotation + deg) % 360 + 360) % 360;
+      })),
+      h("h4", {}, "Add on the roof"),
+      h("div", { class: "ed-chips" }, ...kinds.map(([k, label]) => h("button", { class: "ed-chip", onclick: () => this.addRoofItem(fi, roof.id, k) }, label))),
+      m && pitched ? h("p", { class: "ed-hint" }, this.roofFacesText(m)) : null,
+      items.length ? h("h4", {}, `On this roof (${items.length})`) : null,
+      items.length ? h("div", { class: "ed-chips" }, ...items.map((it) => h("button", { class: "ed-chip", onclick: () => this.select({ floor: fi, kind: "roofitem", id: it.id }) }, this.roofItemName(it)))) : null,
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost", onclick: () => {
+          const id = newId("roof");
+          this.change((p) => {
+            const fl = p.floors[fi];
+            const copy: Roof = { ...structuredClone(roof), id, x: roof.x + 1, z: roof.z + 1 };
+            copy.items = (copy.items ?? []).map((it) => ({ ...it, id: newId("ri"), x: it.x + 1, z: it.z + 1 }));
+            fl.roofs = [...(fl.roofs ?? []), copy];
+          }, false, "Duplicate a roof");
+          this.select({ floor: fi, kind: "roof", id });
+        } }, "Duplicate"),
+        h("button", { class: "ed-btn danger", onclick: () => {
+          this.change((p) => (p.floors[fi].roofs = (p.floors[fi].roofs ?? []).filter((r) => r.id !== roof.id)), false, "Remove a roof");
+          this.select(null);
+        } }, "Remove"),
+      ),
+    );
+  }
+
+  /** Which way each big slope faces, with the plan's north. */
+  private roofFacesText(m: RoofModel): string {
+    const north = this.plan.settings.north ?? 0;
+    const faces = m.faces.filter((f) => f.plane.k > 0.03 && polyArea(f.poly) > 2);
+    if (!faces.length) return "";
+    const parts = faces.map((f) => compassName(faceBearing(m, f, north)));
+    const unique = [...new Set(parts)];
+    return `Its slopes face ${unique.join(", ")}${north === 0 ? " (with north up the plan: set north under Sun and weather)" : ""}.`;
+  }
+
+  private roofItemName(it: RoofItem): string {
+    if (it.kind === "solar") return `${(it.cols ?? 1) * (it.rows ?? 1)} solar panels`;
+    if (it.kind === "dormer") return `${it.style === "box" ? "Box" : it.style === "hipped" ? "Hipped" : "Gable"} dormer`;
+    return ROOF_ITEM_DEFAULTS[it.kind].name;
+  }
+
+  /** Something new on a roof, where it usually goes: panels on the sunniest slope, a chimney on the ridge… */
+  private addRoofItem(fi: number, roofId: string, kind: RoofItem["kind"]): void {
+    const m = this.roofModelOf(fi, roofId);
+    if (!m) return;
+    const north = this.plan.settings.north ?? 0;
+    const southern = (this.hass.config as { latitude?: number } | undefined)?.latitude !== undefined && ((this.hass.config as { latitude: number }).latitude < 0);
+    const def = ROOF_ITEM_DEFAULTS[kind];
+    const centroid = (f: RoofFace) => fromRoofFrame(m, f.poly.reduce((s, p) => s + p[0], 0) / f.poly.length, f.poly.reduce((s, p) => s + p[1], 0) / f.poly.length);
+    const biggest = [...m.faces].sort((a, b) => polyArea(b.poly) - polyArea(a.poly))[0];
+    const r2 = (v: number) => Math.round(v * 100) / 100;
+    let item: RoofItem;
+    if (kind === "solar") {
+      const face = sunniestFace(m, north, southern) ?? biggest;
+      const fit = face ? fitPanels(m, face) : null;
+      const at = fit ? [fit.x, fit.z] : face ? centroid(face) : [m.roof.x, m.roof.z];
+      const cols = fit?.cols ?? 2, rows = fit?.rows ?? 1;
+      item = { id: newId("ri"), kind, x: r2(at[0]), z: r2(at[1]), cols, rows, portrait: true, watts: PANEL.watts, ...solarSize({ cols, rows }) };
+    } else if (kind === "chimney") {
+      // on the ridge: at the party wall when there is one, else in its middle
+      const top = m.faces.flatMap((f) => f.poly.map(([u, v]) => ({ u, v, y: planeHeight(f.plane, u, v) })));
+      const ymax = Math.max(...top.map((p) => p.y));
+      const ridge = top.filter((p) => p.y > ymax - 0.01);
+      const us = ridge.map((p) => p.u);
+      const u = m.party.right ? Math.max(...us) - 0.5 : m.party.left ? Math.min(...us) + 0.5 : (Math.min(...us) + Math.max(...us)) / 2;
+      const at = fromRoofFrame(m, u, ridge[0]?.v ?? 0);
+      item = { id: newId("ri"), kind, x: r2(at[0]), z: r2(at[1]), w: def.w, d: def.d, h: def.h, pots: 2, rotation: m.roof.rotation };
+    } else {
+      // a dormer goes on the back, a window or a lantern on the biggest face
+      const back = m.faces.find((f) => f.plane.n[1] < -0.9 && f.plane.k > 0.03);
+      const face = kind === "dormer" ? back ?? biggest : biggest;
+      const at = face ? centroid(face) : [m.roof.x, m.roof.z];
+      item = { id: newId("ri"), kind, x: r2(at[0]), z: r2(at[1]), w: def.w, d: def.d, h: def.h ?? null, ...(kind === "dormer" ? { style: "box" as const } : {}) };
+    }
+    this.change((p) => {
+      const r = this.roofOf(p, roofId)?.roof;
+      if (r) r.items = [...(r.items ?? []), item];
+    }, false, `Add ${def.name.toLowerCase()}`);
+    this.select({ floor: fi, kind: "roofitem", id: item.id });
+  }
+
+  private roofItemPanel(fi: number, it: RoofItem | undefined): HTMLElement {
+    if (!it) return h("div", {});
+    const found = this.roofItemOf(this.plan, it.id);
+    if (!found) return h("div", {});
+    const roof = found.roof;
+    const upd = (label: string, fn: (x: RoofItem) => void) => this.change((p) => {
+      const x = this.roofItemOf(p, it.id)?.item;
+      if (!x) return;
+      fn(x);
+      if (x.kind === "solar") Object.assign(x, solarSize(x));
+    }, false, label);
+    const chip = (label: string, on: boolean, onclick: () => void, title = "") => h("button", { class: `ed-chip${on ? " on" : ""}`, title, onclick: () => !on && onclick() }, label);
+    const num = (label: string, value: number | null | undefined, step: string, onSet: (v: number | null) => void, placeholder = "", title = "") => [
+      h("label", {}, label),
+      h("input", { class: "ed-in num", type: "number", step, value: value === null || value === undefined ? "" : String(value), placeholder, title, onchange: (e: Event) => {
+        const v = (e.target as HTMLInputElement).value;
+        onSet(v === "" ? null : Number(v));
+      } }),
+    ];
+    const m = this.roofModelOf(fi, roof.id);
+    const fr = m ? itemFrame(m, it) : null;
+    const flat = !!fr && fr.slope < 1;
+    const name = this.roofItemName(it);
+    const rows: (HTMLElement | null)[] = [h("h4", {}, name), h("p", { class: "ed-hint" }, "Drag it along the roof to move it.")];
+    if (it.kind === "solar") {
+      const n = (it.cols ?? 1) * (it.rows ?? 1);
+      const kwp = (n * (it.watts ?? PANEL.watts)) / 1000;
+      const power = this.entities((id, st) => domainOf(id) === "sensor" && st.attributes.device_class === "power");
+      rows.push(
+        h("p", { class: "ed-hint" }, `${n} panels, ${kwp.toFixed(2)} kWp, ${it.w.toFixed(2)} × ${it.d.toFixed(2)} m.`),
+        h("div", { class: "ed-row" },
+          ...num("Across", it.cols, "1", (v) => upd("Solar panels across", (x) => (x.cols = Math.max(1, Math.min(30, Math.round(v ?? 1)))))),
+          ...num("Up", it.rows, "1", (v) => upd("Solar panels up the slope", (x) => (x.rows = Math.max(1, Math.min(12, Math.round(v ?? 1)))))),
+        ),
+        h("div", { class: "ed-row" },
+          chip("Portrait", it.portrait !== false, () => upd("Panels portrait", (x) => (x.portrait = true))),
+          chip("Landscape", it.portrait === false, () => upd("Panels landscape", (x) => (x.portrait = false))),
+          chip("All black", it.style !== "blue", () => upd("All-black panels", (x) => (x.style = "black"))),
+          chip("Blue", it.style === "blue", () => upd("Blue panels", (x) => (x.style = "blue"))),
+        ),
+        h("div", { class: "ed-row" }, ...num("Each (W)", it.watts, "5", (v) => upd("Panel power", (x) => (x.watts = v && v > 0 ? Math.min(1000, v) : null)), String(PANEL.watts), "Each panel's peak power")),
+        flat ? h("div", { class: "ed-row" }, ...num("Tilt °", it.tilt, "5", (v) => upd("Panel tilt", (x) => (x.tilt = v ? Math.max(0, Math.min(60, v)) : null)), "flat", "Frames tilting the panels up on a flat roof")) : null,
+        flat ? this.turnRow((deg) => upd("Turn solar panels", (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))) : null,
+        h("div", { class: "ed-row" }, h("label", {}, "Shines with"), this.dropdown(power, it.entity ?? "", (v) => upd("Panels' sensor", (x) => (x.entity = v || null)), "The house's solar")),
+        h("p", { class: "ed-hint" }, "Link the power sensor of this string of panels (PV1, PV2…), and they shine with what it makes."),
+        m && fr ? h("button", { class: "ed-btn ghost", onclick: () => {
+          const fit = fitPanels(m, fr.face, it.portrait !== false);
+          if (!fit) return this.toastInDrawer("No panel fits on this slope.");
+          upd("Fill the slope with panels", (x) => Object.assign(x, { cols: fit.cols, rows: fit.rows, x: fit.x, z: fit.z }));
+        } }, "Fill the slope") : null,
+      );
+    } else if (it.kind === "window") {
+      const contacts = this.entities((id, st) => domainOf(id) === "binary_sensor" && ["window", "opening"].includes(String(st.attributes.device_class)));
+      const sizes: [string, number, number][] = [["55 × 78", 0.55, 0.78], ["55 × 98", 0.55, 0.98], ["78 × 98", 0.78, 0.98], ["78 × 118", 0.78, 1.18], ["78 × 140", 0.78, 1.4], ["94 × 118", 0.94, 1.18], ["114 × 118", 1.14, 1.18]];
+      rows.push(
+        h("div", { class: "ed-row" },
+          chip("Centre-pivot", it.style !== "conservation", () => upd("Centre-pivot roof window", (x) => (x.style = "pivot"))),
+          chip("Conservation", it.style === "conservation", () => upd("Conservation roof window", (x) => (x.style = "conservation")), "Black, flush with the roof, with a glazing bar")),
+        h("div", { class: "ed-sub" }, "Size (cm)"),
+        h("div", { class: "ed-chips" }, ...sizes.map(([label, w, d]) => chip(label, Math.abs(it.w - w) < 0.005 && Math.abs(it.d - d) < 0.005, () => upd(`Roof window ${label}`, (x) => {
+          x.w = w;
+          x.d = d;
+        })))),
+        h("div", { class: "ed-row" }, ...num("Width", it.w, "0.01", (v) => v && upd("Roof window width", (x) => (x.w = Math.max(0.3, v)))), ...num("Length", it.d, "0.01", (v) => v && upd("Roof window length", (x) => (x.d = Math.max(0.3, v))))),
+        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd("Roof window colour", (x) => (x.color = c)), "Grey"),
+        h("div", { class: "ed-row" }, h("label", {}, "Sensor"), this.dropdown(contacts, it.entity ?? "", (v) => upd("Roof window sensor", (x) => (x.entity = v || null)), "None")),
+        h("p", { class: "ed-hint" }, "Lit from the room under it at night; warm when its sensor says it is open."),
+      );
+    } else if (it.kind === "chimney") {
+      rows.push(
+        h("div", { class: "ed-row" },
+          chip("Brick", !it.style || it.style === "brick", () => upd("Brick chimney", (x) => (x.style = "brick"))),
+          chip("Render", it.style === "render", () => upd("Rendered chimney", (x) => (x.style = "render"))),
+          chip("Stone", it.style === "stone", () => upd("Stone chimney", (x) => (x.style = "stone")))),
+        it.style === "render" ? this.colourPicker(PAINT_SWATCHES, it.color, (c) => upd("Chimney colour", (x) => (x.color = c))) : null,
+        h("div", { class: "ed-row" }, ...num("Width", it.w, "0.05", (v) => v && upd("Chimney width", (x) => (x.w = Math.max(0.3, v)))), ...num("Depth", it.d, "0.05", (v) => v && upd("Chimney depth", (x) => (x.d = Math.max(0.3, v))))),
+        h("div", { class: "ed-row" },
+          ...num("Above roof", it.h, "0.05", (v) => upd("Chimney height", (x) => (x.h = v === null ? null : Math.max(0.3, Math.min(4, v)))), "1.0"),
+          ...num("Pots", it.pots, "1", (v) => upd("Chimney pots", (x) => (x.pots = v === null ? null : Math.max(0, Math.min(6, Math.round(v))))), "2")),
+        this.turnRow((deg) => upd("Turn a chimney", (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))),
+      );
+    } else if (it.kind === "dormer") {
+      rows.push(
+        h("div", { class: "ed-row" },
+          chip("Box", it.style === "box", () => upd("Box dormer", (x) => (x.style = "box")), "Flat-roofed, as most loft conversions"),
+          chip("Gable", it.style !== "box" && it.style !== "hipped", () => upd("Gable dormer", (x) => (x.style = "gable"))),
+          chip("Hipped", it.style === "hipped", () => upd("Hipped dormer", (x) => (x.style = "hipped")))),
+        h("div", { class: "ed-row" }, ...num("Width", it.w, "0.05", (v) => v && upd("Dormer width", (x) => (x.w = Math.max(0.8, v)))), ...num("Front wall", it.h, "0.05", (v) => upd("Dormer height", (x) => (x.h = v)), "auto")),
+        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd("Dormer colour", (x) => (x.color = c)), "White"),
+        h("p", { class: "ed-hint" }, "Its cheeks are hung with the roof's covering; its front and window frame take the colour."),
+      );
+    } else if (it.kind === "lantern") {
+      rows.push(
+        h("div", { class: "ed-row" }, ...num("Width", it.w, "0.05", (v) => v && upd("Lantern width", (x) => (x.w = Math.max(0.6, v)))), ...num("Length", it.d, "0.05", (v) => v && upd("Lantern length", (x) => (x.d = Math.max(0.6, v))))),
+        h("div", { class: "ed-row" }, ...num("Rise", it.h, "0.05", (v) => upd("Lantern rise", (x) => (x.h = v === null ? null : Math.max(0.2, Math.min(1.5, v)))), "0.5")),
+        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd("Lantern colour", (x) => (x.color = c)), "Anthracite"),
+        this.turnRow((deg) => upd("Turn a lantern", (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))),
+      );
+    }
+    rows.push(h("div", { class: "ed-row" },
+      h("button", { class: "ed-btn ghost", onclick: () => this.select({ floor: fi, kind: "roof", id: roof.id }) }, "The roof"),
+      h("button", { class: "ed-btn ghost", onclick: () => {
+        const id = newId("ri");
+        this.change((p) => {
+          const r = this.roofOf(p, roof.id)?.roof;
+          if (r) r.items = [...(r.items ?? []), { ...structuredClone(it), id, x: it.x + 0.5, z: it.z + 0.5 }];
+        }, false, `Duplicate ${name.toLowerCase()}`);
+        this.select({ floor: fi, kind: "roofitem", id });
+      } }, "Duplicate"),
+      h("button", { class: "ed-btn danger", onclick: () => {
+        this.change((p) => {
+          const r = this.roofOf(p, roof.id)?.roof;
+          if (r) r.items = (r.items ?? []).filter((x) => x.id !== it.id);
+        }, false, `Remove ${name.toLowerCase()}`);
+        this.select(null);
+      } }, "Remove"),
+    ));
+    return h("div", {}, ...rows.filter((e): e is HTMLElement => !!e));
+  }
+
+  private roofDrag: { origin: Vec2 | null; roof: Vec2; items: Vec2[]; corner: { opp: Vec2; i: number } | null } | null = null;
+
+  /**
+   * Dragging on a roof: something on it follows the finger along the slope (staying on the roof), the
+   * selected roof moves level with what is on it, and a corner sizes it with the opposite one staying.
+   * Only the roofs are built again per frame.
+   */
+  private dragRoof(kind: "roof" | "roofitem" | "roofcorner", ref: string, x: number, z: number, phase: DragPhase): void {
+    const view = this.host.view;
+    const snap = (v: number) => Math.round(v * 100) / 100;
+    if (phase === "start") {
+      this.dragStart = structuredClone(this.plan);
+      const rid = kind === "roofcorner" ? ref.slice(0, ref.lastIndexOf(":")) : ref;
+      const found = kind === "roofitem" ? this.roofItemOf(this.plan, ref) : this.roofOf(this.plan, rid);
+      if (!found) return;
+      const r = found.roof;
+      let corner: { opp: Vec2; i: number } | null = null;
+      if (kind === "roofcorner") {
+        const i = Number(ref.slice(ref.lastIndexOf(":") + 1));
+        const corners = this.roofCorners(r);
+        corner = { opp: corners[(i + 2) % 4], i };
+      }
+      this.roofDrag = { origin: null, roof: [r.x, r.z], items: (r.items ?? []).map((it) => [it.x, it.z] as Vec2), corner };
+      return;
+    }
+    const d = this.roofDrag;
+    if (phase === "move" && d) {
+      if (kind === "roofitem") {
+        const found = this.roofItemOf(this.plan, ref);
+        if (!found) return;
+        const { roof, item } = found;
+        // kept on its roof: its middle inside the roof's walls
+        const rad = (roof.rotation * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+        const dx = x - roof.x, dz = z - roof.z;
+        let u = c * dx + s * dz, v = -s * dx + c * dz;
+        const t = this.plan.settings.wall_exterior / 2;
+        u = Math.max(-roof.w / 2 - t, Math.min(roof.w / 2 + t, u));
+        v = Math.max(-roof.d / 2 - t, Math.min(roof.d / 2 + t, v));
+        item.x = snap(roof.x + c * u - s * v);
+        item.z = snap(roof.z + s * u + c * v);
+      } else if (kind === "roof") {
+        const found = this.roofOf(this.plan, ref);
+        if (!found) return;
+        d.origin ??= [x, z];
+        const ddx = Math.round((x - d.origin[0]) * 20) / 20, ddz = Math.round((z - d.origin[1]) * 20) / 20;
+        found.roof.x = snap(d.roof[0] + ddx);
+        found.roof.z = snap(d.roof[1] + ddz);
+        (found.roof.items ?? []).forEach((it, k) => {
+          if (!d.items[k]) return;
+          it.x = snap(d.items[k][0] + ddx);
+          it.z = snap(d.items[k][1] + ddz);
+        });
+      } else if (d.corner) {
+        const found = this.roofOf(this.plan, ref.slice(0, ref.lastIndexOf(":")));
+        if (!found) return;
+        const r = found.roof;
+        const rad = (r.rotation * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+        const du = (x - d.corner.opp[0]) * c + (z - d.corner.opp[1]) * s;
+        const dv = -(x - d.corner.opp[0]) * s + (z - d.corner.opp[1]) * c;
+        const w = Math.max(0.5, snap(Math.abs(du))), dd = Math.max(0.5, snap(Math.abs(dv)));
+        const su = du < 0 ? -1 : 1, sv = dv < 0 ? -1 : 1;
+        r.w = w;
+        r.d = dd;
+        r.x = snap(d.corner.opp[0] + c * (su * w / 2) - s * (sv * dd / 2));
+        r.z = snap(d.corner.opp[1] + s * (su * w / 2) + c * (sv * dd / 2));
+      }
+      this.queueDragFrame(() => view.previewPlan(this.plan));
+      return;
+    }
+    this.roofDrag = null;
+    if (this.dragStart) {
+      if (JSON.stringify(this.dragStart) !== JSON.stringify(this.plan)) {
+        this.undo.push({ plan: this.dragStart, label: kind === "roofitem" ? `Move ${this.roofItemName(this.roofItemOf(this.plan, ref)?.item ?? ({ kind: "window" } as RoofItem)).toLowerCase()}` : kind === "roof" ? "Move a roof" : "Size a roof" });
+        this.redo = [];
+        this.changed();
+      }
+      this.apply();
+    }
+    this.dragStart = null;
+  }
+
+  /** A roof's corners on the plan (along the middle of its walls), going round from the back left. */
+  private roofCorners(r: Roof): Vec2[] {
+    const rad = (r.rotation * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+    return ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as const).map(([a, b]) => {
+      const u = (a * r.w) / 2, v = (b * r.d) / 2;
+      return [r.x + c * u - s * v, r.z + s * u + c * v] as Vec2;
+    });
   }
 
   // ------------------------------------------------------------------ actions

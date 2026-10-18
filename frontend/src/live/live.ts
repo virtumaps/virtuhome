@@ -207,6 +207,8 @@ export class HassLive implements LiveSource {
         this.watch(o.entity, "openings", "lighting");
         this.watch(o.cover, "openings");
       }
+      // a roof window that opens glows warm, like a window in a wall
+      for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") this.watch(it.entity, "lighting");
     }
   }
 

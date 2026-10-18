@@ -55,6 +55,8 @@ export interface MarkerSpec {
   pulse: number;
   /** 0..1 how visible (floors fading out). */
   alpha: number;
+  /** Editor handles on a slope: dragging follows it. */
+  plane?: { normal: [number, number, number]; point: [number, number, number] };
 }
 
 const QUAD = new Float32Array([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0]);
