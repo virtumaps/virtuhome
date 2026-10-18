@@ -62,6 +62,8 @@ export const VIEW_CSS = /* css */ `
 .vh-close { margin-left: auto; }
 .vh-empty {
   position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--vh-text); padding: 24px;
+  /* only words: taps go through to the Edit button above it */
+  pointer-events: none;
 }
 .vh-empty h2 { margin: 0 0 8px; font-size: 20px; }
 .vh-empty p { margin: 0 0 14px; color: var(--vh-dim); max-width: 440px; }

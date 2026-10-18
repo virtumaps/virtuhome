@@ -12,6 +12,10 @@
   counts per floor, linked entities that no longer exist, the dashboard card's resource and the
   extensions, for attaching to an issue. Names, entity ids and the licence key stay out of it.
 
+### Fixed
+- A new home's Edit button can be tapped: the "No home yet" text lay over it, so a fresh install
+  couldn't start editing.
+
 ## 0.6.0
 
 ### New
