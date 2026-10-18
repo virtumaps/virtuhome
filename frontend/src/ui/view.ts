@@ -1,5 +1,5 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
 import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
 import { HassLive, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
@@ -10,6 +10,8 @@ import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { VIEW_CSS } from "./styles";
+import { SkyLive, skyKey, type Sky } from "../live/sky";
+import { SkyPanel, SKY_CSS, type SkyPick } from "./sky";
 
 export interface ViewConfig {
   /** Floor to open on (id, name or index); otherwise the whole house. */
@@ -113,10 +115,17 @@ export class VhView {
   private extTint: RoomTint | null = null;
   private extText: RoomText | null = null;
   private themeTimer = 0;
+  /** The sky over the house: the sun moves every minute; the weather follows its entity. */
+  readonly skyLive = new SkyLive();
+  private skyShown = "";
+  private skyTimer = 0;
+  /** A date, time or weather picked in the sun and weather panel, instead of now. */
+  private skyPick: SkyPick | null = null;
+  private skyPanel: SkyPanel;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
-    style.textContent = VIEW_CSS + ENERGY_CSS;
+    style.textContent = VIEW_CSS + ENERGY_CSS + SKY_CSS;
     this.root = document.createElement("div");
     this.root.className = "vh-root";
     this.root.innerHTML = `
@@ -126,6 +135,7 @@ export class VhView {
       <div class="vh-tools">
         <button class="vh-icon" data-act="walls" title="Walls">${svg(WALL_ICONS.smart)}</button>
         <button class="vh-icon" data-act="theme" title="Day / night">${svg(mdiWeatherNight)}</button>
+        <button class="vh-icon" data-act="sky" title="Sun and weather">${svg(mdiWeatherPartlyCloudy)}</button>
         <button class="vh-icon" data-act="frame" title="Show all">${svg(mdiArrowExpandAll)}</button>
         <button class="vh-icon" data-act="heat" title="Temperature map">${svg(mdiThermometer)}</button>
         <button class="vh-icon" data-act="graphics" title="Graphics">${svg(mdiTune)}</button>
@@ -194,6 +204,7 @@ export class VhView {
       if (act === "frame") this.viewer.frame(true);
       if (act === "graphics") this.toggleGraphicsMenu();
       if (act === "heat") this.toggleHeatmap();
+      if (act === "sky") this.toggleSkyPanel();
     });
     this.menu.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest<HTMLElement>("[data-tier]")?.dataset.tier;
@@ -209,6 +220,21 @@ export class VhView {
       }, 1000);
     }
     this.updateWallsButton();
+    this.skyPanel = new SkyPanel({
+      hass: () => this._hass,
+      sky: () => this.viewer.currentSky,
+      realistic: () => this.viewer.realisticLook || this.viewer.tier === "high" || this.viewer.tier === "ultra",
+      pick: (p) => {
+        this.skyPick = p;
+        this.updateSky();
+        this.applyTheme();
+      },
+      useRealistic: () => this.setGraphics("high"),
+    });
+    this.root.append(this.skyPanel.el);
+    this.skyLive.onChange = () => this.updateSky();
+    // the sun moves about a quarter of a degree a minute
+    this.skyTimer = window.setInterval(() => this.updateSky(), 60_000);
     if (fixedPlan) this.applyPlan(fixedPlan);
   }
 
@@ -240,8 +266,7 @@ export class VhView {
     const changes = this.live.update(h);
     for (const c of extra) changes.add(c);
     this.applyTheme();
-    const sun = (h.states["sun.sun"] ?? this._hass?.states["sun.sun"])?.attributes;
-    if (sun && typeof sun.azimuth === "number" && typeof sun.elevation === "number") this.viewer.setSun(sun.azimuth, sun.elevation);
+    this.updateSky();
     if (this.plan && this.plan.floors.length) this.apply(changes);
     this.updateAlarm(h);
   }
@@ -672,6 +697,8 @@ export class VhView {
     const first = !this.plan;
     this.plan = plan;
     this.energy.setSettings(plan.settings.energy);
+    this.skyLive.settings = plan.settings.sky ?? {};
+    this.skyShown = "";
     this.live.setPlan(plan);
     if (this._hass) {
       if (this.energy.update(this._hass)) this.renderStatus();
@@ -698,6 +725,8 @@ export class VhView {
       const f = this.startFloor(plan);
       if (f >= 0) this.viewer.setMode("floor", f, false);
     }
+    // the weather may have been switched off or another entity picked
+    this.updateSky();
     this.renderChips();
   }
 
@@ -731,6 +760,8 @@ export class VhView {
   destroy(): void {
     this.endReplay();
     window.clearTimeout(this.themeTimer);
+    window.clearInterval(this.skyTimer);
+    this.skyPanel.dispose();
     this.disconnect();
     this.unregister?.();
     this.unregister = null;
@@ -740,12 +771,52 @@ export class VhView {
     this.viewer.dispose();
   }
 
+  // ------------------------------------------------------------------ sun and weather
+
+  /**
+   * The sky for the moment shown: now, a replay's moment (with the weather it recorded), or a date,
+   * time and weather picked in the panel. The 3D view hears about it only when it looks different.
+   */
+  private updateSky(): void {
+    const h = this.shown ?? this._hass;
+    if (!h) return;
+    const pick = this.skyPick;
+    const past = !!this.replayed && !pick;
+    const time = pick?.time ?? (past ? this.replayed!.time : Date.now());
+    // a replay's states carry the weather of their moment (its registries and location are the live ones)
+    this.skyLive.solar = this.energy.sources.solar;
+    const sky: Sky = this.skyLive.sky(h, time, { pick: pick?.weather ?? null, past: past || pick?.time != null, solarKw: this.energy.now?.solar ?? null });
+    if (!sky.sun) {
+      // no location: sun.sun still knows where the sun is
+      const a = (h.states["sun.sun"] ?? this._hass?.states["sun.sun"])?.attributes;
+      if (a && typeof a.azimuth === "number" && typeof a.elevation === "number") sky.sun = { azimuth: a.azimuth, elevation: a.elevation };
+    }
+    const key = skyKey(sky);
+    if (key === this.skyShown) return;
+    this.skyShown = key;
+    this.viewer.setSky(sky);
+    this.skyPanel.render();
+  }
+
+  private toggleSkyPanel(): void {
+    if (this.skyPanel.open) {
+      this.skyPanel.close();
+      return;
+    }
+    this.closeSheet();
+    this.menu.hidden = true;
+    this.skyPanel.show();
+  }
+
   // ------------------------------------------------------------------ looks
 
   private themeName(): "day" | "night" {
     if (this.themeOverride) return this.themeOverride;
     const t = this.config.theme ?? this.plan?.settings.theme ?? "auto";
     if (t === "day" || t === "night") return t;
+    // a picked time shows day or night as it would be then
+    const picked = this.skyPick?.time != null ? this.viewer.currentSky?.sun : null;
+    if (picked) return picked.elevation > -0.833 ? "day" : "night";
     // a replay shows day or night as it was then
     const sun = (this.shown?.states["sun.sun"] ?? this._hass?.states["sun.sun"])?.state;
     if (sun) return sun === "below_horizon" ? "night" : "day";
@@ -754,7 +825,7 @@ export class VhView {
 
   private applyTheme(): void {
     const name = this.themeName();
-    if (this.replayed && this.viewer.pal.name !== name) {
+    if ((this.replayed || this.skyPick?.time != null) && this.viewer.pal.name !== name) {
       // a new look rebuilds the house: scrubbing back and forth over sunset changes it at most every 300 ms
       this.themeTimer ||= window.setTimeout(() => {
         this.themeTimer = 0;
@@ -968,6 +1039,7 @@ export class VhView {
     this.viewer.selectRoom(floor, room);
     this.renderChips();
     if (this.config.room_panel !== false) {
+      if (this.skyPanel.open) this.skyPanel.close();
       this.sheetEnergy = false;
       window.clearInterval(this.todayTimer);
       this.sheetRoom = { floor, room };

@@ -51,6 +51,14 @@ export const EDITOR_CSS = /* css */ `
 .ed-hb:disabled { opacity: 0.38; cursor: default; }
 .ed-ib.on { color: var(--vh-accent); box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
 .ed-sub { margin: 10px 0 4px; font-size: 12px; color: var(--vh-dim); }
+.ed-col { flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
+.ed-compass { width: 84px; height: 84px; flex: none; touch-action: none; cursor: grab; }
+.ed-compass svg { width: 100%; height: 100%; display: block; }
+.ed-compass circle { fill: var(--vh-chip); stroke: var(--vh-line); stroke-width: 1.5; }
+.ed-compass line { stroke: var(--vh-dim); stroke-width: 1.2; }
+.ed-compass text { fill: var(--vh-text); font: 600 11px system-ui, sans-serif; text-anchor: middle; }
+.ed-compass text.n { fill: #e5484d; font-size: 13px; }
+.ed-compass .up { fill: var(--vh-accent); }
 .ed-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0; }
 .ed-chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .ed-chip {

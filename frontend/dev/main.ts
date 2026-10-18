@@ -43,6 +43,7 @@ async function liveHass(onChange: (h: Hass) => void): Promise<Hass> {
   const cfg = (await import(/* @vite-ignore */ "/dev/local.env.js" as string)) as { HA_URL: string; HA_TOKEN: string };
   const conn: Connection = await createConnection({ auth: createLongLivedTokenAuth(cfg.HA_URL, cfg.HA_TOKEN) });
   const list = <T>(type: string) => conn.sendMessagePromise<T[]>({ type });
+  const config = await conn.sendMessagePromise<Hass["config"]>({ type: "get_config" });
   const [ents, devs, areas, floors] = await Promise.all([
     list<{ entity_id: string; device_id: string | null; area_id: string | null; entity_category: string | null; hidden_by: string | null; platform: string }>("config/entity_registry/list"),
     list<{ id: string; area_id: string | null; name: string | null; name_by_user: string | null; model: string | null }>("config/device_registry/list"),
@@ -56,6 +57,7 @@ async function liveHass(onChange: (h: Hass) => void): Promise<Hass> {
     areas: Object.fromEntries(areas.map((a) => [a.area_id, a])),
     floors: Object.fromEntries(floors.map((f) => [f.floor_id, f])),
     user: { id: "dev", name: "Dev", is_admin: true },
+    config,
     callService: (domain, service, data, target) =>
       conn.sendMessagePromise({ type: "call_service", domain, service, service_data: data ?? {}, target }),
     callWS: <T>(msg: Record<string, unknown>) => conn.sendMessagePromise<T>(msg as never),

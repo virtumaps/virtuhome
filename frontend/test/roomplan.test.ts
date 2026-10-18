@@ -119,3 +119,56 @@ describe("importRoomPlan", () => {
     expect(pic.z - top).toBeLessThan(0.15);
   });
 });
+
+describe("north from House Scan's compass", () => {
+  // the whole scan turned by θ about y (as if the phone had started facing another way)
+  const ry = (t: number) => [Math.cos(t), 0, -Math.sin(t), 0, 0, 1, 0, 0, Math.sin(t), 0, Math.cos(t), 0, 0, 0, 0, 1];
+  const mul = (a: number[], b: number[]) => {
+    const out = new Array(16).fill(0);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) out[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k];
+    return out;
+  };
+  const turned = (t: number): typeof scan => {
+    const r = ry(t);
+    const fix = (o: unknown): unknown => {
+      if (Array.isArray(o)) return o.map(fix);
+      if (!o || typeof o !== "object") return o;
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(o)) {
+        if (k === "transform") out[k] = mul(r, v as number[]);
+        else if (k === "center") {
+          const [x, y, z] = v as number[];
+          out[k] = [x * Math.cos(t) + z * Math.sin(t), y, -x * Math.sin(t) + z * Math.cos(t)];
+        } else out[k] = fix(v);
+      }
+      return out;
+    };
+    return fix(scan) as typeof scan;
+  };
+  const compass = (bearing: number) => ({ version: 1, space: "structure" as const, objects: [], compass: { structure_minus_z_bearing: bearing, reference: "true" as const, samples: 40, spread: 4 } });
+
+  it("leaves north up without a reading", () => {
+    const { plan, report } = importRoomPlan(scan, null, {});
+    expect(plan.settings.north).toBe(0);
+    expect(report.north).toBeNull();
+  });
+
+  it("gives the same north however the scan was turned", () => {
+    const base = importRoomPlan(scan, null, { detections: compass(40) });
+    expect(base.plan.settings.north).toBeCloseTo(40, 1);
+    expect(base.report.north?.spread).toBe(4);
+    // the house turned by θ in the scan's frame: the frame's -Z now points θ further round
+    for (const deg of [30, 90, 200]) {
+      const t = (deg * Math.PI) / 180;
+      const { plan } = importRoomPlan(turned(t), null, { detections: compass(40 + deg) });
+      const diff = Math.abs((((plan.settings.north - base.plan.settings.north) % 360) + 540) % 360 - 180);
+      expect(diff).toBeLessThan(0.5);
+    }
+  });
+
+  it("ignores a reading with too few samples", () => {
+    const d = compass(40);
+    d.compass.samples = 3;
+    expect(importRoomPlan(scan, null, { detections: d }).plan.settings.north).toBe(0);
+  });
+});

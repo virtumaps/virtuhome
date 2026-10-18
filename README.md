@@ -8,7 +8,8 @@ show where they are, and walls between you and a room slide out of the way.
 
 Built for wall tablets first: on a Fire HD 8 class tablet the view draws nothing while nothing changes,
 each floor is one or two draw calls, and lighting is computed on the CPU only when a light changes.
-On a computer or a recent iPad it switches to a realistic look with textures, sunlight and shadows.
+On a computer or a recent iPad it switches to a realistic look with textures, the real sun's light
+and shadows, and the weather.
 
 - **Get your home in:** import an iPhone/iPad LiDAR scan (Apple RoomPlan JSON), or draw rooms in the
   2D plan. Furniture comes with the scan in the right style (corner sofa, bar stool, round table…),
@@ -31,6 +32,10 @@ On a computer or a recent iPad it switches to a realistic look with textures, su
 - **Fences and garden walls:** 15 designs from closeboard and lap panels to picket, railings,
   palisade, glass and brick walls, in any height and colour, with gravel boards, trellis toppers and
   gates. Fence a garden in one tap, or draw fences in the 2D plan.
+- **Sun and weather:** the sun lights the house from where it really is, at every hour and season,
+  and comes into rooms through their windows. Clouds, fog, rain, snow and wind come from your weather
+  entity (and your solar panels know whether the sun is out). See the house at any date and time, or
+  play a day through. Line the plan up with the map in one tap so the shadows point the right way.
 - **Make it look like home:** floor finishes, wall paint and wallpaper, the outside in brick, render,
   stone or cladding, and about 110 pieces of furniture and decor in swappable styles, colours and
   fabrics.
@@ -77,7 +82,7 @@ Everything above can also be set in the card's visual editor. Extensions add the
 |---|---|---|
 | Tablet | the model look at 1x, no antialiasing, simpler shapes | Fire tablets, old phones |
 | Standard | the model look, sharp and antialiased | phones, older laptops |
-| Realistic | textured materials, light from the sky and the real sun (placed from `sun.sun`), soft shadows | computers, recent iPads |
+| Realistic | textured materials, light from the sky and the real sun (from the home's location), shadows through the windows, the weather | computers, recent iPads |
 | Ultra | Realistic plus ambient occlusion and glow | strong graphics cards |
 
 **Automatic** picks a level for each device and steps down if moving the view gets slow. The sliders
@@ -107,6 +112,11 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
 - **Energy:** Edit → Home → Energy shows the solar, house, battery and grid sensors found from the
   energy settings, and takes another where one is wrong. Panels' peak sets how brightly placed solar
   panels shine (otherwise the best output seen). Charger and Car battery do the same for car charging.
+- **Sun and weather:** Edit → Home → Sun and weather sets which way the top of the plan faces: drag
+  the compass, type the bearing, or tap **Line up with the map** (it asks a public OpenStreetMap
+  server for the building at Home Assistant's home location and matches its walls; pick another of
+  the four ways it fits if the house faces otherwise). The 2D plan has a north arrow to drag. Pick the
+  weather entity there too, or turn the weather off.
 - **Undo / Redo** in the header, or Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z. Every save keeps a restore point.
 
 ## Scanning with House Scan
@@ -114,6 +124,9 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
 Scan room by room with an iPhone or iPad with LiDAR, then choose `house.json`, `manifest.json` and
 `detections.json` together in Edit → Home → **Import a scan…**. While scanning, hold decoration in view
 for a second, or point the crosshair at it and tap **Tag item** (best for dumbbells, mirrors and rugs).
+The app also notes which way the phone's compass points, so the imported plan faces north from the start
+(allow the location for true north; indoors a compass can be some degrees off, so check it with **Line
+up with the map**).
 
 ## Development
 

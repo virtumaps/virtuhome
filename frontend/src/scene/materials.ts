@@ -26,6 +26,8 @@ export interface FloorUniforms {
   /** rgb + amount per room. */
   uTint: { value: Float32Array };
   uDim: { value: number };
+  /** How many of the floor's spaces are rooms (the garden's areas come after them: outside). */
+  uIndoor: { value: number };
 }
 
 export function floorUniforms(): FloorUniforms {
@@ -36,6 +38,7 @@ export function floorUniforms(): FloorUniforms {
     uCutColor: { value: new Color(0x3e4148) },
     uTint: { value: new Float32Array(MAX_ROOMS * 4) },
     uDim: { value: 1 },
+    uIndoor: { value: 0 },
   };
 }
 

@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### New
+- The sun where it really is. VirtuHome works out the sun's and the moon's position itself from Home
+  Assistant's home location (to a tenth of a degree, the same as `sun.sun`), every minute and for any
+  moment, so the realistic look's shadows fall as they do outside at every hour and season: long and
+  low in winter, short at midsummer.
+- Light comes into rooms through their windows and open doors. For the sun every wall stands at its
+  full height (the cutaway only lowers them for you), each storey has a ceiling, and closed blinds keep
+  the sun out. Storeys hidden above the one you look at still shade the garden.
+- The weather from a weather entity (Met.no's `weather.forecast_home`, or the one picked): clouds dim
+  the sun and soften its shadows, the sky turns grey or dark, fog closes in, rain falls and wets the
+  paving, the drive and the garden (it stays wet for a while after), snow falls and lies on what faces
+  up, plants sway in a strong wind, and a storm flashes now and then (not with "reduce motion"). With
+  solar panels, what they make now against what they made in clear sun lately tells whether the sun
+  is out right now. Replays show the weather of their moment.
+- The sun and weather button: the house at any date and time of day (midwinter, midsummer, sunrise,
+  noon, sunset…), a day played through, and the weather picked by hand. "Now" goes back to live.
+- Edit → Home → Sun and weather: which way the top of the plan faces, on a compass to drag or as a
+  bearing, or **Line up with the map**, which turns the plan to match the building's outline on
+  OpenStreetMap (it sends Home Assistant's home location to a public OpenStreetMap server). The 2D plan
+  has a north arrow to drag. Also: the weather entity, and the weather on or off.
+- Scans from House Scan carry the phone's compass reading: an imported scan faces its own way.
+
+### Changed
+- The realistic look no longer keeps the sun at least 18° up, and its shadow covers the house as the
+  sun sees it, so low-sun shadows are no longer cut short. Clear days have more contrast between sun
+  and shade; rooms keep their light.
+- The Tablet and Standard looks show the weather in their sky (greyer under cloud, darker in a storm)
+  and white ground under snow.
+
 ## 0.5.0
 
 ### New
