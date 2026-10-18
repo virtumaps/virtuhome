@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### New
+- Trace a floor plan picture in the 2D plan: put an estate agent's plan (or a photo of a sketch) under
+  a floor, set its scale by clicking both ends of a wall you know and typing its length (metres, or feet
+  and inches as the plans give them), then draw the rooms over it. Drag it into place, fade it or turn
+  it. Only the 2D plan shows it, and Home Assistant keeps it for signed-in users only. A picture that
+  isn't a JPEG or PNG, or is very large, is turned into a smaller JPEG first.
 - Download diagnostics (Settings → Devices & services → VirtuHome → ⋮): versions, the plan's size and
   counts per floor, linked entities that no longer exist, the dashboard card's resource and the
   extensions, for attaching to an issue. Names, entity ids and the licence key stay out of it.

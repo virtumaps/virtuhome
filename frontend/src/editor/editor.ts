@@ -24,6 +24,7 @@ import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import { EDITOR_CSS } from "./styles";
 import { Collider, settle } from "./collide";
+import { imageUrl, uploadImage } from "./background";
 import { Plan2D, PLAN2D_CSS } from "./plan2d";
 import { fetchBuildings, northFits, pickBuilding, type Footprint, type NorthFit } from "./north";
 import { compassName } from "../live/sun";
@@ -184,6 +185,10 @@ export class Editor {
         floor: () => (viewer.mode === "floor" ? viewer.activeFloor : 0),
         setFloor: (i) => this.host.view.showFloor(i),
         status: (text) => (this.status.textContent = text),
+        images: {
+          upload: (floorId, image, progress) => uploadImage(this.hass, floorId, image, progress),
+          url: (file) => imageUrl(this.hass, file),
+        },
       });
       root.append(this.plan2d.el);
       this.status.textContent = "Select something, then drag it: furniture, devices, doors, windows, a room's corners and walls. Click a measurement to type it.";

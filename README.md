@@ -105,6 +105,11 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   As in 3D, furniture, devices, doors and windows move only once they are selected.
   The fence tool draws a fence corner by corner: click its last point again to finish.
   Arrow keys nudge, R turns, Delete removes.
+- **Trace a floor plan picture:** no LiDAR phone needed. In the 2D plan, the picture button puts an
+  estate agent's plan (or a photo of a sketch; JPEG or PNG up to 8 MB) under the floor. Click both ends
+  of a wall you know and type its length (3.45, 345 cm or 11'4"), then draw the rooms over it. Drag the
+  picture to move it; fade or turn it in its panel. Only the 2D plan shows it. It is kept in Home
+  Assistant (`.virtuhome/backgrounds`, for signed-in users only) and deleted when you remove it and save.
 - **Looks:** a room's floor and wall finish and paint colour, the outside walls (also per storey), and
   for furniture its style, colour, upholstery and mirroring. Add items from a searchable catalogue.
 - **Fences:** tap a fence for its style, height, colour, posts, gravel board, trellis topper and gates.

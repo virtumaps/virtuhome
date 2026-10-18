@@ -1,16 +1,21 @@
 // The plan from above, for exact work: walls with their measurements, rooms to reshape by their
 // corners and walls (snapping to the grid and lining up with other corners), lengths typed in,
-// rooms drawn, doors and windows placed and slid along their wall, furniture moved and turned.
-// Every change goes through the editor, so undo, redo and saving work the same as in 3D.
-import { mdiCursorDefault, mdiDoor, mdiFence, mdiFitToPageOutline, mdiPencilOutline, mdiRectangleOutline, mdiVectorPolylinePlus, mdiWindowClosedVariant } from "@mdi/js";
+// rooms drawn, doors and windows placed and slid along their wall, furniture moved and turned, and
+// rooms traced over a floor plan image. Every change goes through the editor, so undo, redo and
+// saving work the same as in 3D.
+import {
+  mdiCursorDefault, mdiDoor, mdiFence, mdiFitToPageOutline, mdiImageOutline, mdiPencilOutline, mdiRectangleOutline, mdiRotateLeft, mdiRotateRight,
+  mdiRuler, mdiVectorPolylinePlus, mdiWindowClosedVariant,
+} from "@mdi/js";
 import { area, bounds, labelPoint, pointInPolygon, segmentDistance } from "../model/geom";
-import { groundOf, newId, splitEdge, type Fence, type Floor, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
+import { groundOf, newId, splitEdge, type Fence, type Floor, type FloorBackground, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
 import { layoutWalls } from "../model/walls";
 import { outdoorTop } from "../scene/build";
 import { FLOOR_FINISHES, type FinishDef } from "../scene/finishes";
 import { CEILING_LAMPS, furnitureType } from "../scene/furniture-lib";
 import { fenceStyle } from "../scene/fences";
 import { styleOf } from "../scene/joinery";
+import { imageCorners, insideImage, parseLength, placeImage, prepareImage, rescale } from "./background";
 import { Collider, settle } from "./collide";
 
 export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence"; id: string } | null;
@@ -28,14 +33,20 @@ export interface Plan2DHost {
   floor(): number;
   setFloor(i: number): void;
   status(text: string): void;
+  /** Floor plan images kept by Home Assistant: store one for a floor (gives its file name), and where to load one from. */
+  images: {
+    upload(floorId: string, image: Blob, progress: (done: number) => void): Promise<string>;
+    url(file: string): Promise<string>;
+  };
 }
 
-type Tool = "select" | "rect" | "draw" | "door" | "window" | "corner" | "fence";
+type Tool = "select" | "rect" | "draw" | "door" | "window" | "corner" | "fence" | "image";
 
 const NS = "http://www.w3.org/2000/svg";
 const svgIcon = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
 const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const r2 = (v: number) => Math.round(v * 100) / 100;
+const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const fmt = (m: number) => `${m.toFixed(2)} m`;
 const same = (a: Vec2, b: Vec2) => Math.abs(a[0] - b[0]) < 0.015 && Math.abs(a[1] - b[1]) < 0.015;
 
@@ -50,6 +61,9 @@ function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, 
   if (text !== undefined) e.textContent = text;
   return e;
 }
+
+/** The storey a plan without floors gets when something is first put on it. */
+const firstFloor = (id = "floor_0"): Floor => ({ id, name: "Ground Floor", elevation: 0, height: 2.6, rooms: [], openings: [], furniture: [], devices: [], walls: [], outdoor: [] });
 
 /** A shape with corners: a room or a garden area. */
 interface Shape {
@@ -83,6 +97,22 @@ export class Plan2D {
   private drawing: Vec2[] = [];
   private rubber: { a: Vec2; b: Vec2 } | null = null;
   private hover: Vec2 | null = null;
+  /** The floor plan image: one <image> kept across redraws, so the picture isn't loaded again. */
+  private bgLayer = el("g", { class: "p2-bg" });
+  private bgImage = el("image", { preserveAspectRatio: "none" });
+  private bgFile: string | null = null;
+  private bgLoaded = false;
+  private bgMissing = false;
+  /** The image tool's panel, rebuilt only when what it shows changes (a slider being dragged stays). */
+  private panel: HTMLDivElement;
+  private panelKey = "";
+  private sliders: { opacity?: HTMLInputElement; turn?: HTMLInputElement; turnText?: HTMLElement; progress?: HTMLElement } = {};
+  private sliding = false;
+  /** Upload progress (0..1) while a picture is being sent. */
+  private uploading: number | null = null;
+  private imageError = "";
+  /** Setting the image's scale: the ends of a wall of known length, as clicked. */
+  private measure: Vec2[] | null = null;
 
   constructor(private host: Plan2DHost) {
     this.el = document.createElement("div");
@@ -94,7 +124,21 @@ export class Plan2D {
     this.input = document.createElement("input");
     this.input.className = "p2-input";
     this.input.hidden = true;
-    this.el.append(this.svg, this.bar, this.input);
+    this.panel = document.createElement("div");
+    this.panel.className = "p2-panel";
+    this.panel.hidden = true;
+    this.bgLayer.append(this.bgImage);
+    this.bgImage.addEventListener("load", () => {
+      this.bgLoaded = true;
+      this.bgMissing = false;
+      this.render();
+    });
+    this.bgImage.addEventListener("error", () => {
+      if (!this.bgImage.getAttribute("href")) return;
+      this.bgMissing = true;
+      this.render();
+    });
+    this.el.append(this.svg, this.bar, this.panel, this.input);
     this.renderBar();
     this.bindPointer();
     this.resizeObs = new ResizeObserver(() => {
@@ -135,13 +179,25 @@ export class Plan2D {
     this.fitted = this.host.floor();
     // the rooms fill the view; the garden shows around them as far as it fits
     const rooms = f?.rooms.flatMap((r) => r.points) ?? [];
-    const pts = rooms.length ? rooms : (f?.outdoor ?? []).flatMap((o) => o.points);
+    const garden = (f?.outdoor ?? []).flatMap((o) => o.points);
+    const pts = rooms.length ? rooms : garden.length ? garden : f?.background ? imageCorners(f.background) : [];
     const b = pts.length ? bounds(pts) : { minX: -3, minZ: -3, maxX: 3, maxZ: 3 };
     const pad = 70;
-    this.s = Math.max(8, Math.min(240, Math.min((this.w - pad * 2) / Math.max(1, b.maxX - b.minX), (this.h - pad * 2 - 50) / Math.max(1, b.maxZ - b.minZ))));
-    this.ox = this.w / 2 - ((b.minX + b.maxX) / 2) * this.s;
-    this.oy = (this.h + 50) / 2 - ((b.minZ + b.maxZ) / 2) * this.s;
+    // clear of the image tool's panel: beside it or below it, whichever leaves more room
+    const scaleIn = ({ left, top }: { left: number; top: number }) =>
+      Math.min((this.w - left - pad * 2) / Math.max(1, b.maxX - b.minX), (this.h - top - pad * 2 - 50) / Math.max(1, b.maxZ - b.minZ));
+    const [beside, below] = this.panelSpace();
+    const free = scaleIn(beside) >= scaleIn(below) ? beside : below;
+    this.s = Math.max(8, Math.min(240, scaleIn(free)));
+    this.ox = free.left + (this.w - free.left) / 2 - ((b.minX + b.maxX) / 2) * this.s;
+    this.oy = (this.h + 50 + free.top) / 2 - ((b.minZ + b.maxZ) / 2) * this.s;
     this.render();
+  }
+
+  /** Room the image tool's panel takes: beside it (its width) and below it (its height under the tool bar). */
+  private panelSpace(): [{ left: number; top: number }, { left: number; top: number }] {
+    if (this.tool !== "image") return [{ left: 0, top: 0 }, { left: 0, top: 0 }];
+    return [{ left: 320, top: 0 }, { left: 0, top: Math.max(180, this.panel.offsetTop + this.panel.offsetHeight - 50) }];
   }
 
   /** Redraws (at most once per frame). */
@@ -162,6 +218,7 @@ export class Plan2D {
       ["window", mdiWindowClosedVariant, "Window: click on a wall"],
       ["corner", mdiVectorPolylinePlus, "Corner: click on an edge where it goes, drag to place it"],
       ["fence", mdiFence, "Fence: click its corners, then the last one again"],
+      ["image", mdiImageOutline, "Floor plan image: trace the rooms over an estate agent's plan"],
     ];
     const floors = this.host.plan().floors;
     this.bar.innerHTML = "";
@@ -209,8 +266,16 @@ export class Plan2D {
     this.tool = t;
     this.drawing = [];
     this.rubber = null;
+    this.measure = null;
+    this.imageError = "";
     this.renderBar();
     this.render();
+    if (t === "image") {
+      this.host.status(this.floor?.background
+        ? "Drag the picture to move it. Set its scale from a wall you know the length of, then draw the rooms over it."
+        : "Choose a floor plan picture to trace the rooms over.");
+      return;
+    }
     this.host.status({
       select: "Select something, then drag it: furniture, devices, doors, windows, a room's corners and walls. Click a measurement to type it.",
       rect: "Drag out a rectangle for the new room.",
@@ -232,11 +297,13 @@ export class Plan2D {
     const svg = this.svg;
     svg.setAttribute("width", String(this.w));
     svg.setAttribute("height", String(this.h));
-    const layers = { grid: el("g"), ghost: el("g"), fill: el("g"), fence: el("g"), wall: el("g"), open: el("g"), items: el("g"), dims: el("g"), labels: el("g"), handles: el("g"), guides: el("g") };
+    const layers = { grid: el("g"), bg: this.bgLayer, ghost: el("g"), fill: el("g"), fence: el("g"), wall: el("g"), open: el("g"), items: el("g"), dims: el("g"), labels: el("g"), handles: el("g"), guides: el("g") };
     svg.replaceChildren(...Object.values(layers));
     this.drawGrid(layers.grid);
+    this.drawBackground(f?.background ?? null, layers.guides);
+    this.syncPanel();
     if (!f) {
-      layers.labels.append(el("text", { x: this.w / 2, y: this.h / 2, class: "p2-empty", "text-anchor": "middle" }, "No floors yet: import a scan or draw a room."));
+      layers.labels.append(el("text", { x: this.w / 2, y: this.h / 2, class: "p2-empty", "text-anchor": "middle" }, "No floors yet: import a scan, draw a room, or trace a floor plan picture."));
       return;
     }
     // the floor below, faintly, to line things up with
@@ -460,6 +527,19 @@ export class Plan2D {
         layers.guides.append(el("circle", { cx: x, cy: y, r: 6, class: "p2-place" }));
       }
     }
+    if (this.measure?.length) {
+      const a = this.measure[0], b = this.measure[1] ?? this.hover;
+      if (b) {
+        const [x1, y1] = this.toScreen(a);
+        const [x2, y2] = this.toScreen(b);
+        layers.guides.append(el("line", { x1, y1, x2, y2, class: "p2-measure" }));
+        layers.guides.append(this.badge((x1 + x2) / 2, (y1 + y2) / 2 - 14, `now ${fmt(Math.hypot(b[0] - a[0], b[1] - a[1]))}`));
+      }
+      for (const q of this.measure) {
+        const [x, y] = this.toScreen(q);
+        layers.guides.append(el("circle", { cx: x, cy: y, r: 4.5, class: "p2-measure-pt" }));
+      }
+    }
     if (this.tool === "corner" && this.hover && !this.drag) {
       const hit = this.shapeEdgeAt(this.hover);
       if (hit) {
@@ -468,6 +548,265 @@ export class Plan2D {
       }
     }
     layers.handles.append(this.compass(plan.settings.north ?? 0));
+  }
+
+  /** Places the floor plan image (and outlines it while the image tool is on). */
+  private drawBackground(bg: FloorBackground | null, guides: SVGGElement): void {
+    const img = this.bgImage;
+    if (!bg) {
+      if (this.bgFile !== null) {
+        img.removeAttribute("href");
+        this.bgFile = null;
+      }
+      this.bgLoaded = this.bgMissing = false;
+      this.svg.classList.remove("traced");
+      return;
+    }
+    if (bg.file !== this.bgFile) {
+      const file = bg.file;
+      this.bgFile = file;
+      this.bgLoaded = this.bgMissing = false;
+      img.removeAttribute("href");
+      this.host.images.url(file).then(
+        (url) => this.bgFile === file && img.setAttribute("href", url),
+        () => {
+          if (this.bgFile !== file) return;
+          this.bgMissing = true;
+          this.render();
+        },
+      );
+    }
+    const [cx, cy] = this.toScreen([bg.x, bg.z]);
+    const w = bg.width * bg.scale * this.s, h = bg.height * bg.scale * this.s;
+    img.setAttribute("x", (cx - w / 2).toFixed(1));
+    img.setAttribute("y", (cy - h / 2).toFixed(1));
+    img.setAttribute("width", w.toFixed(1));
+    img.setAttribute("height", h.toFixed(1));
+    img.setAttribute("transform", `rotate(${bg.rotation} ${cx.toFixed(1)} ${cy.toFixed(1)})`);
+    img.setAttribute("opacity", String(bg.opacity));
+    // rooms are paler over a picture, so its lines show through
+    this.svg.classList.toggle("traced", this.bgLoaded && bg.opacity > 0);
+    if (this.tool === "image") guides.append(el("polygon", { points: this.pts(imageCorners(bg)), class: "p2-img-frame" }));
+  }
+
+  /** The image tool's panel: rebuilt when what it shows changes, else only its values follow the plan. */
+  private syncPanel(): void {
+    const bg = this.floor?.background ?? null;
+    const key = this.tool !== "image" ? "" : [bg?.file ?? "", this.uploading !== null, this.measure?.length ?? -1, this.bgMissing, this.imageError].join("|");
+    if (key !== this.panelKey) {
+      this.panelKey = key;
+      this.renderPanel();
+      return;
+    }
+    if (bg && !this.sliding) {
+      const { opacity, turn, turnText } = this.sliders;
+      if (opacity) opacity.value = String(Math.round(bg.opacity * 100));
+      if (turn) turn.value = String(bg.rotation);
+      if (turnText) turnText.textContent = `${bg.rotation}°`;
+    }
+  }
+
+  private renderPanel(): void {
+    const panel = this.panel;
+    panel.replaceChildren();
+    this.sliders = {};
+    panel.hidden = this.tool !== "image";
+    if (panel.hidden) return;
+    const fi = this.floorIndex;
+    const bg = this.floor?.background ?? null;
+    const node = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = ""): HTMLElementTagNameMap[K] => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text) e.textContent = text;
+      return e;
+    };
+    const button = (text: string, cls: string, onclick: () => void, icon?: string, title?: string) => {
+      const b = node("button", cls);
+      if (icon) b.innerHTML = svgIcon(icon);
+      if (text) b.append(text);
+      if (title) b.title = title;
+      b.onclick = onclick;
+      return b;
+    };
+    const row = (...children: (HTMLElement | string)[]) => {
+      const r = node("div", "row");
+      r.append(...children);
+      return r;
+    };
+    const choose = (text: string, cls: string) => button(text, cls, () => {
+      const input = node("input");
+      input.type = "file";
+      input.accept = "image/png,image/jpeg,image/*";
+      input.onchange = () => input.files?.[0] && void this.chooseImage(input.files[0]);
+      input.click();
+    });
+    panel.append(node("b", "", "Floor plan picture"));
+    if (this.uploading !== null) {
+      this.sliders.progress = node("p", "", `Sending the picture… ${Math.round(this.uploading * 100)}%`);
+      panel.append(this.sliders.progress);
+    } else if (!bg) {
+      panel.append(
+        node("p", "", "Put an estate agent's plan (or a photo of a sketch) under this floor, set its scale, then draw the rooms over it. JPEG or PNG, up to 8 MB; a screenshot of a PDF works. Only the 2D plan shows it."),
+        choose("Choose a picture…", "ed-btn"),
+      );
+    } else {
+      if (this.bgMissing) panel.append(node("p", "err", "The picture can't be loaded (it may have been removed). Choose it again."));
+      if (this.measure) {
+        panel.append(
+          node("p", "", this.measure.length < 2 ? "Click both ends of a wall you know the length of: an outside wall, or a room's width from the plan's labels." : "Type the real length and press Enter."),
+          row(button("Cancel", "ed-btn ghost small", () => {
+            this.measure = null;
+            this.input.hidden = true;
+            this.render();
+          })),
+        );
+      } else {
+        panel.append(row(button("Set the scale", "ed-btn small", () => {
+          this.measure = [];
+          this.host.status("Click both ends of a wall you know the length of.");
+          this.render();
+        }, mdiRuler)));
+      }
+      const opacity = node("input");
+      opacity.type = "range";
+      opacity.min = "0";
+      opacity.max = "100";
+      opacity.value = String(Math.round(bg.opacity * 100));
+      this.slide(opacity, "Fade the floor plan picture", (b, v) => (b.opacity = v / 100));
+      const turn = node("input");
+      turn.type = "range";
+      turn.min = "-180";
+      turn.max = "180";
+      turn.step = "0.5";
+      turn.value = String(bg.rotation);
+      const turnText = node("span", "val", `${bg.rotation}°`);
+      this.slide(turn, "Turn the floor plan picture", (b, v) => {
+        b.rotation = v;
+        turnText.textContent = `${v}°`;
+      });
+      const quarter = (d: number) => () => this.host.change((p) => {
+        const b = p.floors[fi]?.background;
+        if (b) b.rotation = ((((b.rotation + d + 180) % 360) + 360) % 360) - 180;
+      }, "Turn the floor plan picture");
+      this.sliders = { opacity, turn, turnText };
+      panel.append(
+        row(node("label", "", "Show"), opacity),
+        row(node("label", "", "Turn"), turn, turnText,
+          button("", "ib", quarter(-90), mdiRotateLeft, "Turn a quarter left"), button("", "ib", quarter(90), mdiRotateRight, "Turn a quarter right")),
+        row(choose("Another picture…", "ed-btn ghost small"), button("Remove", "ed-btn ghost small", () => {
+          this.host.change((p) => {
+            const f = p.floors[fi];
+            if (f) f.background = null;
+          }, "Remove the floor plan picture");
+          this.host.status("Picture removed. Home Assistant deletes it when you save.");
+        })),
+      );
+    }
+    if (this.imageError) panel.append(node("p", "err", this.imageError));
+  }
+
+  /** A slider that changes the image while it moves, with one undo step when it's let go. */
+  private slide(input: HTMLInputElement, label: string, set: (bg: FloorBackground, v: number) => void): void {
+    input.addEventListener("input", () => {
+      if (!this.sliding) {
+        this.sliding = true;
+        this.host.dragStart();
+      }
+      const live = this.host.plan().floors[this.floorIndex]?.background;
+      if (live) set(live, Number(input.value));
+      this.render();
+    });
+    input.addEventListener("change", () => {
+      if (!this.sliding) return;
+      this.sliding = false;
+      this.host.dragEnd(label);
+    });
+  }
+
+  /** A picture was chosen: it goes to Home Assistant, then under this floor, and the scale is next. */
+  private async chooseImage(file: File): Promise<void> {
+    const fi = this.floorIndex;
+    const floorId = this.floor?.id ?? "floor_0";
+    this.imageError = "";
+    this.uploading = 0;
+    this.render();
+    try {
+      const img = await prepareImage(file);
+      const name = await this.host.images.upload(floorId, img.blob, (done) => {
+        this.uploading = done;
+        if (this.sliders.progress) this.sliders.progress.textContent = `Sending the picture… ${Math.round(done * 100)}%`;
+      });
+      // another picture keeps the old one's place and size; a first one fills most of the view
+      const old = this.floor?.background;
+      const bg = old
+        ? { ...placeImage(name, img.width, img.height, [old.x, old.z], old.width * old.scale), rotation: old.rotation, opacity: old.opacity }
+        : this.placeNew(name, img.width, img.height);
+      const fresh = !this.host.plan().floors.length;
+      this.host.change((p) => {
+        if (!p.floors.length) p.floors.push(firstFloor(floorId));
+        p.floors[Math.min(fi, p.floors.length - 1)].background = bg;
+      }, old ? "Replace the floor plan picture" : "Add a floor plan picture");
+      if (fresh) this.fit();
+      this.measure = [];
+      this.host.status("Now set its scale: click both ends of a wall you know the length of.");
+    } catch (err) {
+      this.imageError = String((err as { message?: string })?.message ?? err);
+    } finally {
+      this.uploading = null;
+      this.render();
+    }
+  }
+
+  /** A first picture: as large as fits beside or below the panel, in the middle of that space. */
+  private placeNew(name: string, width: number, height: number): FloorBackground {
+    const [beside, below] = this.panelSpace();
+    const fits = ({ left, top }: { left: number; top: number }) => Math.min((this.w - left) * 0.85 / width, (this.h - 50 - top) * 0.85 / height);
+    const free = fits(beside) >= fits(below) ? beside : below;
+    const centre = this.toPlan((this.w + free.left) / 2, (this.h + 50 + free.top) / 2);
+    return placeImage(name, width, height, centre, Math.max(1, (fits(free) * width) / this.s));
+  }
+
+  /** Both ends of the wall are clicked: ask how long it really is, and scale the picture to it. */
+  private askLength(): void {
+    const m = this.measure;
+    if (!m || m.length !== 2) return;
+    const [mx, my] = this.toScreen([(m[0][0] + m[1][0]) / 2, (m[0][1] + m[1][1]) / 2]);
+    const input = this.input;
+    input.hidden = false;
+    input.value = "";
+    input.placeholder = "3.45";
+    input.style.left = `${mx - 40}px`;
+    input.style.top = `${my + 12}px`;
+    input.focus();
+    this.host.status("How long is it really? Type it (3.45, 345 cm or 11'4\") and press Enter.");
+    const done = (apply: boolean) => {
+      input.onkeydown = null;
+      input.onblur = null;
+      input.hidden = true;
+      input.placeholder = "";
+      if (this.measure !== m) return;
+      this.measure = null;
+      const len = apply ? parseLength(input.value) : null;
+      const fi = this.floorIndex;
+      const next = len && this.floor?.background ? rescale(this.floor.background, m[0], m[1], len) : null;
+      if (next) {
+        this.host.change((p) => {
+          const f = p.floors[fi];
+          if (f) f.background = next;
+        }, "Scale the floor plan picture");
+        this.host.status(`Scaled: that wall is now ${fmt(len!)}. Draw the rooms over the plan with the room tools.`);
+        if (!this.floor?.rooms.length) this.fit();
+      } else if (apply && input.value.trim()) {
+        this.host.status("That isn't a length. Set the scale again and type it like 3.45 or 11'4\".");
+      }
+      this.render();
+    };
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") done(true);
+      if (e.key === "Escape") done(false);
+      e.stopPropagation();
+    };
+    input.onblur = () => done(true);
   }
 
   /** Where the compass sits: the bottom left corner. */
@@ -950,6 +1289,34 @@ export class Plan2D {
 
   private toolDown(p: Vec2, e: PointerEvent): void {
     const fi = this.floorIndex;
+    if (this.tool === "image") {
+      const bg = this.floor?.background;
+      const [sx, sy] = this.toScreen(p);
+      if (bg && this.measure) {
+        if (this.measure.length < 2) this.measure.push(p);
+        // after the click is over: the press would take the focus straight back from the box
+        if (this.measure.length === 2) setTimeout(() => this.askLength());
+        this.render();
+        return;
+      }
+      // the picture moves; around it (or without one) the view does
+      if (!bg || !insideImage(bg, p)) {
+        this.pan = { x: sx, y: sy, ox: this.ox, oy: this.oy, moved: false, keep: true };
+        return;
+      }
+      const from: Vec2 = [bg.x, bg.z];
+      this.host.dragStart();
+      this.drag = {
+        kind: "image", label: "Move the floor plan picture", moved: false,
+        apply: (x, z) => {
+          const live = this.host.plan().floors[fi]?.background;
+          if (!live) return;
+          live.x = r3(from[0] + x - p[0]);
+          live.z = r3(from[1] + z - p[1]);
+        },
+      };
+      return;
+    }
     if (this.tool === "rect") {
       const a = this.snap(p, new Set(), e.altKey);
       this.rubber = { a, b: a };
@@ -1105,7 +1472,7 @@ export class Plan2D {
     const n = (this.floor?.rooms.length ?? 0) + 1;
     const room: Room = { id: newId("room"), name: `Room ${n}`, area_id: null, floor: "wood", wall_finish: "paint", points: points.map(([x, z]) => [r2(x), r2(z)]) };
     this.host.change((p) => {
-      if (!p.floors.length) p.floors.push({ id: "floor_0", name: "Ground Floor", elevation: 0, height: 2.6, rooms: [], openings: [], furniture: [], devices: [], walls: [], outdoor: [] });
+      if (!p.floors.length) p.floors.push(firstFloor());
       p.floors[fi].rooms.push(room);
     }, "Draw a room");
     this.host.select({ floor: fi, kind: "room", id: room.id });
@@ -1183,7 +1550,10 @@ export class Plan2D {
     const sel = this.host.selection();
     const fi = this.floorIndex;
     if (e.key === "Escape") {
-      if (this.tool !== "select") this.setTool("select");
+      if (this.measure) {
+        this.measure = null;
+        this.render();
+      } else if (this.tool !== "select") this.setTool("select");
       else this.host.select(null);
       return;
     }
@@ -1310,5 +1680,24 @@ export const PLAN2D_CSS = /* css */ `
 .p2-tool.on { background: var(--vh-accent); color: #fff; }
 .p2-floor { border: 0; border-radius: 11px; background: none; color: var(--vh-text); font: inherit; font-size: 12px; padding: 0 10px; cursor: pointer; }
 .p2-floor.on { background: var(--vh-chip-on); font-weight: 600; }
+.p2-bg image { pointer-events: none; }
+.p2-svg.traced .p2-room { fill-opacity: 0.16; }
+.p2-svg.traced .p2-room.sel { fill-opacity: 0.3; }
+.p2-svg.traced .p2-out { fill-opacity: 0.14; }
+.p2-img-frame { fill: none; stroke: #2f7cf6; stroke-width: 1.5; stroke-dasharray: 6 4; pointer-events: none; }
+.p2-measure { stroke: #e5484d; stroke-width: 2; }
+.p2-measure-pt { fill: #e5484d; }
+.p2-panel { position: absolute; left: 10px; top: 56px; width: min(300px, calc(100% - 20px)); max-height: calc(100% - 66px); overflow: auto; box-sizing: border-box; padding: 10px 12px; border-radius: 14px; background: var(--vh-glass); color: var(--vh-text); box-shadow: 0 1px 6px rgba(0,0,0,0.16); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font: 12.5px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; z-index: 3; }
+.p2-panel[hidden] { display: none; }
+.p2-panel b { display: block; margin-bottom: 6px; }
+.p2-panel p { margin: 0 0 8px; color: var(--vh-dim); }
+.p2-panel p.err { color: #e5484d; }
+.p2-panel .row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.p2-panel .row label { min-width: 34px; color: var(--vh-dim); }
+.p2-panel input[type=range] { flex: 1; min-width: 0; accent-color: var(--vh-accent); }
+.p2-panel .val { min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+.p2-panel .ed-btn svg { width: 16px; height: 16px; fill: currentColor; vertical-align: -3px; margin-right: 4px; }
+.p2-panel .ib { width: 30px; height: 30px; flex: none; border: 0; border-radius: 9px; background: var(--vh-chip); color: var(--vh-text); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.p2-panel .ib svg { width: 18px; height: 18px; fill: currentColor; }
 .p2-input { position: absolute; width: 80px; padding: 4px 6px; border-radius: 8px; border: 2px solid #2f7cf6; font: 13px system-ui; text-align: center; z-index: 3; }
 `;
