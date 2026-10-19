@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### New
+- People in their rooms: when a room tracker knows where someone is (Bermuda, ESPresense through
+  mqtt_room or the ESPresense Companion), their picture or initials show over the room's name, and in
+  the house view over the room, and the room glows softly. Tap a face for the person's dialog. The
+  room's sheet says who is here, and the avatars in the corner name the room. Each person's tracker is
+  found on their devices or by its name; Edit → Home → People picks another, or none, and **Show
+  people in their rooms** turns it off. Replays of the past never show rooms, only home or away.
+- A motion or presence sensor (an Aqara FP2, Everything Presence or Apollo mmWave sensor) placed in
+  the plan counts for the room it is in, like a thermostat; one that isn't placed counts for its area.
+
 ## 0.9.0
 
 ### New

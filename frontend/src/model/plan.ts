@@ -366,6 +366,16 @@ export interface PlanSettings {
   energy?: EnergySettings | null;
   /** The weather shown in 3D: which weather entity, or none. */
   sky?: SkySettings | null;
+  /** Who is in which room; anything unset is found from Home Assistant. */
+  presence?: PresenceSettings | null;
+}
+
+/** People in their rooms, from room-level trackers (Bermuda, ESPresense, mqtt_room). */
+export interface PresenceSettings {
+  /** false never shows people in rooms (they stay in the top bar). */
+  enabled?: boolean;
+  /** The tracker that says each person's room, by person entity; null shows that person in no room. */
+  people?: Record<string, string | null>;
 }
 
 /**

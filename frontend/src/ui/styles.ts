@@ -27,6 +27,17 @@ export const VIEW_CSS = /* css */ `
 .vh-label .vh-heat.on { color: #ff8a4c; }
 .vh-root.day .vh-label .vh-heat.on { color: #d2501a; }
 .vh-floor-label { font-size: 13px; font-weight: 600; padding: 5px 12px; }
+/* who is in the room: faces over its name, or alone over the room in the house view */
+.vh-who { display: flex; justify-content: center; margin: 1px 0 3px; }
+.vh-face {
+  width: 22px; height: 22px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; flex: none;
+  font: 600 10px/1 system-ui, sans-serif; font-style: normal; background: var(--vh-chip-on); color: var(--vh-text);
+  box-shadow: 0 0 0 1.5px #2bb673;
+}
+.vh-face + .vh-face { margin-left: -5px; }
+.vh-face img { width: 100%; height: 100%; object-fit: cover; }
+.vh-faces { padding: 4px 6px; border-radius: 16px; }
+.vh-faces .vh-who { margin: 0; }
 .vh-bar {
   position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; align-items: center;
   pointer-events: none; flex-wrap: wrap;
