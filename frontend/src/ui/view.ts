@@ -1,5 +1,5 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
 import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
 import { HassLive, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
@@ -10,7 +10,8 @@ import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { VIEW_CSS } from "./styles";
-import { SkyLive, skyKey, type Sky } from "../live/sky";
+import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
+import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
 import { SkyPanel, SKY_CSS, type SkyPick } from "./sky";
 
 export interface ViewConfig {
@@ -30,6 +31,8 @@ export interface ViewConfig {
   people?: boolean;
   /** Solar, battery and grid: a chip in the corner and the energy sheet (default on). */
   energy?: boolean;
+  /** Roofs over the house (default on; the roof button turns them off on this device). */
+  roof?: boolean;
   /** Dev harness: extension modules to load without the integration. */
   dev_extensions?: string[];
   /** Options of extensions (e.g. Wall Tablet's popup, idle_return) live in the same config. */
@@ -54,6 +57,17 @@ function evKeys(now: EnergyNow | null): [string, string] {
   return [ev.map((c) => c.state).join("|"), ev.map((c) => `${c.state}:${c.level === null ? "" : Math.round(c.level)}`).join("|")];
 }
 
+const ROOF_KEY = "virtuhome.roof";
+/** The roof button's choice on this device, if made. */
+function roofSetting(): boolean | null {
+  try {
+    const v = localStorage.getItem(ROOF_KEY);
+    return v === null ? null : v === "1";
+  } catch {
+    return null;
+  }
+}
+
 let realisticModule: RealisticModule | null = null;
 /** The realistic look's code, fetched the first time a view needs it. */
 function loadRealistic(): Promise<RealisticModule> {
@@ -74,6 +88,7 @@ export class VhView {
   private empty: HTMLDivElement;
   private statsEl: HTMLDivElement;
   private wallsBtn: HTMLButtonElement;
+  private roofBtn: HTMLButtonElement;
   private themeBtn: HTMLButtonElement;
   private themeOverride: "day" | "night" | null = null;
   private sheetRoom: { floor: number; room: number } | null = null;
@@ -83,6 +98,7 @@ export class VhView {
   private editor: { onHit(hit: Hit): void; el: HTMLElement } | null = null;
   private alarmKey = "";
   private hassListeners = new Set<(h: Hass) => void>();
+  private planListeners = new Set<(p: Plan) => void>();
   private touchListeners = new Set<() => void>();
   private unregister: (() => void) | null = null;
   private toastTimer = 0;
@@ -134,6 +150,7 @@ export class VhView {
       <div class="vh-bar"></div>
       <div class="vh-tools">
         <button class="vh-icon" data-act="walls" title="Walls">${svg(WALL_ICONS.smart)}</button>
+        <button class="vh-icon" data-act="roof" title="Roof" hidden>${svg(mdiHomeRoof)}</button>
         <button class="vh-icon" data-act="theme" title="Day / night">${svg(mdiWeatherNight)}</button>
         <button class="vh-icon" data-act="sky" title="Sun and weather">${svg(mdiWeatherPartlyCloudy)}</button>
         <button class="vh-icon" data-act="frame" title="Show all">${svg(mdiArrowExpandAll)}</button>
@@ -156,6 +173,7 @@ export class VhView {
     this.empty = this.root.querySelector(".vh-empty")!;
     this.statsEl = this.root.querySelector(".vh-stats")!;
     this.wallsBtn = this.root.querySelector('[data-act="walls"]')!;
+    this.roofBtn = this.root.querySelector('[data-act="roof"]')!;
     this.themeBtn = this.root.querySelector('[data-act="theme"]')!;
     this.menu = this.root.querySelector(".vh-menu")!;
     this.alertEl = this.root.querySelector(".vh-alert")!;
@@ -183,6 +201,7 @@ export class VhView {
     this.viewer.onSlow = () => this.onSlow();
     this.ensureLook();
     this.viewer.walls = config.walls ?? "smart";
+    this.viewer.roofOn = roofSetting() ?? config.roof ?? true;
     this.live = new HassLive(normalizePlan({ version: 1, floors: [] }));
     this.live.energy = this.energy;
     this.energy.onSources = () => this.onEnergy();
@@ -200,6 +219,7 @@ export class VhView {
     this.root.querySelector(".vh-tools")!.addEventListener("click", (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>("[data-act]")?.dataset.act;
       if (act === "walls") this.cycleWalls();
+      if (act === "roof") this.toggleRoof();
       if (act === "theme") this.cycleTheme();
       if (act === "frame") this.viewer.frame(true);
       if (act === "graphics") this.toggleGraphicsMenu();
@@ -439,6 +459,19 @@ export class VhView {
         this.viewer.selectRoom(floor, room, fly);
         this.renderChips();
         this.renderStatus();
+      },
+      roofFaces: () => (this.plan ? roofFaces(this.plan) : []),
+      solarArrays: () => (this.plan ? solarArrays(this.plan) : []),
+      shadeGeometry: () => shadeGeometry(Array.from({ length: this.viewer.floorCount }, (_, i) => this.viewer.floorBuild(i)!).filter(Boolean)),
+      site: () => {
+        const loc = skyLocation(this._hass);
+        return loc ? { north: this.plan?.settings.north ?? 0, lat: loc.lat, lon: loc.lon } : null;
+      },
+      paintRoofs: (fn, spacing) => this.viewer.setRoofPaint(fn, spacing),
+      showRoofs: (on) => this.viewer.forceRoof(on),
+      onPlan: (cb) => {
+        self.planListeners.add(cb);
+        return () => self.planListeners.delete(cb);
       },
     };
   }
@@ -711,7 +744,10 @@ export class VhView {
       return;
     }
     this.empty.hidden = true;
-    this.hasPanels = plan.floors.some((f) => f.furniture.some((x) => x.type === "solar_panels"));
+    this.hasPanels = plan.floors.some((f) => f.furniture.some((x) => x.type === "solar_panels")
+      || (f.roofs ?? []).some((r) => (r.items ?? []).some((it) => it.kind === "solar")));
+    this.roofBtn.hidden = !plan.floors.some((f) => (f.roofs ?? []).length > 0);
+    this.updateRoofButton();
     this.hasEv = plan.floors.some((f) => f.furniture.some((x) => EV_TYPES.has(x.type)));
     // the plan is drawn with the chargers as they are now
     [this.evGlowKey, this.evLabelKey] = evKeys(this.energy.now);
@@ -728,6 +764,13 @@ export class VhView {
     // the weather may have been switched off or another entity picked
     this.updateSky();
     this.renderChips();
+    for (const cb of this.planListeners) {
+      try {
+        cb(plan);
+      } catch (err) {
+        console.error("VirtuHome extension error", err);
+      }
+    }
   }
 
   private startFloor(plan: Plan): number {
@@ -739,6 +782,10 @@ export class VhView {
 
   setConfig(config: ViewConfig): void {
     this.config = config;
+    if (config.roof !== undefined && roofSetting() === null) {
+      this.viewer.setRoof(config.roof !== false);
+      this.updateRoofButton();
+    }
     if (config.walls) {
       this.viewer.setWalls(config.walls);
       this.updateWallsButton();
@@ -915,6 +962,25 @@ export class VhView {
     this.viewer.setWalls(next[this.viewer.walls]);
     this.updateWallsButton();
     this.toast(WALL_NAMES[this.viewer.walls]);
+  }
+
+  /** The roof button: roofs over the house, or the house open to the sky. Kept per device. */
+  private toggleRoof(): void {
+    const on = !this.viewer.roofOn;
+    this.viewer.setRoof(on);
+    try {
+      localStorage.setItem(ROOF_KEY, on ? "1" : "0");
+    } catch {
+      // private windows: the choice lasts until the page closes
+    }
+    this.updateRoofButton();
+    this.viewer.frame(true);
+    this.toast(on ? "Roof on" : "Roof off");
+  }
+
+  private updateRoofButton(): void {
+    this.roofBtn.classList.toggle("on", this.viewer.roofOn);
+    this.roofBtn.title = this.viewer.roofOn ? "Roof on (tap to see in from above)" : "Roof off (tap to show it)";
   }
 
   private updateWallsButton(): void {

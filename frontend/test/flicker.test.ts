@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, type Plan } from "../src/model/plan";
+import { DEFAULT_SETTINGS, solarSize, type Plan, type Roof } from "../src/model/plan";
+import { ROOF_SHAPE_ORDER, ROOF_SHAPES } from "../src/scene/roofs";
 import { buildFloor } from "../src/scene/build";
 import { WALL_HANG, WALL_TRIM } from "../src/scene/materials";
 import { DAY } from "../src/scene/palette";
@@ -45,9 +46,13 @@ function clip(s: P2[], c: P2[]): P2[] {
  * looks: they flicker. Identical surfaces (wall tops meeting at a corner) and ones facing down are
  * never seen to. `cut` squashes the walls as the cutaway does.
  */
-function flicker(plan: Plan, cut: number | null): string[] {
-  const fb = buildFloor(plan, 0, DAY, { low: false });
-  const g = fb.opaque;
+function flicker(plan: Plan, cut: number | null, fi = 0, roofs = false): string[] {
+  const fb = buildFloor(plan, fi, DAY, { low: false });
+  type Tri = { d: number; pts: P2[]; look: string; nk: string; x0: number; x1: number };
+  const groups = new Map<string, Tri[]>();
+  // the roofs are a mesh of their own, shown with the walls up: they must not fight the walls either
+  for (const g of roofs ? [fb.opaque, fb.roof] : [fb.opaque]) collect(g);
+  function collect(g: typeof fb.opaque): void {
   const pos = (v: number): [number, number, number] => {
     let y = g.pos[v * 3 + 1];
     let w = g.wall[v];
@@ -59,8 +64,6 @@ function flicker(plan: Plan, cut: number | null): string[] {
     }
     return [g.pos[v * 3], y, g.pos[v * 3 + 2]];
   };
-  type Tri = { d: number; pts: P2[]; look: string; nk: string; x0: number; x1: number };
-  const groups = new Map<string, Tri[]>();
   for (let i = 0; i < g.idx.length; i += 3) {
     const [a, b, c] = [g.idx[i], g.idx[i + 1], g.idx[i + 2]].map(pos);
     const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
@@ -81,6 +84,7 @@ function flicker(plan: Plan, cut: number | null): string[] {
     const key = `${nk}|${Math.round(d / 0.001)}`;
     const t = { d, pts, look, nk, x0: Math.min(...pts.map((p) => p[0])), x1: Math.max(...pts.map((p) => p[0])) };
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(t);
+  }
   }
   const bad = new Set<string>();
   for (const [key, list] of groups) {
@@ -135,5 +139,35 @@ describe("no flickering surfaces in a built floor", () => {
 
   it("with the walls cut down", () => {
     expect(flicker(house(), 1.15)).toEqual([]);
+  });
+});
+
+describe("no flickering roofs", { timeout: 30_000 }, () => {
+  const roofed = (roof: Partial<Roof>): Plan => {
+    const p = house();
+    p.floors[0].roofs = [{
+      id: "r", x: 3, z: 1.5, w: 6, d: 3, rotation: 0, shape: "gable", pitch: 35, covering: "slate", ...roof,
+      items: [
+        { id: "ch", kind: "chimney", x: 5.6, z: 1.5, w: 0.8, d: 0.5 },
+        { id: "rw", kind: "window", x: 1.5, z: 0.6, w: 0.78, d: 0.98 },
+        { id: "pv", kind: "solar", x: 3.5, z: 2.3, cols: 3, rows: 1, ...solarSize({ cols: 3, rows: 1 }) },
+        ...(roof.shape === "flat" ? [{ id: "ln", kind: "lantern" as const, x: 0.9, z: 1.5, w: 1.0, d: 1 }] : [{ id: "dm", kind: "dormer" as const, x: 2.5, z: 0.8, w: 1.6, d: 1.2, style: "gable" as const }]),
+      ],
+    }];
+    return p;
+  };
+  for (const shape of ROOF_SHAPE_ORDER) {
+    it(`a ${shape} roof`, () => {
+      expect(flicker(roofed({ shape, pitch: shape === "flat" ? 0 : ROOF_SHAPES[shape].pitch }), null, 0, true)).toEqual([]);
+    });
+  }
+  it("cut off at party walls", () => {
+    expect(flicker(roofed({ shape: "hip", party: "both" }), null, 0, true)).toEqual([]);
+  });
+  it("with a parapet", () => {
+    expect(flicker(roofed({ shape: "flat", pitch: 0, parapet: true }), null, 0, true)).toEqual([]);
+  });
+  it("with no eaves", () => {
+    expect(flicker(roofed({ shape: "gable", overhang: 0 }), null, 0, true)).toEqual([]);
   });
 });

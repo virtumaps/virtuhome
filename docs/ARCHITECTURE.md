@@ -21,6 +21,16 @@ devices sit at plan points. Floors stack by elevation and link to HA floors; roo
 A floor can carry a `background` image (only the 2D editor shows it; `floorKey` leaves it out, so
 moving or fading it never rebuilds the 3D floor).
 
+A floor's `roofs` sit on its walls: each a rectangle (`w` along the ridge, `d` across, along the
+middle of the walls like rooms) with a shape. `scene/roofs.ts` makes every slope a plane rising from
+its eave and takes the lowest plane at each point (the highest for a butterfly), so ridges, hips and
+valleys follow without special cases; each slope's face is the outline clipped by one half-plane per
+other plane. Gables are the walls filled up to the roof, and dormers and lanterns are small roofs of
+their own. Roofs are built into two meshes of their own per floor (opaque and glass), keyed apart from
+the floor (`roofKey`), so dragging a panel along a roof rebuilds only the roofs. `auto/roof.ts` works
+roofs out from the plan; `scene/roof-info.ts` hands their slopes, panels and shading geometry to
+extensions.
+
 ## Performance rules (Fire HD 8 class tablets)
 
 - **No frame without a reason.** Rendering is requested by state changes, camera movement and running

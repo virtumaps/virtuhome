@@ -242,6 +242,48 @@ function weave(threads: number, contrast: number, slub = 0): Recipe {
   };
 }
 
+/**
+ * Roof tiles and slates in courses up the slope: each course's lower edge stands proud and shades
+ * the course under it; `stagger` breaks the joints (plain tiles, slates), `rolls` gives each tile a
+ * curved profile (interlocking tiles, pantiles' S when `wave`).
+ */
+function roofTiles(o: {
+  courses: number; perCourse: number; stagger: boolean; rolls: number; roll: number; vary: number; detail: boolean;
+  tones?: number[]; camber?: number; wave?: boolean; step?: number;
+}): Recipe {
+  return {
+    detail: o.detail,
+    make: (rnd) => {
+      const fine = fbm(48, 48, 2, rnd);
+      const blotch = fbm(5, 5, 3, rnd);
+      const cols = (o.tones ?? [0xffffff]).map(hex);
+      const step = o.step ?? 0.55;
+      return (u, v) => {
+        const c = Math.floor(v * o.courses);
+        const lv = frac(v * o.courses);
+        const x = u * o.perCourse + (o.stagger && c % 2 ? 0.5 : 0);
+        const t = Math.floor(x);
+        const lu = frac(x);
+        const id = hash(mod(t, o.perCourse), mod(c, o.courses), 21);
+        // the tile thins from its lower edge (lv 0) up under the next course; just under that edge it is in shadow
+        let h = 1 - lv * step;
+        let shade = mix(0.6, 1, smooth(clamp01((1 - lv) / 0.14))) * mix(0.82, 1, smooth(clamp01(lv / 0.25)));
+        if (o.rolls) {
+          const a = o.wave ? Math.sin(lu * Math.PI * 2) * 0.5 + 0.5 * Math.sin(lu * Math.PI) : Math.sin(lu * Math.PI * o.rolls);
+          h += a * o.roll * 0.4;
+          shade *= 0.9 + a * o.roll * 0.25;
+        }
+        if (o.camber) h += Math.sin(lu * Math.PI) * o.camber;
+        const joint = groove(lu, o.rolls ? 0.02 : 0.035);
+        shade *= mix(0.55, 1, joint);
+        const base = cols[Math.floor(id * cols.length) % cols.length];
+        const k = shade * (1 + (id - 0.5) * o.vary + (fine(u, v) - 0.5) * 0.1 + (blotch(u, v) - 0.5) * 0.08);
+        return [base[0] * k, base[1] * k, base[2] * k, clamp01(h * 0.8 * joint + (fine(u, v) - 0.5) * 0.05)];
+      };
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------- recipes
 
 const RECIPES: Record<string, Recipe> = {
@@ -685,6 +727,95 @@ const RECIPES: Record<string, Recipe> = {
           if (d < b.r) f = Math.min(f, 0.35 + b.t * 0.55);
         }
         return [f + (n(u, v) - 0.5) * 0.04, f, f, n(u, v) * 0.3];
+      };
+    },
+  },
+  // roofs: courses run along u, v climbs the slope; each course's lower edge stands proud over the one below
+  roof_interlocking: roofTiles({ courses: 5, perCourse: 5, stagger: false, rolls: 2, roll: 0.25, vary: 0.08, detail: true }),
+  roof_plain: roofTiles({ courses: 12, perCourse: 7, stagger: true, rolls: 0, roll: 0, vary: 0.22, detail: true, camber: 0.15 }),
+  roof_slate: roofTiles({ courses: 7, perCourse: 6, stagger: true, rolls: 0, roll: 0, vary: 0.12, detail: false, tones: [0x4b4f58, 0x464a55, 0x51535c, 0x4a4d52, 0x55545e], step: 0.35 }),
+  roof_pantile: roofTiles({ courses: 5, perCourse: 6, stagger: false, rolls: 1, roll: 0.75, vary: 0.14, detail: true, wave: true }),
+  roof_thatch: {
+    detail: false,
+    make: (rnd) => {
+      const strands = fbm(96, 6, 3, rnd);
+      const lumps = fbm(6, 6, 3, rnd);
+      return (u, v) => {
+        // courses of straw a hand deep, wavy at their lower edge
+        const course = v * 6 + (lumps(u, v) - 0.5) * 0.5;
+        const lv = frac(course);
+        const st = strands(u, v * 0.5 + Math.floor(course) * 0.37);
+        const shade = (0.7 + st * 0.45) * mix(0.62, 1, smooth(clamp01(lv / 0.3)));
+        const c = mixc(hex(0x9c844f), hex(0xc4ab72), lumps(u, v));
+        return [c[0] * shade, c[1] * shade, c[2] * shade, st * 0.7 + (1 - lv) * 0.3];
+      };
+    },
+  },
+  roof_seam: {
+    detail: true,
+    make: (rnd) => {
+      const n = fbm(4, 16, 3, rnd);
+      return (u, v) => {
+        // a standing seam every 0.53 m, the trays between them a little oil-canned
+        const x = frac(u * 3);
+        const seam = 1 - groove(x, 0.03);
+        const f = 0.96 + (n(u, v) - 0.5) * 0.05 + seam * 0.1 - (1 - groove(x, 0.06)) * 0.06;
+        return [f, f, f, 0.3 + seam * 0.7 + (n(u, v) - 0.5) * 0.05];
+      };
+    },
+  },
+  roof_felt: {
+    detail: true,
+    make: (rnd) => {
+      const grit = fbm(160, 160, 1, rnd);
+      const n = fbm(6, 6, 3, rnd);
+      return (u, v) => {
+        // mineral felt in 1 m rolls laid up the slope, each lapping over the one below
+        const lv = frac(v * 2);
+        const lap = mix(0.8, 1, smooth(clamp01(lv / 0.06)));
+        const f = (0.9 + (grit(u, v) - 0.5) * 0.35 + (n(u, v) - 0.5) * 0.08) * lap;
+        return [f, f, f, grit(u, v) * 0.5 + (lv < 0.03 ? 0 : 0.5)];
+      };
+    },
+  },
+  roof_epdm: {
+    detail: false,
+    make: (rnd) => {
+      const n = fbm(5, 5, 4, rnd);
+      return (u, v) => {
+        const f = 0.95 + (n(u, v) - 0.5) * 0.12;
+        return [0.165 * f, 0.17 * f, 0.18 * f, n(u, v) * 0.3];
+      };
+    },
+  },
+  roof_grp: grainy(0.05, 5, 0.05),
+  roof_lead: {
+    detail: false,
+    make: (rnd) => {
+      const n = fbm(6, 6, 4, rnd);
+      return (u, v) => {
+        // wood rolls every 0.6 m, the sheet between them mottled with patina
+        const x = frac(u * 2.5);
+        const roll = Math.max(0, 1 - Math.abs(x - 0.5) / 0.05);
+        const c = mixc(hex(0x6f757b), hex(0x8f969b), n(u, v));
+        const f = 0.92 + roll * 0.15;
+        return [c[0] * f, c[1] * f, c[2] * f, 0.3 + roll * 0.7];
+      };
+    },
+  },
+  roof_sedum: {
+    detail: false,
+    make: (rnd) => {
+      const cl = cells(28, rnd, 0.9);
+      const patches = fbm(5, 5, 3, rnd);
+      const tones = [0x5e7f3c, 0x7a9446, 0x8a6b3a, 0x9d4a3a, 0x6c8a4a, 0xa8a05a].map(hex);
+      return (u, v) => {
+        const [d1, d2, id] = cl(u, v);
+        const p = patches(u, v);
+        const c = tones[Math.floor(hash(id, Math.floor(p * 3), 9) * tones.length) % tones.length];
+        const rim = smooth(clamp01((d2 - d1) * 3));
+        const f = 0.65 + rim * 0.45;
+        return [c[0] * f, c[1] * f, c[2] * f, rim];
       };
     },
   },

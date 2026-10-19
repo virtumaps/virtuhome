@@ -13,6 +13,7 @@ import { WALL_HANG, WALL_TRIM } from "./materials";
 import { buildOpeningFixed, joineryLook, type OpeningInfo } from "./joinery";
 import { cameraPieces, cameraRig, type CameraRig } from "./cameras";
 import { fencePaint, fencePieces } from "./fences";
+import { drawRoof, drawRoofItem, floorRoofs, type RoofDraw, type RoofModel } from "./roofs";
 import { inPalette, type Palette } from "./palette";
 
 export const SLAB = 0.18;
@@ -104,9 +105,10 @@ export interface ItemRef {
   /**
    * Editor handles: "corner" sits on a room's corner, id "<space id>:<corner index>"; "edge" is the
    * + in the middle of an edge that adds a corner there, id "<space id>:<edge index>". A fence's
-   * points and +s are "fencepoint" and "fenceedge", id "<fence id>:<index>".
+   * points and +s are "fencepoint" and "fenceedge", id "<fence id>:<index>". A roof's corner handles
+   * are "roofcorner", id "<roof id>:<corner index>"; what sits on a roof is a "roofitem".
    */
-  kind: "furniture" | "device" | "corner" | "edge" | "opening" | "fence" | "fencepoint" | "fenceedge";
+  kind: "furniture" | "device" | "corner" | "edge" | "opening" | "fence" | "fencepoint" | "fenceedge" | "roof" | "roofitem" | "roofcorner";
   id: string;
 }
 
@@ -127,6 +129,13 @@ export interface FloorBuild {
   /** Cameras: where each hangs and what it sees (the viewer draws that). */
   cameras: CameraRig[];
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
+  /** The storey's roofs, in meshes of their own (the view hides them to look inside). */
+  roof: Geo;
+  roofGlass: Geo;
+  roofs: RoofModel[];
+  /** Glows and items before the roofs' (the roofs are rebuilt on their own). */
+  glowsBase: number;
+  itemsBase: number;
 }
 
 export interface BuildOptions {
@@ -411,10 +420,51 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
 
   opaque.currentItem = glass.currentItem = -1;
   const all = floor.rooms.flatMap((r) => r.points);
-  return {
+  const fb: FloorBuild = {
     floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens, cameras,
     bounds: all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 1, maxZ: 1 },
+    roof: new Geo(), roofGlass: new Geo(), roofs: [], glowsBase: glows.length, itemsBase: items.length,
   };
+  buildRoofs(plan, fb, pal, opt);
+  return fb;
+}
+
+/**
+ * Builds a storey's roofs (again) into its build: their meshes, glows (solar panels, lit roof
+ * windows) and items, after the storey's own.
+ */
+export function buildRoofs(plan: Plan, fb: FloorBuild, pal: Palette, opt: BuildOptions): void {
+  const fi = fb.index;
+  const floor = plan.floors[fi];
+  fb.glows.length = fb.glowsBase;
+  fb.items.length = fb.itemsBase;
+  const roof = new Geo();
+  const roofGlass = new Geo();
+  roofGlass.useSurface("glass");
+  roof.uvY0 = roofGlass.uvY0 = floor.elevation;
+  const extName = floor.exterior_finish ?? plan.settings.exterior_finish ?? "render";
+  const extDef = (EXTERIOR_FINISHES as Record<string, FinishDef>)[extName] ?? EXTERIOR_FINISHES.render;
+  const draw: RoofDraw = {
+    geo: roof, glass: roofGlass, glows: fb.glows, low: opt.low,
+    colour: (hex, outside) => lin(inPalette(pal, hex, outside)),
+    exterior: finishLook("ext", extName, extDef, floor.exterior_finish ? floor.exterior_color : plan.settings.exterior_color, pal, true),
+    roomAt: (p) => floor.rooms.findIndex((r) => pointInPolygon(p, r.points)),
+  };
+  const models = floorRoofs(plan, fi);
+  for (const m of models) {
+    roof.currentItem = roofGlass.currentItem = fb.items.length;
+    fb.items.push({ kind: "roof", id: m.roof.id });
+    drawRoof(m, draw);
+    for (const it of m.roof.items ?? []) {
+      roof.currentItem = roofGlass.currentItem = fb.items.length;
+      fb.items.push({ kind: "roofitem", id: it.id });
+      drawRoofItem(m, it, draw, floor);
+    }
+  }
+  roof.currentItem = roofGlass.currentItem = -1;
+  fb.roof = roof;
+  fb.roofGlass = roofGlass;
+  fb.roofs = models;
 }
 
 /** The lamp model for a light placed as a device. */

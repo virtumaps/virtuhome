@@ -18,7 +18,7 @@ import { styleOf } from "../scene/joinery";
 import { imageCorners, insideImage, parseLength, placeImage, prepareImage, rescale } from "./background";
 import { Collider, settle } from "./collide";
 
-export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence"; id: string } | null;
+export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
 
 export interface Plan2DHost {
   plan(): Plan;

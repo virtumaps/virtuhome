@@ -8,7 +8,9 @@ import {
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
-import { buildFloor, lin, outdoorAt, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { faceInfos, type RoofFaceInfo } from "./roof-info";
+import { fromRoofFrame, planeHeight } from "./roofs";
 import { Geo, type V3 } from "./geo";
 import { relight, relightRealistic, roomGlow, roomLights, type LampState, type LightingState } from "./lighting";
 import { buildOpeningMoving, joineryLook, restOpen, windowFollowsSensor, type OpeningInfo } from "./joinery";
@@ -62,6 +64,8 @@ export interface Hit {
   item?: ItemRef;
   /** World height of what was hit (dragging keeps it under the finger). */
   y?: number;
+  /** The slope under something on a roof: dragging follows it (else a level plane at y). */
+  plane?: { normal: V3; point: V3 };
 }
 
 export type DragPhase = "start" | "move" | "end";
@@ -87,6 +91,12 @@ interface FloorView {
    */
   shade: Mesh | null;
   ghost: Mesh | null;
+  /** The storey's roofs and their glass (null without roofs), and what they were built from. */
+  roof: Mesh | null;
+  roofGlass: Mesh | null;
+  roofKey: string;
+  /** An extension's colours over the roofs (the solar map), or null. */
+  paint: Mesh | null;
   /** Target and current cut per wall slot. */
   cutTarget: Float32Array;
   /** How far each door and window is open (0..1) and where it is going. */
@@ -117,6 +127,12 @@ export class Viewer {
   selectedRoom = -1;
   walls: WallMode = "smart";
   explode = true;
+  /** Roofs shown over the house (the view's roof button). */
+  roofOn = true;
+  /** An extension's say over the roofs (the solar map shows them), else null. */
+  private roofForced: boolean | null = null;
+  /** The editor has a roof or something on one selected: roofs show. */
+  private roofEditing = false;
   cutHeight = 1.15;
   /** Called after each drawn frame (overlays follow the camera). */
   onFrame: (() => void) | null = null;
@@ -316,8 +332,11 @@ export class Viewer {
       const f = this.floors[i];
       if (!f) this.floors.push(this.makeFloor(i));
       else if (f.key !== this.floorKey(i)) this.rebuildFloor(f, i);
-      // same content, maybe a new object (undo): later edits and live state read this one
-      else f.fb.floor = floor;
+      else {
+        // same content, maybe a new object (undo): later edits and live state read this one
+        f.fb.floor = floor;
+        if (f.roofKey !== this.roofKey(i)) this.rebuildRoofs(f, i);
+      }
     });
     this.activeFloor = Math.min(this.activeFloor, Math.max(0, this.floors.length - 1));
     this.layoutFloors();
@@ -362,8 +381,17 @@ export class Viewer {
     // stairs on the storey below cut the stairwell in this one's floor; north and the weather only move
     // the light, and the floor plan image is only in the 2D editor
     const { north: _north, sky: _sky, ...settings } = plan.settings;
-    const { background: _background, ...floor } = plan.floors[i];
+    const { background: _background, roofs: _roofs, ...floor } = plan.floors[i];
     return JSON.stringify([settings, floor, stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.pal.name, !!this.look, this.low]);
+  }
+
+  /** Everything a storey's roofs depend on: they are rebuilt on their own (dragging a panel along one is cheap). */
+  private roofKey(i: number): string {
+    const plan = this.plan!;
+    const f = plan.floors[i];
+    const s = plan.settings;
+    return JSON.stringify([f.roofs ?? [], f.elevation, f.height, f.exterior_finish, f.exterior_color, f.rooms,
+      s.exterior_finish, s.exterior_color, s.wall_exterior, plan.floors.slice(i + 1).map((x) => x.rooms), this.pal.name, !!this.look, this.low]);
   }
 
   private buildFloor(i: number): FloorBuild {
@@ -402,8 +430,9 @@ export class Viewer {
     this.scene.add(group);
     const slots = 128;
     const [shade, ghost] = this.makeShadowShells(fb, group);
+    const [roof, roofGlass] = this.makeRoofMeshes(fb, group, u);
     return {
-      fb, key, group, opaque, glass, dyn, dynGeo, dynGlass, dynGlassGeo, u, offset: 0, shade, ghost,
+      fb, key, group, opaque, glass, dyn, dynGeo, dynGlass, dynGlassGeo, u, offset: 0, shade, ghost, roof, roofGlass, roofKey: this.roofKey(i), paint: null,
       cutTarget: new Float32Array(slots),
       doorPos: doorRest(fb),
       doorTarget: doorRest(fb),
@@ -438,6 +467,10 @@ export class Viewer {
     const sameWindows = fb.windows.length === f.fb.windows.length;
     f.fb = fb;
     f.key = this.floorKey(i);
+    this.disposeRoofMeshes(f);
+    [f.roof, f.roofGlass] = this.makeRoofMeshes(fb, f.group, f.u);
+    f.roofKey = this.roofKey(i);
+    this.paintFloor(f);
     f.u.uCutY.value = fb.floor.elevation + this.cutHeight;
     f.u.uFloorY.value = fb.floor.elevation;
     f.u.uIndoor.value = fb.floor.rooms.length;
@@ -454,6 +487,172 @@ export class Viewer {
       f.coverTarget = new Float32Array(fb.windows.length).fill(1);
     }
     this.rebuildDynamic(f);
+  }
+
+  /** A storey's roof meshes: in its group, moving with it; null without roofs. */
+  private makeRoofMeshes(fb: FloorBuild, group: Group, u: FloorUniforms): [Mesh | null, Mesh | null] {
+    if (!fb.roof.vertexCount && !fb.roofGlass.vertexCount) return [null, null];
+    let roof: Mesh, glass: Mesh;
+    if (this.look) {
+      roof = new Mesh(this.look.geometry(fb.roof), this.look.materials(fb.roof, u));
+      glass = new Mesh(this.look.geometry(fb.roofGlass), this.look.glassMaterial(fb.roofGlass, u));
+      this.look.attach(roof, u, true);
+    } else {
+      roof = new Mesh(fb.roof.toBufferGeometry(), opaqueMaterial(u));
+      glass = new Mesh(fb.roofGlass.toBufferGeometry(), glassMaterial(u));
+    }
+    glass.renderOrder = 2;
+    group.add(roof, glass);
+    return [roof, glass];
+  }
+
+  private roofPaint: { fn: (face: RoofFaceInfo, p: V3) => V3 | null; spacing: number } | null = null;
+
+  /**
+   * Colours the roofs' faces (an extension's map: how sunny each part is). `fn` gives a point's
+   * colour (linear RGB 0..1) or null to leave it bare; null takes the colours off.
+   */
+  setRoofPaint(fn: ((face: RoofFaceInfo, p: V3) => V3 | null) | null, spacing = 0.35): void {
+    this.roofPaint = fn ? { fn, spacing: Math.max(0.15, spacing) } : null;
+    for (const f of this.floors) this.paintFloor(f);
+    this.updateRoofs();
+  }
+
+  private paintFloor(f: FloorView): void {
+    if (f.paint) {
+      f.paint.removeFromParent();
+      f.paint.geometry.dispose();
+      (f.paint.material as Material).dispose();
+      f.paint = null;
+    }
+    const paint = this.roofPaint;
+    if (!paint || !f.fb.roofs.length || !this.plan) return;
+    const pos: number[] = [], col: number[] = [];
+    const north = this.plan.settings.north ?? 0;
+    for (const m of f.fb.roofs) {
+      const infos = faceInfos(m, f.fb.index, north);
+      m.faces.forEach((face, k) => {
+        const info = infos[k];
+        if (!info) return;
+        const n = info.normal;
+        const at = (u: number, v: number): V3 => {
+          const [x, z] = fromRoofFrame(m, u, v);
+          const y = m.base + planeHeight(face.plane, u, v);
+          return [x + n[0] * 0.03, y + n[1] * 0.03, z + n[2] * 0.03];
+        };
+        const us = face.poly.map((p) => p[0]), vs = face.poly.map((p) => p[1]);
+        const g = paint.spacing;
+        for (let gu = Math.floor(Math.min(...us) / g) * g; gu < Math.max(...us); gu += g) {
+          for (let gv = Math.floor(Math.min(...vs) / g) * g; gv < Math.max(...vs); gv += g) {
+            const cell = clipToRect(face.poly, gu, gv, gu + g, gv + g);
+            if (cell.length < 3) continue;
+            const pts = cell.map(([u, v]) => at(u, v));
+            const cs = pts.map((p) => paint.fn(info, p));
+            if (cs.some((c) => !c)) continue;
+            for (let i = 1; i + 1 < pts.length; i++) {
+              for (const j of [0, i, i + 1]) {
+                pos.push(...pts[j]);
+                col.push(...cs[j]!);
+              }
+            }
+          }
+        }
+      });
+    }
+    if (!pos.length) return;
+    const geo = new BufferGeometry();
+    geo.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
+    geo.setAttribute("color", new BufferAttribute(new Float32Array(col), 3));
+    geo.computeBoundingSphere();
+    const mat = new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.86, depthWrite: false, side: DoubleSide, forceSinglePass: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    f.paint = new Mesh(geo, mat);
+    f.paint.renderOrder = 1;
+    f.group.add(f.paint);
+  }
+
+  private disposeRoofMeshes(f: FloorView): void {
+    for (const m of [f.roof, f.roofGlass]) {
+      if (!m) continue;
+      m.removeFromParent();
+      m.geometry.dispose();
+      if (this.look) this.look.detach(m);
+      else (m.material as Material).dispose();
+    }
+    f.roof = f.roofGlass = null;
+  }
+
+  /** Builds a storey's roofs again, leaving the rest of it as it is. */
+  private rebuildRoofs(f: FloorView, i: number): void {
+    buildRoofs(this.plan!, f.fb, this.look ? DAY : this.pal, { low: this.low });
+    this.disposeRoofMeshes(f);
+    [f.roof, f.roofGlass] = this.makeRoofMeshes(f.fb, f.group, f.u);
+    f.roofKey = this.roofKey(i);
+    this.paintFloor(f);
+    this.disposeShells(f);
+    [f.shade, f.ghost] = this.makeShadowShells(f.fb, f.group);
+    this.updateRoofs();
+    this.sceneChanged = true;
+    this.refreshLighting();
+  }
+
+  /**
+   * Roofs show over the house when the roof button is on: over every storey in the whole-house view
+   * (not with low walls), and over the storeys below the one shown, never over the one looked into.
+   */
+  private roofShown(fi: number): boolean {
+    if (!this.roofWanted) return false;
+    return this.mode === "house" ? this.walls !== "low" : fi < this.activeFloor;
+  }
+
+  private get roofWanted(): boolean {
+    return this.roofEditing || (this.roofForced ?? this.roofOn);
+  }
+
+  /**
+   * The whole house with its storeys pulled apart (to see into them), unless roofs are on: then the
+   * storeys sit together as the house does outside.
+   */
+  private get apart(): boolean {
+    return this.mode === "house" && this.explode && !(this.roofWanted && this.walls !== "low" && this.hasRoofs);
+  }
+
+  private updateRoofs(): void {
+    this.floors.forEach((f, fi) => {
+      const shown = this.roofShown(fi);
+      if (f.roof) f.roof.visible = shown;
+      if (f.roofGlass) f.roofGlass.visible = shown;
+      if (f.paint) f.paint.visible = shown;
+    });
+    this.sceneChanged = true;
+    this.invalidate();
+  }
+
+  /** The roof button. */
+  setRoof(on: boolean): void {
+    this.roofOn = on;
+    this.layoutFloors();
+    this.refreshMarkers();
+  }
+
+  /** An extension shows the roofs whatever the button says, or hides them (null hands them back). */
+  forceRoof(on: boolean | null): void {
+    if (this.roofForced === on) return;
+    this.roofForced = on;
+    this.layoutFloors();
+    this.refreshMarkers();
+  }
+
+  /** The editor shows the roofs while one of them, or something on one, is selected. */
+  editRoof(on: boolean): void {
+    if (this.roofEditing === on) return;
+    this.roofEditing = on;
+    this.layoutFloors();
+    this.refreshMarkers();
+  }
+
+  /** Whether any storey has a roof. */
+  get hasRoofs(): boolean {
+    return this.floors.some((f) => f.fb.roofs.length > 0);
   }
 
   /**
@@ -488,6 +687,9 @@ export class Viewer {
       const [a, b] = [w.a, w.b];
       shell.push(a[0], y0, a[1], b[0], y0, b[1], b[0], top, b[1], a[0], y0, a[1], b[0], top, b[1], a[0], top, a[1]);
     }
+    // and its roofs, whose shadow falls on the garden too
+    const rp = fb.roof.pos;
+    for (const k of fb.roof.idx) shell.push(rp[k * 3], rp[k * 3 + 1], rp[k * 3 + 2]);
     const ghost = mesh(shell);
     ghost.visible = false;
     this.ghosts.add(ghost);
@@ -609,6 +811,12 @@ export class Viewer {
   private disposeFloor(f: FloorView): void {
     this.scene.remove(f.group);
     this.disposeShells(f);
+    this.disposeRoofMeshes(f);
+    if (f.paint) {
+      f.paint.geometry.dispose();
+      (f.paint.material as Material).dispose();
+      f.paint = null;
+    }
     for (const m of [f.opaque, f.glass, f.dyn, f.dynGlass]) {
       m.geometry.dispose();
       if (this.look) this.look.detach(m);
@@ -635,7 +843,9 @@ export class Viewer {
 
   setWalls(mode: WallMode): void {
     this.walls = mode;
-    this.updateCutTargets(true);
+    // low walls take the roofs off, and the storeys apart
+    this.layoutFloors();
+    this.refreshMarkers();
     this.invalidate();
   }
 
@@ -678,9 +888,9 @@ export class Viewer {
     this.floors.forEach((f, i) => {
       const above = this.mode === "floor" && i > this.activeFloor;
       f.group.visible = !above;
-      f.offset = this.mode === "house" && this.explode ? lift : 0;
+      f.offset = this.apart ? lift : 0;
       f.group.position.y = f.offset;
-      if (this.mode === "house" && this.explode) lift += EXPLODE_GAP;
+      if (this.apart) lift += EXPLODE_GAP;
       f.u.uDim.value = this.mode === "floor" && i < this.activeFloor ? 0.45 : 1;
     });
     const groundY = (this.floors[0]?.fb.floor.elevation ?? 0) - SLAB - 0.01;
@@ -716,6 +926,7 @@ export class Viewer {
     }
     this.sceneChanged = true;
     this.updateCutTargets(true);
+    this.updateRoofs();
   }
 
   private planBounds(floors = this.floors) {
@@ -751,9 +962,15 @@ export class Viewer {
     const target = new Vector3(cx, ty, cz);
     const dir = new Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az));
     // the box of what is shown, from the lowest floor to the top of the highest
-    const top3 = this.mode === "house" && this.floors.length
+    let top3 = this.mode === "house" && this.floors.length
       ? this.floors[this.floors.length - 1].fb.floor.elevation + this.floors[this.floors.length - 1].offset + this.floors[this.floors.length - 1].fb.floor.height
       : (this.floors[this.activeFloor]?.fb.floor.elevation ?? 0) + 1.2;
+    // roofs (and chimneys) shown above the walls
+    this.floors.forEach((f, fi) => {
+      if (!f.roof?.visible) return;
+      const box = f.roof.geometry.boundingBox ?? (f.roof.geometry.computeBoundingBox(), f.roof.geometry.boundingBox);
+      if (box && (this.mode === "house" || fi <= this.activeFloor)) top3 = Math.max(top3, box.max.y + f.offset);
+    });
     const corners: Vector3[] = [];
     for (const x of [b.minX, b.maxX]) for (const z of [b.minZ, b.maxZ]) for (const y of [bottom, top3]) corners.push(new Vector3(x, y, z));
     dist = this.fitDistance(target, dir, corners, dist);
@@ -865,6 +1082,8 @@ export class Viewer {
       fill(f.glass, f.fb.glass);
       fill(f.dyn, f.dynGeo);
       fill(f.dynGlass, f.dynGlassGeo);
+      if (f.roof) fill(f.roof, f.fb.roof);
+      if (f.roofGlass) fill(f.roofGlass, f.fb.roofGlass);
       if (this.mode === "floor" && fi > this.activeFloor) continue;
       for (const lamp of f.fb.lamps) {
         const s = st.lamp(lamp);
@@ -1495,7 +1714,10 @@ export class Viewer {
       if (this.editMode && this.onDrag) {
         const hit = this.pick(e.clientX, e.clientY);
         if (hit.item && (hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "furniture") && (this.canDrag?.(hit) ?? true)) {
-          drag = { hit, plane: new Plane(new Vector3(0, 1, 0), -(hit.y ?? 0)), moved: false };
+          const plane = hit.plane
+            ? new Plane().setFromNormalAndCoplanarPoint(new Vector3(...hit.plane.normal), new Vector3(...hit.plane.point))
+            : new Plane(new Vector3(0, 1, 0), -(hit.y ?? 0));
+          drag = { hit, plane, moved: false };
           this.controls.enabled = false;
           el.setPointerCapture(e.pointerId);
           this.onDrag(hit, 0, 0, "start");
@@ -1573,7 +1795,7 @@ export class Viewer {
       if (d < m.size * 0.75 && (!best || d < best.d)) best = { d, key: m.key };
       if (m.item && d < Math.max(m.size * 0.9, 16) && (!handle || d < handle.d)) handle = { d, m };
     }
-    if (handle) return { kind: "marker", floor: this.activeFloor, room: -1, entity: null, item: handle.m.item, y: handle.m.pos[1] };
+    if (handle) return { kind: "marker", floor: this.activeFloor, room: -1, entity: null, item: handle.m.item, y: handle.m.pos[1], plane: handle.m.plane };
     if (best) {
       for (const [fi, f] of this.floors.entries()) {
         const dev = f.fb.floor.devices.find((dd) => dd.id === best!.key);
@@ -1620,12 +1842,14 @@ export class Viewer {
     // then the meshes: a screen with an entity, else the room the floor belongs to
     const ray = new Raycaster();
     ray.setFromCamera(new Vector2((x / this.width) * 2 - 1, -(y / this.height) * 2 + 1), this.camera);
-    const meshes = this.floors.filter((f, fi) => f.group.visible && (this.mode === "house" || fi === this.activeFloor)).flatMap((f) => [f.opaque, f.dyn]);
+    const meshes = this.floors.filter((f, fi) => f.group.visible && (this.mode === "house" || fi === this.activeFloor))
+      .flatMap((f) => [f.opaque, f.dyn, ...(f.roof?.visible ? [f.roof] : [])]);
     const hits = ray.intersectObjects(meshes, false);
     for (const h of hits) {
-      const fi = this.floors.findIndex((f) => f.opaque === h.object || f.dyn === h.object);
+      const fi = this.floors.findIndex((f) => f.opaque === h.object || f.dyn === h.object || f.roof === h.object);
       const f = this.floors[fi];
-      const geo = f.dyn === h.object ? f.dynGeo : f.fb.opaque;
+      const onRoof = f.roof === h.object;
+      const geo = f.dyn === h.object ? f.dynGeo : onRoof ? f.fb.roof : f.fb.opaque;
       const vi = h.face?.a ?? -1;
       if (vi < 0) continue;
       const itemIdx = geo.item[vi];
@@ -1634,6 +1858,16 @@ export class Viewer {
       if (slot >= 0 && !this.editMode) {
         const g = f.fb.glows[slot];
         if (g?.entity) return { kind: "entity", floor: fi, room: g.room, entity: g.entity, item };
+      }
+      if (item && this.editMode && onRoof) {
+        // something on a roof slides along the slope under it; a roof itself moves level
+        const n = h.face?.normal;
+        const plane = item.kind === "roofitem" && n && n.y > 0.2 ? { normal: [n.x, n.y, n.z] as V3, point: [h.point.x, h.point.y, h.point.z] as V3 } : undefined;
+        return { kind: "furniture", floor: fi, room: -1, entity: null, item, y: h.point.y, plane };
+      }
+      if (onRoof && !this.editMode) {
+        // a tap on the roof is a tap on the house (solar panels open their sensor)
+        return { kind: "empty", floor: fi, room: -1, entity: null, item };
       }
       if (item && this.editMode) {
         return { kind: "furniture", floor: fi, room: this.roomAt(fi, [h.point.x, h.point.z]), entity: null, item, y: f.fb.floor.elevation + f.offset };
