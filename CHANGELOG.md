@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### New
+- Add a floor without a scan: Edit → Home → Floors → Add a floor puts a storey on top, and the 2D
+  plan shows the floor below faintly to draw its rooms over. A floor can be removed too. A roof's
+  Sits on moves it, with everything on it, onto another storey.
+- A user guide, [docs/GUIDE.md](docs/GUIDE.md): installing, getting a home in by scanning, drawing or
+  tracing a floor plan, placing devices, looks, the garden and roof, energy, the sun and weather,
+  wall tablets, the card's options, extensions, a FAQ and troubleshooting.
 - Solar panels can have their real size: tap the panels and pick a common size, or type the length
   and width in mm from the label on the back of a panel. The array is sized from it, and Fill the
   slope fits as many as there is room for. A new size changes every array of the same panels, and
@@ -25,6 +31,8 @@
   the garden's furniture and plants. A rectangular area's size, or a round one's width, can be typed.
 
 ### Fixed
+- Activating a licence key no longer sends the home's name from Home Assistant to the licence
+  server: only the key and an anonymous code for the installation.
 - Solar panels on a roof look dark in the realistic look, as anti-reflective panel glass does; they
   used to mirror a bright sky almost white.
 - With the roofs on, taps no longer reach what is inside the house: a tap on a solar panel used to

@@ -759,6 +759,8 @@ export class Editor {
       ...this.skySection(),
       h("h4", {}, "Floors"),
       ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
+      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.addFloor() }, "Add a floor")),
+      h("p", { class: "ed-hint" }, `A new floor goes on top. Draw its rooms in the 2D plan, over the floor below it.${this.plan.floors.some((f) => (f.roofs ?? []).length) ? " Then tap the roof and set Sits on to the new floor, to put it on top." : ""}`),
       h("h4", {}, "Plan file"),
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost", onclick: () => this.downloadPlan() }, "Download"),
@@ -1010,7 +1012,10 @@ export class Editor {
   private floorRow(f: Floor, i: number): HTMLElement {
     const haFloors = Object.values(this.hass.floors ?? {});
     return h("div", { class: "ed-card" },
-      h("input", { class: "ed-in", value: f.name, onchange: (e: Event) => this.change((p) => (p.floors[i].name = (e.target as HTMLInputElement).value)) }),
+      h("div", { class: "ed-row" },
+        h("input", { class: "ed-in", value: f.name, onchange: (e: Event) => this.change((p) => (p.floors[i].name = (e.target as HTMLInputElement).value)) }),
+        this.plan.floors.length > 1 ? h("button", { class: "ed-ib small", title: `Remove ${f.name}`, html: svg(mdiDelete), onclick: () => this.removeFloor(i) }) : null,
+      ),
       h("div", { class: "ed-row" },
         h("label", {}, "HA floor"),
         this.dropdown(haFloors.map((x) => [x.floor_id, x.name]), f.ha_floor ?? "", (v) => this.change((p) => (p.floors[i].ha_floor = v || null)), "—"),
@@ -1998,6 +2003,8 @@ export class Editor {
     return h("div", {},
       h("h4", {}, `${ROOF_SHAPES[roof.shape]?.name ?? roof.shape} roof · ${f?.name ?? ""}`),
       h("p", { class: "ed-hint" }, "Drag the blue corners to size it, or the roof itself to move it. Lengths are along the middle of the walls under it, like the rooms'."),
+      this.plan.floors.length > 1 ? h("div", { class: "ed-row" }, h("label", {}, "Sits on"),
+        this.dropdown(this.plan.floors.map((x, i) => [String(i), x.name]), String(fi), (v) => this.moveRoof(fi, roof.id, Number(v)))) : null,
       h("div", { class: "ed-chips" }, ...ROOF_SHAPE_ORDER.map((k) => chip(ROOF_SHAPES[k].name, roof.shape === k, () => upd(`${ROOF_SHAPES[k].name} roof`, (r) => {
         r.shape = k;
         if (k === "flat") r.pitch = 0;
@@ -2059,6 +2066,18 @@ export class Editor {
         } }, "Remove"),
       ),
     );
+  }
+
+  /** Puts a roof, with what is on it, on another storey (after a floor was added under it, say). */
+  private moveRoof(from: number, id: string, to: number): void {
+    if (to === from || !this.plan.floors[to]) return;
+    this.change((p) => {
+      const roof = (p.floors[from].roofs ?? []).find((r) => r.id === id);
+      if (!roof) return;
+      p.floors[from].roofs = (p.floors[from].roofs ?? []).filter((r) => r.id !== id);
+      p.floors[to].roofs = [...(p.floors[to].roofs ?? []), roof];
+    }, false, `Roof onto ${this.plan.floors[to].name}`);
+    this.select({ floor: to, kind: "roof", id });
   }
 
   /** Which way each big slope faces, with the plan's north. */
@@ -2410,6 +2429,39 @@ export class Editor {
     this.show("home");
     const r = this.body.querySelector(".ed-report");
     r?.replaceChildren(...lines.map((l) => h("div", {}, l)));
+  }
+
+  /** A storey on top of the house: as high as the one below, linked to the Home Assistant floor of its level when there is one. */
+  private addFloor(): void {
+    const floors = this.plan.floors;
+    const top = floors.reduce<Floor | null>((a, f) => (!a || f.elevation >= a.elevation ? f : a), null);
+    const n = floors.length;
+    const names = ["Ground Floor", "First Floor", "Second Floor", "Third Floor", "Fourth Floor", "Fifth Floor"];
+    const taken = new Set(floors.map((f) => f.name.toLowerCase()));
+    const name = [names[n] ?? `Floor ${n}`, `Floor ${n}`, `Floor ${n + 1}`].find((x) => !taken.has(x.toLowerCase())) ?? `Floor ${n + 1}`;
+    const used = new Set(floors.map((f) => f.ha_floor).filter(Boolean));
+    const ha = Object.values(this.hass.floors ?? {}).find((x) => x.level === n && !used.has(x.floor_id));
+    const floor: Floor = {
+      id: newId("floor"), name, ha_floor: ha?.floor_id ?? null,
+      elevation: top ? Math.round((top.elevation + top.height) * 100) / 100 : 0, height: top?.height ?? 2.6,
+      rooms: [], openings: [], furniture: [], devices: [], walls: [], outdoor: [], fences: [], roofs: [],
+    };
+    this.change((p) => p.floors.push(floor), false, `Add ${name}`);
+    this.select(null);
+    this.host.view.showFloor(this.plan.floors.length - 1);
+  }
+
+  /** Takes a storey out with everything on it; the others keep their levels. */
+  private removeFloor(i: number): void {
+    const f = this.plan.floors[i];
+    if (!f || this.plan.floors.length < 2) return;
+    const n = f.rooms.length;
+    const what = n ? ` with its ${n > 1 ? `${n} rooms` : "room"} and everything in ${n > 1 ? "them" : "it"}` : "";
+    this.confirm(`Remove ${f.name}${what}?`, "Remove", () => {
+      this.change((p) => p.floors.splice(i, 1), false, `Remove ${f.name}`);
+      this.select(null);
+      this.host.view.showHouse();
+    });
   }
 
   /** A 3 x 3 m room beside the house on the current floor. */
