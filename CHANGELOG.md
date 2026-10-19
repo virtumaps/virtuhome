@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### New
+- A user guide, [docs/GUIDE.md](docs/GUIDE.md): installing, getting a home in by scanning, drawing or
+  tracing a floor plan, placing devices, looks, the garden and roof, energy, the sun and weather,
+  wall tablets, the card's options, extensions, a FAQ and troubleshooting.
 - Solar panels can have their real size: tap the panels and pick a common size, or type the length
   and width in mm from the label on the back of a panel. The array is sized from it, and Fill the
   slope fits as many as there is room for. A new size changes every array of the same panels, and

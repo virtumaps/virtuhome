@@ -52,6 +52,9 @@ and shadows, and the weather.
   house: doors, motion, cameras, the doorbell and the alarm on a timeline, and what happened while
   everyone was out) are available to VirtuMaps installation clients.
 
+**[Read the user guide](docs/GUIDE.md)**: installing, getting your home in with or without a
+scanner, devices, wall tablets, FAQ and troubleshooting.
+
 | Realistic, by day | Live: alerts, people, temperature map |
 |---|---|
 | ![Realistic look by day](docs/screenshots/day.jpg) | ![Leak alert, people and the temperature map](docs/screenshots/live.jpg) |
@@ -64,6 +67,8 @@ and shadows, and the weather.
 2. Install **VirtuHome**, restart Home Assistant.
 3. Settings → Devices & services → Add integration → **VirtuHome**.
 4. Open **VirtuHome** in the sidebar. Add the card to a dashboard with `type: custom:virtuhome-card`.
+
+The [user guide](docs/GUIDE.md) goes on from here.
 
 ## Card options
 
@@ -175,9 +180,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md) a
 
 ## Extensions and licence keys
 
-Editor → **Extras** takes a licence key. Keys are checked with the VirtuMaps licence server once; the
-extensions they unlock are verified, stored in Home Assistant and keep working offline. Nothing is sent
-anywhere unless you enter a key.
+Editor → **Extras** takes a licence key. Keys are checked with the VirtuMaps licence server; the
+extensions they unlock are verified, stored in Home Assistant and keep working offline. Opening Extras
+asks the server for the list of extensions; nothing else is sent unless you enter a key (the guide
+says [what is sent](docs/GUIDE.md#extensions-and-licence-keys)).
 
 ## Licence
 
