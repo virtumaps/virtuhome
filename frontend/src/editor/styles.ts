@@ -89,6 +89,21 @@ export const EDITOR_CSS = /* css */ `
 .ed-pick small { font-size: 11px; color: var(--vh-dim); }
 .ed-pick:hover { box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
 .ed-report { margin-top: 8px; color: var(--vh-dim); line-height: 1.45; }
+.ed-setup { margin: 2px 0 4px; }
+.ed-step { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--vh-chip); }
+.ed-step:last-child { border-bottom: 0; }
+.ed-step > div { flex: 1; min-width: 0; }
+.ed-step b { font-weight: 600; }
+.ed-step.done b { color: var(--vh-dim); font-weight: 500; }
+.ed-step .ed-hint { margin: 2px 0 4px; }
+.ed-step .ed-row { margin: 2px 0; }
+.ed-check { flex: none; width: 22px; height: 22px; padding: 0; display: grid; place-items: center; fill: var(--vh-dim); }
+.ed-check svg { width: 20px; height: 20px; }
+.ed-check.on { fill: var(--vh-accent); }
+button.ed-check { border: 0; background: none; cursor: pointer; border-radius: 50%; }
+.ed-flash { animation: ed-flash 1.6s ease-out 1; border-radius: 10px; }
+@keyframes ed-flash { 0%, 40% { box-shadow: 0 0 0 2px var(--vh-accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .ed-flash { animation: none; box-shadow: 0 0 0 2px var(--vh-accent); } }
 .ed-list { margin-top: 4px; }
 .ed-confirm {
   position: absolute; left: 12px; right: 12px; bottom: 54px; padding: 12px 14px; border-radius: 14px; z-index: 6;
