@@ -17,11 +17,14 @@ arrives as a pull request that CI and a review check before a maintainer merges 
 | `ready for merge` | Reviewed and passing; a maintainer can merge it | reviewer |
 | `bug`, `feature`, `docs`, `chore`, `perf` | What kind of work it is | anyone |
 | `priority: high`, `priority: low` | Order within `ready` (no label means normal) | maintainers |
+| `area: …` | Which part of VirtuHome it touches (onboarding, editor, devices, support, quality, extensions) | anyone |
+| `device support` | A request to support a device or integration | anyone |
 
 ## The flow
 
-1. **Pick:** the oldest `ready` issue with the highest priority that is not `in progress` and has no
-   open pull request. Label it `in progress`.
+1. **Pick:** from the earliest open milestone first (then issues with no milestone), the oldest
+   `ready` issue with the highest priority that is not `in progress` and has no open pull request.
+   Label it `in progress`.
 2. **Branch:** `claude/<issue number>-<short-name>` for scheduled work, any name for people.
 3. **Build** it, meeting the definition of done below.
 4. **Pull request** that closes the issue: what changed, why, and how it was checked, in plain words.
@@ -84,21 +87,15 @@ Maintainers only:
 
 ## Roadmap
 
-Most valuable first. Each one becomes an issue with acceptance criteria before anyone builds it.
+The roadmap is kept in GitHub [milestones](https://github.com/virtumaps/virtuhome/milestones) and
+issues, not in this file:
 
-1. **Trace a floor plan image** in the 2D editor: put an estate agent's plan behind the plan, set the
-   scale from one known wall, draw over it. Most people have no LiDAR phone.
-2. **Diagnostics download** through Home Assistant's diagnostics platform (versions, plan size,
-   recent errors), so problems can be reported in one click.
-3. **Heating per room:** TRVs and thermostats (Hive, Tado, Drayton Wiser, Nest, Evohome) with
-   setpoint, current temperature and a glow while heating.
-4. **Presence by room** from mmWave sensors and room-level tracking (Bermuda, ESPresense).
-5. **Security timeline:** replay today's doors, motion, cameras and alarm on the 3D home.
-6. **Smart locks** on their doors, and **media players** showing what is playing.
-7. **EV charger and car** on the driveway, as part of the energy view.
-8. **Robot vacuum position** and an **air quality map** (CO₂, PM2.5, humidity).
-9. **Translations:** move UI strings into a table first, then German and Dutch.
-10. **Feet and inches** in the 2D editor.
-11. **Performance budget tests:** draw calls per floor, idle frames and bundle size, failing CI when
-    they grow.
-12. **Starter plans** for common UK house types (2-bed terrace, 3-bed semi, 4-bed detached).
+- **Community launch:** what has to be true before VirtuHome is announced to the Home Assistant
+  community: a first run that works without help, an online demo, help that answers questions, and
+  tests that keep it working.
+- **Shop opening:** core work needed before extensions can be bought by anyone.
+- Everything else is the backlog, grouped by the `area: …` labels.
+
+Ideas start in [Discussions → Ideas](https://github.com/virtumaps/virtuhome/discussions/categories/ideas),
+where votes help decide the order. A maintainer turns one into a `proposed` issue with acceptance
+criteria, and marks it `ready` once it is approved.
