@@ -146,7 +146,8 @@ what they do when you point at them:
 Name the rooms and link them to Home Assistant areas in Edit → **Rooms** (each room has a name box
 and **Area**). **Add a room** there puts a 3 × 3 m room beside the house.
 
-Drawing by hand gives you one storey for now: a home with an upstairs needs a scan.
+For an upstairs, [add a floor](#storeys): the floor below shows faintly in the 2D plan, to draw the
+new floor's rooms over.
 
 ![The 2D plan editor](screenshots/plan.jpg)
 
@@ -161,7 +162,8 @@ No LiDAR phone? Almost every home has an estate agent's floor plan.
 3. Draw the rooms over it with the room tools.
 
 Drag the picture to move it. Its panel fades it, turns it (also a quarter turn at a time), sets the
-scale again, takes **Another picture…** or removes it. Only the 2D plan shows the picture. It is
+scale again, takes **Another picture…** or removes it. Each floor has its own picture: pick the floor
+with the buttons at the top of the 2D plan. Only the 2D plan shows the picture. It is
 kept in Home Assistant (`.virtuhome/backgrounds`, for signed-in users only) and deleted when you
 remove it and save.
 
@@ -170,6 +172,13 @@ remove it and save.
 Edit → **Home** → **Floors** lists each storey: its name, the Home Assistant floor it belongs to
 (**HA floor**), its **Level (m)** above the ground floor, its **Height**, and its **Outside** walls
 (**Same as the house** or its own finish).
+
+- **Add a floor** puts a new storey on top, as high as the one below, linked to the Home Assistant
+  floor of its level when there is one. VirtuHome shows it, ready to draw its rooms in the 2D plan.
+- The bin beside a floor's name removes it, with everything on it, after asking. The other floors
+  keep their levels.
+- A house that already has a roof: once the new floor's rooms are drawn, tap the roof and set
+  **Sits on** to the new floor. The roof moves up with everything on it.
 
 ### Saving and undoing
 
@@ -262,8 +271,9 @@ Edit → **Home** → **Roof** works the roofs out from the plan:
 3. **Add the roof**: a roof over the top storey, and a lean-to (or flat roof) over each lower part
    that stands against the house.
 
-Tap a roof in 3D for its shape, **Pitch °**, which ends are **Joined next door**, **Covering** and
-colour, **Fascias and soffits**, **Eaves out**, **Eaves at**, **Length**, **Span** and **Turn**.
+Tap a roof in 3D for the storey it **Sits on**, its shape, **Pitch °**, which ends are **Joined
+next door**, **Covering** and colour, **Fascias and soffits**, **Eaves out**, **Eaves at**,
+**Length**, **Span** and **Turn**.
 Drag its blue corners to size it. **Add a roof** adds one more; **Start again** takes them all off.
 
 **Add on the roof:** **Solar panels**, **Roof window**, **Chimney**, and a **Dormer** (or on a flat
@@ -396,8 +406,7 @@ your home. The licence is then renewed about once a day while Home Assistant is 
 ## FAQ
 
 **Do I need an iPhone with LiDAR?** No. Trace an estate agent's floor plan or draw the rooms in the
-2D plan. A scan is quicker and brings furniture and decoration, and a home with an upstairs needs one
-for now.
+2D plan, floor by floor. A scan is quicker and brings furniture and decoration.
 
 **Does VirtuHome send my data anywhere?** No. It runs inside Home Assistant. Only these go out, and
 only when you use them: **Line up with the map** (your home's location, to OpenStreetMap), and the

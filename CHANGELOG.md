@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### New
+- Add a floor without a scan: Edit → Home → Floors → Add a floor puts a storey on top, and the 2D
+  plan shows the floor below faintly to draw its rooms over. A floor can be removed too. A roof's
+  Sits on moves it, with everything on it, onto another storey.
 - A user guide, [docs/GUIDE.md](docs/GUIDE.md): installing, getting a home in by scanning, drawing or
   tracing a floor plan, placing devices, looks, the garden and roof, energy, the sun and weather,
   wall tablets, the card's options, extensions, a FAQ and troubleshooting.

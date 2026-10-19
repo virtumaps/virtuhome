@@ -118,6 +118,8 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   As in 3D, furniture, devices, doors and windows move only once they are selected.
   The fence tool draws a fence corner by corner: click its last point again to finish.
   Arrow keys nudge, R turns, Delete removes.
+- **Floors:** Edit → Home → Floors → **Add a floor** puts a storey on top; the 2D plan shows the floor
+  below faintly to draw over. A roof's **Sits on** moves it onto another storey.
 - **Trace a floor plan picture:** no LiDAR phone needed. In the 2D plan, the picture button puts an
   estate agent's plan (or a photo of a sketch; JPEG or PNG up to 8 MB) under the floor. Click both ends
   of a wall you know and type its length (3.45, 345 cm or 11'4"), then draw the rooms over it. Drag the
