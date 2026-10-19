@@ -20,6 +20,15 @@
   sleepers). Add steps down from any open side, and a railing round the open sides (spindles, glass,
   railings, post and rail, slatted or picket) with a gap at the steps. Spindles is a new fence style
   too.
+- Pergolas: timber (open, slats, a glass roof, a canvas sail or climbing plants on top), louvred
+  aluminium, a pergola on a wall, a gazebo with a hipped roof, a garden arch and an arbour with a seat.
+- Sheds and garden buildings: apex, reverse apex and pent sheds, a summerhouse and a log cabin with a
+  porch, a garden office, a metal shed and a greenhouse. Pick the roof (felt, shingles, corrugated
+  sheet, rubber or a sedum green roof), where the door is or double doors, how many windows, and the
+  trim's colour as well as the cladding's.
+- Planters: trough, raised bed, cube, round, tall and tiered, made of timber, sleepers, painted wood,
+  corten or galvanised steel, fibreclay, terracotta, brick, stone or rattan, planted with flowers,
+  shrubs, grasses, lavender, herbs, vegetables, a topiary ball, a small tree or just soil.
 - Edit → Rooms → **Add a patio** and **Add a deck**. A lawn's panel has **Add to this garden**: a
   patio, a round patio, a deck or a path in the middle of it, **Draw a patio** in the 2D plan, and
   the garden's furniture and plants. A rectangular area's size, or a round one's width, can be typed.

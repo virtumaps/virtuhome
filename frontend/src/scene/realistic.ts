@@ -71,6 +71,21 @@ const ROLE_SPECS: Record<string, SurfaceSpec> = {
   blackMetal: { rough: 0.4, metal: 0.6 },
   concrete: { tex: "concrete", scale: 0.8, rough: 0.9, relief: 0.25 },
   brick: { tex: "brick_red", scale: 1.35, rough: 0.85, relief: 0.9 },
+  shiplap: { tex: "boards_h", scale: 1.2, rough: 0.7, relief: 0.7 },
+  logs: { tex: "logs", scale: 1.12, rough: 0.7, relief: 0.9 },
+  corrugated: { tex: "corrugated", scale: 0.76, rough: 0.45, metal: 0.3, relief: 0.9 },
+  felt: { tex: "roof_felt", scale: 2.0, rough: 0.95, relief: 0.4 },
+  shingle: { tex: "shingles", scale: 1.0, rough: 0.9, relief: 0.8 },
+  epdm: { tex: "roof_epdm", scale: 3.0, rough: 0.8, relief: 0.15 },
+  sedum: { tex: "roof_sedum", scale: 1.5, rough: 1, relief: 0.8 },
+  corten: { tex: "rust", scale: 1.0, rough: 0.8, relief: 0.3 },
+  galvanised: { tex: "brushed", scale: 0.5, rough: 0.35, metal: 0.7 },
+  sleeper: { tex: "wood_grain_v", scale: 0.6, rough: 0.85, relief: 0.4 },
+  stone: { tex: "stone_wall", scale: 1.0, rough: 0.85, relief: 0.9 },
+  rattan: { tex: "weave", scale: 0.15, rough: 0.8, relief: 0.6 },
+  bloom: { tex: "foliage", scale: 0.25, rough: 0.7, relief: 0.6 },
+  lavender: { tex: "foliage", scale: 0.25, rough: 0.7, relief: 0.6 },
+  straw: { tex: "foliage", scale: 0.3, rough: 0.75, relief: 0.6 },
 };
 
 const OTHER_SPECS: Record<string, SurfaceSpec> = {
@@ -181,7 +196,7 @@ function injectStandard(mat: MeshStandardMaterial, u: FloorUniforms, key: string
 }
 
 /** Plants and leaves move in the wind (outside). */
-const SWAYS = new Set(["role:plant", "role:leaf"]);
+const SWAYS = new Set(["role:plant", "role:leaf", "role:bloom", "role:lavender", "role:straw"]);
 
 /** Only the cutaway (the normal pass must see lowered walls as lowered). */
 function injectCut<T extends Material>(mat: T, u: FloorUniforms, key: string): T {

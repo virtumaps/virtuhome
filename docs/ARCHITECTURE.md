@@ -67,5 +67,8 @@ styles can be swapped. Patios, paths, driveways and decks are textured to order 
 (`pave:sandstone.random.300x300.8e8c70.8a8781.85`, `deck:composite.8e8b87.145`), and
 `scene/paving-tex.ts` lays the units out over a tile that repeats exactly and draws each unit's face.
 An area's texture runs along its longest edge (or at its angle to it) through the mesh's `uvFrame`.
-`scene/areas.ts` works out a raised area's open edges, steps, border and railing runs. The editor's 2D plan is `editor/plan2d.ts` (SVG, redrawn per frame while
+`scene/areas.ts` works out a raised area's open edges, steps, border and railing runs.
+Garden buildings and planters (`scene/garden.ts`) are furniture types whose options (a pergola's
+top, a shed's roof, door, windows and trim, a planter's material and plants) are fields of the piece;
+a shed with its door in the gable end is described front towards +x and drawn with `Part.turn`. The editor's 2D plan is `editor/plan2d.ts` (SVG, redrawn per frame while
 dragging), going through the same change and undo path as the 3D editor.

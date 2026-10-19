@@ -5,6 +5,7 @@ import { cameraPieces, cameraRig } from "../src/scene/cameras";
 import { separateFaces } from "../src/scene/build";
 import { BALUSTRADES, FURNITURE, type BalustradeStyle, type Part } from "../src/scene/furniture-lib";
 import { FENCE_ORDER, fencePieces } from "../src/scene/fences";
+import { GARDEN_OPTIONS, PLANTER_MATERIALS, PLANTING_NAMES } from "../src/scene/garden";
 
 /** Flat faces of the parts that lie in one plane, face the same way and overlap: they would flicker. */
 function fights(parts: Part[]): string[] {
@@ -39,6 +40,25 @@ function fights(parts: Part[]): string[] {
 }
 
 describe("flicker-free furniture", () => {
+  it("leaves no two parts of a garden building or planter sharing a face, whatever is picked", () => {
+    const bad: string[] = [];
+    for (const [type, o] of Object.entries(GARDEN_OPTIONS)) {
+      const def = FURNITURE[type];
+      const [w, d, h] = def.size;
+      const variants: Record<string, unknown>[] = [{}];
+      for (const canopy of o.canopies ?? []) variants.push({ canopy });
+      for (const roofing of o.roofings ?? []) variants.push({ roofing });
+      for (const door of o.doors ?? [null]) for (let windows = 0; windows <= (o.windows?.[0] ?? 0); windows++) variants.push({ door, windows });
+      if (o.material) for (const material of Object.keys(PLANTER_MATERIALS)) variants.push({ material });
+      if (o.plants) for (const plants of Object.keys(PLANTING_NAMES)) variants.push({ plants });
+      for (const v of variants) {
+        const item = { id: "t", type, x: 0, z: 0, rotation: 0, w, d, h, ...v };
+        for (const f of fights(separateFaces(def.build(w, d, h, item)))) bad.push(`${type} ${JSON.stringify(v)}: ${f}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
   it("leaves no two parts of a piece sharing a face", () => {
     const bad: string[] = [];
     for (const [type, def] of Object.entries(FURNITURE)) {

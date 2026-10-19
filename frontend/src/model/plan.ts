@@ -12,10 +12,12 @@ import type { DoorStyle, GarageStyle, WindowStyle } from "../scene/joinery";
 import { CEILING_LAMPS, FURNITURE, type BalustradeMaterial, type BalustradeStyle } from "../scene/furniture-lib";
 import type { SkySettings } from "../live/sky";
 import type { DeckBoard, PavingMaterial, PavingPattern, RaisedWall } from "../scene/paving";
+import type { Canopy, GardenRoofing, PlanterMaterial, Planting, ShedDoor } from "../scene/garden";
 
 export type FloorMaterial = FloorFinish;
 export type { DoorStyle, ExteriorFinish, FloorFinish, GarageStyle, JoineryFinish, RoofCovering, Upholstery, WallFinish, WindowStyle };
 export type { DeckBoard, PavingMaterial, PavingPattern, RaisedWall };
+export type { Canopy, GardenRoofing, PlanterMaterial, Planting, ShedDoor };
 export type OpeningKind = "door" | "window" | "passage" | "garage";
 export type Mount = "ceiling" | "wall" | "floor" | "table";
 export type ThemeName = "auto" | "night" | "day";
@@ -94,6 +96,16 @@ export interface Furniture {
   balustrade?: BalustradeStyle | null;
   balustrade_material?: BalustradeMaterial | null;
   balustrade_side?: "left" | "right" | "both" | null;
+  /** Garden buildings (scene/garden.ts): a pergola's top; a shed's or gazebo's roof covering. */
+  canopy?: Canopy | null;
+  roofing?: GardenRoofing | null;
+  /** Sheds: where the door is (or double doors), how many windows, and the trim's colour ("#rrggbb"). */
+  door?: ShedDoor | null;
+  windows?: number | null;
+  trim?: string | null;
+  /** Planters: what they are made of, and what grows in them. */
+  material?: PlanterMaterial | null;
+  plants?: Planting | null;
 }
 
 export interface Device {
