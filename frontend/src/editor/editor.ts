@@ -9,7 +9,7 @@ import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
 import {
-  newId, normalizePlan, PANEL, solarSize, spaces, splitEdge, type Device, type EnergySettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
+  newId, normalizePlan, PANEL, panelOf, panelSize, solarSize, spaces, splitEdge, type Device, type EnergySettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
   type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type PartyEnds, type Plan, type Roof, type RoofCovering, type RoofItem, type RoofShape, type Room, type Vec2,
 } from "../model/plan";
 import { bounds } from "../model/geom";
@@ -41,6 +41,13 @@ import { location as homeLocation } from "../live/sky";
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
 type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
+/** Common solar panel sizes (mm), long side first, newest first. */
+const PANEL_SIZES: [number, number, string][] = [
+  [1722, 1134, "Most panels sold since 2022, about 400–440 W"],
+  [1762, 1134, "A little longer, about 430–455 W"],
+  [1755, 1038, "Common from 2019 to 2022, about 330–380 W"],
+  [1650, 992, "Older 60-cell panels, about 250–300 W"],
+];
 
 const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
@@ -1902,11 +1909,14 @@ export class Editor {
     const r2 = (v: number) => Math.round(v * 100) / 100;
     let item: RoofItem;
     if (kind === "solar") {
+      // a house's arrays are nearly always the same panels: take them from one already placed
+      const like = this.plan.floors.flatMap((f) => (f.roofs ?? []).flatMap((r) => r.items ?? [])).find((x) => x.kind === "solar");
+      const panel = panelSize(like?.panel);
       const face = sunniestFace(m, north, southern) ?? biggest;
-      const fit = face ? fitPanels(m, face) : null;
+      const fit = face ? fitPanels(m, face, true, panelOf({ panel })) : null;
       const at = fit ? [fit.x, fit.z] : face ? centroid(face) : [m.roof.x, m.roof.z];
       const cols = fit?.cols ?? 2, rows = fit?.rows ?? 1;
-      item = { id: newId("ri"), kind, x: r2(at[0]), z: r2(at[1]), cols, rows, portrait: true, watts: PANEL.watts, ...solarSize({ cols, rows }) };
+      item = { id: newId("ri"), kind, x: r2(at[0]), z: r2(at[1]), cols, rows, portrait: true, watts: like?.watts ?? PANEL.watts, panel, ...solarSize({ cols, rows, panel }) };
     } else if (kind === "chimney") {
       // on the ridge: at the party wall when there is one, else in its middle
       const top = m.faces.flatMap((f) => f.poly.map(([u, v]) => ({ u, v, y: planeHeight(f.plane, u, v) })));
@@ -1957,6 +1967,18 @@ export class Editor {
     if (it.kind === "solar") {
       const n = (it.cols ?? 1) * (it.rows ?? 1);
       const kwp = (n * (it.watts ?? PANEL.watts)) / 1000;
+      const panel = panelOf(it);
+      const mm = (v: number) => Math.round(v * 1000);
+      // a size is set for every array of the same panels: a house nearly always has one kind
+      const samePanels = (p: Plan) => p.floors.flatMap((f) => (f.roofs ?? []).flatMap((r) => r.items ?? []))
+        .filter((x) => x.kind === "solar" && mm(panelOf(x).long) === mm(panel.long) && mm(panelOf(x).short) === mm(panel.short));
+      const arrays = samePanels(this.plan).length;
+      const setPanel = (label: string, size: (x: RoofItem) => [number, number] | null) => this.change((p) => {
+        for (const x of samePanels(p)) {
+          x.panel = size(x);
+          Object.assign(x, solarSize(x));
+        }
+      }, false, label);
       const power = this.entities((id, st) => domainOf(id) === "sensor" && st.attributes.device_class === "power");
       rows.push(
         h("p", { class: "ed-hint" }, `${n} panels, ${kwp.toFixed(2)} kWp, ${it.w.toFixed(2)} × ${it.d.toFixed(2)} m.`),
@@ -1970,13 +1992,20 @@ export class Editor {
           chip("All black", it.style !== "blue", () => upd("All-black panels", (x) => (x.style = "black"))),
           chip("Blue", it.style === "blue", () => upd("Blue panels", (x) => (x.style = "blue"))),
         ),
+        h("div", { class: "ed-sub" }, "Panel size (mm)"),
+        h("div", { class: "ed-chips" }, ...PANEL_SIZES.map(([long, short, title]) => chip(`${long} × ${short}`, mm(panel.long) === long && mm(panel.short) === short, () => setPanel(`Panels ${long} × ${short} mm`, () => [long / 1000, short / 1000]), title))),
+        h("div", { class: "ed-row" },
+          ...num("Long", mm(panel.long), "1", (v) => setPanel("Panel length", (x) => (v ? panelSize([v / 1000, panelOf(x).short]) : null)), "", "Each panel's long side, in mm"),
+          ...num("Short", mm(panel.short), "1", (v) => setPanel("Panel width", (x) => (v ? panelSize([panelOf(x).long, v / 1000]) : null)), "", "Each panel's short side, in mm"),
+        ),
+        h("p", { class: "ed-hint" }, `The size and power are on the label on the back of a panel, or on its datasheet.${arrays > 1 ? ` A new size changes all ${arrays} arrays of these panels.` : ""}`),
         h("div", { class: "ed-row" }, ...num("Each (W)", it.watts, "5", (v) => upd("Panel power", (x) => (x.watts = v && v > 0 ? Math.min(1000, v) : null)), String(PANEL.watts), "Each panel's peak power")),
         flat ? h("div", { class: "ed-row" }, ...num("Tilt °", it.tilt, "5", (v) => upd("Panel tilt", (x) => (x.tilt = v ? Math.max(0, Math.min(60, v)) : null)), "flat", "Frames tilting the panels up on a flat roof")) : null,
         flat ? this.turnRow((deg) => upd("Turn solar panels", (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))) : null,
         h("div", { class: "ed-row" }, h("label", {}, "Shines with"), this.dropdown(power, it.entity ?? "", (v) => upd("Panels' sensor", (x) => (x.entity = v || null)), "The house's solar")),
         h("p", { class: "ed-hint" }, "Link the power sensor of this string of panels (PV1, PV2…), and they shine with what it makes."),
         m && fr ? h("button", { class: "ed-btn ghost", onclick: () => {
-          const fit = fitPanels(m, fr.face, it.portrait !== false);
+          const fit = fitPanels(m, fr.face, it.portrait !== false, panel);
           if (!fit) return this.toastInDrawer("No panel fits on this slope.");
           upd("Fill the slope with panels", (x) => Object.assign(x, { cols: fit.cols, rows: fit.rows, x: fit.x, z: fit.z }));
         } }, "Fill the slope") : null,

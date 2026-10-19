@@ -240,6 +240,8 @@ export interface RoofItem {
   rows?: number | null;
   portrait?: boolean | null;
   watts?: number | null;
+  /** Solar panels: each panel's long and short side (m); null is the typical `PANEL`. */
+  panel?: [number, number] | null;
   /** Solar panels on a flat roof: frames tilting them up (degrees) towards `rotation`'s front; null lies flat. */
   tilt?: number | null;
   /** Solar panels: the power sensor of their string (they shine with it). Roof windows: a contact sensor. */
@@ -401,20 +403,42 @@ function normalizeRoof(r: Roof): Roof {
     shape,
     pitch,
     covering: r.covering ?? "concrete_tiles",
-    items: (r.items ?? []).map((it) => (it.kind === "solar" ? { ...it, ...solarSize(it) } : it)),
+    items: (r.items ?? []).map((it) => (it.kind === "solar" ? normalizeSolar(it) : it)),
   };
+}
+
+function normalizeSolar(it: RoofItem): RoofItem {
+  const out = { ...it, panel: panelSize(it.panel) };
+  return { ...out, ...solarSize(out) };
 }
 
 /** A typical panel today: 1.72 x 1.13 m, about 430 W. */
 export const PANEL = { long: 1.722, short: 1.134, gap: 0.02, watts: 430 };
 
+/** A usable panel size, long side first (m), or null for the typical one. */
+export function panelSize(p: unknown): [number, number] | null {
+  if (!Array.isArray(p) || p.length !== 2) return null;
+  const [a, b] = p.map(Number);
+  if (!(isFinite(a) && isFinite(b))) return null;
+  const long = Math.max(a, b), short = Math.min(a, b);
+  if (long > 3 || short < 0.3) return null;
+  return [Math.round(long * 1000) / 1000, Math.round(short * 1000) / 1000];
+}
+
+/** One panel's sides (m): the array's own size, or the typical one. */
+export function panelOf(it: Pick<RoofItem, "panel">): { long: number; short: number } {
+  const p = panelSize(it.panel);
+  return p ? { long: p[0], short: p[1] } : PANEL;
+}
+
 /** A solar array's size from its panels: `w` across the slope, `d` up it. */
-export function solarSize(it: Pick<RoofItem, "cols" | "rows" | "portrait">): { w: number; d: number } {
+export function solarSize(it: Pick<RoofItem, "cols" | "rows" | "portrait" | "panel">): { w: number; d: number } {
   const cols = Math.max(1, Math.round(it.cols ?? 1));
   const rows = Math.max(1, Math.round(it.rows ?? 1));
   const portrait = it.portrait ?? true;
-  const across = portrait ? PANEL.short : PANEL.long;
-  const up = portrait ? PANEL.long : PANEL.short;
+  const panel = panelOf(it);
+  const across = portrait ? panel.short : panel.long;
+  const up = portrait ? panel.long : panel.short;
   const r3 = (v: number) => Math.round(v * 1000) / 1000;
   return { w: r3(cols * across + (cols - 1) * PANEL.gap), d: r3(rows * up + (rows - 1) * PANEL.gap) };
 }

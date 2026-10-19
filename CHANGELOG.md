@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### New
+- Solar panels can have their real size: tap the panels and pick a common size, or type the length
+  and width in mm from the label on the back of a panel. The array is sized from it, and Fill the
+  slope fits as many as there is room for. A new size changes every array of the same panels, and
+  new panels take the size and power of those already on the roof.
+
 ### Fixed
 - Solar panels on a roof look dark in the realistic look, as anti-reflective panel glass does; they
   used to mirror a bright sky almost white.
