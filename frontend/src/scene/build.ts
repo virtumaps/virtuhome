@@ -3,7 +3,7 @@
 // lighting and live-state code drive. Every surface is tagged with its finish ("floor:oak",
 // "ext:brick", "role:fabric"...) so the realistic look can texture it.
 import { Color, ShapeUtils, Vector2 } from "three";
-import { groundOf, type Floor, type Furniture, type Plan, type Vec2 } from "../model/plan";
+import { groundOf, type Fence, type Floor, type Furniture, type OutdoorArea, type Plan, type Vec2 } from "../model/plan";
 import { bounds, labelPoint, pointInPolygon, segmentDistance } from "../model/geom";
 import { layoutWalls, OUTSIDE, type WallLayout, type WallSegment } from "../model/walls";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, parseHex, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "./finishes";
@@ -12,21 +12,32 @@ import { Geo, ROOM_NONE, ROOM_OUTSIDE, type V3 } from "./geo";
 import { WALL_HANG, WALL_TRIM } from "./materials";
 import { buildOpeningFixed, joineryLook, type OpeningInfo } from "./joinery";
 import { cameraPieces, cameraRig, type CameraRig } from "./cameras";
-import { fencePaint, fencePieces } from "./fences";
+import { fencePaint, fencePieces, FENCE_STYLES } from "./fences";
+import { edgeOf, insetPolygon, openEdges, railingRuns, stepBlocks, turnOf } from "./areas";
+import { areaColour, areaPaving, BORDER_MATERIALS, BORDER_UNITS, deckKey, deckLook, isPaved, layingAngle, layingFrame, pavingKey, pavingLook, type PavingMaterial } from "./paving";
 import { drawRoof, drawRoofItem, floorRoofs, type RoofDraw, type RoofModel } from "./roofs";
 import { inPalette, type Palette } from "./palette";
 
 export const SLAB = 0.18;
 
+/** Whether a garden area stands up off the ground (a deck, a raised patio): its sides show and things stand on it. */
+export function isRaised(o: OutdoorArea | undefined): boolean {
+  return !!o && (o.kind === "deck" || (o.height ?? 0) > 0.02);
+}
+
 /**
  * Height of garden area k's top above the floor's level. A deck stands level with the floor indoors
- * (a hair under it, so a deck reaching under a wall never fights the floor); the rest lie on the
- * ground. Overlapping areas stack a few millimetres apart: decks over the rest, later over earlier.
+ * unless its height is set (a hair under it, so a deck reaching under a wall never fights the
+ * floor); a raised patio or deck stands its height above the ground; the rest lie on the ground.
+ * Overlapping areas stack a few millimetres apart: raised ones over the rest, later over earlier.
  */
 export function outdoorTop(floor: Floor, k: number): number {
   const all = floor.outdoor ?? [];
-  if (all[k]?.kind === "deck") return -0.012 + 0.002 * Math.min(5, all.slice(0, k).filter((o) => o.kind === "deck").length);
-  return -SLAB + 0.004 + (all[k]?.kind === "patio" ? 0.012 : 0) + 0.003 * k;
+  const o = all[k];
+  const level = (x: OutdoorArea) => x.kind === "deck" && (x.height === null || x.height === undefined);
+  if (o && level(o)) return -0.012 + 0.002 * Math.min(5, all.slice(0, k).filter(level).length);
+  if (isRaised(o)) return -SLAB + Math.max(0.03, o!.height ?? 0) + 0.002 * Math.min(5, k);
+  return -SLAB + 0.004 + (o?.kind === "patio" ? 0.012 : 0) + 0.003 * k;
 }
 
 /** The garden area on top at p (an index into floor.outdoor), or -1. */
@@ -41,7 +52,7 @@ export function outdoorAt(floor: Floor, p: Vec2): number {
 /** What stands outside at p rests on, from the floor's level: a deck, or the ground. */
 export function groundAt(floor: Floor, p: Vec2): number {
   const k = outdoorAt(floor, p);
-  return k >= 0 && floor.outdoor![k].kind === "deck" ? outdoorTop(floor, k) : -SLAB;
+  return k >= 0 && isRaised(floor.outdoor![k]) ? outdoorTop(floor, k) : -SLAB;
 }
 
 /** Lintels whose bottom is at least this high sit above any cut, so they can drop out when cut. */
@@ -223,38 +234,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
   const sideLook = (room: number): Look => (room === OUTSIDE || room < 0 ? exterior : inside[room] ?? inside[0] ?? exterior);
 
   // ---------------------------------------------------------------- garden areas
-  outdoor.forEach((o, k) => {
-    const ground = groundOf(o);
-    opaque.useSurface(`out:${ground}`);
-    const colour = lin(pal.outdoor[ground] ?? pal.outdoor.lawn);
-    const up: V3 = [0, 1, 0];
-    const b0 = bounds(o.points);
-    const g = grid * 2; // a coarser lighting grid outside
-    const y = y0 + outdoorTop(floor, k);
-    for (let gx = Math.floor(b0.minX / g) * g; gx < b0.maxX; gx += g) {
-      for (let gz = Math.floor(b0.minZ / g) * g; gz < b0.maxZ; gz += g) {
-        const cell = clipToRect(o.points, gx, gz, gx + g, gz + g);
-        if (cell.length < 3) continue;
-        const tris = ShapeUtils.triangulateShape(cell.map(([x, z]) => new Vector2(x, z)), []);
-        const ids = cell.map(([x, z]) => opaque.vertex([x, y, z], up, colour, floor.rooms.length + k));
-        for (const [a, c, d] of tris) opaque.tri(ids[a], ids[c], ids[d], up);
-      }
-    }
-    if (o.kind !== "deck") return;
-    // a deck's open sides, down into the ground; not along the house, where they would only hide
-    const turn = Math.sign(area(o.points)) || 1;
-    const side = colour.map((c) => c * 0.78) as V3;
-    o.points.forEach((p, i) => {
-      const q = o.points[(i + 1) % o.points.length];
-      const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
-      if (len < 0.01) return;
-      const n: V3 = [(turn * (q[1] - p[1])) / len, 0, (-turn * (q[0] - p[0])) / len];
-      const out: Vec2 = [(p[0] + q[0]) / 2 + n[0] * 0.3, (p[1] + q[1]) / 2 + n[2] * 0.3];
-      if (floor.rooms.some((r) => pointInPolygon(out, r.points))) return;
-      const lo = y0 - SLAB - 0.01;
-      opaque.quad([p[0], lo, p[1]], [q[0], lo, q[1]], [q[0], y, q[1]], [p[0], y, p[1]], n, side, floor.rooms.length + k, -1, -1, Math.max(1, Math.ceil(len / g)), 1);
-    });
-  });
+  outdoor.forEach((o, k) => buildArea(opaque, glass, plan, floor, o, k, pal, grid * 2, opt.low));
 
   // ---------------------------------------------------------------- room floors
   const wells = stairwells(plan, floorIndex);
@@ -467,6 +447,145 @@ export function buildRoofs(plan: Plan, fb: FloorBuild, pal: Palette, opt: BuildO
   fb.roofs = models;
 }
 
+// -------------------------------------------------------------------- garden areas
+
+/** An area's surface: its texture key and its colour in the model look. */
+function areaLook(o: OutdoorArea, pal: Palette): Look {
+  const hex = parseHex(areaColour(o));
+  const surf = o.kind === "deck" ? deckKey(deckLook(o)) : isPaved(o) ? pavingKey(areaPaving(o)) : `out:${groundOf(o)}`;
+  return { surf, col: lin(hex !== null ? inPalette(pal, hex, true) : pal.outdoor[groundOf(o)] ?? pal.outdoor.lawn) };
+}
+
+/** A course round an area's edge (a patio's border of setts, a deck's picture frame): its look and width (m). */
+function borderLook(o: OutdoorArea, pal: Palette): { look: Look; width: number } | null {
+  if (!o.border) return null;
+  if (o.kind === "deck") {
+    if (o.border !== "frame") return null;
+    const d = deckLook(o);
+    return { look: areaLook(o, pal), width: (d.width + 6) / 1000 };
+  }
+  if (!isPaved(o) || !BORDER_MATERIALS.includes(o.border as PavingMaterial)) return null;
+  const m = o.border as PavingMaterial;
+  const p = pavingLook(m, { pattern: m === "setts" ? "grid" : "stretcher", unit: BORDER_UNITS[m], color: o.border_color, joint: o.joint });
+  return { look: { surf: pavingKey(p), col: lin(inPalette(pal, parseHex(p.color)!, true)) }, width: p.unit[1] / 1000 };
+}
+
+/** What a raised area's sides are: a deck's fascia boards, a raised patio's walls. */
+function sideLook(o: OutdoorArea, pal: Palette, top: Look): Look {
+  if (o.kind === "deck") return { surf: top.surf, col: top.col.map((c) => c * 0.85) as V3 };
+  const w = o.walls ?? "brick";
+  if (w === "sleepers") return { surf: deckKey({ boards: "softwood", color: "#6a5440", width: 194 }), col: lin(inPalette(pal, 0x6a5440, true)) };
+  const name = w === "stone" ? "stone" : w === "render" ? "render" : "brick";
+  return { surf: `ext:${name}`, col: lin(inPalette(pal, EXTERIOR_FINISHES[name].color, true)) };
+}
+
+/** The texture frame along a direction on the plan, counted from point a: u along dir, v across it (towards `across`). */
+function frameAlong(a: Vec2, dir: Vec2, across: Vec2): { c: number; s: number; ou: number; ov: number } {
+  // v grows along (-s, c); turn the frame round if that points the other way
+  const flip = -dir[1] * across[0] + dir[0] * across[1] < 0 ? -1 : 1;
+  const c = dir[0] * flip, s = dir[1] * flip;
+  return { c, s, ou: a[0] * c + a[1] * s, ov: -a[0] * s + a[1] * c };
+}
+
+/** A flat polygon at height y, in lighting-grid cells. */
+function fillPolygon(g: Geo, pts: Vec2[], y: number, colour: V3, room: number, cell: number): void {
+  const up: V3 = [0, 1, 0];
+  const b0 = bounds(pts);
+  for (let gx = Math.floor(b0.minX / cell) * cell; gx < b0.maxX; gx += cell) {
+    for (let gz = Math.floor(b0.minZ / cell) * cell; gz < b0.maxZ; gz += cell) {
+      const piece = clipToRect(pts, gx, gz, gx + cell, gz + cell);
+      if (piece.length < 3) continue;
+      const tris = ShapeUtils.triangulateShape(piece.map(([x, z]) => new Vector2(x, z)), []);
+      const ids = piece.map(([x, z]) => g.vertex([x, y, z], up, colour, room));
+      for (const [a, c, d] of tris) g.tri(ids[a], ids[c], ids[d], up);
+    }
+  }
+}
+
+/**
+ * A garden area: its surface (in its laying direction, inside its border), and when raised its
+ * sides down to the ground, its steps and its railing.
+ */
+function buildArea(opaque: Geo, glass: Geo, plan: Plan, floor: Floor, o: OutdoorArea, k: number, pal: Palette, cell: number, low: boolean): void {
+  if (o.points.length < 3) return;
+  const room = floor.rooms.length + k;
+  const y0 = floor.elevation;
+  const top = y0 + outdoorTop(floor, k);
+  const ground = y0 - SLAB;
+  const look = areaLook(o, pal);
+  const border = borderLook(o, pal);
+  const turn = turnOf(o.points);
+  const inner = border ? insetPolygon(o.points, border.width) : o.points;
+  opaque.useSurface(look.surf);
+  opaque.uvFrame = layingFrame(inner, layingAngle(o));
+  fillPolygon(opaque, inner, top, look.col, room, cell);
+  opaque.uvFrame = null;
+  if (border) {
+    // one course along each edge, mitred at the corners, running along the edge from its outside
+    opaque.useSurface(border.look.surf);
+    o.points.forEach((a, i) => {
+      const e = edgeOf(o.points, i, turn);
+      if (e.len < 0.01) return;
+      const j = (i + 1) % o.points.length;
+      opaque.uvFrame = frameAlong(a, e.dir, [-e.out[0], -e.out[1]]);
+      opaque.quad([a[0], top, a[1]], [e.b[0], top, e.b[1]], [inner[j][0], top, inner[j][1]], [inner[i][0], top, inner[i][1]], [0, 1, 0], border.look.col, room, -1, -1, Math.max(1, Math.ceil(e.len / cell)), 1);
+    });
+    opaque.uvFrame = null;
+  }
+  if (!isRaised(o)) return;
+
+  const open = openEdges(floor, o, plan.settings.wall_exterior);
+  const side = sideLook(o, pal, look);
+  const deck = o.kind === "deck";
+  // a raised patio's slabs overhang its walls a little, as a coping does
+  const lip = deck ? 0 : 0.03, lipH = deck ? 0 : 0.04;
+  o.points.forEach((p, i) => {
+    if (!open[i]) return;
+    const e = edgeOf(o.points, i, turn);
+    if (e.len < 0.01) return;
+    const n: V3 = [e.out[0], 0, e.out[1]];
+    const nu = Math.max(1, Math.ceil(e.len / cell));
+    const q = e.b;
+    if (lip) {
+      opaque.useSurface(look.surf);
+      opaque.quad([p[0], top - lipH, p[1]], [q[0], top - lipH, q[1]], [q[0], top, q[1]], [p[0], top, p[1]], n, look.col.map((c) => c * 0.9) as V3, room, -1, -1, nu, 1);
+      const pi: Vec2 = [p[0] - e.out[0] * lip, p[1] - e.out[1] * lip], qi: Vec2 = [q[0] - e.out[0] * lip, q[1] - e.out[1] * lip];
+      opaque.quad([p[0], top - lipH, p[1]], [pi[0], top - lipH, pi[1]], [qi[0], top - lipH, qi[1]], [q[0], top - lipH, q[1]], [0, -1, 0], look.col.map((c) => c * 0.6) as V3, room, -1, -1, nu, 1);
+      opaque.useSurface(side.surf);
+      opaque.quad([pi[0], ground - 0.01, pi[1]], [qi[0], ground - 0.01, qi[1]], [qi[0], top - lipH, qi[1]], [pi[0], top - lipH, pi[1]], n, side.col, room, -1, -1, nu, 1);
+    } else {
+      opaque.useSurface(side.surf);
+      opaque.quad([p[0], ground - 0.01, p[1]], [q[0], ground - 0.01, q[1]], [q[0], top, q[1]], [p[0], top, p[1]], n, side.col, room, -1, -1, nu, 1);
+    }
+  });
+
+  // steps: each tread laid along the edge like the area's top, its riser and ends like its sides
+  for (const s of o.steps ?? []) {
+    for (const b of stepBlocks(o.points, s, top - ground)) {
+      const [c0, c1, c2, c3] = b.corners;
+      const y = ground + b.top;
+      opaque.useSurface(look.surf);
+      opaque.uvFrame = frameAlong(c3, b.dir, [-b.out[0], -b.out[1]]);
+      opaque.quad([c0[0], y, c0[1]], [c1[0], y, c1[1]], [c2[0], y, c2[1]], [c3[0], y, c3[1]], [0, 1, 0], look.col, room, -1, -1, Math.max(1, Math.ceil(Math.hypot(c1[0] - c0[0], c1[1] - c0[1]) / cell)), 1);
+      opaque.uvFrame = null;
+      opaque.useSurface(side.surf);
+      const lo = ground - 0.01;
+      opaque.quad([c3[0], lo, c3[1]], [c2[0], lo, c2[1]], [c2[0], y, c2[1]], [c3[0], y, c3[1]], [b.out[0], 0, b.out[1]], side.col, room);
+      opaque.quad([c1[0], lo, c1[1]], [c2[0], lo, c2[1]], [c2[0], y, c2[1]], [c1[0], y, c1[1]], [b.dir[0], 0, b.dir[1]], side.col, room);
+      opaque.quad([c0[0], lo, c0[1]], [c3[0], lo, c3[1]], [c3[0], y, c3[1]], [c0[0], y, c0[1]], [-b.dir[0], 0, -b.dir[1]], side.col, room);
+    }
+  }
+
+  // a railing round the open edges, standing on the area, with gaps where the steps go down
+  const style = o.railing && o.railing in FENCE_STYLES ? o.railing : null;
+  if (!style) return;
+  for (const [ri, points] of railingRuns(o.points, open, o.steps ?? []).entries()) {
+    const fence: Fence = { id: `${o.id}_rail${ri}`, points, style, height: Math.min(1.1, FENCE_STYLES[style].height), gates: [], gravel_board: false };
+    const paint = fencePaint(fence);
+    for (const piece of fencePieces(fence, low)) addParts(opaque, piece.parts, piece.item, top, false, room, -1, pal, low, glass, paint);
+  }
+}
+
 /** The lamp model for a light placed as a device. */
 export function lampTypeFor(mount: string | null | undefined): string {
   if (mount === "floor") return "lamp_floor";
@@ -617,6 +736,7 @@ function flatFaces(p: Part): boolean[] {
   if (p.shape === "box") return [true, true, !p.shear, !p.shear, true, true];
   if (p.shape === "prism") return [true, true, true, false, false, false];
   if (p.shape === "ball" || p.shape === "hull") return [false, false, false, false, false, false];
+  if (p.shape === "hip") return [false, false, true, false, false, false];
   if (p.axis === "x") return [true, true, false, false, false, false];
   if (p.axis === "z") return [false, false, false, false, true, true];
   return [false, false, true, (p.taper ?? 1) > 0.001, false, false];
@@ -679,21 +799,35 @@ function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, r
   const mx = item.mirror ? -1 : 1;
   const toWorld = (lx: number, ly: number, lz: number): V3 => [item.x + c * lx * mx - s * lz, bottom + ly, item.z + s * lx * mx + c * lz];
   const rotN = (nx: number, ny: number, nz: number): V3 => [c * nx * mx - s * nz, ny, s * nx * mx + c * nz];
+  // a quarter turn for parts described front towards +x (scene/furniture-lib.ts Part.turn)
+  const toWorldT = (lx: number, ly: number, lz: number): V3 => toWorld(-lz, ly, lx);
+  const rotNT = (nx: number, ny: number, nz: number): V3 => rotN(-nz, ny, nx);
   // the picked colour, or the upholstery's own colour (leather is brown unless told otherwise)
   const finish = item.finish ?? def.finish ?? "fabric";
   const upholstery = UPHOLSTERY[finish] ?? UPHOLSTERY.fabric;
   const picked = parseHex(item.color) ?? (finish !== "fabric" ? upholstery.color : null);
-  const painted = paint ?? paintRoles(def, parts);
+  const trim = def.trim ? parseHex(item.trim) : null;
+  const painted = paint ?? paintRoles(def, parts, item);
   parts = separateFaces(parts, raised);
+  const shadeOf = (hex: number, role: Role): V3 => {
+    const base = lin(inPalette(pal, hex));
+    const k = SHADE_OF[role] ?? 1;
+    return [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)];
+  };
   const colourOf = (role: Role): V3 => {
-    if (picked !== null && painted.has(role)) {
-      const base = lin(inPalette(pal, picked));
-      const k = SHADE_OF[role] ?? 1;
-      return [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)];
-    }
+    if (trim !== null && def.trim!.includes(role)) return shadeOf(trim, role);
+    if (picked !== null && painted.has(role)) return shadeOf(picked, role);
     return lin(pal.roles[role]);
   };
+  // tops textured along the piece (a rug's pattern, a roof's courses), moving with it
+  const frameOf = (turned: boolean) => {
+    const [fc, fs] = turned ? [-s, c] : [c, s];
+    return { c: fc, s: fs, ou: item.x * fc + item.z * fs, ov: -item.x * fs + item.z * fc };
+  };
+  const frames = [frameOf(false), frameOf(true)];
   for (const p of parts) {
+    const tw = p.turn ? toWorldT : toWorld, rn = p.turn ? rotNT : rotN;
+    opaque.uvFrame = frames[p.turn ? 1 : 0];
     // the glass mesh keeps its one surface
     const g = p.role === "glass" && glass ? glass : opaque;
     if (g === opaque) g.useSurface(UPHOLSTERY_ROLES.has(p.role) ? `uph:${finish}` : `role:${p.role}`);
@@ -708,23 +842,26 @@ function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, r
       const yb0 = ya0 + p.h, yb1 = ya1 + p.h;
       const ao = p.y < 0.05 ? 0.86 : 1;
       const l = Math.hypot(1, sh);
-      const up = sh ? rotN(0, 1 / l, -sh / l) : ([0, 1, 0] as V3);
+      const up = sh ? rn(0, 1 / l, -sh / l) : ([0, 1, 0] as V3);
       const q = (a: V3, b: V3, cc: V3, d: V3, n: V3, f: number) =>
-        g.quad(toWorld(...a), toWorld(...b), toWorld(...cc), toWorld(...d), n, col, room, -1, gslot, 1, 1, f);
+        g.quad(tw(...a), tw(...b), tw(...cc), tw(...d), n, col, room, -1, gslot, 1, 1, f);
       q([x0, yb0, z0], [x1, yb0, z0], [x1, yb1, z1], [x0, yb1, z1], up, 1);
-      q([x0, ya1, z1], [x1, ya1, z1], [x1, yb1, z1], [x0, yb1, z1], rotN(0, 0, 1), ao);
-      q([x1, ya0, z0], [x0, ya0, z0], [x0, yb0, z0], [x1, yb0, z0], rotN(0, 0, -1), ao);
-      q([x1, ya1, z1], [x1, ya0, z0], [x1, yb0, z0], [x1, yb1, z1], rotN(1, 0, 0), ao);
-      q([x0, ya0, z0], [x0, ya1, z1], [x0, yb1, z1], [x0, yb0, z0], rotN(-1, 0, 0), ao);
+      q([x0, ya1, z1], [x1, ya1, z1], [x1, yb1, z1], [x0, yb1, z1], rn(0, 0, 1), ao);
+      q([x1, ya0, z0], [x0, ya0, z0], [x0, yb0, z0], [x1, yb0, z0], rn(0, 0, -1), ao);
+      q([x1, ya1, z1], [x1, ya0, z0], [x1, yb0, z0], [x1, yb1, z1], rn(1, 0, 0), ao);
+      q([x0, ya0, z0], [x0, ya1, z1], [x0, yb1, z1], [x0, yb0, z0], rn(-1, 0, 0), ao);
       if (elevated) q([x0, ya1, z1], [x1, ya1, z1], [x1, ya0, z0], [x0, ya0, z0], [-up[0], -up[1], -up[2]], 1);
     } else if (p.shape === "prism") {
-      prismPart(g, p, toWorld, rotN, col, room, gslot, elevated);
+      prismPart(g, p, tw, rn, col, room, gslot, elevated);
+    } else if (p.shape === "hip") {
+      hipPart(g, p, tw, rn, col, room, gslot, elevated);
     } else if (p.shape === "hull") {
-      hullPart(g, p, toWorld, rotN, col, room, gslot, elevated);
+      hullPart(g, p, tw, rn, col, room, gslot, elevated);
     } else {
-      lathe(g, p, toWorld, rotN, col, room, gslot, elevated, low);
+      lathe(g, p, tw, rn, col, room, gslot, elevated, low);
     }
   }
+  opaque.uvFrame = null;
 }
 
 type ToWorld = (x: number, y: number, z: number) => V3;
@@ -746,6 +883,31 @@ function prismPart(g: Geo, p: Part, toWorld: ToWorld, rotN: RotN, col: V3, room:
     g.tri(a, b, t, n);
   }
   if (elevated) g.quad(toWorld(x0, ya, z1), toWorld(x1, ya, z1), toWorld(x1, ya, z0), toWorld(x0, ya, z0), [0, -1, 0], col, room, -1, gslot);
+}
+
+/** A hipped roof: a w x d base, a ridge along x of length `ridge` at height h, four flat slopes. */
+function hipPart(g: Geo, p: Part, toWorld: ToWorld, rotN: RotN, col: V3, room: number, gslot: number, elevated: boolean): void {
+  const x0 = p.x - p.w / 2, x1 = p.x + p.w / 2, z0 = p.z - p.d / 2, z1 = p.z + p.d / 2;
+  const r = Math.max(0, Math.min(p.w, p.ridge ?? p.w - p.d)) / 2;
+  const ya = p.y, yb = p.y + p.h;
+  const ra: V3 = [p.x - r, yb, p.z], rb: V3 = [p.x + r, yb, p.z];
+  const face = (pts: V3[]) => {
+    // the slope's normal from two of its edges
+    const [a, b, c] = pts;
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n: V3 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const l = Math.hypot(n[0], n[1], n[2]) || 1;
+    n = [n[0] / l, n[1] / l, n[2] / l];
+    if (n[1] < 0) n = [-n[0], -n[1], -n[2]];
+    const nw = rotN(n[0], n[1], n[2]);
+    const ids = pts.map((q) => g.vertex(toWorld(q[0], q[1], q[2]), nw, col, room, -1, gslot));
+    for (let k = 1; k < ids.length - 1; k++) g.tri(ids[0], ids[k], ids[k + 1], nw);
+  };
+  face([[x0, ya, z1], [x1, ya, z1], rb, ra]);
+  face([[x1, ya, z0], [x0, ya, z0], ra, rb]);
+  face([[x0, ya, z0], [x0, ya, z1], ra]);
+  face([[x1, ya, z1], [x1, ya, z0], rb]);
+  if (elevated) g.quad(toWorld(x0, ya, z1), toWorld(x1, ya, z1), toWorld(x1, ya, z0), toWorld(x0, ya, z0), rotN(0, -1, 0), col, room, -1, gslot);
 }
 
 /** A side outline extruded across x, its sides leaning in towards the top (a car's body and windows). */

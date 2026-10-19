@@ -20,6 +20,8 @@ import { finishFor } from "./finishes";
 import type { Geo } from "./geo";
 import { FRAG_BODY, FRAG_HEAD, VERT_BODY, VERT_HEAD, type FloorUniforms } from "./materials";
 import { bake, disposeTextures, isDetail } from "./textures";
+import { DECK_BOARDS, PAVING, parseDeckKey, parsePavingKey } from "./paving";
+import { deckTile, pavingTile } from "./paving-tex";
 import { kelvinToRgb } from "./lighting";
 import { WeatherFx, type FxArea } from "./weather-fx";
 import { quietSky, type Sky } from "../live/sky";
@@ -33,6 +35,8 @@ interface SurfaceSpec {
   relief?: number;
   /** Opacity of see-through surfaces. */
   opacity?: number;
+  /** Texture resolution as a multiple of the look's usual, up to 1024 (big surfaces seen close up: patios, decks). */
+  res?: number;
 }
 
 const ROLE_SPECS: Record<string, SurfaceSpec> = {
@@ -67,6 +71,21 @@ const ROLE_SPECS: Record<string, SurfaceSpec> = {
   blackMetal: { rough: 0.4, metal: 0.6 },
   concrete: { tex: "concrete", scale: 0.8, rough: 0.9, relief: 0.25 },
   brick: { tex: "brick_red", scale: 1.35, rough: 0.85, relief: 0.9 },
+  shiplap: { tex: "boards_h", scale: 1.2, rough: 0.7, relief: 0.7 },
+  logs: { tex: "logs", scale: 1.12, rough: 0.7, relief: 0.9 },
+  corrugated: { tex: "corrugated", scale: 0.76, rough: 0.45, metal: 0.3, relief: 0.9 },
+  felt: { tex: "roof_felt", scale: 2.0, rough: 0.95, relief: 0.4 },
+  shingle: { tex: "shingles", scale: 1.0, rough: 0.9, relief: 0.8 },
+  epdm: { tex: "roof_epdm", scale: 3.0, rough: 0.8, relief: 0.15 },
+  sedum: { tex: "roof_sedum", scale: 1.5, rough: 1, relief: 0.8 },
+  corten: { tex: "rust", scale: 1.0, rough: 0.8, relief: 0.3 },
+  galvanised: { tex: "brushed", scale: 0.5, rough: 0.35, metal: 0.7 },
+  sleeper: { tex: "wood_grain_v", scale: 0.6, rough: 0.85, relief: 0.4 },
+  stone: { tex: "stone_wall", scale: 1.0, rough: 0.85, relief: 0.9 },
+  rattan: { tex: "weave", scale: 0.15, rough: 0.8, relief: 0.6 },
+  bloom: { tex: "foliage", scale: 0.25, rough: 0.7, relief: 0.6 },
+  lavender: { tex: "foliage", scale: 0.25, rough: 0.7, relief: 0.6 },
+  straw: { tex: "foliage", scale: 0.3, rough: 0.75, relief: 0.6 },
 };
 
 const OTHER_SPECS: Record<string, SurfaceSpec> = {
@@ -77,15 +96,10 @@ const OTHER_SPECS: Record<string, SurfaceSpec> = {
   pv: { rough: 0.38, metal: 0.05 },
 };
 
+/** Lawns and beds (paved areas and decks are textured from their look: scene/paving.ts). */
 const OUTDOOR_SPECS: Record<string, SurfaceSpec> = {
   lawn: { tex: "grass", scale: 2.0, rough: 0.95, relief: 0.4 },
-  patio: { tex: "patio", scale: 1.2, rough: 0.8, relief: 0.6 },
-  deck: { tex: "deck", scale: 1.2, rough: 0.7, relief: 0.6 },
-  path: { tex: "pavers", scale: 1.0, rough: 0.8, relief: 0.6 },
-  driveway: { tex: "block_paving", scale: 1.6, rough: 0.8, relief: 0.6 },
-  asphalt: { tex: "tarmac", scale: 2.5, rough: 0.85, relief: 0.35 },
   bed: { tex: "soil", scale: 1.5, rough: 1, relief: 0.6 },
-  gravel: { tex: "gravel", scale: 1.0, rough: 0.9, relief: 0.9 },
 };
 
 /** What a surface key ("floor:oak", "role:metal", "out:lawn", "cap") is made of. */
@@ -95,6 +109,14 @@ function specFor(key: string): SurfaceSpec {
   if (fin) return { tex: fin.tex, scale: fin.scale, rough: fin.roughness, metal: fin.metalness, relief: fin.relief };
   if (group === "role") return ROLE_SPECS[name] ?? { rough: 0.6 };
   if (group === "out") return OUTDOOR_SPECS[name] ?? OUTDOOR_SPECS.lawn;
+  if (group === "pave") {
+    const p = parsePavingKey(name);
+    if (p) return { tex: key, scale: pavingTile(p) / 1000, rough: PAVING[p.material].roughness, relief: PAVING[p.material].relief, res: 2 };
+  }
+  if (group === "deck") {
+    const d = parseDeckKey(name);
+    if (d) return { tex: key, scale: deckTile(d) / 1000, rough: DECK_BOARDS[d.boards].roughness, relief: 0.7, res: 2 };
+  }
   return OTHER_SPECS[group] ?? { rough: 0.6 };
 }
 
@@ -174,7 +196,7 @@ function injectStandard(mat: MeshStandardMaterial, u: FloorUniforms, key: string
 }
 
 /** Plants and leaves move in the wind (outside). */
-const SWAYS = new Set(["role:plant", "role:leaf"]);
+const SWAYS = new Set(["role:plant", "role:leaf", "role:bloom", "role:lavender", "role:straw"]);
 
 /** Only the cutaway (the normal pass must see lowered walls as lowered). */
 function injectCut<T extends Material>(mat: T, u: FloorUniforms, key: string): T {
@@ -332,7 +354,7 @@ export class RealisticLook {
     const spec = specFor(key);
     const mat = new MeshStandardMaterial({ vertexColors: true, roughness: spec.rough, metalness: spec.metal ?? 0 });
     if (spec.tex) {
-      const pair = bake(spec.tex, this.texSize, this.aniso);
+      const pair = bake(spec.tex, Math.min(1024, this.texSize * (spec.res ?? 1)), this.aniso);
       if (pair) {
         const rep = 1 / (spec.scale ?? 1);
         mat.map = pair.map.clone();

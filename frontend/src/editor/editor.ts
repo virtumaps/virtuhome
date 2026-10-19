@@ -26,7 +26,13 @@ import { pointInPolygon, segmentDistance } from "../model/geom";
 import { layoutWalls, openingPoint } from "../model/walls";
 import { CAMERA_NAMES, cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
-import { outdoorTop } from "../scene/build";
+import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
+import { isRaised, outdoorTop } from "../scene/build";
+import { circlePoints, edgeOf, newArea, openEdges, rectSides, resizeRect, roundness, turnOf, type NewAreaKind } from "../scene/areas";
+import {
+  areaPaving, BORDER_MATERIALS, DECK_BOARDS, DECK_ORDER, deckLook, isPaved, JOINT_SWATCHES, PATTERN_NAMES, PAVING, PAVING_ORDER, RAISED_WALLS,
+  type PavingMaterial, type RaisedWall,
+} from "../scene/paving";
 import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
@@ -48,6 +54,7 @@ const PANEL_SIZES: [number, number, string][] = [
   [1755, 1038, "Common from 2019 to 2022, about 330–380 W"],
   [1650, 992, "Older 60-cell panels, about 250–300 W"],
 ];
+const KIND_NAMES: Record<OutdoorKind, string> = { lawn: "Lawn", patio: "Patio", deck: "Deck", path: "Path", driveway: "Driveway", bed: "Flower bed", gravel: "Gravel" };
 
 const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
@@ -99,6 +106,7 @@ export class Editor {
   private redoBtn: HTMLButtonElement;
   /** The add-item picker's category and search text (kept across re-renders). */
   private pickCat: Category | "all" = "all";
+  private pickCatGarden: Category | "all" = "outdoor";
   private pickQuery = "";
   /** The 2D plan (bird's-eye, with measurements), when it is shown instead of 3D. */
   private plan2d: Plan2D | null = null;
@@ -1104,6 +1112,8 @@ export class Editor {
         h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("back") }, "Add back garden"),
         h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("front") }, "Add front area"),
         h("button", { class: "ed-btn ghost small", onclick: () => this.startFence() }, "Draw a fence"),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addArea("patio", "rect") }, "Add a patio"),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addArea("deck", "rect") }, "Add a deck"),
       ),
     );
     this.plan.floors.forEach((f, fi) => {
@@ -1115,7 +1125,7 @@ export class Editor {
       }
       for (const o of f.outdoor ?? []) {
         box.append(h("div", { class: `ed-card ${this.sel?.id === o.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "outdoor", id: o.id }) },
-          h("div", { class: "ed-row" }, h("b", {}, o.name), h("small", {}, ` · ${o.kind}`)),
+          h("div", { class: "ed-row" }, h("b", {}, o.name), h("small", {}, ` · ${o.kind === "deck" ? `${DECK_BOARDS[deckLook(o).boards].name.toLowerCase()} deck` : isPaved(o) ? PAVING[areaPaving(o).material].name.toLowerCase() : KIND_NAMES[o.kind].toLowerCase()}`)),
         ));
       }
       f.rooms.forEach((r, ri) => {
@@ -1275,25 +1285,194 @@ export class Editor {
   private outdoorPanel(fi: number, o: OutdoorArea | undefined): HTMLElement {
     if (!o) return h("div", {});
     const areas = Object.values(this.hass.areas ?? {}).sort((a, b) => a.name.localeCompare(b.name));
-    const upd = (fn: (x: OutdoorArea) => void) => this.change((p) => fn(p.floors[fi].outdoor!.find((y) => y.id === o.id)!));
+    const upd = (label: string, fn: (x: OutdoorArea) => void) => this.change((p) => fn(p.floors[fi].outdoor!.find((y) => y.id === o.id)!), false, label);
+    const chip = (label: string, on: boolean, onclick: () => void, title = "") => h("button", { class: `ed-chip${on ? " on" : ""}`, title, onclick: () => !on && onclick() }, label);
+    const lawn = o.kind === "lawn";
     return h("div", {},
-      h("h4", {}, "Garden area"),
+      h("h4", {}, o.name),
       h("p", { class: "ed-hint" }, "Drag the blue corners to shape it. To add a corner, drag a + from the middle of an edge to where it goes; a tap puts it in the middle. Lights of its area light it up at night."),
-      h("div", { class: "ed-row" }, h("label", {}, "Name"), h("input", { class: "ed-in", value: o.name, onchange: (e: Event) => upd((x) => (x.name = (e.target as HTMLInputElement).value)) })),
-      h("div", { class: "ed-row" }, h("label", {}, "Ground"), this.dropdown(OUTDOOR_KINDS.map((k) => [k, k]), o.kind, (v) => upd((x) => (x.kind = v as OutdoorKind)))),
-      o.kind === "driveway" ? h("div", { class: "ed-row" },
-        h("label", {}, "Surface"),
-        this.dropdown([["blocks", "block paving"], ["asphalt", "asphalt"]], o.surface ?? "blocks", (v) => upd((x) => (x.surface = v === "asphalt" ? "asphalt" : null))),
+      h("div", { class: "ed-row" }, h("label", {}, "Name"), h("input", { class: "ed-in", value: o.name, onchange: (e: Event) => upd("Rename a garden area", (x) => (x.name = (e.target as HTMLInputElement).value)) })),
+      h("div", { class: "ed-sub" }, "Ground"),
+      h("div", { class: "ed-chips" }, ...OUTDOOR_KINDS.map((k) => chip(KIND_NAMES[k], o.kind === k, () => upd(`Make ${o.name} ${KIND_NAMES[k].toLowerCase()}`, (x) => (x.kind = k))))),
+      ...(isPaved(o) ? this.pavingRows(o, upd) : []),
+      ...(o.kind === "deck" ? this.deckRows(o, upd) : []),
+      ...(o.kind === "patio" || o.kind === "deck" ? this.raisedRows(fi, o, upd) : []),
+      ...this.areaSizeRows(o, upd),
+      h("div", { class: "ed-row" }, h("label", {}, "Area"), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd("Link a garden area", (x) => (x.area_id = v || null)), "Not linked")),
+      lawn ? h("h4", {}, "Add to this garden") : null,
+      lawn ? h("div", { class: "ed-chips" },
+        h("button", { class: "ed-chip", onclick: () => this.addArea("patio", "rect", o) }, "Patio"),
+        h("button", { class: "ed-chip", onclick: () => this.addArea("patio", "round", o) }, "Round patio"),
+        h("button", { class: "ed-chip", onclick: () => this.addArea("deck", "rect", o) }, "Deck"),
+        h("button", { class: "ed-chip", onclick: () => this.addArea("path", "rect", o) }, "Path"),
+        h("button", { class: "ed-chip", title: "Draw its outline in the 2D plan", onclick: () => this.drawArea("patio") }, "Draw a patio"),
       ) : null,
-      h("div", { class: "ed-row" }, h("label", {}, "Area"), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd((x) => (x.area_id = v || null)), "Not linked")),
+      lawn ? this.itemPicker((type) => this.addFurniture(fi, o, type), true) : null,
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost", title: "A fence along its edges, except those along the house", onclick: () => this.fenceRound(fi, o) }, "Fence round it"),
+        h("button", { class: "ed-btn ghost", onclick: () => {
+          const id = newId("out");
+          this.change((p) => {
+            const fl = p.floors[fi];
+            fl.outdoor = [...(fl.outdoor ?? []), { ...structuredClone(o), id, name: `${o.name} 2`, points: o.points.map(([px, pz]) => [px + 0.5, pz + 0.5] as Vec2) }];
+          }, false, `Duplicate ${o.name}`);
+          this.select({ floor: fi, kind: "outdoor", id });
+        } }, "Duplicate"),
         h("button", { class: "ed-btn danger", onclick: () => {
-          this.change((p) => (p.floors[fi].outdoor = (p.floors[fi].outdoor ?? []).filter((x) => x.id !== o.id)));
+          this.change((p) => (p.floors[fi].outdoor = (p.floors[fi].outdoor ?? []).filter((x) => x.id !== o.id)), false, `Remove ${o.name}`);
           this.select(null);
         } }, "Remove"),
       ),
     );
+  }
+
+  /** A paved area: what it is laid with, in what colour and pattern, unit size, joints, direction and border. */
+  private pavingRows(o: OutdoorArea, upd: (label: string, fn: (x: OutdoorArea) => void) => void): (HTMLElement | null)[] {
+    const look = areaPaving(o);
+    const usual = areaPaving({ ...o, color: null });
+    const def = PAVING[look.material];
+    const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
+    const sized = look.pattern !== "random" && look.pattern !== "crazy" && look.pattern !== "plain";
+    const unit = def.sizes.includes(o.unit ?? "") ? o.unit! : def.sizes[0];
+    const border = o.border && BORDER_MATERIALS.includes(o.border as PavingMaterial) ? (o.border as PavingMaterial) : null;
+    // a gravel area's stones only take a colour (gravel is a kind of ground of its own)
+    if (o.kind === "gravel") {
+      return [h("div", { class: "ed-sub" }, "Stones"), this.colourPicker(def.colors.map(([name, c]) => [name, c] as [string, string]), o.color && o.color !== usual.color ? o.color : null, (c) => upd(`Stones of ${o.name}`, (x) => (x.color = c)), def.colors[0][0])];
+    }
+    return [
+      h("div", { class: "ed-sub" }, "Laid with"),
+      h("div", { class: "ed-chips" }, ...PAVING_ORDER.filter((k) => k !== "gravel").map((k) => h("button", { class: `ed-chip${k === look.material ? " on" : ""}`, onclick: () => k !== look.material && upd(`${PAVING[k].name} for ${o.name}`, (x) => {
+        x.paving = k;
+        x.pattern = x.unit = x.color = x.joint = null;
+        if (x.kind === "driveway") x.surface = null;
+      }) }, h("i", { style: `background:${PAVING[k].colors[0][1]}` }), PAVING[k].name))),
+      h("div", { class: "ed-sub" }, "Colour"),
+      this.colourPicker(def.colors.map(([name, c]) => [name, c] as [string, string]), o.color && o.color !== usual.color ? o.color : null, (c) => upd(`Colour of ${o.name}`, (x) => (x.color = c)),
+        def.colors.find(([, c]) => c === usual.color)?.[0] ?? "Usual"),
+      def.patterns.length > 1 ? h("div", { class: "ed-sub" }, "Pattern") : null,
+      def.patterns.length > 1 ? h("div", { class: "ed-chips" }, ...def.patterns.map((k) => chip(PATTERN_NAMES[k], look.pattern === k, () => upd(`${PATTERN_NAMES[k]} pattern for ${o.name}`, (x) => (x.pattern = k))))) : null,
+      sized && def.sizes.length > 1 ? h("div", { class: "ed-sub" }, "Size (mm)") : null,
+      sized && def.sizes.length > 1 ? h("div", { class: "ed-chips" }, ...def.sizes.map((k) => chip(k.replace("x", " × "), unit === k, () => upd(`${k} units for ${o.name}`, (x) => (x.unit = k))))) : null,
+      def.joint > 0 ? h("div", { class: "ed-sub" }, "Joints") : null,
+      def.joint > 0 ? this.colourPicker(JOINT_SWATCHES, o.joint, (c) => upd(`Joints of ${o.name}`, (x) => (x.joint = c)), "Usual") : null,
+      look.pattern !== "plain" && look.pattern !== "crazy" ? this.directionRow(o, upd) : null,
+      look.material !== "gravel" ? h("div", { class: "ed-sub" }, "Border") : null,
+      look.material !== "gravel" ? h("div", { class: "ed-chips" },
+        chip("None", !border, () => upd(`No border round ${o.name}`, (x) => (x.border = null))),
+        ...BORDER_MATERIALS.map((k) => chip(PAVING[k].name, border === k, () => upd(`${PAVING[k].name} border round ${o.name}`, (x) => {
+          x.border = k;
+          x.border_color = null;
+        })))) : null,
+      border ? this.colourPicker(PAVING[border].colors.map(([name, c]) => [name, c] as [string, string]), o.border_color, (c) => upd(`Border colour of ${o.name}`, (x) => (x.border_color = c)), PAVING[border].colors[0][0]) : null,
+    ];
+  }
+
+  /** Which way the pattern or the boards run, from the area's longest edge. */
+  private directionRow(o: OutdoorArea, upd: (label: string, fn: (x: OutdoorArea) => void) => void): HTMLElement {
+    const a = o.angle ?? 0;
+    const chip = (label: string, v: number) => h("button", { class: `ed-chip${Math.abs(a - v) < 0.01 ? " on" : ""}`, onclick: () => upd(`Lay ${o.name} ${label.toLowerCase()}`, (x) => (x.angle = v || null)) }, label);
+    return h("div", { class: "ed-row" }, h("label", {}, "Runs"), chip("Along", 0), chip("Diagonal", 45), chip("Across", 90),
+      h("input", { class: "ed-in num", type: "number", step: "5", value: String(a), title: "Degrees from the longest edge", onchange: (e: Event) => {
+        const v = Number((e.target as HTMLInputElement).value);
+        upd(`Turn the pattern of ${o.name}`, (x) => (x.angle = isFinite(v) && v ? ((v % 180) + 180) % 180 : null));
+      } }));
+  }
+
+  /** A deck's boards: material, colour, width, direction and a picture frame round the edge. */
+  private deckRows(o: OutdoorArea, upd: (label: string, fn: (x: OutdoorArea) => void) => void): (HTMLElement | null)[] {
+    const look = deckLook(o);
+    const def = DECK_BOARDS[look.boards];
+    const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
+    return [
+      h("div", { class: "ed-sub" }, "Boards"),
+      h("div", { class: "ed-chips" }, ...DECK_ORDER.map((k) => h("button", { class: `ed-chip${k === look.boards ? " on" : ""}`, onclick: () => k !== look.boards && upd(`${DECK_BOARDS[k].name} boards on ${o.name}`, (x) => {
+        x.boards = k;
+        x.color = x.board_width = null;
+      }) }, h("i", { style: `background:${DECK_BOARDS[k].colors[0][1]}` }), DECK_BOARDS[k].name))),
+      h("div", { class: "ed-sub" }, "Colour"),
+      this.colourPicker(def.colors, o.color && o.color !== def.colors[0][1] ? o.color : null, (c) => upd(`Colour of ${o.name}`, (x) => (x.color = c)), def.colors[0][0]),
+      h("div", { class: "ed-row" }, h("label", {}, "Boards mm"), ...def.widths.map((w) => chip(String(w), look.width === w, () => upd(`${w} mm boards on ${o.name}`, (x) => (x.board_width = w))))),
+      this.directionRow(o, upd),
+      h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: o.border === "frame", onchange: (e: Event) => upd(`Picture frame round ${o.name}`, (x) => (x.border = (e.target as HTMLInputElement).checked ? "frame" : null)) }),
+        " Picture frame: boards along the edges"),
+    ];
+  }
+
+  /** A patio or deck off the ground: how high, what its sides are, steps down from its open edges, a railing. */
+  private raisedRows(fi: number, o: OutdoorArea, upd: (label: string, fn: (x: OutdoorArea) => void) => void): (HTMLElement | null)[] {
+    const deck = o.kind === "deck";
+    const raised = isRaised(o);
+    const chip = (label: string, on: boolean, onclick: () => void, title = "") => h("button", { class: `ed-chip${on ? " on" : ""}`, title, onclick: () => !on && onclick() }, label);
+    const heights: [number | null, string][] = deck
+      ? [[null, "Level with the floor"], [0.05, "On the ground"], [0.3, "0.3"], [0.45, "0.45"], [0.6, "0.6"], [0.9, "0.9"]]
+      : [[null, "On the ground"], [0.15, "0.15"], [0.3, "0.3"], [0.45, "0.45"], [0.6, "0.6"], [0.9, "0.9"]];
+    const cur = o.height ?? null;
+    const f = this.plan.floors[fi];
+    const open = openEdges(f, o, this.plan.settings.wall_exterior);
+    const turn = turnOf(o.points);
+    const north = this.plan.settings.north ?? 0;
+    const steps = o.steps ?? [];
+    const railings: FenceStyle[] = ["balustrade", "glass", "railings", "post_rail", "slatted", "picket"];
+    const rows: (HTMLElement | null)[] = [
+      h("div", { class: "ed-sub" }, deck ? "Height (m)" : "Raised (m)"),
+      h("div", { class: "ed-chips" }, ...heights.map(([v, label]) => chip(label, cur === v || (v !== null && cur !== null && Math.abs(cur - v) < 0.001), () => upd(`Height of ${o.name}`, (x) => (x.height = v)))),
+        h("input", { class: "ed-in num", type: "number", step: "0.05", min: "0", value: cur === null ? "" : String(cur), placeholder: "m", onchange: (e: Event) => {
+          const v = (e.target as HTMLInputElement).value;
+          upd(`Height of ${o.name}`, (x) => (x.height = v === "" ? null : Math.max(0, Math.min(3, Number(v)))));
+        } })),
+    ];
+    if (!raised) return rows;
+    if (!deck) {
+      rows.push(h("div", { class: "ed-row" }, h("label", {}, "Sides"), ...Object.entries(RAISED_WALLS).map(([k, name]) =>
+        chip(name, (o.walls ?? "brick") === k, () => upd(`${name} sides on ${o.name}`, (x) => (x.walls = k as RaisedWall))))));
+    }
+    rows.push(h("div", { class: "ed-sub" }, "Steps down"));
+    o.points.forEach((_, i) => {
+      if (!open[i]) return;
+      const e = edgeOf(o.points, i, turn);
+      const facing = compassName(north + (Math.atan2(e.out[0], -e.out[1]) * 180) / Math.PI);
+      const s = steps.find((x) => x.edge === i);
+      rows.push(h("div", { class: "ed-row" },
+        h("label", {}, `${facing} side`), h("small", {}, `${e.len.toFixed(1)} m`),
+        h("button", { class: `ed-chip${s ? " on" : ""}`, title: s ? "Take them off" : "Add steps here", onclick: () => upd(s ? `Take the steps off ${o.name}` : `Steps down from ${o.name}`, (x) => {
+          x.steps = s ? (x.steps ?? []).filter((y) => y.edge !== i) : [...(x.steps ?? []), { edge: i, width: Math.min(e.len, 1.2) }];
+        }) }, "Steps"),
+        s ? h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0.6", value: String(s.width ?? e.len.toFixed(2)), title: "Width of the steps (m)", onchange: (ev: Event) => {
+          const v = Number((ev.target as HTMLInputElement).value);
+          upd(`Width of the steps of ${o.name}`, (x) => {
+            const y = x.steps?.find((z) => z.edge === i);
+            if (y) y.width = isFinite(v) && v > 0 ? Math.max(0.6, Math.min(e.len, v)) : null;
+          });
+        } }) : null,
+      ));
+    });
+    rows.push(
+      h("div", { class: "ed-sub" }, "Railing"),
+      h("div", { class: "ed-chips" }, chip("None", !o.railing, () => upd(`No railing round ${o.name}`, (x) => (x.railing = null))),
+        ...railings.map((k) => chip(FENCE_STYLES[k].name, o.railing === k, () => upd(`${FENCE_STYLES[k].name} railing round ${o.name}`, (x) => (x.railing = k))))),
+    );
+    return rows;
+  }
+
+  /** The size of a rectangular or round area, to type in. */
+  private areaSizeRows(o: OutdoorArea, upd: (label: string, fn: (x: OutdoorArea) => void) => void): HTMLElement[] {
+    const round = roundness(o.points);
+    const num = (value: number, title: string, onSet: (v: number) => void) => h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0.5", value: value.toFixed(2), title, onchange: (e: Event) => {
+      const v = Number((e.target as HTMLInputElement).value);
+      if (isFinite(v) && v >= 0.5) onSet(v);
+    } });
+    if (round) {
+      return [h("div", { class: "ed-row" }, h("label", {}, "Across m"), num(round.radius * 2, "Diameter", (v) => upd(`Resize ${o.name}`, (x) => (x.points = circlePoints(round.centre, v / 2, x.points.length)))))];
+    }
+    const rect = rectSides(o.points);
+    if (!rect) return [];
+    return [h("div", { class: "ed-row" },
+      h("label", {}, "Size m"),
+      num(rect[0], "Along its first edge", (v) => upd(`Resize ${o.name}`, (x) => (x.points = resizeRect(x.points, 0, v)))),
+      h("span", {}, "×"),
+      num(rect[1], "Along its second edge", (v) => upd(`Resize ${o.name}`, (x) => (x.points = resizeRect(x.points, 1, v)))),
+    )];
   }
 
   private fencePanel(fi: number, fence: Fence | undefined): HTMLElement {
@@ -1492,6 +1671,7 @@ export class Editor {
         },
       })];
     const styles = styleOptions(x.type);
+    const garden = x.type in GARDEN_OPTIONS || x.type === "metal_shed" || x.type === "greenhouse";
     const finish = x.finish ?? def?.finish ?? "fabric";
     const named = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!), false, `${label} ${def?.name ?? "item"}`);
     return h("div", {},
@@ -1500,11 +1680,12 @@ export class Editor {
       styles.length > 1 ? h("div", { class: "ed-chips" }, ...styles.map((k) =>
         h("button", { class: `ed-chip${k === x.type ? " on" : ""}`, onclick: () => k !== x.type && this.swapType(fi, x, k) }, FURNITURE[k].name))) : null,
       h("div", { class: "ed-sub" }, "Colour"),
-      this.colourPicker(FURNITURE_SWATCHES, x.color, (c) => named("Recolour")((y) => (y.color = c)), "Original"),
+      this.colourPicker(garden ? FENCE_SWATCHES : FURNITURE_SWATCHES, x.color, (c) => named("Recolour")((y) => (y.color = c)), "Original"),
       isUpholstered(x.type) ? h("div", { class: "ed-sub" }, "Upholstery") : null,
       isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named("Reupholster")((y) => (y.finish = k as Furniture["finish"]))) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
-      h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? "Charger" : "Linked to"),
+      ...(garden ? this.gardenRows(x, named) : []),
+      garden ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? "Charger" : "Linked to"),
         this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? "The house's charger" : "None found") : "Nothing")),
       ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
       h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
@@ -1525,6 +1706,31 @@ export class Editor {
         } }, "Remove"),
       ),
     );
+  }
+
+  /** Garden buildings and planters: a pergola's top, a shed's roof, door, windows and trim, a planter's material and plants. */
+  private gardenRows(x: Furniture, named: (label: string) => (fn: (y: Furniture) => void) => void): (HTMLElement | null)[] {
+    const o = GARDEN_OPTIONS[x.type] ?? {};
+    const c = gardenChoice(x.type, x);
+    const def = FURNITURE[x.type];
+    const chips = <T extends string>(title: string, list: T[] | undefined, names: Record<T, string>, cur: T | null, label: string, set: (y: Furniture, v: T) => void) =>
+      list && list.length > 1 ? [h("div", { class: "ed-sub" }, title), h("div", { class: "ed-chips" }, ...list.map((k) => h("button", {
+        class: `ed-chip${cur === k ? " on" : ""}`, onclick: () => cur !== k && named(label)((y) => set(y, k)),
+      }, names[k])))] : [];
+    const [most] = o.windows ?? [0, 0];
+    return [
+      ...chips("Top", o.canopies, CANOPY_NAMES, c.canopy, "Top of", (y, v) => (y.canopy = v)),
+      ...chips("Roof", o.roofings, ROOFING_NAMES, c.roofing, "Roof of", (y, v) => (y.roofing = v)),
+      ...chips("Door", o.doors, DOOR_NAMES, c.door, "Door of", (y, v) => (y.door = v)),
+      most ? h("div", { class: "ed-row" }, h("label", {}, "Windows"), ...Array.from({ length: most + 1 }, (_, n) => h("button", {
+        class: `ed-chip${c.windows === n ? " on" : ""}`, onclick: () => c.windows !== n && named("Windows of")((y) => (y.windows = n)),
+      }, n ? String(n) : "None"))) : null,
+      def?.trim ? h("div", { class: "ed-sub" }, "Trim") : null,
+      def?.trim ? this.colourPicker(FENCE_SWATCHES, x.trim, (t) => named("Trim colour of")((y) => (y.trim = t)), "Original") : null,
+      ...chips("Made of", o.material ? (Object.keys(PLANTER_MATERIALS) as PlanterMaterial[]) : undefined,
+        Object.fromEntries(Object.entries(PLANTER_MATERIALS).map(([k, m]) => [k, m.name])) as Record<PlanterMaterial, string>, c.material, "Material of", (y, v) => (y.material = v)),
+      ...chips("Planting", o.plants ? (Object.keys(PLANTING_NAMES) as Planting[]) : undefined, PLANTING_NAMES, c.plants, "Planting in", (y, v) => (y.plants = v)),
+    ];
   }
 
   /** Stairs: the balustrade's style, what it is made of, and which side it is on. */
@@ -1670,14 +1876,15 @@ export class Editor {
     );
   }
 
-  /** Search and categories over everything that can be placed. */
-  private itemPicker(onAdd: (type: string) => void): HTMLElement {
+  /** Search and categories over everything that can be placed (in a garden, the garden's things first). */
+  private itemPicker(onAdd: (type: string) => void, garden = false): HTMLElement {
     const cats = ["all", ...Object.keys(CATEGORY_NAMES)] as (Category | "all")[];
     const results = h("div", { class: "ed-grid" });
+    const cat = () => (garden ? this.pickCatGarden : this.pickCat);
     const draw = () => {
       const q = this.pickQuery.trim().toLowerCase();
       const list = Object.entries(FURNITURE)
-        .filter(([k, t]) => (this.pickCat === "all" || t.category === this.pickCat) && (!q || t.name.toLowerCase().includes(q) || k.includes(q.replace(/\s+/g, "_"))))
+        .filter(([k, t]) => (cat() === "all" || t.category === cat()) && (!q || t.name.toLowerCase().includes(q) || k.includes(q.replace(/\s+/g, "_"))))
         .sort((a, b) => a[1].name.localeCompare(b[1].name));
       results.replaceChildren(...list.slice(0, 80).map(([k, t]) =>
         h("button", { class: "ed-pick", title: `Add ${t.name}`, onclick: () => onAdd(k) }, h("span", { html: svg(mdiPlus) }), h("b", {}, t.name), h("small", {}, CATEGORY_NAMES[t.category]))));
@@ -1687,8 +1894,9 @@ export class Editor {
       this.pickQuery = (e.target as HTMLInputElement).value;
       draw();
     } });
-    const chips = h("div", { class: "ed-chips scroll" }, ...cats.map((c) => h("button", { class: `ed-chip${this.pickCat === c ? " on" : ""}`, onclick: (e: Event) => {
-      this.pickCat = c;
+    const chips = h("div", { class: "ed-chips scroll" }, ...cats.map((c) => h("button", { class: `ed-chip${cat() === c ? " on" : ""}`, onclick: (e: Event) => {
+      if (garden) this.pickCatGarden = c;
+      else this.pickCat = c;
       chips.querySelectorAll(".ed-chip").forEach((b) => b.classList.toggle("on", b === e.currentTarget));
       draw();
     } }, c === "all" ? "All" : CATEGORY_NAMES[c])));
@@ -2326,6 +2534,37 @@ export class Editor {
     this.select({ floor: 0, kind: "outdoor", id: o.id });
   }
 
+  /**
+   * A new patio (4 x 3 m, or 3 m across), deck or path (1 m wide) in the middle of a garden area:
+   * the one given, else the back garden, else behind the house.
+   */
+  private addArea(kind: NewAreaKind, shape: "rect" | "round", near?: OutdoorArea): void {
+    const f = this.plan.floors[0];
+    if (!f) return;
+    const garden = near ?? (f.outdoor ?? []).find((o) => o.kind === "lawn");
+    const house = f.rooms.flatMap((r) => r.points);
+    let at: Vec2;
+    if (garden) at = labelPoint(garden.points);
+    else if (house.length) {
+      const b = bounds(house);
+      at = [(b.minX + b.maxX) / 2, b.minZ - this.plan.settings.wall_exterior / 2 - 2];
+    } else at = [0, 0];
+    const [w, d] = kind === "path" ? [1, 4] : [4, 3];
+    const points: Vec2[] = shape === "round" ? circlePoints(at, 1.5)
+      : [[at[0] - w / 2, at[1] - d / 2], [at[0] + w / 2, at[1] - d / 2], [at[0] + w / 2, at[1] + d / 2], [at[0] - w / 2, at[1] + d / 2]];
+    const o = newArea(f, kind, points);
+    this.change((p) => {
+      p.floors[0].outdoor = [...(p.floors[0].outdoor ?? []), o];
+    }, false, `Add ${o.name.toLowerCase()}`);
+    this.select({ floor: 0, kind: "outdoor", id: o.id });
+  }
+
+  /** Opens the 2D plan to draw a patio or deck. */
+  private drawArea(kind: NewAreaKind): void {
+    this.setPlanMode(true);
+    this.plan2d?.drawArea(kind, "rect");
+  }
+
   /** The edge behind a + handle ("<space id>:<edge index>"), with its length. */
   private edgeOf(ref: string, fi: number): { outdoor: boolean; id: string; k: number; len: number } | null {
     const at = ref.lastIndexOf(":");
@@ -2347,10 +2586,10 @@ export class Editor {
     }));
   }
 
-  private addFurniture(fi: number, room: Room, type: string): void {
+  private addFurniture(fi: number, space: { points: Vec2[] }, type: string): void {
     const def = FURNITURE[type];
     if (!def) return;
-    const at = labelPoint(room.points);
+    const at = labelPoint(space.points);
     const item: Furniture = { id: newId("f"), type, x: at[0], z: at[1], rotation: 0, w: def.size[0], d: def.size[1], h: def.size[2] };
     if (def.y) item.y = def.y;
     this.change((p) => {

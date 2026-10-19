@@ -13,6 +13,31 @@
   and width in mm from the label on the back of a panel. The array is sized from it, and Fill the
   slope fits as many as there is room for. A new size changes every array of the same panels, and
   new panels take the size and power of those already on the roof.
+- Patios in the popular materials: Indian sandstone, porcelain, concrete slabs, slate, granite,
+  limestone, travertine, block paving, clay pavers, granite setts, crazy paving, resin bound and
+  tarmac. Each comes in its usual colours (or any colour), patterns (random, grid, staggered, third
+  offset, herringbone, basketweave) and slab sizes, with a joint colour, laid along, across or
+  diagonally, and with an optional border of setts, blocks, clay pavers, porcelain or sandstone. Paths
+  and driveways take the same materials; gravel areas take the colour of their stones. Patios laid
+  before show as Indian sandstone and paths as grey block paving until something else is picked.
+- Decks in softwood, cedar, hardwood or composite boards, in their colours and widths, laid along,
+  across or diagonally, with an optional picture frame of boards round the edge.
+- Raised patios and decks: set the height, and a raised patio's sides (brick, stone, render or
+  sleepers). Add steps down from any open side, and a railing round the open sides (spindles, glass,
+  railings, post and rail, slatted or picket) with a gap at the steps. Spindles is a new fence style
+  too.
+- Pergolas: timber (open, slats, a glass roof, a canvas sail or climbing plants on top), louvred
+  aluminium, a pergola on a wall, a gazebo with a hipped roof, a garden arch and an arbour with a seat.
+- Sheds and garden buildings: apex, reverse apex and pent sheds, a summerhouse and a log cabin with a
+  porch, a garden office, a metal shed and a greenhouse. Pick the roof (felt, shingles, corrugated
+  sheet, rubber or a sedum green roof), where the door is or double doors, how many windows, and the
+  trim's colour as well as the cladding's.
+- Planters: trough, raised bed, cube, round, tall and tiered, made of timber, sleepers, painted wood,
+  corten or galvanised steel, fibreclay, terracotta, brick, stone or rattan, planted with flowers,
+  shrubs, grasses, lavender, herbs, vegetables, a topiary ball, a small tree or just soil.
+- Edit → Rooms → **Add a patio** and **Add a deck**. A lawn's panel has **Add to this garden**: a
+  patio, a round patio, a deck or a path in the middle of it, **Draw a patio** in the 2D plan, and
+  the garden's furniture and plants. A rectangular area's size, or a round one's width, can be typed.
 - Heating per room: a room with a thermostat or radiator valve shows its temperature and setpoint under
   its name, "20.5° → 21°" (warmest setpoint when it has several), in orange while it heats, and the
   room glows softly warm. With one thermostat for the whole home, as most homes have, every room glows

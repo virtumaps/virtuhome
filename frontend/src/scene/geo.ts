@@ -42,6 +42,11 @@ export class Geo {
   surfaces: string[] = [];
   /** Height texture coordinates count from (the storey's floor, so a dado rail sits right). */
   uvY0 = 0;
+  /**
+   * Floors laid at an angle (paving, deck boards): their texture's u runs along (c, s) on the plan,
+   * v across it, both counted from (ou, ov). Unset: along x and z from the plan's origin.
+   */
+  uvFrame: { c: number; s: number; ou: number; ov: number } | null = null;
   idx: number[] = [];
   private surfaceIndex = new Map<string, number>();
 
@@ -68,8 +73,11 @@ export class Geo {
     this.albedo.push(c[0], c[1], c[2]);
     this.ao.push(ao);
     // world-space planar mapping in metres: floors by x/z, everything else along its face and up
-    if (n[1] > 0.7 || n[1] < -0.7) this.uv.push(p[0], p[2]);
-    else {
+    const f = this.uvFrame;
+    if (n[1] > 0.7 || n[1] < -0.7) {
+      if (f) this.uv.push(p[0] * f.c + p[2] * f.s - f.ou, -p[0] * f.s + p[2] * f.c - f.ov);
+      else this.uv.push(p[0], p[2]);
+    } else {
       const l = Math.hypot(n[0], n[2]) || 1;
       this.uv.push((p[0] * -n[2] + p[2] * n[0]) / l, p[1] - this.uvY0);
     }

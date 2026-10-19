@@ -32,9 +32,14 @@ and shadows, and the weather.
   themselves. The car's battery, what it is charging to and by when, and its charge modes are in the
   energy sheet; the charger on the driveway lights up while it charges, and the car (shaped like
   yours) is on the drive while it is plugged in or its tracker says it is home.
-- **Fences and garden walls:** 15 designs from closeboard and lap panels to picket, railings,
+- **Fences and garden walls:** 16 designs from closeboard and lap panels to picket, railings,
   palisade, glass and brick walls, in any height and colour, with gravel boards, trellis toppers and
   gates. Fence a garden in one tap, or draw fences in the 2D plan.
+- **Garden:** patios, paths and driveways in Indian sandstone, porcelain, slate, granite, block
+  paving, setts, resin and more, in their patterns, sizes and colours, with borders; decks in timber or
+  composite; raised patios and decks with steps and railings. Pergolas, a gazebo and arches, sheds, a
+  summerhouse, a log cabin, a garden office and a greenhouse with their roofs, doors and windows, and
+  planters in their materials with what grows in them.
 - **Roofs:** gable, hipped, half-hipped, Dutch gable, pyramid, mansard, gambrel, lean-to, flat,
   butterfly and M-shaped, in concrete or clay tiles, slate, pantiles, thatch, metal, felt, rubber,
   fibreglass, lead, sedum or conservatory glass. Semi-detached and terraced roofs carry on over the

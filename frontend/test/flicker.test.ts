@@ -132,9 +132,26 @@ const house = (): Plan => ({
   }],
 });
 
+// behind the house: a raised patio with a border, steps and spindles, a raised deck with a
+// picture frame, steps the whole length of its side and glass round it, and a patio on the lawn
+const garden = (): Plan => {
+  const p = house();
+  p.floors[0].outdoor = [
+    { id: "lawn", name: "Lawn", kind: "lawn", area_id: null, points: [[-1, -8], [7, -8], [7, -0.14], [-1, -0.14]] },
+    { id: "pat", name: "Patio", kind: "patio", area_id: null, points: [[0, -3], [2.8, -3], [2.8, -0.14], [0, -0.14]], paving: "sandstone", border: "setts", height: 0.45, walls: "brick", steps: [{ edge: 0, width: 1.2 }], railing: "balustrade" },
+    { id: "deck", name: "Deck", kind: "deck", area_id: null, points: [[3.2, -3], [6, -3], [6, -0.14], [3.2, -0.14]], height: 0.6, border: "frame", steps: [{ edge: 1 }], railing: "glass" },
+    { id: "flat", name: "Flat", kind: "patio", area_id: null, points: [[0, -7], [3, -7], [3, -4], [0, -4]], paving: "porcelain", angle: 45, border: "block" },
+  ];
+  return p;
+};
+
 describe("no flickering surfaces in a built floor", () => {
   it("with the walls up", () => {
     expect(flicker(house(), null)).toEqual([]);
+  });
+
+  it("with patios and decks: raised, bordered, with steps and railings", () => {
+    expect(flicker(garden(), null)).toEqual([]);
   });
 
   it("with the walls cut down", () => {
