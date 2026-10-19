@@ -3,105 +3,12 @@
 // map from the recipe's height. Tintable recipes are detail maps (linear multipliers around 1)
 // that the surface's own colour shows through; the others carry their colours.
 import { CanvasTexture, LinearMipmapLinearFilter, NoColorSpace, RepeatWrapping, SRGBColorSpace, type Texture } from "three";
+import { cells, clamp01, fbm, frac, groove, hash, hex, mix, mixc, mod, noise, rng, smooth, type Recipe, type RGB } from "./texture-kit";
+import { pavingRecipe } from "./paving-tex";
 
 export interface TexturePair {
   map: Texture;
   normal: Texture | null;
-}
-
-type RGB = [number, number, number];
-/** A recipe returns colour (0..1, sRGB for full-colour recipes, linear for detail ones) and height. */
-type Pixel = (u: number, v: number) => [number, number, number, number];
-interface Recipe {
-  /** Detail map: multiplies the surface colour (stored linear). */
-  detail: boolean;
-  make: (rnd: () => number) => Pixel;
-}
-
-// ---------------------------------------------------------------------------- helpers
-
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** Integer hash to 0..1 (cell colours, plank variation). */
-function hash(a: number, b = 0, c = 0): number {
-  let h = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 2147483647);
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
-const frac = (x: number) => x - Math.floor(x);
-const mod = (a: number, n: number) => ((a % n) + n) % n;
-const smooth = (t: number) => t * t * (3 - 2 * t);
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
-const mix = (a: number, b: number, t: number) => a + (b - a) * t;
-const mixc = (a: RGB, b: RGB, t: number): RGB => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
-const hex = (h: number): RGB => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
-/** 0 inside a groove of width w at the edges of a 0..1 cell, 1 elsewhere, softened. */
-const groove = (t: number, w: number) => clamp01(Math.min(t, 1 - t) / w);
-
-/** Tileable value noise with cx x cy cells over the tile. */
-function noise(cx: number, cy: number, rnd: () => number): (u: number, v: number) => number {
-  const g = new Float32Array(cx * cy);
-  for (let i = 0; i < g.length; i++) g[i] = rnd();
-  return (u, v) => {
-    const x = frac(u) * cx, y = frac(v) * cy;
-    const x0 = Math.floor(x), y0 = Math.floor(y);
-    const fx = smooth(x - x0), fy = smooth(y - y0);
-    const x1 = (x0 + 1) % cx, y1 = (y0 + 1) % cy;
-    const a = g[y0 * cx + x0], b = g[y0 * cx + x1], c = g[y1 * cx + x0], d = g[y1 * cx + x1];
-    return mix(mix(a, b, fx), mix(c, d, fx), fy);
-  };
-}
-
-/** Fractal noise: octaves of value noise, 0..1. */
-function fbm(cx: number, cy: number, octaves: number, rnd: () => number): (u: number, v: number) => number {
-  const layers = Array.from({ length: octaves }, (_, i) => noise(cx << i, cy << i, rnd));
-  return (u, v) => {
-    let s = 0, amp = 0.5, norm = 0;
-    for (const n of layers) {
-      s += n(u, v) * amp;
-      norm += amp;
-      amp *= 0.5;
-    }
-    return s / norm;
-  };
-}
-
-/** Tileable cellular noise over n x n jittered cells: nearest and second-nearest distances, cell id. */
-function cells(n: number, rnd: () => number, jitter = 0.8): (u: number, v: number) => [number, number, number] {
-  const pts = new Float32Array(n * n * 2);
-  for (let i = 0; i < n * n; i++) {
-    pts[i * 2] = 0.5 + (rnd() - 0.5) * jitter;
-    pts[i * 2 + 1] = 0.5 + (rnd() - 0.5) * jitter;
-  }
-  return (u, v) => {
-    const x = frac(u) * n, y = frac(v) * n;
-    const cx = Math.floor(x), cy = Math.floor(y);
-    let d1 = 9, d2 = 9, id = 0;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const gx = cx + dx, gy = cy + dy;
-        const k = mod(gy, n) * n + mod(gx, n);
-        const px = gx + pts[k * 2], py = gy + pts[k * 2 + 1];
-        const d = Math.hypot(px - x, py - y);
-        if (d < d1) {
-          d2 = d1;
-          d1 = d;
-          id = k;
-        } else if (d < d2) d2 = d;
-      }
-    }
-    return [d1, d2, id];
-  };
 }
 
 // ---------------------------------------------------------------------------- recipe makers
@@ -545,61 +452,6 @@ const RECIPES: Record<string, Recipe> = {
       };
     },
   },
-  patio: tiles(2, 0xc8c0b2, null, 0x8d877d, 0.02, 0.1),
-  deck: planks(8, 1, [0xa77b52, 0x9b6f48, 0xb2875d], 0.14, 0.25),
-  pavers: {
-    detail: false,
-    make: (rnd) => {
-      const n = fbm(32, 32, 2, rnd);
-      const cols = [0xa59c92, 0x9a9087, 0xb0a79c, 0x8f857c].map(hex);
-      return (u, v) => {
-        const c = Math.floor(v * 10);
-        const x = u * 5 + (c % 2) * 0.5;
-        const id = hash(mod(Math.floor(x), 5), mod(c, 10), 9);
-        const g = Math.min(groove(frac(x), 0.04), groove(frac(v * 10), 0.08));
-        const base = cols[Math.floor(id * cols.length) % cols.length];
-        const s = (0.9 + (n(u, v) - 0.5) * 0.25) * mix(0.55, 1, g);
-        return [base[0] * s, base[1] * s, base[2] * s, g];
-      };
-    },
-  },
-  // driveway block paving: 200 × 100 mm blocks in herringbone, brindle tones, sanded joints
-  block_paving: {
-    detail: false,
-    make: (rnd) => {
-      const n = fbm(48, 48, 2, rnd);
-      const cols = [0x8d604d, 0x7e5c4f, 0x96694f, 0x6f5d55, 0x9a735c, 0x845648].map(hex);
-      const sand = hex(0x8a8070);
-      const k = 2, cellsPer = 16;
-      return (u, v) => {
-        const x = u * cellsPer, y = v * cellsPer;
-        const cx = Math.floor(x), cy = Math.floor(y);
-        const fx = frac(x), fy = frac(y);
-        const s = mod(cx + cy, 2 * k);
-        const horiz = s < k;
-        const along = horiz ? (s + fx) / k : (s - k + fy) / k;
-        const across = horiz ? fy : fx;
-        const id = horiz ? hash(mod(cx - s, cellsPer), mod(cy, cellsPer), 5) : hash(mod(cx, cellsPer), mod(cy - (s - k), cellsPer), 6);
-        const base = cols[Math.floor(id * cols.length) % cols.length];
-        const joint = Math.min(groove(across, 0.07), groove(along, 0.035));
-        const bevel = Math.min(groove(across, 0.2), groove(along, 0.1));
-        const f = (0.94 + id * 0.1 + (n(u, v) - 0.5) * 0.2) * mix(0.86, 1, smooth(bevel));
-        const c = mixc(sand, [base[0] * f, base[1] * f, base[2] * f], smooth(joint));
-        return [c[0], c[1], c[2], 0.3 * smooth(joint) + 0.5 * smooth(bevel) + n(u, v) * 0.2];
-      };
-    },
-  },
-  tarmac: {
-    detail: false,
-    make: (rnd) => {
-      const n = fbm(128, 128, 2, rnd);
-      const m = fbm(4, 4, 3, rnd);
-      return (u, v) => {
-        const f = 0.32 + (n(u, v) - 0.5) * 0.18 + (m(u, v) - 0.5) * 0.06 + (n(u, v) > 0.82 ? 0.12 : 0);
-        return [f, f, f * 1.02, n(u, v)];
-      };
-    },
-  },
   soil: {
     detail: false,
     make: (rnd) => {
@@ -607,20 +459,6 @@ const RECIPES: Record<string, Recipe> = {
       return (u, v) => {
         const k = 0.75 + n(u, v) * 0.5;
         return [0.36 * k, 0.27 * k, 0.2 * k, n(u, v)];
-      };
-    },
-  },
-  gravel: {
-    detail: false,
-    make: (rnd) => {
-      const c = cells(48, rnd, 0.9);
-      return (u, v) => {
-        const [d1, d2, id] = c(u, v);
-        const edge = clamp01((d2 - d1) / 0.25);
-        const t = hash(id);
-        const base = mixc([0.62, 0.58, 0.52], [0.86, 0.83, 0.78], t);
-        const k = mix(0.5, 1, edge) * (0.9 + clamp01(1 - d1) * 0.15);
-        return [base[0] * k, base[1] * k, base[2] * k, edge * clamp01(1 - d1 * 0.8)];
       };
     },
   },
@@ -827,7 +665,7 @@ const cache = new Map<string, TexturePair>();
 
 /** The texture pair of a recipe, drawn once at `size` pixels and shared (repeat set per use). */
 export function bake(recipe: string, size: number, anisotropy: number): TexturePair | null {
-  const r = RECIPES[recipe];
+  const r = recipeFor(recipe);
   if (!r) return null;
   const key = `${recipe}@${size}`;
   const hit = cache.get(key);
@@ -886,13 +724,18 @@ export function bake(recipe: string, size: number, anisotropy: number): TextureP
   return pair;
 }
 
+/** A recipe by name: a fixed one, or paving and deck boards made to order ("pave:…", "deck:…"). */
+function recipeFor(name: string): Recipe | null {
+  return RECIPES[name] ?? pavingRecipe(name);
+}
+
 export function hasRecipe(recipe: string): boolean {
-  return recipe in RECIPES;
+  return recipeFor(recipe) !== null;
 }
 
 /** Whether a recipe is a detail map (the surface's colour shows through). */
 export function isDetail(recipe: string): boolean {
-  return RECIPES[recipe]?.detail ?? true;
+  return recipeFor(recipe)?.detail ?? true;
 }
 
 function hashString(s: string): number {

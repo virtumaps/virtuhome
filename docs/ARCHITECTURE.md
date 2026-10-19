@@ -62,5 +62,10 @@ draw the model look: `MeshBasicMaterial` with colours lit on the CPU. Realistic 
   normals drawn with the walls lowered as the cutaway shows them) and bloom.
 
 `scene/finishes.ts` lists the finishes; `scene/furniture-lib.ts` the furniture, in families whose
-styles can be swapped. The editor's 2D plan is `editor/plan2d.ts` (SVG, redrawn per frame while
+styles can be swapped. Patios, paths, driveways and decks are textured to order from their look
+(`scene/paving.ts`): the surface key carries the material, pattern, unit size, colours and joints
+(`pave:sandstone.random.300x300.8e8c70.8a8781.85`, `deck:composite.8e8b87.145`), and
+`scene/paving-tex.ts` lays the units out over a tile that repeats exactly and draws each unit's face.
+An area's texture runs along its longest edge (or at its angle to it) through the mesh's `uvFrame`.
+`scene/areas.ts` works out a raised area's open edges, steps, border and railing runs. The editor's 2D plan is `editor/plan2d.ts` (SVG, redrawn per frame while
 dragging), going through the same change and undo path as the 3D editor.

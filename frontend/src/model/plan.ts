@@ -11,9 +11,11 @@ import type { ExteriorFinish, FloorFinish, JoineryFinish, RoofCovering, Upholste
 import type { DoorStyle, GarageStyle, WindowStyle } from "../scene/joinery";
 import { CEILING_LAMPS, FURNITURE, type BalustradeMaterial, type BalustradeStyle } from "../scene/furniture-lib";
 import type { SkySettings } from "../live/sky";
+import type { DeckBoard, PavingMaterial, PavingPattern, RaisedWall } from "../scene/paving";
 
 export type FloorMaterial = FloorFinish;
 export type { DoorStyle, ExteriorFinish, FloorFinish, GarageStyle, JoineryFinish, RoofCovering, Upholstery, WallFinish, WindowStyle };
+export type { DeckBoard, PavingMaterial, PavingPattern, RaisedWall };
 export type OpeningKind = "door" | "window" | "passage" | "garage";
 export type Mount = "ceiling" | "wall" | "floor" | "table";
 export type ThemeName = "auto" | "night" | "day";
@@ -122,8 +124,41 @@ export interface OutdoorArea {
   kind: OutdoorKind;
   area_id: string | null;
   points: Vec2[];
-  /** Driveways only. */
+  /** Driveways laid before paving could be picked: "asphalt" is tarmac. */
   surface?: DrivewaySurface | null;
+  /** Patios, paths, driveways and gravel: what they are laid with (scene/paving.ts); null = the kind's usual. */
+  paving?: PavingMaterial | null;
+  /** How the units are laid; null = the material's usual. */
+  pattern?: PavingPattern | null;
+  /** The units' size in mm, "900x600"; null = the material's usual. */
+  unit?: string | null;
+  /** The paving's or the deck boards' colour ("#rrggbb"); null = the material's usual. */
+  color?: string | null;
+  /** The joints' colour ("#rrggbb"); null = the material's usual. */
+  joint?: string | null;
+  /** Which way the pattern or the boards run: degrees from the area's longest edge (45: diagonal). */
+  angle?: number | null;
+  /** Decks: what the boards are, and their width (mm). */
+  boards?: DeckBoard | null;
+  board_width?: number | null;
+  /** A course round the edge: a paving material on a patio, "frame" (boards along the edges) on a deck. */
+  border?: string | null;
+  border_color?: string | null;
+  /** Its top above the ground (m): a raised patio or deck. Decks: null = level with the floor indoors. */
+  height?: number | null;
+  /** Raised patios: what the sides are built of; null = brick. */
+  walls?: RaisedWall | null;
+  /** Steps down to the ground from a raised patio or deck. */
+  steps?: AreaSteps[];
+  /** A balustrade along its open edges, in a fence style; null = none. */
+  railing?: FenceStyle | null;
+}
+
+/** Steps down from a raised area: in the middle of an edge (points[edge] -> points[edge + 1]). */
+export interface AreaSteps {
+  edge: number;
+  /** Across the steps (m); null = the whole edge. */
+  width?: number | null;
 }
 
 export function groundOf(o: OutdoorArea): Ground {
@@ -274,7 +309,7 @@ export interface FloorBackground {
 /** The fence designs (scene/fences.ts builds them). */
 export type FenceStyle =
   | "closeboard" | "lap" | "slatted" | "venetian" | "hit_miss" | "louvre" | "composite" | "trellis"
-  | "picket" | "post_rail" | "railings" | "estate" | "palisade" | "glass" | "brick_wall";
+  | "picket" | "post_rail" | "railings" | "estate" | "palisade" | "balustrade" | "glass" | "brick_wall";
 export type FencePost = "timber" | "concrete" | "metal" | "pier";
 
 /** A gate in a fence: its middle `at` metres along the fence from its first point. */
@@ -382,13 +417,26 @@ export function normalizePlan(raw: unknown): Plan {
     furniture: (f.furniture ?? []).map(repairHeight),
     devices: f.devices ?? [],
     walls: f.walls ?? [],
-    outdoor: (f.outdoor ?? []).map((o) => ({ ...o, area_id: o.area_id ?? null, kind: o.kind ?? "lawn" })),
+    outdoor: (f.outdoor ?? []).map(normalizeOutdoor),
     fences: (f.fences ?? []).filter((x) => (x.points ?? []).length >= 2).map((x) => ({ ...x, gates: x.gates ?? [] })),
     background: normalizeBackground(f.background),
     roofs: (f.roofs ?? []).filter((r) => r.w > 0.2 && r.d > 0.2).map(normalizeRoof),
   }));
   floors.sort((a, b) => a.elevation - b.elevation);
   return { version: 1, name: p.name, settings, floors };
+}
+
+/** A garden area with its kind and area set, its height in range and its steps on edges it has. */
+function normalizeOutdoor(o: OutdoorArea): OutdoorArea {
+  const n = (o.points ?? []).length;
+  const height = typeof o.height === "number" && isFinite(o.height) ? Math.max(0, Math.min(3, o.height)) : null;
+  return {
+    ...o,
+    area_id: o.area_id ?? null,
+    kind: o.kind ?? "lawn",
+    ...(o.height !== undefined ? { height } : {}),
+    ...(o.steps ? { steps: o.steps.filter((s) => Number.isInteger(s.edge) && s.edge >= 0 && s.edge < n) } : {}),
+  };
 }
 
 const ROOF_SHAPES = new Set<RoofShape>(["gable", "hip", "half_hip", "dutch", "pyramid", "mansard", "gambrel", "lean_to", "flat", "butterfly", "m_shaped"]);

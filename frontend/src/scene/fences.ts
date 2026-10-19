@@ -213,6 +213,15 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
       return out;
     },
   },
+  balustrade: {
+    // square spindles between a base rail and a handrail: a deck's or a raised patio's edge
+    name: "Spindles", height: 1.0, spacing: 1.5, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0,
+    bay: (w, h, o) => {
+      const out = [box(0, 0.05, 0, w + o.post, 0.07, 0.07, T), box(0, h - 0.07, 0, w + o.post, 0.07, 0.09, T)];
+      for (const x of across(w, o.low ? 0.24 : 0.12).xs) out.push(box(x, 0.12, 0, 0.036, h - 0.19, 0.036, T));
+      return out;
+    },
+  },
   glass: {
     // frameless glass panes held by clamps: round a patio or deck without blocking the view
     name: "Glass", height: 1.0, spacing: 1.2, posts: "metal", paint: [], timber: false, gravel: false, clear: 0,

@@ -10,7 +10,9 @@ import {
 import { area, bounds, labelPoint, pointInPolygon, segmentDistance } from "../model/geom";
 import { groundOf, newId, splitEdge, type Fence, type Floor, type FloorBackground, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
 import { layoutWalls } from "../model/walls";
-import { outdoorTop } from "../scene/build";
+import { isRaised, outdoorTop, SLAB } from "../scene/build";
+import { newArea, stepBlocks, type NewAreaKind } from "../scene/areas";
+import { areaColour } from "../scene/paving";
 import { FLOOR_FINISHES, type FinishDef } from "../scene/finishes";
 import { CEILING_LAMPS, furnitureType } from "../scene/furniture-lib";
 import { fenceStyle } from "../scene/fences";
@@ -96,6 +98,8 @@ export class Plan2D {
   private guides: { x?: number; z?: number } = {};
   private drawing: Vec2[] = [];
   private rubber: { a: Vec2; b: Vec2 } | null = null;
+  /** The rectangle and draw tools make this garden area instead of a room. */
+  private areaKind: NewAreaKind | null = null;
   private hover: Vec2 | null = null;
   /** The floor plan image: one <image> kept across redraws, so the picture isn't loaded again. */
   private bgLayer = el("g", { class: "p2-bg" });
@@ -262,8 +266,16 @@ export class Plan2D {
     this.setTool("fence");
   }
 
+  /** Starts drawing a patio, deck or path: a rectangle, or corner by corner. */
+  drawArea(kind: NewAreaKind, shape: "rect" | "draw"): void {
+    this.setTool(shape);
+    this.areaKind = kind;
+    this.host.status(shape === "rect" ? `Drag out a rectangle for the new ${kind}.` : `Click the corners of the new ${kind}; click the first corner again to finish (Esc cancels).`);
+  }
+
   private setTool(t: Tool): void {
     this.tool = t;
+    this.areaKind = null;
     this.drawing = [];
     this.rubber = null;
     this.measure = null;
@@ -313,8 +325,16 @@ export class Plan2D {
     const selRoom = sel?.floor === fi && (sel.kind === "room" || sel.kind === "outdoor") ? sel.id : null;
     // stacked as in 3D, so the area on top (a deck on the lawn) is the one a click picks
     const stack = (f.outdoor ?? []).map((o, k) => ({ o, top: outdoorTop(f, k) })).sort((a, b) => a.top - b.top);
-    for (const { o } of stack) {
-      layers.fill.append(el("polygon", { points: this.pts(o.points), class: `p2-out p2-out-${groundOf(o)}${selRoom === o.id ? " sel" : ""}`, "data-kind": "outdoor", "data-id": o.id }));
+    for (const { o, top } of stack) {
+      // in its paving's or boards' colour, with its steps
+      const colour = areaColour(o);
+      const style = colour ? `fill:${colour}` : undefined;
+      const cls = `p2-out p2-out-${groundOf(o)}${selRoom === o.id ? " sel" : ""}`;
+      layers.fill.append(el("polygon", { points: this.pts(o.points), class: cls, style, "data-kind": "outdoor", "data-id": o.id }));
+      if (!isRaised(o)) continue;
+      for (const s of o.steps ?? []) {
+        for (const b of stepBlocks(o.points, s, top + SLAB)) layers.fill.append(el("polygon", { points: this.pts(b.corners), class: `${cls} p2-step`, style, "data-kind": "outdoor", "data-id": o.id }));
+      }
     }
     for (const r of f.rooms) {
       const fin = (FLOOR_FINISHES as Record<string, FinishDef>)[r.floor ?? "wood"] ?? FLOOR_FINISHES.wood;
@@ -1403,7 +1423,7 @@ export class Plan2D {
       return;
     }
     const x0 = Math.min(r.a[0], r.b[0]), z0 = Math.min(r.a[1], r.b[1]);
-    this.addRoom([[x0, z0], [x0 + w, z0], [x0 + w, z0 + d], [x0, z0 + d]]);
+    this.addShape([[x0, z0], [x0 + w, z0], [x0 + w, z0 + d], [x0, z0 + d]]);
   }
 
   private finishDrawing(): void {
@@ -1413,7 +1433,26 @@ export class Plan2D {
       this.render();
       return;
     }
-    this.addRoom(pts);
+    this.addShape(pts);
+  }
+
+  /** What the rectangle and draw tools made: a room, or the garden area being drawn. */
+  private addShape(points: Vec2[]): void {
+    const kind = this.areaKind;
+    if (!kind) {
+      this.addRoom(points);
+      return;
+    }
+    const fi = this.floorIndex;
+    const f = this.floor;
+    if (!f) return;
+    const o = newArea(f, kind, points);
+    this.host.change((p) => {
+      const fl = p.floors[fi];
+      fl.outdoor = [...(fl.outdoor ?? []), o];
+    }, `Draw a ${kind}`);
+    this.host.select({ floor: fi, kind: "outdoor", id: o.id });
+    this.setTool("select");
   }
 
   /** A fence along the points clicked: like the last fence drawn, else a closeboard fence. */
@@ -1619,6 +1658,7 @@ export const PLAN2D_CSS = /* css */ `
 .p2-out-asphalt { fill: #5d6066; }
 .p2-out-deck { fill: #b58a62; }
 .p2-out.sel { fill-opacity: 0.55; }
+.p2-step { stroke: currentColor; stroke-opacity: 0.35; stroke-width: 1; }
 .p2-fence { cursor: pointer; }
 .p2-fence-line { fill: none; stroke-linecap: square; stroke-linejoin: miter; opacity: 0.9; }
 .p2-fence.sel .p2-fence-line { opacity: 1; filter: drop-shadow(0 0 2px #2f7cf6); }

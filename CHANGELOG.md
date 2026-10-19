@@ -7,6 +7,22 @@
   and width in mm from the label on the back of a panel. The array is sized from it, and Fill the
   slope fits as many as there is room for. A new size changes every array of the same panels, and
   new panels take the size and power of those already on the roof.
+- Patios in the popular materials: Indian sandstone, porcelain, concrete slabs, slate, granite,
+  limestone, travertine, block paving, clay pavers, granite setts, crazy paving, resin bound and
+  tarmac. Each comes in its usual colours (or any colour), patterns (random, grid, staggered, third
+  offset, herringbone, basketweave) and slab sizes, with a joint colour, laid along, across or
+  diagonally, and with an optional border of setts, blocks, clay pavers, porcelain or sandstone. Paths
+  and driveways take the same materials; gravel areas take the colour of their stones. Patios laid
+  before show as Indian sandstone and paths as grey block paving until something else is picked.
+- Decks in softwood, cedar, hardwood or composite boards, in their colours and widths, laid along,
+  across or diagonally, with an optional picture frame of boards round the edge.
+- Raised patios and decks: set the height, and a raised patio's sides (brick, stone, render or
+  sleepers). Add steps down from any open side, and a railing round the open sides (spindles, glass,
+  railings, post and rail, slatted or picket) with a gap at the steps. Spindles is a new fence style
+  too.
+- Edit → Rooms → **Add a patio** and **Add a deck**. A lawn's panel has **Add to this garden**: a
+  patio, a round patio, a deck or a path in the middle of it, **Draw a patio** in the 2D plan, and
+  the garden's furniture and plants. A rectangular area's size, or a round one's width, can be typed.
 
 ### Fixed
 - Solar panels on a roof look dark in the realistic look, as anti-reflective panel glass does; they

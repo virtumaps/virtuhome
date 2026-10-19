@@ -20,6 +20,8 @@ import { finishFor } from "./finishes";
 import type { Geo } from "./geo";
 import { FRAG_BODY, FRAG_HEAD, VERT_BODY, VERT_HEAD, type FloorUniforms } from "./materials";
 import { bake, disposeTextures, isDetail } from "./textures";
+import { DECK_BOARDS, PAVING, parseDeckKey, parsePavingKey } from "./paving";
+import { deckTile, pavingTile } from "./paving-tex";
 import { kelvinToRgb } from "./lighting";
 import { WeatherFx, type FxArea } from "./weather-fx";
 import { quietSky, type Sky } from "../live/sky";
@@ -33,6 +35,8 @@ interface SurfaceSpec {
   relief?: number;
   /** Opacity of see-through surfaces. */
   opacity?: number;
+  /** Texture resolution as a multiple of the look's usual, up to 1024 (big surfaces seen close up: patios, decks). */
+  res?: number;
 }
 
 const ROLE_SPECS: Record<string, SurfaceSpec> = {
@@ -77,15 +81,10 @@ const OTHER_SPECS: Record<string, SurfaceSpec> = {
   pv: { rough: 0.38, metal: 0.05 },
 };
 
+/** Lawns and beds (paved areas and decks are textured from their look: scene/paving.ts). */
 const OUTDOOR_SPECS: Record<string, SurfaceSpec> = {
   lawn: { tex: "grass", scale: 2.0, rough: 0.95, relief: 0.4 },
-  patio: { tex: "patio", scale: 1.2, rough: 0.8, relief: 0.6 },
-  deck: { tex: "deck", scale: 1.2, rough: 0.7, relief: 0.6 },
-  path: { tex: "pavers", scale: 1.0, rough: 0.8, relief: 0.6 },
-  driveway: { tex: "block_paving", scale: 1.6, rough: 0.8, relief: 0.6 },
-  asphalt: { tex: "tarmac", scale: 2.5, rough: 0.85, relief: 0.35 },
   bed: { tex: "soil", scale: 1.5, rough: 1, relief: 0.6 },
-  gravel: { tex: "gravel", scale: 1.0, rough: 0.9, relief: 0.9 },
 };
 
 /** What a surface key ("floor:oak", "role:metal", "out:lawn", "cap") is made of. */
@@ -95,6 +94,14 @@ function specFor(key: string): SurfaceSpec {
   if (fin) return { tex: fin.tex, scale: fin.scale, rough: fin.roughness, metal: fin.metalness, relief: fin.relief };
   if (group === "role") return ROLE_SPECS[name] ?? { rough: 0.6 };
   if (group === "out") return OUTDOOR_SPECS[name] ?? OUTDOOR_SPECS.lawn;
+  if (group === "pave") {
+    const p = parsePavingKey(name);
+    if (p) return { tex: key, scale: pavingTile(p) / 1000, rough: PAVING[p.material].roughness, relief: PAVING[p.material].relief, res: 2 };
+  }
+  if (group === "deck") {
+    const d = parseDeckKey(name);
+    if (d) return { tex: key, scale: deckTile(d) / 1000, rough: DECK_BOARDS[d.boards].roughness, relief: 0.7, res: 2 };
+  }
   return OTHER_SPECS[group] ?? { rough: 0.6 };
 }
 
@@ -332,7 +339,7 @@ export class RealisticLook {
     const spec = specFor(key);
     const mat = new MeshStandardMaterial({ vertexColors: true, roughness: spec.rough, metalness: spec.metal ?? 0 });
     if (spec.tex) {
-      const pair = bake(spec.tex, this.texSize, this.aniso);
+      const pair = bake(spec.tex, Math.min(1024, this.texSize * (spec.res ?? 1)), this.aniso);
       if (pair) {
         const rep = 1 / (spec.scale ?? 1);
         mat.map = pair.map.clone();
