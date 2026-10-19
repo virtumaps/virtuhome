@@ -29,7 +29,7 @@ and shadows, and the weather.
   themselves. The car's battery, what it is charging to and by when, and its charge modes are in the
   energy sheet; the charger on the driveway lights up while it charges, and the car (shaped like
   yours) is on the drive while it is plugged in or its tracker says it is home.
-- **Fences and garden walls:** 15 designs from closeboard and lap panels to picket, railings,
+- **Fences and garden walls:** 16 designs from closeboard and lap panels to picket, railings,
   palisade, glass and brick walls, in any height and colour, with gravel boards, trellis toppers and
   gates. Fence a garden in one tap, or draw fences in the 2D plan.
 - **Roofs:** gable, hipped, half-hipped, Dutch gable, pyramid, mansard, gambrel, lean-to, flat,

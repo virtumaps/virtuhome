@@ -247,16 +247,42 @@ per storey under **Floors**.
 
 ### Garden
 
-Edit → **Rooms** → **Add back garden** or **Add front area** adds an area as wide as the house. Tap
-it for its **Name**, **Ground** (lawn, patio, deck, path, driveway, bed or gravel), a driveway's
-**Surface**, and its **Area** (its lights light it up at night). Drag its blue corners to shape it;
-drag a + from the middle of an edge to add a corner.
+Edit → **Rooms** → **Add back garden** or **Add front area** adds an area as wide as the house;
+**Add a patio** and **Add a deck** add one in the back garden. Tap an area for its **Name**,
+**Ground** (Lawn, Patio, Deck, Path, Driveway, Flower bed or Gravel) and **Area** (its lights light
+it up at night). Drag its blue corners to shape it; drag a + from the middle of an edge to add a
+corner. Type a rectangle's **Size m**, or a round area's **Across m**. **Duplicate** copies it.
+
+**Patios, paths and driveways:**
+- **Laid with**: Indian sandstone, Porcelain, Concrete slabs, Slate, Granite, Limestone, Travertine,
+  Block paving, Clay pavers, Granite setts, Crazy paving, Resin bound or Tarmac, in its **Colour**.
+- **Pattern** (Random, Grid, Staggered, Third offset, Herringbone or Basketweave) and **Size (mm)**,
+  as the material comes.
+- **Joints**: their colour. **Runs**: **Along**, **Diagonal** or **Across** the longest edge, or type
+  an angle.
+- **Border**: a course of Granite setts, Block paving, Clay pavers, Porcelain or Indian sandstone
+  round the edge, and its colour.
+- A gravel area has the colour of its **Stones**.
+
+**Decks:** **Boards** (Softwood, Cedar, Hardwood or Composite) and their **Colour**, **Boards mm**,
+**Runs**, and **Picture frame: boards along the edges**.
+
+**Raised patios and decks:** a patio's **Raised (m)** or a deck's **Height (m)** (**Level with the
+floor** is the usual for a deck). A raised patio's **Sides** are Brick, Stone, Render or Sleepers.
+Under **Steps down**, tap **Steps** on any side away from the house and type their width. A
+**Railing** (Spindles, Glass, Railings, Post and rail, Slatted or Picket) runs round the open sides,
+with a gap at the steps.
+
+On a lawn, **Add to this garden** adds a **Patio**, **Round patio**, **Deck** or **Path** in the
+middle of it, **Draw a patio** drags one out in the 2D plan, and the list below adds garden
+furniture, plants, a shed, a greenhouse or planters.
 
 ### Fences and garden walls
 
 - **Fence round it** on a garden area fences every edge that isn't along the house.
 - **Draw a fence** (Edit → **Rooms**) opens the 2D plan's fence tool.
-- Tap a fence for its **Style** (15 designs from closeboard to railings, glass and brick walls),
+- Tap a fence for its **Style** (16 designs from closeboard to railings, spindles, glass and brick
+  walls),
   height, **Colour**, **Posts**, the gravel board and a trellis on top, and its gates: **Add a gate**
   or **Add a driveway gate**, each with its place and width, single or **Double**.
 
