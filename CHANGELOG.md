@@ -38,6 +38,12 @@
 - Edit → Rooms → **Add a patio** and **Add a deck**. A lawn's panel has **Add to this garden**: a
   patio, a round patio, a deck or a path in the middle of it, **Draw a patio** in the 2D plan, and
   the garden's furniture and plants. A rectangular area's size, or a round one's width, can be typed.
+- Heating per room: a room with a thermostat or radiator valve shows its temperature and setpoint under
+  its name, "20.5° → 21°" (warmest setpoint when it has several), in orange while it heats, and the
+  room glows softly warm. With one thermostat for the whole home, as most homes have, every room glows
+  while the heating is on. Tap the temperatures for the thermostat's dialog; the room's name still
+  opens the room. A thermostat counts for the room it is placed in, else for its area's rooms.
+- Rooms with a thermostat or valve but no temperature sensor show on the temperature map too.
 
 ### Fixed
 - Activating a licence key no longer sends the home's name from Home Assistant to the licence

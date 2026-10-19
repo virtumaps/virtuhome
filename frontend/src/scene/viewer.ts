@@ -22,6 +22,7 @@ import { DAY, paletteFor, type Palette } from "./palette";
 import type { RealisticLook } from "./realistic";
 import type { Tier, TierSetting } from "./tier";
 import { quietSky, type Sky } from "../live/sky";
+import type { RoomPart } from "../live/live";
 
 export { detectLowEnd } from "./tier";
 export type WallMode = "smart" | "low" | "full";
@@ -48,8 +49,8 @@ export interface LiveSource {
   /** Blind or curtain: 0 closed .. 1 open, null without one. */
   cover(entity: string | null | undefined): number | null;
   tint(floor: Floor, room: { id: string }): [number, number, number, number] | null;
-  /** Short text under the room name, e.g. "21.4° · 48 %". */
-  roomText(floor: Floor, room: { id: string }): string | null;
+  /** Short text under the room name, e.g. "20.5° → 21° · 48 %", in pieces (a piece with an entity opens it). */
+  roomLine(floor: Floor, room: { id: string }): RoomPart[];
   /** A camera's state: its view turns red while it is live or sees motion, grey while offline. */
   cameraState?(d: Device): "idle" | "active" | "offline";
 }
@@ -1422,10 +1423,19 @@ export class Viewer {
       f.fb.rooms.forEach((r, ri) => {
         const el = document.createElement("div");
         el.className = "vh-label";
-        const text = this.live?.roomText(f.fb.floor, { id: r.id });
-        el.innerHTML = `<b></b>${text ? "<span></span>" : ""}`;
+        const parts = this.live?.roomLine(f.fb.floor, { id: r.id }) ?? [];
+        el.innerHTML = `<b></b>${parts.length ? "<span></span>" : ""}`;
         (el.firstChild as HTMLElement).textContent = r.name;
-        if (text) (el.lastChild as HTMLElement).textContent = text;
+        parts.forEach((p, i) => {
+          const line = el.lastChild as HTMLElement;
+          if (i) line.append(" · ");
+          if (!p.entity) return line.append(p.text);
+          const s = document.createElement("span");
+          s.className = p.heating ? "vh-heat on" : "vh-heat";
+          s.dataset.entity = p.entity;
+          s.textContent = p.text;
+          line.append(s);
+        });
         el.dataset.floor = String(fi);
         el.dataset.room = String(ri);
         this.overlay.appendChild(el);

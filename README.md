@@ -22,6 +22,9 @@ and shadows, and the weather.
   (on a bracket, as a ceiling dome, as a doorbell) with what it sees lit up to the first walls, red on
   motion and grey while offline, leaks and smoke raise a banner, a temperature map colours the rooms, room
   temperatures sit on the labels, who is home sits in the corner, and one tap turns off the lights.
+- **Heating per room:** a room with a thermostat or radiator valve (Hive, Tado, Drayton Wiser, Nest,
+  Evohome, heat pumps, any `climate` entity) shows its temperature and setpoint, "20.5° → 21°", and glows
+  warm while it heats. With one thermostat for the whole home, every room glows while the heating is on.
 - **Solar, battery and grid:** what the panels make sits in the corner; tap it for the power flowing
   between solar, battery, grid and the house, the price now and today's totals. Found from Home
   Assistant's energy settings; solar panels placed in the plan shine with what they make.
