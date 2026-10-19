@@ -62,6 +62,21 @@ const DAY_ROLES: Record<Role, number> = {
   blackMetal: 0x2a2b2e,
   concrete: 0xb3b0a8,
   brick: 0xa65d44,
+  shiplap: 0xa98258,
+  logs: 0xb48a5e,
+  corrugated: 0x6f7f6a,
+  felt: 0x3a3c40,
+  shingle: 0x5a4844,
+  epdm: 0x2b2c2f,
+  sedum: 0x6c8b4a,
+  corten: 0x8e4b2c,
+  galvanised: 0xa9aeb0,
+  sleeper: 0x6a5440,
+  stone: 0xb5ab98,
+  rattan: 0x8b6a45,
+  bloom: 0xd9779b,
+  lavender: 0x8e7cc3,
+  straw: 0xc9b47c,
 };
 
 export const DAY: Palette = {

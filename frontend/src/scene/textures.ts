@@ -602,6 +602,62 @@ const RECIPES: Record<string, Recipe> = {
       };
     },
   },
+  // garden buildings (detail maps: the picked colour shows through)
+  // a log cabin's logs: rounded courses, 140 mm high, shaded under each one
+  logs: {
+    detail: true,
+    make: (rnd) => {
+      const grain = fbm(3, 64, 3, rnd);
+      return (u, v) => {
+        const lv = frac(v * 8);
+        const round = Math.sin(lv * Math.PI);
+        const f = (0.62 + 0.4 * Math.pow(round, 0.5)) * (0.94 + (grain(u, v) - 0.5) * 0.18);
+        return [f, f, f, round];
+      };
+    },
+  },
+  // corrugated sheet: ribs every 76 mm across u
+  corrugated: {
+    detail: true,
+    make: (rnd) => {
+      const n = fbm(4, 4, 2, rnd);
+      return (u, v) => {
+        const w = Math.sin(u * 10 * Math.PI * 2);
+        const f = 0.86 + w * 0.12 + (n(u, v) - 0.5) * 0.05;
+        return [f, f, f, 0.5 + w * 0.5];
+      };
+    },
+  },
+  // felt shingles: courses of three-tab strips, the tabs' gaps and the course above in shadow
+  shingles: {
+    detail: true,
+    make: (rnd) => {
+      const grit = fbm(128, 128, 1, rnd);
+      return (u, v) => {
+        const c = Math.floor(v * 7);
+        const lv = frac(v * 7);
+        const x = u * 3 + (c % 2) * 0.5 + hash(c, 4) * 0.3;
+        const lu = frac(x);
+        const tab = hash(Math.floor(x), c, 8);
+        const gap = groove(lu, 0.03);
+        const shadow = mix(0.6, 1, smooth(clamp01((1 - lv) / 0.18)));
+        const f = (0.88 + (tab - 0.5) * 0.18 + (grit(u, v) - 0.5) * 0.25) * shadow * mix(0.5, 1, gap);
+        return [f, f, f, (1 - lv * 0.6) * gap];
+      };
+    },
+  },
+  // weathering steel: patches of darker and brighter rust
+  rust: {
+    detail: true,
+    make: (rnd) => {
+      const big = fbm(5, 5, 4, rnd);
+      const fine = fbm(96, 96, 2, rnd);
+      return (u, v) => {
+        const b = big(u, v), s = fine(u, v);
+        return [0.86 + b * 0.3 + (s - 0.5) * 0.12, 0.84 + b * 0.24 + (s - 0.5) * 0.1, 0.82 + b * 0.18 + (s - 0.5) * 0.08, s];
+      };
+    },
+  },
   roof_felt: {
     detail: true,
     make: (rnd) => {

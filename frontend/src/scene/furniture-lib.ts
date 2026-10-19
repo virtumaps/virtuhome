@@ -7,6 +7,7 @@
 // same family can be swapped for each other in the editor (a sofa for a corner sofa).
 import type { Furniture } from "../model/plan";
 import type { Upholstery } from "./finishes";
+import { GARDEN_FURNITURE } from "./garden";
 
 export type Role =
   | "wood" | "woodDark" | "fabric" | "fabricDark" | "cushion" | "white" | "metal" | "dark"
@@ -15,7 +16,10 @@ export type Role =
   // balustrade materials
   | "pine" | "softwood" | "oak" | "walnut" | "primed" | "blackMetal"
   // fences and garden walls
-  | "concrete" | "brick";
+  | "concrete" | "brick"
+  // garden buildings: cladding, roofs, planters and what grows in them
+  | "shiplap" | "logs" | "corrugated" | "felt" | "shingle" | "epdm" | "sedum" | "corten" | "galvanised" | "sleeper" | "stone"
+  | "rattan" | "bloom" | "lavender" | "straw";
 
 /** Parts that light up with their entity: a TV screen, a lamp shade. */
 export type Glow = "screen" | "lamp";
@@ -23,9 +27,10 @@ export type Glow = "screen" | "lamp";
 export interface Part {
   /**
    * box; cyl (a cylinder, cone or disc); ball (an ellipsoid); prism (a roof-like ridge along x);
-   * hull (a side outline extruded across x: a car's body).
+   * hull (a side outline extruded across x: a car's body); hip (a hipped roof: a ridge along x,
+   * sloping down to all four sides, a pyramid when the ridge is 0).
    */
-  shape: "box" | "cyl" | "ball" | "prism" | "hull";
+  shape: "box" | "cyl" | "ball" | "prism" | "hull" | "hip";
   x: number;
   y: number;
   z: number;
@@ -48,6 +53,13 @@ export interface Part {
   outline?: [number, number][];
   /** Hulls: how far each side leans in at the top (m), like a car's windows. */
   inset?: number;
+  /** Hips: the ridge's length (default w - d, at least 0). */
+  ridge?: number;
+  /**
+   * Turned a quarter round the piece's middle: the part is described with its front towards +x and
+   * drawn with it towards +z (a shed whose door is in its gable end). All of a piece's parts or none.
+   */
+  turn?: boolean;
 }
 
 export type Category =
@@ -73,6 +85,10 @@ export interface FurnitureType {
   finish?: Upholstery;
   /** Roles a picked colour applies to (default: upholstery, else wood, else the body). */
   paint?: Role[];
+  /** Roles a picked colour applies to that depend on the piece (a planter's material). */
+  paintFor?: (item?: Furniture) => Role[];
+  /** Roles the trim colour applies to (a shed's corner boards, fascias and door frame). */
+  trim?: Role[];
   /** The item itself is passed when there is one (a staircase's balustrade). */
   build: (w: number, d: number, h: number, item?: Furniture) => Part[];
 }
@@ -89,9 +105,6 @@ const rod = (axis: "x" | "z", x: number, y: number, z: number, w: number, h: num
 });
 const ball = (x: number, y: number, z: number, w: number, h: number, d: number, role: Role, seg = 10, glow?: Glow): Part => ({
   shape: "ball", x, y, z, w, h, d, role, seg, glow,
-});
-const prism = (x: number, y: number, z: number, w: number, h: number, d: number, role: Role): Part => ({
-  shape: "prism", x, y, z, w, h, d, role,
 });
 /** A side outline ([z, y] in metres) extruded w wide around x, leaning in by `inset` at the top. */
 function hull(x: number, w: number, pts: [number, number][], role: Role, inset = 0): Part {
@@ -906,6 +919,8 @@ export const FURNITURE: Record<string, FurnitureType> = {
   printer_3d: { name: "3D printer", category: "utility", family: "printer", size: [0.4, 0.4, 0.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "dark"), box(0, 0.05, d / 2 - 0.004, w * 0.85, h * 0.8, 0.008, "glass", "screen")] },
 
   // ---------------------------------------------------------------- garden
+  // pergolas, sheds and planters: scene/garden.ts
+  ...GARDEN_FURNITURE,
   garden_table: { name: "Garden table", category: "outdoor", family: "garden_table", size: [1.2, 1.2, 0.72], paint: ["metal"], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "metal", undefined, 18), ...roundTopLegs(w, d, h - 0.03, 0.55, 0.8, 0.04, "dark")] },
   garden_chair: { name: "Garden chair", category: "outdoor", family: "garden_chair", size: [0.55, 0.6, 0.85], build: (w, d, h) => [box(0, 0.42, 0.02, w, 0.04, d - 0.06, "wood"), box(0, 0.46, -d / 2 + 0.04, w, h - 0.46, 0.04, "wood"), ...legs(w, d, 0.42, 0.04, 0.03, "metal"), box(-w / 2 + 0.02, 0.6, 0, 0.04, 0.03, d - 0.1, "metal"), box(w / 2 - 0.02, 0.6, 0, 0.04, 0.03, d - 0.1, "metal")] },
   sun_lounger: { name: "Sun lounger", category: "outdoor", family: "garden_chair", size: [0.7, 1.95, 0.5], paint: ["fabric"], build: (w, d, h) => [box(0, 0.25, 0.25, w, 0.06, d - 0.5, "fabric"), box(0, 0.25, -d / 2 + 0.3, w, h, 0.12, "fabric"), ...legs(w, d, 0.25, 0.04, 0.05, "metal")] },
@@ -967,11 +982,8 @@ export const FURNITURE: Record<string, FurnitureType> = {
     build: (w, d, h) => [cyl(0, h - 0.06, 0, w, 0.06, d, "blue", undefined, 24), cyl(0, h - 0.055, 0, w * 0.86, 0.008, d * 0.86, "rubber", undefined, 24), ...[0, 1, 2, 3, 4, 5].map((i) => cyl(Math.cos(i * 1.047) * w * 0.47, 0, Math.sin(i * 1.047) * d * 0.47, 0.05, h - 0.06, 0.05, "metal", undefined, 5))],
   },
   swing: { name: "Swing", category: "outdoor", family: "play", size: [2.2, 1.6, 2.1], build: (w, d, h) => [box(0, h - 0.08, 0, w, 0.08, 0.08, "woodDark"), ...[-1, 1].flatMap((s) => [box(s * (w / 2 - 0.04), 0, -d / 4, 0.08, h - 0.08, 0.08, "woodDark"), box(s * (w / 2 - 0.04), 0, d / 4, 0.08, h - 0.08, 0.08, "woodDark")]), box(-0.3, 0.45, 0, 0.45, 0.04, 0.18, "red"), box(0.3, 0.45, 0, 0.45, 0.04, 0.18, "blue")] },
-  shed: { name: "Shed", category: "outdoor", family: "shed", size: [2.4, 1.8, 2.3], paint: ["wood"], build: (w, d, h) => [box(0, 0, 0, w, h * 0.78, d, "wood"), prism(0, h * 0.78, 0, w + 0.2, h * 0.22, d + 0.2, "dark"), box(-w * 0.2, 0, d / 2, w * 0.38, h * 0.7, 0.02, "woodDark"), box(w * 0.25, h * 0.4, d / 2, w * 0.3, h * 0.2, 0.02, "glass")] },
-  greenhouse: { name: "Greenhouse", category: "outdoor", family: "shed", size: [2.5, 1.9, 2.3], build: (w, d, h) => [box(0, 0, 0, w, 0.3, d, "white"), box(0, 0.3, 0, w, h * 0.7 - 0.3, d, "glass"), prism(0, h * 0.7, 0, w, h * 0.3, d, "glass")] },
-  planter: { name: "Planter", category: "outdoor", family: "planter", size: [1.2, 0.45, 0.8], paint: ["woodDark"], build: (w, d, h) => [box(0, 0, 0, w, h * 0.5, d, "woodDark"), ball(-w * 0.25, h * 0.4, 0, w * 0.5, h * 0.6, d, "plant", 8), ball(w * 0.22, h * 0.42, 0, w * 0.5, h * 0.55, d * 0.9, "leaf", 8)] },
   hedge: {
-    name: "Hedge", category: "outdoor", family: "planter", size: [2.0, 0.6, 1.4],
+    name: "Hedge", category: "outdoor", family: "tree", size: [2.0, 0.6, 1.4],
     build: (w, d, h) => {
       const n = Math.max(2, Math.round(w / 0.5));
       return [box(0, 0, 0, w, h * 0.85, d, "leaf"), ...Array.from({ length: n }, (_, i) => ball(-w / 2 + (w / n) * (i + 0.5), h * 0.62, 0, w / n + 0.1, h * 0.38, d * 1.05, "plant", 8))];
@@ -1106,7 +1118,8 @@ export function isUpholstered(type: string): boolean {
 }
 
 /** Roles a picked colour paints, for a set of parts. */
-export function paintRoles(def: FurnitureType, parts: Part[]): Set<Role> {
+export function paintRoles(def: FurnitureType, parts: Part[], item?: Furniture): Set<Role> {
+  if (def.paintFor) return new Set(def.paintFor(item));
   if (def.paint) return new Set(def.paint);
   const has = (r: Role) => parts.some((p) => p.role === r);
   if (UPHOLSTERED.some(has)) return new Set(UPHOLSTERED);

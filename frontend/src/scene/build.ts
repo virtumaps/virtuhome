@@ -736,6 +736,7 @@ function flatFaces(p: Part): boolean[] {
   if (p.shape === "box") return [true, true, !p.shear, !p.shear, true, true];
   if (p.shape === "prism") return [true, true, true, false, false, false];
   if (p.shape === "ball" || p.shape === "hull") return [false, false, false, false, false, false];
+  if (p.shape === "hip") return [false, false, true, false, false, false];
   if (p.axis === "x") return [true, true, false, false, false, false];
   if (p.axis === "z") return [false, false, false, false, true, true];
   return [false, false, true, (p.taper ?? 1) > 0.001, false, false];
@@ -798,21 +799,35 @@ function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, r
   const mx = item.mirror ? -1 : 1;
   const toWorld = (lx: number, ly: number, lz: number): V3 => [item.x + c * lx * mx - s * lz, bottom + ly, item.z + s * lx * mx + c * lz];
   const rotN = (nx: number, ny: number, nz: number): V3 => [c * nx * mx - s * nz, ny, s * nx * mx + c * nz];
+  // a quarter turn for parts described front towards +x (scene/furniture-lib.ts Part.turn)
+  const toWorldT = (lx: number, ly: number, lz: number): V3 => toWorld(-lz, ly, lx);
+  const rotNT = (nx: number, ny: number, nz: number): V3 => rotN(-nz, ny, nx);
   // the picked colour, or the upholstery's own colour (leather is brown unless told otherwise)
   const finish = item.finish ?? def.finish ?? "fabric";
   const upholstery = UPHOLSTERY[finish] ?? UPHOLSTERY.fabric;
   const picked = parseHex(item.color) ?? (finish !== "fabric" ? upholstery.color : null);
-  const painted = paint ?? paintRoles(def, parts);
+  const trim = def.trim ? parseHex(item.trim) : null;
+  const painted = paint ?? paintRoles(def, parts, item);
   parts = separateFaces(parts, raised);
+  const shadeOf = (hex: number, role: Role): V3 => {
+    const base = lin(inPalette(pal, hex));
+    const k = SHADE_OF[role] ?? 1;
+    return [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)];
+  };
   const colourOf = (role: Role): V3 => {
-    if (picked !== null && painted.has(role)) {
-      const base = lin(inPalette(pal, picked));
-      const k = SHADE_OF[role] ?? 1;
-      return [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)];
-    }
+    if (trim !== null && def.trim!.includes(role)) return shadeOf(trim, role);
+    if (picked !== null && painted.has(role)) return shadeOf(picked, role);
     return lin(pal.roles[role]);
   };
+  // tops textured along the piece (a rug's pattern, a roof's courses), moving with it
+  const frameOf = (turned: boolean) => {
+    const [fc, fs] = turned ? [-s, c] : [c, s];
+    return { c: fc, s: fs, ou: item.x * fc + item.z * fs, ov: -item.x * fs + item.z * fc };
+  };
+  const frames = [frameOf(false), frameOf(true)];
   for (const p of parts) {
+    const tw = p.turn ? toWorldT : toWorld, rn = p.turn ? rotNT : rotN;
+    opaque.uvFrame = frames[p.turn ? 1 : 0];
     // the glass mesh keeps its one surface
     const g = p.role === "glass" && glass ? glass : opaque;
     if (g === opaque) g.useSurface(UPHOLSTERY_ROLES.has(p.role) ? `uph:${finish}` : `role:${p.role}`);
@@ -827,23 +842,26 @@ function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, r
       const yb0 = ya0 + p.h, yb1 = ya1 + p.h;
       const ao = p.y < 0.05 ? 0.86 : 1;
       const l = Math.hypot(1, sh);
-      const up = sh ? rotN(0, 1 / l, -sh / l) : ([0, 1, 0] as V3);
+      const up = sh ? rn(0, 1 / l, -sh / l) : ([0, 1, 0] as V3);
       const q = (a: V3, b: V3, cc: V3, d: V3, n: V3, f: number) =>
-        g.quad(toWorld(...a), toWorld(...b), toWorld(...cc), toWorld(...d), n, col, room, -1, gslot, 1, 1, f);
+        g.quad(tw(...a), tw(...b), tw(...cc), tw(...d), n, col, room, -1, gslot, 1, 1, f);
       q([x0, yb0, z0], [x1, yb0, z0], [x1, yb1, z1], [x0, yb1, z1], up, 1);
-      q([x0, ya1, z1], [x1, ya1, z1], [x1, yb1, z1], [x0, yb1, z1], rotN(0, 0, 1), ao);
-      q([x1, ya0, z0], [x0, ya0, z0], [x0, yb0, z0], [x1, yb0, z0], rotN(0, 0, -1), ao);
-      q([x1, ya1, z1], [x1, ya0, z0], [x1, yb0, z0], [x1, yb1, z1], rotN(1, 0, 0), ao);
-      q([x0, ya0, z0], [x0, ya1, z1], [x0, yb1, z1], [x0, yb0, z0], rotN(-1, 0, 0), ao);
+      q([x0, ya1, z1], [x1, ya1, z1], [x1, yb1, z1], [x0, yb1, z1], rn(0, 0, 1), ao);
+      q([x1, ya0, z0], [x0, ya0, z0], [x0, yb0, z0], [x1, yb0, z0], rn(0, 0, -1), ao);
+      q([x1, ya1, z1], [x1, ya0, z0], [x1, yb0, z0], [x1, yb1, z1], rn(1, 0, 0), ao);
+      q([x0, ya0, z0], [x0, ya1, z1], [x0, yb1, z1], [x0, yb0, z0], rn(-1, 0, 0), ao);
       if (elevated) q([x0, ya1, z1], [x1, ya1, z1], [x1, ya0, z0], [x0, ya0, z0], [-up[0], -up[1], -up[2]], 1);
     } else if (p.shape === "prism") {
-      prismPart(g, p, toWorld, rotN, col, room, gslot, elevated);
+      prismPart(g, p, tw, rn, col, room, gslot, elevated);
+    } else if (p.shape === "hip") {
+      hipPart(g, p, tw, rn, col, room, gslot, elevated);
     } else if (p.shape === "hull") {
-      hullPart(g, p, toWorld, rotN, col, room, gslot, elevated);
+      hullPart(g, p, tw, rn, col, room, gslot, elevated);
     } else {
-      lathe(g, p, toWorld, rotN, col, room, gslot, elevated, low);
+      lathe(g, p, tw, rn, col, room, gslot, elevated, low);
     }
   }
+  opaque.uvFrame = null;
 }
 
 type ToWorld = (x: number, y: number, z: number) => V3;
@@ -865,6 +883,31 @@ function prismPart(g: Geo, p: Part, toWorld: ToWorld, rotN: RotN, col: V3, room:
     g.tri(a, b, t, n);
   }
   if (elevated) g.quad(toWorld(x0, ya, z1), toWorld(x1, ya, z1), toWorld(x1, ya, z0), toWorld(x0, ya, z0), [0, -1, 0], col, room, -1, gslot);
+}
+
+/** A hipped roof: a w x d base, a ridge along x of length `ridge` at height h, four flat slopes. */
+function hipPart(g: Geo, p: Part, toWorld: ToWorld, rotN: RotN, col: V3, room: number, gslot: number, elevated: boolean): void {
+  const x0 = p.x - p.w / 2, x1 = p.x + p.w / 2, z0 = p.z - p.d / 2, z1 = p.z + p.d / 2;
+  const r = Math.max(0, Math.min(p.w, p.ridge ?? p.w - p.d)) / 2;
+  const ya = p.y, yb = p.y + p.h;
+  const ra: V3 = [p.x - r, yb, p.z], rb: V3 = [p.x + r, yb, p.z];
+  const face = (pts: V3[]) => {
+    // the slope's normal from two of its edges
+    const [a, b, c] = pts;
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n: V3 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const l = Math.hypot(n[0], n[1], n[2]) || 1;
+    n = [n[0] / l, n[1] / l, n[2] / l];
+    if (n[1] < 0) n = [-n[0], -n[1], -n[2]];
+    const nw = rotN(n[0], n[1], n[2]);
+    const ids = pts.map((q) => g.vertex(toWorld(q[0], q[1], q[2]), nw, col, room, -1, gslot));
+    for (let k = 1; k < ids.length - 1; k++) g.tri(ids[0], ids[k], ids[k + 1], nw);
+  };
+  face([[x0, ya, z1], [x1, ya, z1], rb, ra]);
+  face([[x1, ya, z0], [x0, ya, z0], ra, rb]);
+  face([[x0, ya, z0], [x0, ya, z1], ra]);
+  face([[x1, ya, z1], [x1, ya, z0], rb]);
+  if (elevated) g.quad(toWorld(x0, ya, z1), toWorld(x1, ya, z1), toWorld(x1, ya, z0), toWorld(x0, ya, z0), rotN(0, -1, 0), col, room, -1, gslot);
 }
 
 /** A side outline extruded across x, its sides leaning in towards the top (a car's body and windows). */

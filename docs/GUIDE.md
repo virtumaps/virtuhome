@@ -275,7 +275,23 @@ with a gap at the steps.
 
 On a lawn, **Add to this garden** adds a **Patio**, **Round patio**, **Deck** or **Path** in the
 middle of it, **Draw a patio** drags one out in the 2D plan, and the list below adds garden
-furniture, plants, a shed, a greenhouse or planters.
+furniture, plants, pergolas, sheds and planters.
+
+### Pergolas, sheds and planters
+
+Add them from a lawn's **Add to this garden**, or from **Garden** in any room's list. Tap one to swap
+its **Style** for another of its kind, and set its **Colour**, size and **Turn**:
+- **Pergolas** (Pergola, Louvred pergola, Pergola on a wall, Gazebo, Garden arch, Arbour): **Top** is
+  Open, Slats, Glass roof, Canvas sail, Climbing plants or Louvres, as the style has them; a gazebo
+  has a **Roof**.
+- **Sheds** (Apex shed, Reverse apex shed, Pent shed, Summerhouse, Log cabin, Garden office, Metal
+  shed, Greenhouse): **Roof** (Felt, Shingles, Corrugated sheet, Rubber (EPDM) or Green roof
+  (sedum)), **Door** (Left, Middle, Right or Double doors), **Windows**, and the **Trim** colour of
+  the corner boards, fascias and frames, as the style has them.
+- **Planters** (Trough planter, Raised bed, Cube planter, Round planter, Tall planter, Tiered
+  planter): **Made of** (Timber, Sleepers, Painted wood, Corten steel, Galvanised steel, Fibreclay,
+  Terracotta, Brick, Stone or Rattan) and **Planting** (Flowers, Shrubs, Grasses, Lavender, Herbs,
+  Vegetables, Topiary ball, Small tree or Just soil).
 
 ### Fences and garden walls
 

@@ -26,6 +26,7 @@ import { pointInPolygon, segmentDistance } from "../model/geom";
 import { layoutWalls, openingPoint } from "../model/walls";
 import { CAMERA_NAMES, cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
+import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
 import { isRaised, outdoorTop } from "../scene/build";
 import { circlePoints, edgeOf, newArea, openEdges, rectSides, resizeRect, roundness, turnOf, type NewAreaKind } from "../scene/areas";
 import {
@@ -1670,6 +1671,7 @@ export class Editor {
         },
       })];
     const styles = styleOptions(x.type);
+    const garden = x.type in GARDEN_OPTIONS || x.type === "metal_shed" || x.type === "greenhouse";
     const finish = x.finish ?? def?.finish ?? "fabric";
     const named = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!), false, `${label} ${def?.name ?? "item"}`);
     return h("div", {},
@@ -1678,11 +1680,12 @@ export class Editor {
       styles.length > 1 ? h("div", { class: "ed-chips" }, ...styles.map((k) =>
         h("button", { class: `ed-chip${k === x.type ? " on" : ""}`, onclick: () => k !== x.type && this.swapType(fi, x, k) }, FURNITURE[k].name))) : null,
       h("div", { class: "ed-sub" }, "Colour"),
-      this.colourPicker(FURNITURE_SWATCHES, x.color, (c) => named("Recolour")((y) => (y.color = c)), "Original"),
+      this.colourPicker(garden ? FENCE_SWATCHES : FURNITURE_SWATCHES, x.color, (c) => named("Recolour")((y) => (y.color = c)), "Original"),
       isUpholstered(x.type) ? h("div", { class: "ed-sub" }, "Upholstery") : null,
       isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named("Reupholster")((y) => (y.finish = k as Furniture["finish"]))) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
-      h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? "Charger" : "Linked to"),
+      ...(garden ? this.gardenRows(x, named) : []),
+      garden ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? "Charger" : "Linked to"),
         this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? "The house's charger" : "None found") : "Nothing")),
       ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
       h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
@@ -1703,6 +1706,31 @@ export class Editor {
         } }, "Remove"),
       ),
     );
+  }
+
+  /** Garden buildings and planters: a pergola's top, a shed's roof, door, windows and trim, a planter's material and plants. */
+  private gardenRows(x: Furniture, named: (label: string) => (fn: (y: Furniture) => void) => void): (HTMLElement | null)[] {
+    const o = GARDEN_OPTIONS[x.type] ?? {};
+    const c = gardenChoice(x.type, x);
+    const def = FURNITURE[x.type];
+    const chips = <T extends string>(title: string, list: T[] | undefined, names: Record<T, string>, cur: T | null, label: string, set: (y: Furniture, v: T) => void) =>
+      list && list.length > 1 ? [h("div", { class: "ed-sub" }, title), h("div", { class: "ed-chips" }, ...list.map((k) => h("button", {
+        class: `ed-chip${cur === k ? " on" : ""}`, onclick: () => cur !== k && named(label)((y) => set(y, k)),
+      }, names[k])))] : [];
+    const [most] = o.windows ?? [0, 0];
+    return [
+      ...chips("Top", o.canopies, CANOPY_NAMES, c.canopy, "Top of", (y, v) => (y.canopy = v)),
+      ...chips("Roof", o.roofings, ROOFING_NAMES, c.roofing, "Roof of", (y, v) => (y.roofing = v)),
+      ...chips("Door", o.doors, DOOR_NAMES, c.door, "Door of", (y, v) => (y.door = v)),
+      most ? h("div", { class: "ed-row" }, h("label", {}, "Windows"), ...Array.from({ length: most + 1 }, (_, n) => h("button", {
+        class: `ed-chip${c.windows === n ? " on" : ""}`, onclick: () => c.windows !== n && named("Windows of")((y) => (y.windows = n)),
+      }, n ? String(n) : "None"))) : null,
+      def?.trim ? h("div", { class: "ed-sub" }, "Trim") : null,
+      def?.trim ? this.colourPicker(FENCE_SWATCHES, x.trim, (t) => named("Trim colour of")((y) => (y.trim = t)), "Original") : null,
+      ...chips("Made of", o.material ? (Object.keys(PLANTER_MATERIALS) as PlanterMaterial[]) : undefined,
+        Object.fromEntries(Object.entries(PLANTER_MATERIALS).map(([k, m]) => [k, m.name])) as Record<PlanterMaterial, string>, c.material, "Material of", (y, v) => (y.material = v)),
+      ...chips("Planting", o.plants ? (Object.keys(PLANTING_NAMES) as Planting[]) : undefined, PLANTING_NAMES, c.plants, "Planting in", (y, v) => (y.plants = v)),
+    ];
   }
 
   /** Stairs: the balustrade's style, what it is made of, and which side it is on. */
