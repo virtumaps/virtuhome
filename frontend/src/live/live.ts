@@ -13,6 +13,7 @@ import type { LiveSource, MarkerLook } from "../scene/viewer";
 import type { EnergyLive } from "./energy";
 import { chargerEntities, type EvNow } from "./ev";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
+import { roomOf, roomTrackers, slug, sourcesOf } from "./presence";
 
 export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status";
 
@@ -41,6 +42,8 @@ export interface Person {
   /** Where they are: "Home", "Away" or a zone's name. */
   where: string;
   picture: string | null;
+  /** The room they are in, when a room tracker knows it. */
+  room: string | null;
 }
 
 const ALERT_NAMES: Record<string, string> = {
@@ -97,6 +100,15 @@ export class HassLive implements LiveSource {
   private indexedWithStates = false;
   /** Rooms tinted by temperature (blue cold, red warm). */
   heatmap = false;
+  /** Everyone, and the trackers that say their room (watched apart: only a move to another room redraws). */
+  private presence: { person: string; sources: string[] }[] = [];
+  private presenceIds = new Set<string>();
+  private presenceSeen = new Map<string, HassEntity | undefined>();
+  /** The room each person is in now (floor and space index, and `floor id/space id`). */
+  private where = new Map<string, { floor: number; room: number; key: string }>();
+  private whereKey = "";
+  /** Shows people in their rooms (the card's `people` option turns it off with the avatars). */
+  peopleInRooms = true;
   /** Motion sensors of each camera's own device (a doorbell's motion turns its view cone red). */
   private cameraMotion = new Map<string, string[]>();
   /** Rooms and garden areas with a car or a charger in them. */
@@ -131,6 +143,8 @@ export class HassLive implements LiveSource {
       this.reindex(hass);
       for (const c of ["lighting", "openings", "markers", "tints", "labels", "status"] as Change[]) changes.add(c);
       for (const id of this.kinds.keys()) this.seen.set(id, hass.states[id]);
+      for (const id of this.presenceIds) this.presenceSeen.set(id, hass.states[id]);
+      this.locate();
       return changes;
     }
     for (const [id, kinds] of this.kinds) {
@@ -140,6 +154,16 @@ export class HassLive implements LiveSource {
         for (const k of kinds) changes.add(k);
       }
     }
+    // trackers change often (a distance, a signal); the view only hears of it when someone changes room
+    let moved = false;
+    for (const id of this.presenceIds) {
+      const s = hass.states[id];
+      if (s !== this.presenceSeen.get(id)) {
+        this.presenceSeen.set(id, s);
+        moved = true;
+      }
+    }
+    if (moved && this.locate()) for (const c of ["tints", "labels", "status"] as Change[]) changes.add(c);
     return changes;
   }
 
@@ -155,6 +179,13 @@ export class HassLive implements LiveSource {
     this.rooms.clear();
     this.cameraMotion.clear();
     this.evSpaces.clear();
+    this.presence = [];
+    const set = this.plan.settings.presence;
+    if (this.peopleInRooms && set?.enabled !== false) {
+      const trackers = roomTrackers(hass);
+      for (const id of Object.keys(hass.states)) if (domainOf(id) === "person") this.presence.push({ person: id, sources: sourcesOf(hass, id, set, trackers) });
+    }
+    this.presenceIds = new Set(this.presence.flatMap((p) => [p.person, ...p.sources]));
     // people, and alarms anywhere in the house, feed the top bar
     for (const id of Object.keys(hass.states)) {
       const dom = domainOf(id);
@@ -171,14 +202,17 @@ export class HassLive implements LiveSource {
       if (!list) byArea.set(area, (list = []));
       list.push(id);
     }
-    // a thermostat or valve placed in the plan belongs to the room it is in, else to its area's rooms
+    // a thermostat, valve or motion or presence sensor placed in the plan belongs to the room it is
+    // in, else to its area's rooms
+    const isMotion = (id: string) => domainOf(id) === "binary_sensor" && MOTION_CLASSES.has(String(hass.states[id]?.attributes.device_class));
     const placed = new Map<string, string[]>();
     const anywhere = new Set<string>();
     for (const floor of this.plan.floors) {
       const sp = spaces(floor);
       for (const x of [...floor.devices, ...floor.furniture]) {
-        if (!x.entity || domainOf(x.entity) !== "climate") continue;
-        const space = sp.find((s) => !s.outdoor && pointInPolygon([x.x, x.z], s.points));
+        const climate = !!x.entity && domainOf(x.entity) === "climate";
+        if (!x.entity || (!climate && !isMotion(x.entity))) continue;
+        const space = sp.find((s) => (!climate || !s.outdoor) && pointInPolygon([x.x, x.z], s.points));
         if (!space) continue;
         anywhere.add(x.entity);
         placed.set(`${floor.id}/${space.id}`, [...(placed.get(`${floor.id}/${space.id}`) ?? []), x.entity]);
@@ -191,15 +225,16 @@ export class HassLive implements LiveSource {
         const cls = (id: string) => hass.states[id]?.attributes.device_class;
         const pick = (dc: string, unit: RegExp) =>
           ids.find((id) => domainOf(id) === "sensor" && cls(id) === dc && unit.test(String(hass.states[id]?.attributes.unit_of_measurement ?? "")) && !NOT_ROOM_TEMP.test(id)) ?? null;
+        const here = placed.get(`${floor.id}/${room.id}`) ?? [];
         const climates = space.outdoor ? [] : [...new Set([
-          ...(placed.get(`${floor.id}/${room.id}`) ?? []),
+          ...here.filter((id) => domainOf(id) === "climate"),
           ...ids.filter((id) => domainOf(id) === "climate" && !anywhere.has(id)),
         ])];
         const w: RoomWatch = {
           temperature: room.temperature ?? (space.outdoor ? null : pick("temperature", /°/)),
           humidity: room.humidity ?? (space.outdoor ? null : pick("humidity", /%/)),
           alerts: ids.filter((id) => domainOf(id) === "binary_sensor" && ALERT_CLASSES.has(String(cls(id)))),
-          motion: ids.filter((id) => domainOf(id) === "binary_sensor" && MOTION_CLASSES.has(String(cls(id)))),
+          motion: [...new Set([...here.filter(isMotion), ...ids.filter((id) => isMotion(id) && !anywhere.has(id))])],
           lights: ids.filter((id) => domainOf(id) === "light"),
           climates,
           heating: climates,
@@ -263,9 +298,59 @@ export class HassLive implements LiveSource {
     return id ? this.hass?.states[id] : undefined;
   }
 
-  /** Every entity whose state the view shows. */
+  /**
+   * Every entity whose state the view shows. Room trackers are left out: a replay of the past shows
+   * people home or away, never where they went.
+   */
   watched(): string[] {
     return [...this.kinds.keys()];
+  }
+
+  /** Puts everyone who is home into the room their first tracker that names one says; true when someone moved. */
+  private locate(): boolean {
+    this.where.clear();
+    const hass = this.hass;
+    if (hass) {
+      for (const { person, sources } of this.presence) {
+        // away (or in another zone), a tracker's last room is out of date
+        const p = hass.states[person];
+        if (p && (p.state === "not_home" || (p.state !== "home" && hass.states[`zone.${slug(p.state)}`]))) continue;
+        for (const id of sources) {
+          const at = roomOf(this.plan, hass, hass.states[id]);
+          if (!at) continue;
+          this.where.set(person, { ...at, key: `${this.plan.floors[at.floor].id}/${spaces(this.plan.floors[at.floor])[at.room].id}` });
+          break;
+        }
+      }
+    }
+    const key = [...this.where].map(([p, at]) => `${p}@${at.key}`).join("|");
+    if (key === this.whereKey) return false;
+    this.whereKey = key;
+    return true;
+  }
+
+  /** Where someone is: the floor and space index of their room, if a tracker knows it. */
+  personRoom(person: string): { floor: number; room: number } | null {
+    const at = this.where.get(person);
+    return at ? { floor: at.floor, room: at.room } : null;
+  }
+
+  /** The trackers a person's room is read from (the first that names a room wins). */
+  presenceSources(person: string): string[] {
+    return this.presence.find((p) => p.person === person)?.sources ?? [];
+  }
+
+  /** The people in a room now. */
+  roomPeople(floor: Floor, room: { id: string }): Person[] {
+    if (!this.where.size) return [];
+    const key = `${floor.id}/${room.id}`;
+    return [...this.where].filter(([, at]) => at.key === key).map(([id]) => this.person(id)).filter((p): p is Person => !!p);
+  }
+
+  private occupied(floor: Floor, room: { id: string }): boolean {
+    const key = `${floor.id}/${room.id}`;
+    for (const at of this.where.values()) if (at.key === key) return true;
+    return false;
   }
 
   /**
@@ -416,7 +501,8 @@ export class HassLive implements LiveSource {
       if (v !== null) return [...heatColour(v), 0.42];
       return null;
     }
-    if (w.motion.some((id) => this.hass!.states[id]?.state === "on")) return [1.0, 0.72, 0.32, 0.09];
+    // someone is there: motion, a presence sensor, or a person's room tracker
+    if (w.motion.some((id) => this.hass!.states[id]?.state === "on") || this.occupied(floor, room)) return [1.0, 0.72, 0.32, 0.09];
     if (w.heating.some((id) => this.state(id)?.attributes.hvac_action === "heating")) return TINT_HEAT;
     // cooling is a room's own (an air conditioner), never the whole home's
     if (w.climates.some((id) => this.state(id)?.attributes.hvac_action === "cooling")) return TINT_COOL;
@@ -482,15 +568,22 @@ export class HassLive implements LiveSource {
   people(): Person[] {
     const hass = this.hass;
     if (!hass) return [];
-    return Object.entries(hass.states)
-      .filter(([id]) => domainOf(id) === "person")
-      .map(([id, s]) => ({
-        id,
-        name: String(s.attributes.friendly_name ?? id.slice(7)),
-        home: s.state === "home",
-        where: s.state === "home" ? "Home" : s.state === "not_home" ? "Away" : isUnavailable(s) ? "Unknown" : s.state,
-        picture: typeof s.attributes.entity_picture === "string" ? s.attributes.entity_picture : null,
-      }));
+    return Object.keys(hass.states).filter((id) => domainOf(id) === "person").map((id) => this.person(id)!);
+  }
+
+  private person(id: string): Person | null {
+    const s = this.hass?.states[id];
+    if (!s) return null;
+    const at = this.where.get(id);
+    return {
+      id,
+      name: String(s.attributes.friendly_name ?? id.slice(7)),
+      // a person whose tracker names a room is home, whatever their state says
+      home: s.state === "home" || !!at,
+      where: s.state === "home" || at ? "Home" : s.state === "not_home" ? "Away" : isUnavailable(s) ? "Unknown" : s.state,
+      picture: typeof s.attributes.entity_picture === "string" ? s.attributes.entity_picture : null,
+      room: at ? spaces(this.plan.floors[at.floor])[at.room]?.name ?? null : null,
+    };
   }
 
   /** The line under a room's name, e.g. "21.4° · 48 %". */
@@ -671,6 +764,11 @@ function iconName(domain: string, dc: string | undefined, s: HassEntity | undefi
   };
   void s;
   return map[domain] ?? "dot";
+}
+
+/** "Kadir Eker" -> "KE": a person without a picture. */
+export function initials(name: string): string {
+  return name.split(/\s+/).map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase();
 }
 
 /** Toggles what can be toggled; false means "open its dialog instead". */

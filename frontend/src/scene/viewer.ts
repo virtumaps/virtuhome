@@ -22,7 +22,7 @@ import { DAY, paletteFor, type Palette } from "./palette";
 import type { RealisticLook } from "./realistic";
 import type { Tier, TierSetting } from "./tier";
 import { quietSky, type Sky } from "../live/sky";
-import type { RoomPart } from "../live/live";
+import { initials, type Person, type RoomPart } from "../live/live";
 
 export { detectLowEnd } from "./tier";
 export type WallMode = "smart" | "low" | "full";
@@ -53,6 +53,8 @@ export interface LiveSource {
   roomLine(floor: Floor, room: { id: string }): RoomPart[];
   /** A camera's state: its view turns red while it is live or sees motion, grey while offline. */
   cameraState?(d: Device): "idle" | "active" | "offline";
+  /** Who is in a room now: their faces go on its label (in the house view, over the room). */
+  roomPeople?(floor: Floor, room: { id: string }): Person[];
 }
 
 export interface Hit {
@@ -1418,6 +1420,18 @@ export class Viewer {
         el.dataset.floor = String(fi);
         this.overlay.appendChild(el);
         f.labels.push(el);
+        // the house view has no room labels: who is where shows over their rooms
+        f.fb.rooms.forEach((r, ri) => {
+          const people = this.live?.roomPeople?.(f.fb.floor, { id: r.id }) ?? [];
+          if (!people.length) return;
+          const who = document.createElement("div");
+          who.className = "vh-label vh-faces";
+          who.append(faces(people));
+          who.dataset.floor = String(fi);
+          who.dataset.room = String(ri);
+          this.overlay.appendChild(who);
+          f.labels.push(who);
+        });
         return;
       }
       f.fb.rooms.forEach((r, ri) => {
@@ -1426,6 +1440,11 @@ export class Viewer {
         const parts = this.live?.roomLine(f.fb.floor, { id: r.id }) ?? [];
         el.innerHTML = `<b></b>${parts.length ? "<span></span>" : ""}`;
         (el.firstChild as HTMLElement).textContent = r.name;
+        const people = this.live?.roomPeople?.(f.fb.floor, { id: r.id }) ?? [];
+        if (people.length) {
+          el.prepend(faces(people));
+          el.dataset.who = "";
+        }
         parts.forEach((p, i) => {
           const line = el.lastChild as HTMLElement;
           if (i) line.append(" · ");
@@ -1453,15 +1472,17 @@ export class Viewer {
     const v = new Vector3();
     const items: { el: HTMLElement; x: number; y: number; hidden: boolean; prio: number }[] = [];
     for (const [fi, f] of this.floors.entries()) {
-      f.labels.forEach((el, i) => {
+      f.labels.forEach((el) => {
         let prio = 1e9;
-        if (this.mode === "house") {
+        const i = el.dataset.room === undefined ? -1 : Number(el.dataset.room);
+        if (i < 0) {
           const b = f.fb.bounds;
           v.set(b.maxX + 0.4, f.fb.floor.elevation + f.offset + 0.2, (b.minZ + b.maxZ) / 2);
         } else {
           const r = f.fb.rooms[i];
           v.set(r.label[0], f.fb.floor.elevation + f.offset + 0.05, r.label[1]);
-          prio = (fi === this.activeFloor && i === this.selectedRoom ? 1e6 : 0) + (r.area || 1);
+          // a room with someone in it keeps its label; in the house view people always show
+          prio = this.mode === "house" ? 1e10 : (fi === this.activeFloor && i === this.selectedRoom ? 1e6 : 0) + (el.dataset.who !== undefined ? 1e5 : 0) + (r.area || 1);
         }
         v.project(this.camera);
         const hidden = v.z > 1 || (this.mode === "floor" && fi !== this.activeFloor);
@@ -1479,7 +1500,7 @@ export class Viewer {
           if (size[0]) this.labelSize.set(it.el, size);
         }
         const r = [it.x - size[0] / 2 - 3, it.y - size[1] / 2 - 2, it.x + size[0] / 2 + 3, it.y + size[1] / 2 + 2];
-        if (placed.some((p) => r[0] < p[2] && r[2] > p[0] && r[1] < p[3] && r[3] > p[1])) hide = true;
+        if (it.prio < 1e10 && placed.some((p) => r[0] < p[2] && r[2] > p[0] && r[1] < p[3] && r[3] > p[1])) hide = true;
         else placed.push(r);
       }
       const key = hide ? "h" : `${it.x},${it.y}`;
@@ -1979,3 +2000,22 @@ export class Viewer {
   }
 }
 
+/** People's faces in a row: their picture, else their initials. Names go in as text, never markup. */
+function faces(people: Person[]): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "vh-who";
+  for (const p of people) {
+    const face = document.createElement("i");
+    face.className = "vh-face";
+    face.dataset.entity = p.id;
+    face.title = p.name;
+    if (p.picture) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = p.picture;
+      face.append(img);
+    } else face.textContent = initials(p.name);
+    row.append(face);
+  }
+  return row;
+}

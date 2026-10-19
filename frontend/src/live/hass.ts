@@ -42,6 +42,7 @@ export interface HassAreaReg {
   name: string;
   floor_id?: string | null;
   icon?: string | null;
+  aliases?: string[];
 }
 
 export interface HassFloorReg {

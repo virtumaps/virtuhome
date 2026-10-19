@@ -2,8 +2,9 @@
 import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
 import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
-import { HassLive, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
+import { HassLive, initials, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
 import { EnergyLive, type EnergyNow } from "../live/energy";
+import { hereText } from "../live/presence";
 import { loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
 import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
@@ -203,6 +204,7 @@ export class VhView {
     this.viewer.walls = config.walls ?? "smart";
     this.viewer.roofOn = roofSetting() ?? config.roof ?? true;
     this.live = new HassLive(normalizePlan({ version: 1, floors: [] }));
+    this.live.peopleInRooms = config.people !== false;
     this.live.energy = this.energy;
     this.energy.onSources = () => this.onEnergy();
     this.viewer.onHit = (hit, gesture) => this.onHit(hit, gesture);
@@ -559,12 +561,15 @@ export class VhView {
     if (energy) parts.push(energy);
     if (on) parts.push(`<button class="vh-chip vh-lights" data-status="lights" title="Turn them off">${svg(mdiLightbulbOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span>${on} on</span></button>`);
     for (const p of people) {
-      const initials = p.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-      parts.push(`<button class="vh-person ${p.home ? "home" : "away"}" data-status="${p.id}" title="">${p.picture ? `<img alt="" src="${p.picture.replace(/"/g, "")}">` : `<i>${initials}</i>`}</button>`);
+      parts.push(`<button class="vh-person ${p.home ? "home" : "away"}" data-status="${p.id}" title="">${p.picture ? `<img alt="" src="${p.picture.replace(/"/g, "")}">` : "<i></i>"}</button>`);
     }
     this.statusEl.innerHTML = parts.join("");
     // names and places as text, never as markup
-    this.statusEl.querySelectorAll<HTMLElement>(".vh-person").forEach((b, i) => (b.title = `${people[i].name}: ${people[i].where}`));
+    this.statusEl.querySelectorAll<HTMLElement>(".vh-person").forEach((b, i) => {
+      b.title = `${people[i].name}: ${people[i].room ?? people[i].where}`;
+      const letters = b.querySelector("i");
+      if (letters) letters.textContent = initials(people[i].name);
+    });
   }
 
   /** Turns off the lights that are on, on the shown floor (or in the whole house). */
@@ -1212,9 +1217,10 @@ export class VhView {
     if (!room) return this.closeSheet();
     const ids = this.areaEntities(room.area_id);
     const text = this.live.roomText(floor, room);
+    const here = hereText(this.config.people === false || this.replayed ? [] : this.live.roomPeople(floor, room).map((p) => p.name));
     const lights = this.live.roomLights(floor, room);
     const anyOn = lights.some((id) => hass.states[id]?.state === "on");
-    const key = `${room.id}|${ids.join(",")}|${anyOn}|${text}`;
+    const key = `${room.id}|${ids.join(",")}|${anyOn}|${text}|${here}`;
     if (this.sheet.dataset.key === key) {
       this.sheet.querySelectorAll<HTMLElement & { hass?: unknown }>("[data-tile]").forEach((t) => (t.hass = hass));
       this.updateRows(hass);
@@ -1227,7 +1233,7 @@ export class VhView {
       <div class="actions"></div>
       <div class="vh-tiles"></div>`;
     this.sheet.querySelector(".t")!.textContent = room.name;
-    this.sheet.querySelector(".sub")!.textContent = [text, room.area_id ? null : "Not linked to an area"].filter(Boolean).join(" · ") || " ";
+    this.sheet.querySelector(".sub")!.textContent = [text, here, room.area_id ? null : "Not linked to an area"].filter(Boolean).join(" · ") || " ";
     this.sheet.querySelector<HTMLButtonElement>(".vh-close")!.onclick = () => this.closeSheet();
     const actions = this.sheet.querySelector(".actions")!;
     if (lights.length) {

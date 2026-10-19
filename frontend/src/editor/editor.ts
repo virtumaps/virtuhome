@@ -9,11 +9,12 @@ import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
 import {
-  newId, normalizePlan, PANEL, panelOf, panelSize, solarSize, spaces, splitEdge, type Device, type EnergySettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
+  newId, normalizePlan, PANEL, panelOf, panelSize, solarSize, spaces, splitEdge, type Device, type EnergySettings, type PresenceSettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
   type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type PartyEnds, type Plan, type Roof, type RoofCovering, type RoofItem, type RoofShape, type Room, type Vec2,
 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { domainOf, type Hass } from "../live/hass";
+import { roomTrackers, sourcesOf } from "../live/presence";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
 import {
@@ -757,6 +758,7 @@ export class Editor {
         : null,
       ...this.roofSection(),
       ...this.energySection(),
+      ...this.peopleSection(),
       ...this.skySection(),
       h("h4", {}, "Floors"),
       ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
@@ -849,6 +851,56 @@ export class Editor {
       row("Charger", "ev_charger", power, auto.ev.length ? `Automatic: ${auto.ev.map((c) => c.name).join(" + ")}` : "Automatic: none found"),
       row("Car battery", "ev_level", levels, automatic(auto.ev[0]?.level ?? null)),
     ];
+  }
+
+  /** Who is in which room: the tracker each person's room comes from, found by itself or picked. */
+  private peopleSection(): HTMLElement[] {
+    const hass = this.hass;
+    const set = this.plan.settings.presence ?? {};
+    const people = this.entities((id) => domainOf(id) === "person");
+    const found = new Set(roomTrackers(hass));
+    const trackers = this.entities((id) => found.has(id));
+    const name = (id: string) => trackers.find(([t]) => t === id)?.[1] ?? id;
+    const edit = (fn: (e: PresenceSettings) => void, label: string) =>
+      this.change((p) => {
+        const e: PresenceSettings = { ...(p.settings.presence ?? {}), people: { ...(p.settings.presence?.people ?? {}) } };
+        fn(e);
+        if (!Object.keys(e.people!).length) delete e.people;
+        p.settings.presence = Object.keys(e).length ? e : null;
+      }, false, label);
+    const rows = people.map(([id, who]) => {
+      const picked = set.people && id in set.people ? set.people[id] ?? "none" : "";
+      const auto = sourcesOf(hass, id, null, [...found]).filter((t) => found.has(t));
+      return h("div", { class: "ed-row" },
+        h("label", {}, who),
+        this.dropdown([["none", "Never in a room"], ...trackers], picked, (v) => edit((e) => {
+          if (!v) delete e.people![id];
+          else e.people![id] = v === "none" ? null : v;
+        }, `${who}: room from`), `Automatic: ${auto.length ? auto.map(name).join(" or ") : "none found"}`));
+    });
+    // where the trackers put everyone now, to check them against
+    const now = people.flatMap(([id, who]) => {
+      const at = this.host.view.live.personRoom(id);
+      const room = at ? spaces(this.plan.floors[at.floor])[at.room]?.name : null;
+      return room ? [`${who} in ${room}`] : [];
+    });
+    const out: (HTMLElement | null)[] = [
+      h("h4", {}, "People"),
+      h("p", { class: "ed-hint" }, "People show in the room they are in when a room tracker knows it: Bermuda, ESPresense or mqtt_room. Each person's tracker is found on their devices, or by its name; pick another where it is wrong. Rooms must be linked to their areas."),
+      h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: set.enabled !== false, onchange: (e: Event) => edit((x) => {
+          if ((e.target as HTMLInputElement).checked) delete x.enabled;
+          else x.enabled = false;
+        }, "People in rooms shown") }),
+        " Show people in their rooms"),
+      ...(set.enabled === false ? [] : rows),
+      set.enabled !== false && now.length ? h("p", { class: "ed-hint" }, `Now: ${now.join(", ")}.`) : null,
+      people.length ? null : h("p", { class: "ed-hint" }, "No people in Home Assistant yet: add them under Settings → People."),
+      people.length && !trackers.length && set.enabled !== false
+        ? h("p", { class: "ed-hint" }, "No room trackers found. Bermuda and ESPresense find phones, watches and tags with Bluetooth proxies in the rooms.")
+        : null,
+    ];
+    return out.filter((e): e is HTMLElement => !!e);
   }
 
   /** Which way the house faces (for the sun and the wind) and which weather it shows. */

@@ -90,6 +90,20 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
   for (const [id, device] of [["camera.doorbell", "doorbell"], ["camera.kitchen", "kitchen_camera"]]) {
     if (entities[id]) entities[id].device_id = device;
   }
+  // who is in which room (?where=<area id> moves Alex): Alex's phone through Bermuda, on the same device
+  // as the tracker in Alex's person; Sam's watch through ESPresense's mqtt_room, found by its name
+  devices.alex_phone = { id: "alex_phone", name: "Alex's phone" };
+  const alexArea = new URLSearchParams(location.search).get("where") ?? "living_room";
+  states["person.alex"].attributes.device_trackers = ["device_tracker.alexs_phone_bermuda_tracker"];
+  put("device_tracker.alexs_phone_bermuda_tracker", "home", { friendly_name: "Alex's phone Bermuda Tracker" });
+  entities["device_tracker.alexs_phone_bermuda_tracker"] = { entity_id: "device_tracker.alexs_phone_bermuda_tracker", device_id: "alex_phone", platform: "bermuda" };
+  put("sensor.alexs_phone_area", areas[alexArea]?.name ?? "unknown", { friendly_name: "Alex's phone Area", area_id: alexArea, area_name: areas[alexArea]?.name });
+  entities["sensor.alexs_phone_area"] = { entity_id: "sensor.alexs_phone_area", device_id: "alex_phone", platform: "bermuda" };
+  put("sensor.sams_watch", "kitchen", { friendly_name: "Sam's watch", distance: 1.4 });
+  entities["sensor.sams_watch"] = { entity_id: "sensor.sams_watch", platform: "mqtt_room" };
+  // an mmWave presence sensor in the main bedroom
+  put("binary_sensor.bedroom_presence", "on", { device_class: "occupancy", friendly_name: "Bedroom presence" });
+  entities["binary_sensor.bedroom_presence"] = { entity_id: "binary_sensor.bedroom_presence", area_id: "bedroom" };
   // a leak sensor (?leak turns it on to show the alert banner)
   const kitchenArea = plan.floors[0]?.rooms.find((r) => /kitchen/i.test(r.name))?.area_id ?? null;
   put("binary_sensor.kitchen_leak", new URLSearchParams(location.search).has("leak") ? "on" : "off", { device_class: "moisture", friendly_name: "Kitchen leak" });

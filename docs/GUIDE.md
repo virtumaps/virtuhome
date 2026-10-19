@@ -60,7 +60,8 @@ The same view is in the sidebar and in every VirtuHome card.
   [Energy](#energy-and-car-charging)).
 - **N on**: how many lights are on, on the floor shown or in the whole house. Tap it to turn them
   off.
-- Who is home, as pictures or initials. Tap one for that person's dialog.
+- Who is home, as pictures or initials (pointing at one names the room they are in, when VirtuHome
+  knows it). Tap one for that person's dialog.
 
 **Buttons on the right**, top to bottom (extensions add theirs above these):
 
@@ -81,12 +82,16 @@ The same view is in the sidebar and in every VirtuHome card.
   thermostat's dialog; tap the room's name to open the room.
 - While a room heats it glows softly warm (blue while its air conditioner cools). With one thermostat
   for the whole home, as most homes have, every room glows while the heating is on.
+- Someone in the room: their picture or initials sit over its name (see
+  [People in their rooms](#people-in-their-rooms)), and the room glows softly amber, as it does
+  while a motion or presence sensor in it is on. Tap a face for that person's dialog. In the house
+  view, faces float over the rooms they are in.
 
 **Gestures**
 - **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead.
 - **Long-press** a lamp or a device for its Home Assistant dialog.
 - **Tap a room** to open it: in the house view this goes to its floor first. A sheet shows the
-  room's temperature and its devices, with **All lights on** / **All lights off**.
+  room's temperature, who is here and its devices, with **All lights on** / **All lights off**.
 - **Double-tap a room** to switch all its lights.
 - **Double-tap empty space** to go back to the whole house.
 
@@ -227,8 +232,30 @@ did, and how many devices are in areas without a room in the plan.
 - **Doors and windows:** tap one, then pick its **Sensor** (it opens in 3D when the sensor does) and,
   for a window, its **Blind**.
 - **Lamps and TVs** that are furniture: **Linked to** picks the light, switch or media player.
-- **Thermostats and radiator valves** count for the room you place them in. One you don't place
-  counts for the rooms of its area.
+- **Thermostats and radiator valves**, and **motion and presence sensors**, count for the room you
+  place them in. One you don't place counts for the rooms of its area, so the zones of an Aqara FP2
+  count for the areas you gave them in Home Assistant.
+
+### People in their rooms
+
+VirtuHome shows who is in which room when a room tracker in Home Assistant knows it:
+- **Bermuda** (its **Area** sensor for each phone, watch or tag),
+- **ESPresense**, through the `mqtt_room` sensor or the ESPresense Companion's trackers,
+- any other sensor or tracker whose state is the name of an area.
+
+Both need Bluetooth proxies in the rooms (ESPHome boards, ESPresense nodes or Shelly devices). The
+tracker's area finds the room linked to it, so link your rooms to their areas (Edit → **Rooms** →
+**Area**).
+
+Edit → **Home** → **People** lists everyone in Home Assistant with the tracker found for them:
+Bermuda's Area sensor on the device of one of their trackers (add Bermuda's tracker to the person
+under Settings → People), or a tracker named after them or their phone ("Kadir's iPhone Area" for
+Kadir). Pick another where that is wrong, or **Never in a room**. **Now** under the list says where
+everyone is, to check the trackers. **Show people in their rooms** turns it off, and so does the
+card's `people: false`.
+
+Someone who is away is never shown in a room, even if their tracker still names one. Room trackers
+stay out of the replays of the past: a replay shows people home or away, never where they went.
 
 ## Make it look like home
 
@@ -428,7 +455,7 @@ height: 440
 | `room_panel` | Tap a room to open it | `true` / `false` | `true` |
 | `floor_chips` | Floor buttons | `true` / `false` | `true` |
 | `fill` | Fill the screen | `true` / `false` | `false` |
-| `people` | Show who is home | `true` / `false` | `true` |
+| `people` | Show who is home, and in which room | `true` / `false` | `true` |
 | `energy` | Show solar, battery and grid | `true` / `false` | `true` |
 | `roof` | Show the roofs (each device can change it) | `true` / `false` | `true` |
 | `alarm` | Alarm panel in the top bar | an `alarm_control_panel` entity, or `none` | the first alarm panel |
@@ -502,6 +529,12 @@ in](#get-your-home-in).
   **Remove from plan** and run it again.
 
 **A door or window doesn't open in 3D**: tap it in the editor and pick its **Sensor**.
+
+**Someone is in the wrong room, or in none**
+- Check what their tracker says in Home Assistant: it must name an area (Bermuda's Area sensor, or a
+  room of ESPresense named like the area).
+- Link that room to the area (Edit → **Rooms** → **Area**).
+- Pick the right tracker for them in Edit → **Home** → **People**.
 
 **Shadows fall the wrong way**: set north (Edit → **Home** → **Sun and weather**).
 

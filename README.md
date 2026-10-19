@@ -22,6 +22,10 @@ and shadows, and the weather.
   (on a bracket, as a ceiling dome, as a doorbell) with what it sees lit up to the first walls, red on
   motion and grey while offline, leaks and smoke raise a banner, a temperature map colours the rooms, room
   temperatures sit on the labels, who is home sits in the corner, and one tap turns off the lights.
+- **People in their rooms:** with a room tracker (Bermuda or ESPresense), everyone's picture or
+  initials sit in the room they are in, and the room glows softly. Motion and mmWave presence sensors
+  (Aqara FP2, Everything Presence, Apollo) light up their rooms too. Drawn as labels, so it costs no
+  extra draw calls.
 - **Heating per room:** a room with a thermostat or radiator valve (Hive, Tado, Drayton Wiser, Nest,
   Evohome, heat pumps, any `climate` entity) shows its temperature and setpoint, "20.5° → 21°", and glows
   warm while it heats. With one thermostat for the whole home, every room glows while the heating is on.
@@ -89,7 +93,7 @@ quality: auto          # auto | low (Tablet) | medium (Standard) | high (Realist
 height: 440            # px, ignored in a panel view or with fill: true
 room_panel: true       # tapping a room opens its devices
 floor_chips: true
-people: true           # who is home, in the corner
+people: true           # who is home, in the corner and in their rooms
 energy: true           # solar, battery and grid in the corner (when the house has them)
 roof: true             # roofs over the house (the roof button changes it on each device)
 alarm: alarm_control_panel.home   # optional; default: the first alarm panel, "none" hides it
