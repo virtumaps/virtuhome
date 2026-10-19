@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 ### New
 - Add a floor without a scan: Edit → Home → Floors → Add a floor puts a storey on top, and the 2D
