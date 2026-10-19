@@ -733,65 +733,24 @@ export class Viewer {
 
   // ------------------------------------------------------------------ dragging a piece
 
-  /** A piece lifted out of its floor's mesh while it is dragged. */
-  private lifted: { f: FloorView; mesh: Mesh; index: BufferAttribute; saved: Uint16Array | Uint32Array; geometry: BufferGeometry } | null = null;
+  /** A piece lifted out of its floor's meshes (the opaque one and the glass) while it is dragged. */
+  private lifted: { f: FloorView; parts: LiftedPart[] } | null = null;
 
   /**
-   * Lifts a piece (furniture, or a light's lamp) out of its floor's merged mesh into a mesh of its
-   * own, so dragging it moves that mesh instead of rebuilding the floor. False when it has no
-   * geometry (a plain device).
+   * Lifts a piece (furniture, or a light's lamp) out of its floor's merged meshes into meshes of its
+   * own, so dragging it moves those instead of rebuilding the floor. Its glass comes along too (a
+   * greenhouse, a glass table). False when it has no geometry (a plain device).
    */
   liftItem(fi: number, ref: ItemRef): boolean {
     this.dropLifted();
     const f = this.floors[fi];
     const k = f ? f.fb.items.findIndex((it) => it.kind === ref.kind && it.id === ref.id) : -1;
-    const src = f?.opaque.geometry;
-    const index = src?.getIndex();
-    if (!f || k < 0 || !src || !index) return false;
-    const owner = f.fb.opaque.item;
-    const idx = index.array as Uint16Array | Uint32Array;
-    const saved = idx.slice();
-    const remap = new Int32Array(owner.length).fill(-1);
-    const verts: number[] = [];
-    const tris: number[] = [];
-    const groups: { start: number; count: number; materialIndex: number }[] = [];
-    const ranges = src.groups.length ? src.groups : [{ start: 0, count: idx.length, materialIndex: 0 }];
-    for (const r of ranges) {
-      const start = tris.length;
-      for (let i = r.start; i < r.start + r.count; i += 3) {
-        if (owner[idx[i]] !== k) continue;
-        for (let c = 0; c < 3; c++) {
-          const v = idx[i + c];
-          if (remap[v] < 0) {
-            remap[v] = verts.length;
-            verts.push(v);
-          }
-          tris.push(remap[v]);
-        }
-        // collapsed in the floor's mesh: nothing left to draw there
-        idx[i + 1] = idx[i + 2] = idx[i];
-      }
-      if (tris.length > start) groups.push({ start, count: tris.length - start, materialIndex: r.materialIndex ?? 0 });
-    }
-    if (!tris.length) return false;
-    index.needsUpdate = true;
-    const g = new BufferGeometry();
-    for (const [name, attr] of Object.entries(src.attributes)) {
-      const a = attr as BufferAttribute;
-      const n = a.itemSize;
-      const arr = new Float32Array(verts.length * n);
-      verts.forEach((v, r) => {
-        for (let c = 0; c < n; c++) arr[r * n + c] = a.array[v * n + c];
-      });
-      g.setAttribute(name, new BufferAttribute(arr, n));
-    }
-    g.setIndex(tris);
-    if (src.groups.length) for (const gr of groups) g.addGroup(gr.start, gr.count, gr.materialIndex);
-    g.computeBoundingSphere();
-    const mesh = new Mesh(g, f.opaque.material);
-    f.group.add(mesh);
-    this.look?.attach(mesh, f.u, true);
-    this.lifted = { f, mesh, index, saved, geometry: src };
+    if (!f || k < 0) return false;
+    const parts = [liftPart(f.opaque, f.fb.opaque.item, k), liftPart(f.glass, f.fb.glass.item, k)].filter((p): p is LiftedPart => !!p);
+    if (!parts.length) return false;
+    for (const p of parts) f.group.add(p.mesh);
+    if (parts[0].from === f.opaque) this.look?.attach(parts[0].mesh, f.u, true);
+    this.lifted = { f, parts };
     if (ref.kind === "device" && f.fb.cameras.some((c) => c.id === ref.id)) this.liftedCamera = { id: ref.id, dx: 0, dz: 0 };
     this.sceneChanged = true;
     this.invalidate();
@@ -801,7 +760,7 @@ export class Viewer {
   /** Moves the lifted piece by (dx, dz) from where it was built. */
   moveLifted(dx: number, dz: number): void {
     if (!this.lifted) return;
-    this.lifted.mesh.position.set(dx, 0, dz);
+    for (const p of this.lifted.parts) p.mesh.position.set(dx, 0, dz);
     if (this.liftedCamera) {
       this.liftedCamera.dx = dx;
       this.liftedCamera.dz = dz;
@@ -820,13 +779,15 @@ export class Viewer {
       this.liftedCamera = null;
       this.refreshCones();
     }
-    if (l.f.opaque.geometry === l.geometry) {
-      (l.index.array as Uint16Array | Uint32Array).set(l.saved);
-      l.index.needsUpdate = true;
+    for (const p of l.parts) {
+      if (p.from.geometry === p.geometry) {
+        (p.index.array as Uint16Array | Uint32Array).set(p.saved);
+        p.index.needsUpdate = true;
+      }
+      l.f.group.remove(p.mesh);
+      this.look?.detach(p.mesh);
+      p.mesh.geometry.dispose();
     }
-    l.f.group.remove(l.mesh);
-    this.look?.detach(l.mesh);
-    l.mesh.geometry.dispose();
     this.sceneChanged = true;
     this.invalidate();
   }
@@ -2018,4 +1979,66 @@ function faces(people: Person[]): HTMLElement {
     row.append(face);
   }
   return row;
+}
+
+/** A piece's share of one of its floor's meshes, drawn by a mesh of its own while it is dragged. */
+interface LiftedPart {
+  /** The floor's mesh it came out of, its geometry then, and that geometry's index as it was. */
+  from: Mesh;
+  geometry: BufferGeometry;
+  index: BufferAttribute;
+  saved: Uint16Array | Uint32Array;
+  mesh: Mesh;
+}
+
+/**
+ * Copies item k's triangles out of a floor's mesh (owner: the item of each vertex) into a mesh of
+ * their own, and collapses them in the floor's index. Null when the item has none there.
+ */
+function liftPart(from: Mesh, owner: number[], k: number): LiftedPart | null {
+  const src = from.geometry;
+  const index = src.getIndex();
+  if (!index) return null;
+  const idx = index.array as Uint16Array | Uint32Array;
+  const saved = idx.slice();
+  const remap = new Int32Array(owner.length).fill(-1);
+  const verts: number[] = [];
+  const tris: number[] = [];
+  const groups: { start: number; count: number; materialIndex: number }[] = [];
+  const ranges = src.groups.length ? src.groups : [{ start: 0, count: idx.length, materialIndex: 0 }];
+  for (const r of ranges) {
+    const start = tris.length;
+    for (let i = r.start; i < r.start + r.count; i += 3) {
+      if (owner[idx[i]] !== k) continue;
+      for (let c = 0; c < 3; c++) {
+        const v = idx[i + c];
+        if (remap[v] < 0) {
+          remap[v] = verts.length;
+          verts.push(v);
+        }
+        tris.push(remap[v]);
+      }
+      // collapsed in the floor's mesh: nothing left to draw there
+      idx[i + 1] = idx[i + 2] = idx[i];
+    }
+    if (tris.length > start) groups.push({ start, count: tris.length - start, materialIndex: r.materialIndex ?? 0 });
+  }
+  if (!tris.length) return null;
+  index.needsUpdate = true;
+  const g = new BufferGeometry();
+  for (const [name, attr] of Object.entries(src.attributes)) {
+    const a = attr as BufferAttribute;
+    const n = a.itemSize;
+    const arr = new Float32Array(verts.length * n);
+    verts.forEach((v, r) => {
+      for (let c = 0; c < n; c++) arr[r * n + c] = a.array[v * n + c];
+    });
+    g.setAttribute(name, new BufferAttribute(arr, n));
+  }
+  g.setIndex(tris);
+  if (src.groups.length) for (const gr of groups) g.addGroup(gr.start, gr.count, gr.materialIndex);
+  g.computeBoundingSphere();
+  const mesh = new Mesh(g, from.material);
+  mesh.renderOrder = from.renderOrder;
+  return { from, geometry: src, index, saved, mesh };
 }
