@@ -74,6 +74,14 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm |
 | **Graphics** | Picks the graphics on this device (below) |
 
+**Room labels**
+- Under each room's name: its temperature and humidity, and on the driveway the car's charge.
+- A room with a thermostat or radiator valve shows what it reads and its setpoint, **20.5° → 21°**
+  (the warmest setpoint if it has several), in orange while it heats. Tap the numbers for the
+  thermostat's dialog; tap the room's name to open the room.
+- While a room heats it glows softly warm (blue while its air conditioner cools). With one thermostat
+  for the whole home, as most homes have, every room glows while the heating is on.
+
 **Gestures**
 - **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead.
 - **Long-press** a lamp or a device for its Home Assistant dialog.
@@ -219,6 +227,8 @@ did, and how many devices are in areas without a room in the plan.
 - **Doors and windows:** tap one, then pick its **Sensor** (it opens in 3D when the sensor does) and,
   for a window, its **Blind**.
 - **Lamps and TVs** that are furniture: **Linked to** picks the light, switch or media player.
+- **Thermostats and radiator valves** count for the room you place them in. One you don't place
+  counts for the rooms of its area.
 
 ## Make it look like home
 
