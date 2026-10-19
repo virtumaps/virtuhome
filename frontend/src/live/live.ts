@@ -20,6 +20,13 @@ export type RGBA = [number, number, number, number];
 /** An extension's colour for a room (null leaves it to the core), and its text under the room's name. */
 export type RoomTint = (floor: Floor, space: Space) => RGBA | null;
 export type RoomText = (floor: Floor, space: Space) => string | null;
+/** A piece of the line under a room's name. A piece with an entity opens it when tapped. */
+export interface RoomPart {
+  text: string;
+  entity?: string;
+  /** The room's heating is on: the piece shows warm. */
+  heating?: boolean;
+}
 
 /** Something that needs attention now: a leak, smoke, a triggered alarm. */
 export interface Alert {
@@ -46,6 +53,10 @@ interface RoomWatch {
   alerts: string[];
   motion: string[];
   lights: string[];
+  /** Thermostats and radiator valves in the room: placed in it in the plan, or of its area. */
+  climates: string[];
+  /** What warms the room: its own climates, else the house's one thermostat. */
+  heating: string[];
 }
 
 const ALERT_CLASSES = new Set(["smoke", "gas", "moisture", "carbon_monoxide", "safety"]);
@@ -69,6 +80,9 @@ const C = {
   cool: 0x3db6f2,
   secure: 0x2bb673,
 };
+
+const TINT_HEAT: RGBA = [1.0, 0.42, 0.16, 0.13];
+const TINT_COOL: RGBA = [0.25, 0.62, 1.0, 0.11];
 
 const isUnavailable = (s: HassEntity | undefined) => !s || s.state === "unavailable" || s.state === "unknown";
 
@@ -157,6 +171,19 @@ export class HassLive implements LiveSource {
       if (!list) byArea.set(area, (list = []));
       list.push(id);
     }
+    // a thermostat or valve placed in the plan belongs to the room it is in, else to its area's rooms
+    const placed = new Map<string, string[]>();
+    const anywhere = new Set<string>();
+    for (const floor of this.plan.floors) {
+      const sp = spaces(floor);
+      for (const x of [...floor.devices, ...floor.furniture]) {
+        if (!x.entity || domainOf(x.entity) !== "climate") continue;
+        const space = sp.find((s) => !s.outdoor && pointInPolygon([x.x, x.z], s.points));
+        if (!space) continue;
+        anywhere.add(x.entity);
+        placed.set(`${floor.id}/${space.id}`, [...(placed.get(`${floor.id}/${space.id}`) ?? []), x.entity]);
+      }
+    }
     for (const floor of this.plan.floors) {
       for (const space of spaces(floor)) {
         const room = (floor.rooms.find((r) => r.id === space.id) ?? space) as Partial<Room> & Space;
@@ -164,14 +191,21 @@ export class HassLive implements LiveSource {
         const cls = (id: string) => hass.states[id]?.attributes.device_class;
         const pick = (dc: string, unit: RegExp) =>
           ids.find((id) => domainOf(id) === "sensor" && cls(id) === dc && unit.test(String(hass.states[id]?.attributes.unit_of_measurement ?? "")) && !NOT_ROOM_TEMP.test(id)) ?? null;
+        const climates = space.outdoor ? [] : [...new Set([
+          ...(placed.get(`${floor.id}/${room.id}`) ?? []),
+          ...ids.filter((id) => domainOf(id) === "climate" && !anywhere.has(id)),
+        ])];
         const w: RoomWatch = {
           temperature: room.temperature ?? (space.outdoor ? null : pick("temperature", /°/)),
           humidity: room.humidity ?? (space.outdoor ? null : pick("humidity", /%/)),
           alerts: ids.filter((id) => domainOf(id) === "binary_sensor" && ALERT_CLASSES.has(String(cls(id)))),
           motion: ids.filter((id) => domainOf(id) === "binary_sensor" && MOTION_CLASSES.has(String(cls(id)))),
           lights: ids.filter((id) => domainOf(id) === "light"),
+          climates,
+          heating: climates,
         };
         this.rooms.set(`${floor.id}/${room.id}`, w);
+        for (const id of w.climates) this.watch(id, "labels", "tints");
         this.watch(w.temperature, "labels", "tints");
         this.watch(w.humidity, "labels");
         for (const id of w.lights) this.watch(id, "status");
@@ -209,6 +243,19 @@ export class HassLive implements LiveSource {
       }
       // a roof window that opens glows warm, like a window in a wall
       for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") this.watch(it.entity, "lighting");
+    }
+    // one thermostat in the whole home runs the boiler for every room: they all warm while it heats
+    const all = new Set([...this.rooms.values()].flatMap((w) => w.climates));
+    if (all.size === 1) {
+      const [only] = all;
+      for (const floor of this.plan.floors) {
+        for (const space of spaces(floor)) {
+          const w = this.rooms.get(`${floor.id}/${space.id}`);
+          if (!w || space.outdoor || w.climates.length) continue;
+          w.heating = [only];
+          this.watch(only, "tints");
+        }
+      }
     }
   }
 
@@ -365,13 +412,24 @@ export class HassLive implements LiveSource {
       if (t) return t;
     }
     if (this.heatmap) {
-      const t = this.state(w.temperature);
-      const v = t && !isUnavailable(t) ? parseFloat(t.state) : NaN;
-      if (!isNaN(v)) return [...heatColour(v), 0.42];
+      const v = this.roomTemperature(w);
+      if (v !== null) return [...heatColour(v), 0.42];
       return null;
     }
     if (w.motion.some((id) => this.hass!.states[id]?.state === "on")) return [1.0, 0.72, 0.32, 0.09];
+    if (w.heating.some((id) => this.state(id)?.attributes.hvac_action === "heating")) return TINT_HEAT;
+    // cooling is a room's own (an air conditioner), never the whole home's
+    if (w.climates.some((id) => this.state(id)?.attributes.hvac_action === "cooling")) return TINT_COOL;
     return null;
+  }
+
+  /** The room's temperature: its sensor's, else what its thermostat or valve reads. */
+  private roomTemperature(w: RoomWatch): number | null {
+    const t = this.state(w.temperature);
+    const v = t && !isUnavailable(t) ? parseFloat(t.state) : NaN;
+    if (!isNaN(v)) return v;
+    const c = shownClimate(w.climates.map((id) => this.state(id)));
+    return c?.current ?? null;
   }
 
   cameraState(d: Device): "idle" | "active" | "offline" {
@@ -435,25 +493,34 @@ export class HassLive implements LiveSource {
       }));
   }
 
+  /** The line under a room's name, e.g. "21.4° · 48 %". */
   roomText(floor: Floor, room: { id: string }): string | null {
+    const parts = this.roomLine(floor, room);
+    return parts.length ? parts.map((p) => p.text).join(" · ") : null;
+  }
+
+  /** The line under a room's name in pieces: "20.5° → 21°" opens the room's thermostat. */
+  roomLine(floor: Floor, room: { id: string }): RoomPart[] {
     const w = this.rooms.get(`${floor.id}/${room.id}`);
-    if (!w) return null;
-    const parts: string[] = [];
-    const t = this.state(w.temperature);
-    if (t && !isUnavailable(t) && !isNaN(parseFloat(t.state))) parts.push(`${parseFloat(t.state).toFixed(1)}°`);
+    if (!w) return [];
+    const parts: RoomPart[] = [];
+    const c = shownClimate(w.climates.map((id) => this.state(id)));
+    // what the thermostat reads goes with its setpoint, as its dialog shows them
+    const text = heatText(c?.current ?? this.roomTemperature(w), c?.target ?? null);
+    if (text) parts.push(c ? { text, entity: c.entity, heating: w.climates.some((id) => this.state(id)?.attributes.hvac_action === "heating") } : { text });
     const h = this.state(w.humidity);
-    if (h && !isUnavailable(h) && !isNaN(parseFloat(h.state))) parts.push(`${Math.round(parseFloat(h.state))} %`);
+    if (h && !isUnavailable(h) && !isNaN(parseFloat(h.state))) parts.push({ text: `${Math.round(parseFloat(h.state))} %` });
     // a car that is here, or a charger with a car plugged in
     const cars = new Set((this.evSpaces.get(`${floor.id}/${room.id}`) ?? [])
       .filter((f) => (CAR_TYPES.has(f.type) ? this.carHere(f) : !["unplugged", "unknown"].includes(this.ev(f.entity ?? null)?.state ?? "unknown")))
       .map((f) => this.ev(f.entity ?? null)));
-    for (const ev of cars) if (ev) parts.push(evText(ev));
+    for (const ev of cars) if (ev) parts.push({ text: evText(ev) });
     if (this.roomExtraText) {
       const space = spaces(floor).find((x) => x.id === room.id);
       const extra = space ? this.roomExtraText(floor, space) : null;
-      if (extra) parts.push(extra);
+      if (extra) parts.push({ text: extra });
     }
-    return parts.length ? parts.join(" · ") : null;
+    return parts;
   }
 
   /** The charger a car or charger of the plan is linked to (any of its entities), else the house's first. */
@@ -520,6 +587,44 @@ function evGlow(ev: EvNow | null, day: boolean): V3 | null {
 function evText(ev: EvNow): string {
   const what: Partial<Record<EvNow["state"], string>> = { charging: "charging", plugged: "plugged in", approval: "waiting", paused: "paused", finished: "charged", fault: "fault" };
   return [`Car${ev.level !== null ? ` ${Math.round(ev.level)}%` : ""}`, what[ev.state]].filter(Boolean).join(" · ");
+}
+
+/**
+ * Which of a room's thermostats and valves its label shows: the one set warmest of those that are on,
+ * else the first that is there (it reads the temperature, and a tap opens it to turn it on).
+ */
+export function shownClimate(states: (HassEntity | undefined)[]): { entity: string; current: number | null; target: string | null } | null {
+  const there = states.filter((s): s is HassEntity => !isUnavailable(s));
+  const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : null);
+  // a heat-and-cool range is told by its low end, which is what heats
+  const setpoint = (s: HassEntity) => num(s.attributes.temperature) ?? num(s.attributes.target_temp_low);
+  let best: HassEntity | null = null;
+  for (const s of there) {
+    const v = setpoint(s);
+    if (s.state === "off" || v === null) continue;
+    if (!best || v > setpoint(best)!) best = s;
+  }
+  const s = best ?? there[0];
+  if (!s) return null;
+  let target: string | null = null;
+  if (best) {
+    const lo = num(s.attributes.target_temp_low), hi = num(s.attributes.target_temp_high);
+    target = num(s.attributes.temperature) === null && lo !== null && hi !== null ? `${degrees(lo, false)}–${degrees(hi)}` : degrees(setpoint(s)!);
+  }
+  return { entity: s.entity_id, current: num(s.attributes.current_temperature), target };
+}
+
+/** "20.5° → 21°", "20.5°" while the heating is off, "→ 21°" with nothing reading the room. */
+export function heatText(current: number | null, target: string | null): string | null {
+  const now = current !== null ? `${current.toFixed(1)}°` : null;
+  if (!target) return now;
+  return now ? `${now} → ${target}` : `→ ${target}`;
+}
+
+/** A setpoint as thermostats show it: "21°", "20.5°". */
+function degrees(v: number, mark = true): string {
+  const r = Math.round(v * 10) / 10;
+  return `${Number.isInteger(r) ? r : r.toFixed(1)}${mark ? "°" : ""}`;
 }
 
 /** The panels' brightness in tenths: the 3D view only relights when it moves a step. */
