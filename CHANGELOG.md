@@ -12,6 +12,10 @@
 - A motion or presence sensor (an Aqara FP2, Everything Presence or Apollo mmWave sensor) placed in
   the plan counts for the room it is in, like a thermostat; one that isn't placed counts for its area.
 
+### Fixed
+- On a wide screen the Graphics menu opened far from its button, in the middle of the view; it sits
+  beside the buttons again (and left of the editor while editing).
+
 ## 0.9.0
 
 ### New
