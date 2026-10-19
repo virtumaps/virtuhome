@@ -613,7 +613,27 @@ export class Viewer {
    * storeys sit together as the house does outside.
    */
   private get apart(): boolean {
-    return this.mode === "house" && this.explode && !(this.roofWanted && this.walls !== "low" && this.hasRoofs);
+    return this.mode === "house" && this.explode && !this.closed;
+  }
+
+  /** The whole house shut under its roofs, its walls up: from outside, as it stands. */
+  private get closed(): boolean {
+    return this.mode === "house" && this.roofWanted && this.walls !== "low" && this.hasRoofs;
+  }
+
+  /**
+   * Whether a point (world) of a storey is inside the shut house: in one of its rooms with a storey
+   * or a roof over it. What is in there can't be seen, so it takes no taps; doors and windows do.
+   */
+  private shutIn(fi: number, p: V3): boolean {
+    if (!this.closed) return false;
+    const xz: Vec2 = [p[0], p[2]];
+    const inRoom = (k: number) => this.floors[k].fb.floor.rooms.some((r) => pointInPolygon(xz, r.points));
+    if (!this.floors[fi] || !inRoom(fi)) return false;
+    for (let k = fi + 1; k < this.floors.length; k++) if (inRoom(k)) return true;
+    // looking down onto it (a roof's faces face out): anything of a roof above it
+    const roofs = this.floors.flatMap((f) => (f.roof?.visible ? [f.roof] : []));
+    return new Raycaster(new Vector3(p[0], p[1] + 1000, p[2]), new Vector3(0, -1, 0), 0, 1000).intersectObjects(roofs, false).length > 0;
   }
 
   private updateRoofs(): void {
@@ -1155,7 +1175,7 @@ export class Viewer {
     const pal = this.look ? DAY : this.pal;
     const y0 = f.fb.floor.elevation;
     const draw = (info: OpeningInfo, open: number, glow: number) => {
-      g.currentItem = info.item;
+      g.currentItem = gl.currentItem = info.item;
       // cut, door leaves and sashes settle just under the wall's cut top
       const ws = info.wallSlot >= 0 ? info.wallSlot * 2 + WALL_TRIM : -1;
       buildOpeningMoving({ g, glass: gl, pal, look: joineryLook(info.opening, pal), room: info.room, ws, glow, low: this.low }, info, open);
@@ -1164,7 +1184,7 @@ export class Viewer {
     f.fb.windows.forEach((w, i) => {
       if (windowFollowsSensor(w.opening)) draw(w, f.winPos[i], w.glow);
     });
-    g.currentItem = -1;
+    g.currentItem = gl.currentItem = -1;
     f.fb.windows.forEach((w, i) => {
       if (!w.opening.cover) return;
       const open = f.coverPos[i];
@@ -1786,13 +1806,22 @@ export class Viewer {
     let best: { d: number; key: string } | null = null;
     // editor handles (blue dots) win over everything drawn under or in front of them: the nearest one
     let handle: { d: number; m: MarkerSpec } | null = null;
+    // the editor leaves alone what the shut house hides (its pins still show what wants attention)
+    const pinShut = (key: string) => {
+      if (!this.editMode || !this.closed) return false;
+      for (const [fi, f] of this.floors.entries()) {
+        const dev = f.fb.floor.devices.find((dd) => dd.id === key);
+        if (dev) return this.shutIn(fi, this.devicePosition(fi, dev));
+      }
+      return false;
+    };
     for (const m of this.markers.list) {
       v.set(m.pos[0], m.pos[1], m.pos[2]).project(this.camera);
       if (v.z > 1) continue;
       const sx = ((v.x + 1) / 2) * this.width;
       const sy = ((1 - v.y) / 2) * this.height;
       const d = Math.hypot(sx - x, sy - y);
-      if (d < m.size * 0.75 && (!best || d < best.d)) best = { d, key: m.key };
+      if (d < m.size * 0.75 && (!best || d < best.d) && !pinShut(m.key)) best = { d, key: m.key };
       if (m.item && d < Math.max(m.size * 0.9, 16) && (!handle || d < handle.d)) handle = { d, m };
     }
     if (handle) return { kind: "marker", floor: this.activeFloor, room: -1, entity: null, item: handle.m.item, y: handle.m.pos[1], plane: handle.m.plane };
@@ -1815,7 +1844,7 @@ export class Viewer {
         const sx = ((v.x + 1) / 2) * this.width;
         const sy = ((1 - v.y) / 2) * this.height;
         const d = Math.hypot(sx - x, sy - y);
-        if (d < 26 && (!lampBest || d < lampBest.d)) {
+        if (d < 26 && (!lampBest || d < lampBest.d) && !this.shutIn(fi, [lamp.pos[0], lamp.pos[1] + f.offset, lamp.pos[2]])) {
           const item = lamp.id.startsWith("dev_") ? { kind: "device" as const, id: lamp.id.slice(4) } : { kind: "furniture" as const, id: lamp.id };
           lampBest = { d, fi, entity: lamp.entity, room: lamp.room, item, y: lamp.pos[1] + f.offset };
         }
@@ -1830,7 +1859,7 @@ export class Viewer {
         v.set(rig.lens[0], wy, rig.lens[1]).project(this.camera);
         if (v.z > 1) continue;
         const d = Math.hypot(((v.x + 1) / 2) * this.width - x, ((1 - v.y) / 2) * this.height - y);
-        if (d < 26 && (!camBest || d < camBest.d)) camBest = { d, fi, rig, y: wy };
+        if (d < 26 && (!camBest || d < camBest.d) && !this.shutIn(fi, [rig.lens[0], wy, rig.lens[1]])) camBest = { d, fi, rig, y: wy };
       }
     }
     if (camBest && (!lampBest || camBest.d < lampBest.d)) {
@@ -1842,22 +1871,40 @@ export class Viewer {
     // then the meshes: a screen with an entity, else the room the floor belongs to
     const ray = new Raycaster();
     ray.setFromCamera(new Vector2((x / this.width) * 2 - 1, -(y / this.height) * 2 + 1), this.camera);
-    const meshes = this.floors.filter((f, fi) => f.group.visible && (this.mode === "house" || fi === this.activeFloor))
-      .flatMap((f) => [f.opaque, f.dyn, ...(f.roof?.visible ? [f.roof] : [])]);
-    const hits = ray.intersectObjects(meshes, false);
+    const parts = new Map<object, { fi: number; geo: Geo; onRoof: boolean }>();
+    this.floors.forEach((f, fi) => {
+      if (!f.group.visible || (this.mode !== "house" && fi !== this.activeFloor)) return;
+      parts.set(f.opaque, { fi, geo: f.fb.opaque, onRoof: false });
+      parts.set(f.dyn, { fi, geo: f.dynGeo, onRoof: false });
+      if (f.roof?.visible) parts.set(f.roof, { fi, geo: f.fb.roof, onRoof: true });
+      // the shut house's glass too: a tap on a pane is on its window, not on the room behind
+      if (!this.closed) return;
+      parts.set(f.glass, { fi, geo: f.fb.glass, onRoof: false });
+      parts.set(f.dynGlass, { fi, geo: f.dynGlassGeo, onRoof: false });
+      if (f.roofGlass?.visible) parts.set(f.roofGlass, { fi, geo: f.fb.roofGlass, onRoof: true });
+    });
+    const hits = ray.intersectObjects([...parts.keys()] as Mesh[], false);
     for (const h of hits) {
-      const fi = this.floors.findIndex((f) => f.opaque === h.object || f.dyn === h.object || f.roof === h.object);
+      const { fi, geo, onRoof } = parts.get(h.object)!;
       const f = this.floors[fi];
-      const onRoof = f.roof === h.object;
-      const geo = f.dyn === h.object ? f.dynGeo : onRoof ? f.fb.roof : f.fb.opaque;
       const vi = h.face?.a ?? -1;
       if (vi < 0) continue;
       const itemIdx = geo.item[vi];
       const item = itemIdx >= 0 ? f.fb.items[itemIdx] : undefined;
       const slot = geo.glow[vi];
+      if (!onRoof && item?.kind !== "opening" && this.shutIn(fi, [h.point.x, h.point.y, h.point.z])) {
+        // seen inside the shut house (through an open door): only its room, never what is in it
+        const room = this.roomAt(fi, [h.point.x, h.point.z]);
+        return { kind: room >= 0 ? "room" : "empty", floor: fi, room, entity: null };
+      }
       if (slot >= 0 && !this.editMode) {
         const g = f.fb.glows[slot];
         if (g?.entity) return { kind: "entity", floor: fi, room: g.room, entity: g.entity, item };
+      }
+      if (this.closed && item?.kind === "opening" && !this.editMode) {
+        // the shut house's door or window without a sensor: the room behind it (as a tap through the glass gave)
+        const o = [...f.fb.windows, ...f.fb.doors].find((w) => w.item === itemIdx);
+        if (o && o.room >= 0) return { kind: "room", floor: fi, room: o.room, entity: null };
       }
       if (item && this.editMode && onRoof) {
         // something on a roof slides along the slope under it; a roof itself moves level
