@@ -2,7 +2,8 @@
 
 Everything happens on GitHub: issues hold the work, labels say what state it is in, and every change
 arrives as a pull request that CI and a review check before a maintainer merges it. Read this with
-[CONTRIBUTING.md](../CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+[CONTRIBUTING.md](../CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md). What users read is the
+[user guide](GUIDE.md), and every change keeps it true.
 
 ## Labels
 
@@ -26,8 +27,9 @@ arrives as a pull request that CI and a review check before a maintainer merges 
 4. **Pull request** that closes the issue: what changed, why, and how it was checked, in plain words.
    Keep it focused: under about 600 changed lines, not counting the built files. Split bigger issues
    and say so on the issue.
-5. **Review:** CI must pass. The review checks the change against the issue, the performance rules
-   and plan compatibility, fixes small problems on the branch, and labels it `ready for merge`.
+5. **Review:** CI must pass. The review checks the change against the issue, the performance rules,
+   plan compatibility and the user guide, fixes small problems on the branch, and labels it
+   `ready for merge`.
 6. **Merge:** a maintainer squash-merges. The branch is deleted automatically.
 7. **Release:** maintainers only, after trying it on a real Home Assistant (see Releases).
 
@@ -48,6 +50,10 @@ questions on it, label it `needs info`, and remove `in progress`.
 - Old plans still load. Plan format changes go through `normalizePlan`.
 - User-visible changes get a line in `CHANGELOG.md` under `## Unreleased` (add the heading at the top
   if it is missing), in the same plain style as the existing entries.
+- **The user guide stays true.** Anything a user sees or does differently (a new feature, a renamed
+  button, a changed option or default, something removed) updates [docs/GUIDE.md](GUIDE.md) in the
+  same pull request, naming buttons and options exactly as the source does. The pull request says
+  which sections changed, or why none needed to.
 - Text shown to users is short and plain.
 
 ## Rules
@@ -70,7 +76,7 @@ questions on it, label it `needs info`, and remove `in progress`.
 
 Maintainers only:
 1. Move `## Unreleased` in `CHANGELOG.md` to the new version and bump `version` in
-   `custom_components/virtuhome/manifest.json`.
+   `custom_components/virtuhome/manifest.json`. Check that the user guide covers every line of it.
 2. `cd frontend && npm run build` (the loader carries the version) and commit.
 3. Wait for CI on `main`, then try it on a real Home Assistant: update through HACS, restart, open the
    panel and a wall tablet, and check an old plan still loads.
@@ -84,17 +90,15 @@ Most valuable first. Each one becomes an issue with acceptance criteria before a
    scale from one known wall, draw over it. Most people have no LiDAR phone.
 2. **Diagnostics download** through Home Assistant's diagnostics platform (versions, plan size,
    recent errors), so problems can be reported in one click.
-3. **User guide:** getting started, scanning, wall tablets (Fire HD 8, Android, iPad, Fully Kiosk,
-   Companion app), FAQ and troubleshooting.
-4. **Heating per room:** TRVs and thermostats (Hive, Tado, Drayton Wiser, Nest, Evohome) with
+3. **Heating per room:** TRVs and thermostats (Hive, Tado, Drayton Wiser, Nest, Evohome) with
    setpoint, current temperature and a glow while heating.
-5. **Presence by room** from mmWave sensors and room-level tracking (Bermuda, ESPresense).
-6. **Security timeline:** replay today's doors, motion, cameras and alarm on the 3D home.
-7. **Smart locks** on their doors, and **media players** showing what is playing.
-8. **EV charger and car** on the driveway, as part of the energy view.
-9. **Robot vacuum position** and an **air quality map** (CO₂, PM2.5, humidity).
-10. **Translations:** move UI strings into a table first, then German and Dutch.
-11. **Feet and inches** in the 2D editor.
-12. **Performance budget tests:** draw calls per floor, idle frames and bundle size, failing CI when
+4. **Presence by room** from mmWave sensors and room-level tracking (Bermuda, ESPresense).
+5. **Security timeline:** replay today's doors, motion, cameras and alarm on the 3D home.
+6. **Smart locks** on their doors, and **media players** showing what is playing.
+7. **EV charger and car** on the driveway, as part of the energy view.
+8. **Robot vacuum position** and an **air quality map** (CO₂, PM2.5, humidity).
+9. **Translations:** move UI strings into a table first, then German and Dutch.
+10. **Feet and inches** in the 2D editor.
+11. **Performance budget tests:** draw calls per floor, idle frames and bundle size, failing CI when
     they grow.
-13. **Starter plans** for common UK house types (2-bed terrace, 3-bed semi, 4-bed detached).
+12. **Starter plans** for common UK house types (2-bed terrace, 3-bed semi, 4-bed detached).

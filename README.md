@@ -29,7 +29,7 @@ and shadows, and the weather.
   themselves. The car's battery, what it is charging to and by when, and its charge modes are in the
   energy sheet; the charger on the driveway lights up while it charges, and the car (shaped like
   yours) is on the drive while it is plugged in or its tracker says it is home.
-- **Fences and garden walls:** 15 designs from closeboard and lap panels to picket, railings,
+- **Fences and garden walls:** 16 designs from closeboard and lap panels to picket, railings,
   palisade, glass and brick walls, in any height and colour, with gravel boards, trellis toppers and
   gates. Fence a garden in one tap, or draw fences in the 2D plan.
 - **Roofs:** gable, hipped, half-hipped, Dutch gable, pyramid, mansard, gambrel, lean-to, flat,
@@ -52,6 +52,9 @@ and shadows, and the weather.
   house: doors, motion, cameras, the doorbell and the alarm on a timeline, and what happened while
   everyone was out) are available to VirtuMaps installation clients.
 
+**[Read the user guide](docs/GUIDE.md)**: installing, getting your home in with or without a
+scanner, devices, wall tablets, FAQ and troubleshooting.
+
 | Realistic, by day | Live: alerts, people, temperature map |
 |---|---|
 | ![Realistic look by day](docs/screenshots/day.jpg) | ![Leak alert, people and the temperature map](docs/screenshots/live.jpg) |
@@ -64,6 +67,8 @@ and shadows, and the weather.
 2. Install **VirtuHome**, restart Home Assistant.
 3. Settings → Devices & services → Add integration → **VirtuHome**.
 4. Open **VirtuHome** in the sidebar. Add the card to a dashboard with `type: custom:virtuhome-card`.
+
+The [user guide](docs/GUIDE.md) goes on from here.
 
 ## Card options
 
@@ -113,6 +118,8 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   As in 3D, furniture, devices, doors and windows move only once they are selected.
   The fence tool draws a fence corner by corner: click its last point again to finish.
   Arrow keys nudge, R turns, Delete removes.
+- **Floors:** Edit → Home → Floors → **Add a floor** puts a storey on top; the 2D plan shows the floor
+  below faintly to draw over. A roof's **Sits on** moves it onto another storey.
 - **Trace a floor plan picture:** no LiDAR phone needed. In the 2D plan, the picture button puts an
   estate agent's plan (or a photo of a sketch; JPEG or PNG up to 8 MB) under the floor. Click both ends
   of a wall you know and type its length (3.45, 345 cm or 11'4"), then draw the rooms over it. Drag the
@@ -175,9 +182,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md) a
 
 ## Extensions and licence keys
 
-Editor → **Extras** takes a licence key. Keys are checked with the VirtuMaps licence server once; the
-extensions they unlock are verified, stored in Home Assistant and keep working offline. Nothing is sent
-anywhere unless you enter a key.
+Editor → **Extras** takes a licence key. Keys are checked with the VirtuMaps licence server; the
+extensions they unlock are verified, stored in Home Assistant and keep working offline. Opening Extras
+asks the server for the list of extensions; nothing else is sent unless you enter a key (the guide
+says [what is sent](docs/GUIDE.md#extensions-and-licence-keys)).
 
 ## Licence
 

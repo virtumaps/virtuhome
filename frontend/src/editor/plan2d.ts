@@ -184,7 +184,9 @@ export class Plan2D {
     // the rooms fill the view; the garden shows around them as far as it fits
     const rooms = f?.rooms.flatMap((r) => r.points) ?? [];
     const garden = (f?.outdoor ?? []).flatMap((o) => o.points);
-    const pts = rooms.length ? rooms : garden.length ? garden : f?.background ? imageCorners(f.background) : [];
+    // a new storey without rooms yet: the one below it, which shows faintly to draw over
+    const under = this.host.plan().floors[this.floorIndex - 1]?.rooms.flatMap((r) => r.points) ?? [];
+    const pts = rooms.length ? rooms : garden.length ? garden : f?.background ? imageCorners(f.background) : under;
     const b = pts.length ? bounds(pts) : { minX: -3, minZ: -3, maxX: 3, maxZ: 3 };
     const pad = 70;
     // clear of the image tool's panel: beside it or below it, whichever leaves more room
@@ -213,7 +215,11 @@ export class Plan2D {
     });
   }
 
+  /** The floors the bar's buttons were made for. */
+  private barFloors = "";
+
   private renderBar(): void {
+    this.barFloors = this.host.plan().floors.map((x) => x.name).join("\n");
     const tools: [Tool, string, string][] = [
       ["select", mdiCursorDefault, "Select and move"],
       ["rect", mdiRectangleOutline, "New room: drag a rectangle"],
@@ -302,6 +308,10 @@ export class Plan2D {
   // ------------------------------------------------------------------ drawing
 
   private draw(): void {
+    // a floor added, removed or renamed from the drawer: the floor buttons follow, and a new one is fitted
+    const floorsKey = this.host.plan().floors.map((x) => x.name).join("\n");
+    if (floorsKey !== this.barFloors) this.renderBar();
+    if (this.w > 2 && this.fitted !== this.host.floor()) this.fit();
     const f = this.floor;
     const plan = this.host.plan();
     const sel = this.host.selection();

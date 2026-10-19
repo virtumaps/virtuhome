@@ -31,6 +31,8 @@ Issues, labels, branches, the definition of done and the release steps are in
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): no per-pixel lighting, no extra draw calls per device,
   nothing that renders while nothing changes. Say in your pull request how you checked it.
 - Keep the plan format backwards compatible: old plans must keep loading (`normalizePlan`).
+- Keep the [user guide](docs/GUIDE.md) true: a change to what users see or do updates it in the same
+  pull request.
 - Run `npm run build` in `frontend/` and commit the result in `custom_components/virtuhome/frontend`:
   HACS installs straight from the repository.
 - Code style: follow the surrounding code; comments explain why, not what.
