@@ -43,14 +43,18 @@ questions on it, label it `needs info`, and remove `in progress`.
 
 - `cd frontend && npm ci && npm run typecheck && npm test && npm run build` passes, and the build in
   `custom_components/virtuhome/frontend` is committed. CI checks that it matches the sources.
-- If Python changed: `pip install cryptography pytest && pytest -q tests`, and
+- If Python changed: `pip install cryptography pytest voluptuous && pytest -q tests`, and
   `python -m compileall -q custom_components/virtuhome` is clean.
 - New behaviour has tests where it can (`frontend/test`, vitest). Geometry changes keep
   `zfight.test.ts` and `flicker.test.ts` passing.
 - The performance rules in [ARCHITECTURE.md](ARCHITECTURE.md) still hold: nothing renders while
   nothing changes, no extra draw calls per device, no per-pixel lighting, no allocations in the render
   loop.
-- Old plans still load. Plan format changes go through `normalizePlan`.
+- Old plans still load. Plan format changes go through `normalizePlan` (and `schema.py`).
+  `frontend/test/fixtures/plans/` keeps the demo plan as every release saved it, and small plans
+  with the rarer parts; `frontend/test/fixtures.test.ts` loads and builds each one, and
+  `tests/test_plan_fixtures.py` checks them against the schema. When one stops loading, fix the
+  loading, never the fixture.
 - User-visible changes get a line in `CHANGELOG.md` under `## Unreleased` (add the heading at the top
   if it is missing), in the same plain style as the existing entries.
 - **The user guide stays true.** Anything a user sees or does differently (a new feature, a renamed
@@ -80,10 +84,14 @@ questions on it, label it `needs info`, and remove `in progress`.
 Maintainers only:
 1. Move `## Unreleased` in `CHANGELOG.md` to the new version and bump `version` in
    `custom_components/virtuhome/manifest.json`. Check that the user guide covers every line of it.
-2. `cd frontend && npm run build` (the loader carries the version) and commit.
-3. Wait for CI on `main`, then try it on a real Home Assistant: update through HACS, restart, open the
+2. Save the demo plan as the new fixture: `python tools/save_plan_fixture.py` writes
+   `frontend/test/fixtures/plans/vX.Y.Z.json` (it needs `npm ci` in `frontend/` and voluptuous).
+   From then on the tests load it, so every later release keeps loading this one's plans. The tests
+   fail until the new version has one.
+3. `cd frontend && npm run build` (the loader carries the version) and commit.
+4. Wait for CI on `main`, then try it on a real Home Assistant: update through HACS, restart, open the
    panel and a wall tablet, and check an old plan still loads.
-4. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
+5. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
 
 ## Roadmap
 
