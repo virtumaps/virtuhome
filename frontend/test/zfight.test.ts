@@ -7,7 +7,11 @@ import { BALUSTRADES, FURNITURE, type BalustradeStyle, type Part } from "../src/
 import { FENCE_ORDER, fencePieces } from "../src/scene/fences";
 import { GARDEN_OPTIONS, PLANTER_MATERIALS, PLANTING_NAMES } from "../src/scene/garden";
 
-/** Flat faces of the parts that lie in one plane, face the same way and overlap: they would flicker. */
+/**
+ * Flat faces of the parts that lie in one plane, face the same way and overlap: they would flicker.
+ * Glass is drawn from both sides, so a pane in the plane of a solid face flickers whichever way
+ * either faces.
+ */
 function fights(parts: Part[]): string[] {
   type Face = { part: number; axis: number; sign: number; at: number; u: [number, number]; v: [number, number] };
   const faces: Face[] = [];
@@ -25,12 +29,16 @@ function fights(parts: Part[]): string[] {
     }
     if (box || p.axis === "x") for (const s of [-1, 1]) faces.push({ part: i, axis: 0, sign: s, at: s < 0 ? x[0] : x[1], u: y, v: z });
     if (box || p.axis === "z") for (const s of [-1, 1]) faces.push({ part: i, axis: 2, sign: s, at: s < 0 ? z[0] : z[1], u: x, v: y });
+    // a hull's sides are flat unless they lean in (the outline's box stands for the outline)
+    if (p.shape === "hull" && !p.inset) for (const s of [-1, 1]) faces.push({ part: i, axis: 0, sign: s, at: s < 0 ? x[0] : x[1], u: y, v: z });
   });
+  const glass = (f: Face) => parts[f.part].role === "glass";
   const out: string[] = [];
   for (let a = 0; a < faces.length; a++) {
     for (let b = a + 1; b < faces.length; b++) {
       const A = faces[a], B = faces[b];
-      if (A.part === B.part || A.axis !== B.axis || A.sign !== B.sign || Math.abs(A.at - B.at) > 0.0005) continue;
+      if (A.part === B.part || A.axis !== B.axis || Math.abs(A.at - B.at) > 0.0005) continue;
+      if (A.sign !== B.sign && glass(A) === glass(B)) continue;
       const ou = Math.min(A.u[1], B.u[1]) - Math.max(A.u[0], B.u[0]);
       const ov = Math.min(A.v[1], B.v[1]) - Math.max(A.v[0], B.v[0]);
       if (ou > 0.002 && ov > 0.002) out.push(`parts ${A.part} and ${B.part}, ${"xyz"[A.axis]}${A.sign > 0 ? "+" : "-"} at ${A.at.toFixed(3)}`);

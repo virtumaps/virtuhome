@@ -96,27 +96,33 @@ function door(x: number, zf: number, width: number, height: number, leaf: Role, 
   for (let k = 0; k < n; k++) {
     const lx = x - width / 2 + lw / 2 + k * (lw + 0.01);
     if (glazed) {
-      // a frame of the trim round a pane, the dark room behind it showing through
-      out.push(box(lx, y0, zf + 0.012, lw, height, 0.024, trim));
-      out.push(box(lx, y0 + 0.124, zf + 0.0243, lw - 0.148, height - 0.248, 0.001, "screen"));
-      out.push(box(lx, y0 + 0.12, zf + 0.027, lw - 0.14, height - 0.24, 0.004, "glass"));
+      // stiles and rails of the trim round a pane, the dark room behind it showing through; the
+      // pane's edges sink into the frame and it stands clear of the dark (glass shows both sides)
+      for (const sx of [-1, 1]) out.push(box(lx + sx * (lw / 2 - 0.035), y0, zf + 0.012, 0.07, height, 0.024, trim));
+      out.push(box(lx, y0, zf + 0.012, lw - 0.14, 0.12, 0.024, trim), box(lx, y0 + height - 0.12, zf + 0.012, lw - 0.14, 0.12, 0.024, trim));
+      out.push(box(lx, y0 + 0.11, zf + 0.003, lw - 0.13, height - 0.22, 0.002, "screen"));
+      out.push(box(lx, y0 + 0.11, zf + 0.012, lw - 0.13, height - 0.22, 0.004, "glass"));
     } else {
       out.push(box(lx, y0, zf + 0.012, lw, height, 0.024, leaf));
       // hinges on the outer side
       const hx = k === 0 ? lx - lw / 2 + 0.12 : lx + lw / 2 - 0.12;
       for (const hy of [0.25, height - 0.3]) out.push(box(hx, y0 + hy, zf + 0.026, 0.22, 0.03, 0.004, "dark"));
     }
+    // the handle by the closing edge, on the stile of a glazed door
     const side = n === 1 ? 1 : k === 0 ? 1 : -1;
-    out.push(box(lx + side * (lw / 2 - 0.07), y0 + Math.min(1.0, height * 0.52), zf + 0.035, 0.02, 0.13, 0.022, "dark"));
+    out.push(box(lx + side * (lw / 2 - (glazed ? 0.035 : 0.07)), y0 + Math.min(1.0, height * 0.52), zf + 0.035, 0.02, 0.13, 0.022, "dark"));
   }
   return out;
 }
 
-/** A window in the +z face at zf: a pane in a frame of the trim, on a sill. */
+/**
+ * A window in the +z face at zf: a pane in a frame of the trim, on a sill. The pane's edges sink
+ * into the frame and it stands clear of the dark behind it (glass shows both sides).
+ */
 function window(x: number, y0: number, zf: number, w: number, h: number, trim: Role): Part[] {
   return [
     box(x, y0 + 0.004, zf + 0.001, w - 0.008, h - 0.008, 0.0015, "screen"),
-    box(x, y0, zf + 0.008, w, h, 0.012, "glass"),
+    box(x, y0 - 0.01, zf + 0.012, w + 0.02, h + 0.02, 0.006, "glass"),
     box(x - w / 2 - 0.025, y0, zf + 0.015, 0.05, h, 0.03, trim),
     box(x + w / 2 + 0.025, y0, zf + 0.015, 0.05, h, 0.03, trim),
     box(x, y0 + h, zf + 0.015, w + 0.1, 0.05, 0.03, trim),
@@ -314,22 +320,34 @@ function gardenOffice(w: number, d: number, h: number, roof: Role, doors: ShedDo
   return out;
 }
 
-/** A greenhouse: an aluminium frame of posts, rails and glazing bars round glass, its door in the gable end. */
+/**
+ * A greenhouse: an aluminium frame of sills, posts, rails and glazing bars round panes of glass, a
+ * sliding door outside the gable end, and a path of slabs down the soil inside. Glass is seen from
+ * both sides, so every pane's edges are sunk into the frame and no pane lies on a metal face.
+ */
 function greenhouse(L: number, W: number, h: number, frame: Role): Part[] {
   const base = 0.12;
   const rise = Math.min(h - 1.4, W * 0.3);
   const he = h - rise;
   const slope = rise / (W / 2);
-  const out: Part[] = [
-    box(0, 0, 0, L, base, W, frame),
-    box(0, base, 0, L - 0.02, he - base, W - 0.02, "glass"),
-    prism(0, he, 0, L - 0.02, rise - 0.01, W - 0.02, "glass"),
-  ];
   const yAt = (z: number) => he + rise * (1 - Math.abs(z) / (W / 2));
-  // posts at the corners, rails along the eaves and the ridge, bars every 0.6 m
+  const G = 0.006;
+  // the doorway: 0.7 wide, up into the gable, under the roof
+  const ow = Math.max(0.2, Math.min(0.35, W / 2 - 0.15));
+  const top = Math.min(base + 1.85, yAt(ow) - 0.08);
+  const out: Part[] = [
+    // soil, and slabs from the door to the back
+    box(0, 0, 0, L - 0.05, 0.02, W - 0.05, "soil"),
+  ];
+  const pw = Math.min(0.6, W - 0.4), n = Math.max(1, Math.round((L - 0.05) / 0.6)), sl = (L - 0.05) / n;
+  for (let i = 0; i < n; i++) out.push(box(-(L - 0.05) / 2 + sl * (i + 0.5), 0, 0, sl - 0.012, 0.035, pw, "concrete"));
+  // the sills round the base, posts at the corners, rails along the eaves and the ridge
+  for (const sz of [-1, 1]) out.push(box(0, 0, (sz * W) / 2, L + 0.05, base, 0.05, frame));
+  for (const sx of [-1, 1]) out.push(box((sx * L) / 2, 0, 0, 0.05, base, W - 0.05, frame));
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(box((sx * L) / 2, base, (sz * W) / 2, 0.04, he - base, 0.04, frame));
   for (const sz of [-1, 1]) out.push(box(0, he - 0.03, (sz * W) / 2, L + 0.04, 0.05, 0.05, frame));
   out.push(box(0, he + rise - 0.03, 0, L + 0.04, 0.05, 0.05, frame));
+  // glazing bars every 0.6 m, up the sides and over the roof; rafters along both gables
   const nx = Math.max(1, Math.round(L / 0.6));
   for (let i = 1; i < nx; i++) {
     const x = -L / 2 + (L * i) / nx;
@@ -338,14 +356,30 @@ function greenhouse(L: number, W: number, h: number, frame: Role): Part[] {
       out.push(box(x, yAt((sz * W) / 4) - 0.012, (sz * W) / 4, 0.025, 0.03, W / 2, frame, { shear: -sz * slope }));
     }
   }
-  // the gable ends: a bar each side of the door, the door's frame and a gable bar
-  const end = (s: number) => [
-    box(s * (L / 2), base, -0.35, 0.03, he - base, 0.025, frame),
-    box(s * (L / 2), base, 0.35, 0.03, he - base, 0.025, frame),
-  ];
-  out.push(...end(-1), ...end(1));
-  out.push(box(L / 2 + 0.012, base, 0, 0.024, Math.min(1.85, he + rise * 0.5 - base), 0.66, frame));
-  out.push(box(L / 2 + 0.026, base + 0.1, 0, 0.004, Math.min(1.85, he + rise * 0.5 - base) - 0.2, 0.56, "glass"));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(box((sx * L) / 2, yAt((sz * W) / 4) - 0.015, (sz * W) / 4, 0.04, 0.03, W / 2, frame, { shear: -sz * slope }));
+  // the gable ends: a bar each side of the doorway (up to the head at the door's end, to the rafters at the back)
+  for (const sz of [-1, 1]) {
+    out.push(box(L / 2, base, sz * ow, 0.03, top - 0.03 - base, 0.025, frame));
+    out.push(box(-L / 2, base, sz * ow, 0.03, yAt(ow) - base, 0.025, frame));
+  }
+  out.push(box(L / 2, top - 0.03, 0, 0.03, 0.04, 2 * ow + 0.025, frame));
+  // the panes: the sides, the roof's two slopes, and the gables (the doorway left open)
+  const y0 = base - 0.03;
+  for (const sz of [-1, 1]) {
+    out.push(box(0, y0, (sz * W) / 2, L, he - y0, G, "glass"));
+    // the slopes stop short of the bars' ends, still inside the eave and ridge rails
+    out.push(box(0, yAt((sz * W) / 4) - G / 2, (sz * W) / 4, L, G, W / 2 - 0.02, "glass", { shear: -sz * slope }));
+  }
+  const gh = he + rise - y0, ve = (he - y0) / gh, u0 = 0.5 - ow / W, u1 = 0.5 + ow / W, vt = (top - 0.01 - y0) / gh;
+  const gable = (x: number, outline: [number, number][]): Part => ({ shape: "hull", x, y: y0, z: 0, w: G, h: gh, d: W, role: "glass", outline });
+  out.push(gable(-L / 2, [[0, 0], [1, 0], [1, ve], [0.5, 1], [0, ve]]));
+  out.push(gable(L / 2, [[0, 0], [u0, 0], [u0, vt], [u1, vt], [u1, 0], [1, 0], [1, ve], [0.5, 1], [0, ve]]));
+  // the sliding door, a little wider than the doorway: stiles and rails round a pane, and a handle
+  const xd = L / 2 + 0.028, dw = 2 * ow + 0.06, dh = top - base;
+  for (const sz of [-1, 1]) out.push(box(xd, base, sz * (dw / 2 - 0.02), 0.024, dh, 0.04, frame));
+  out.push(box(xd, base, 0, 0.024, 0.08, dw - 0.08, frame), box(xd, top - 0.04, 0, 0.024, 0.04, dw - 0.08, frame));
+  out.push(box(xd, base + 0.06, 0, 0.004, dh - 0.08, dw - 0.06, "glass"));
+  out.push(box(xd + 0.022, base + 0.9, -(dw / 2 - 0.02), 0.02, 0.14, 0.02, "dark"));
   return out;
 }
 
@@ -427,7 +461,7 @@ function louvred(w: number, d: number, h: number, item?: Furniture): Part[] {
   if (canopy === "louvres") {
     const n = Math.max(3, Math.round(id / 0.2));
     for (let i = 0; i < n; i++) out.push(box(0, h - fh / 2 - 0.006, -id / 2 + (id * (i + 0.5)) / n, iw, 0.012, 0.18, A, { shear: 0.84 }));
-  } else if (canopy === "glass") out.push(box(0, h - 0.06, 0, iw, 0.012, id, "glass"));
+  } else if (canopy === "glass") out.push(box(0, h - 0.06, 0, iw + 0.01, 0.012, id + 0.01, "glass"));
   else out.push(box(0, h - 0.07, 0, iw, 0.01, id, "canvas"));
   return out;
 }

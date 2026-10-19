@@ -555,7 +555,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
       box(0, 0, 0, w, 0.12, d, "woodDark"), box(0, h - 0.05, 0, w, 0.05, d, "woodDark"),
       box(-w / 2 + 0.02, 0.12, 0, 0.04, h - 0.17, d, "woodDark"), box(w / 2 - 0.02, 0.12, 0, 0.04, h - 0.17, d, "woodDark"),
       box(0, 0.12, -d / 2 + 0.01, w - 0.08, h - 0.17, 0.02, "woodDark"),
-      ...[0.45, 0.85, 1.25].map((y) => box(0, (y / 1.9) * h, 0, w - 0.08, 0.015, d - 0.04, "glass")),
+      ...[0.45, 0.85, 1.25].map((y) => box(0, (y / 1.9) * h, -0.0025, w - 0.07, 0.015, d - 0.035, "glass")),
       ...[0.5, 0.9].map((y, i) => box(-w * 0.15 + i * 0.2, (y / 1.9) * h, 0, 0.12, 0.18, 0.12, i ? "ceramic" : "accent")),
     ],
   },
@@ -696,7 +696,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
   },
   shower: {
     name: "Shower", category: "bath", family: "shower", size: [0.9, 0.9, 2.0],
-    build: (w, d, h) => [box(0, 0, 0, w, 0.06, d, "ceramic"), box(0, 0.06, d / 2 - 0.01, w, h - 0.06, 0.01, "glass"), box(-w / 2 + 0.01, 0.06, 0, 0.01, h - 0.06, d, "glass"), cyl(w / 2 - 0.15, h - 0.12, -d / 2 + 0.15, 0.22, 0.02, 0.22, "metal", undefined, 12)],
+    build: (w, d, h) => [box(0, 0, 0, w, 0.06, d, "ceramic"), box(0, 0.055, d / 2 - 0.01, w, h - 0.055, 0.01, "glass"), box(-w / 2 + 0.01, 0.055, 0, 0.01, h - 0.055, d, "glass"), cyl(w / 2 - 0.15, h - 0.12, -d / 2 + 0.15, 0.22, 0.02, 0.22, "metal", undefined, 12)],
   },
   wc: {
     name: "Toilet", category: "bath", family: "wc", size: [0.4, 0.65, 0.8],
