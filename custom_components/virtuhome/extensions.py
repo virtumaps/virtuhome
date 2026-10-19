@@ -110,9 +110,8 @@ class ExtensionManager:
 
     async def async_activate(self, key: str) -> dict[str, Any]:
         key = key.strip()
-        data = await self._post("/v1/activate", {
-            "key": key, "instance": self.instance, "label": self.hass.config.location_name or "Home Assistant",
-        })
+        # only the key and the anonymous installation id: nothing that names the home
+        data = await self._post("/v1/activate", {"key": key, "instance": self.instance})
         await self._accept(key, data)
         if not self._unsub_timer:
             self._unsub_timer = async_track_time_interval(self.hass, self._daily, timedelta(hours=24))

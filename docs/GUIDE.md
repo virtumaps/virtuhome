@@ -384,9 +384,8 @@ fetches new versions; **Remove licence** frees the key for another Home Assistan
 extensions** lists what there is.
 
 **What is sent:** opening **Extras** asks the VirtuMaps licence server for the list of extensions.
-Activating a key sends the key, an anonymous code for this Home Assistant and your home's name in
-Home Assistant (to tell your activations apart). The licence is then renewed about once a day while
-Home Assistant is online. Extensions are checked, stored in Home Assistant and keep working offline.
+Activating a key sends the key and an anonymous code for this Home Assistant, nothing that names
+your home. The licence is then renewed about once a day while Home Assistant is online. Extensions are checked, stored in Home Assistant and keep working offline.
 
 | Extension | What it adds | Card options (visual editor section) |
 |---|---|---|

@@ -12,6 +12,8 @@
   new panels take the size and power of those already on the roof.
 
 ### Fixed
+- Activating a licence key no longer sends the home's name from Home Assistant to the licence
+  server: only the key and an anonymous code for the installation.
 - Solar panels on a roof look dark in the realistic look, as anti-reflective panel glass does; they
   used to mirror a bright sky almost white.
 - With the roofs on, taps no longer reach what is inside the house: a tap on a solar panel used to
