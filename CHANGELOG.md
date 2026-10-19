@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
 ### New
 - Roofs: gable, hipped, half-hipped, Dutch gable, pyramid, mansard, gambrel, lean-to, flat (with
