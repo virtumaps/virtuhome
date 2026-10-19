@@ -212,7 +212,10 @@ export class VhView {
       const el = (e.target as HTMLElement).closest<HTMLElement>(".vh-label");
       if (!el) return;
       const floor = Number(el.dataset.floor);
+      const opens = (e.target as HTMLElement).closest<HTMLElement>("[data-entity]")?.dataset.entity;
       if (el.dataset.room === undefined) this.showFloor(floor);
+      // the room's heating opens its thermostat; the rest of the label opens the room
+      else if (opens && !this.replayed && !this.editor) moreInfo(this.root, opens);
       else if (this.replayed) this.replayed.options.onHit?.({ floor, room: Number(el.dataset.room), entity: null }, "tap");
       else this.openRoom(floor, Number(el.dataset.room));
     });

@@ -22,6 +22,10 @@ export const VIEW_CSS = /* css */ `
 }
 .vh-label b { font-weight: 600; display: block; }
 .vh-label span { color: var(--vh-dim); font-size: 11px; }
+/* a bigger target than the text, without moving it */
+.vh-label .vh-heat { display: inline-block; padding: 6px 4px; margin: -6px -4px; }
+.vh-label .vh-heat.on { color: #ff8a4c; }
+.vh-root.day .vh-label .vh-heat.on { color: #d2501a; }
 .vh-floor-label { font-size: 13px; font-weight: 600; padding: 5px 12px; }
 .vh-bar {
   position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; align-items: center;
