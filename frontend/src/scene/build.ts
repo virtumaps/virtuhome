@@ -580,9 +580,10 @@ function buildWall(
     } else {
       doors.push(info);
     }
-    g.currentItem = info.item;
+    // its glass too: a tap on the pane is a tap on the window
+    g.currentItem = glass.currentItem = info.item;
     buildOpeningFixed({ g, glass, pal, look: joineryLook(o, pal), room, ws: wsBody >= 0 ? wsBody + WALL_TRIM : wsBody, glow, low }, info);
-    g.currentItem = -1;
+    g.currentItem = glass.currentItem = -1;
   }
 }
 

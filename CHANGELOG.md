@@ -5,6 +5,11 @@
 ### Fixed
 - Solar panels on a roof look dark in the realistic look, as anti-reflective panel glass does; they
   used to mirror a bright sky almost white.
+- With the roofs on, taps no longer reach what is inside the house: a tap on a solar panel used to
+  pick a light, a camera or (in the editor) a sensor under the roof that happened to be near it on
+  screen, and a tap on a window went through the glass to whatever stood behind it. Doors, windows
+  and the garden still take taps: in the editor a window's pane selects the window, and in the view
+  it opens the window's sensor, or the room behind it.
 
 ## 0.8.0
 
