@@ -1007,7 +1007,8 @@ function solar(it: RoofItem, fr: ItemFrame, d: RoofDraw): void {
       const a0 = -w / 2 + c * (pw + PANEL.gap);
       g.useSurface(blue ? "role:metal" : "role:blackMetal");
       frameBox(g, row, a0, a0 + pw, bb, bb + ph, lift, lift + 0.035, frameCol, -1, tilt > 0);
-      g.useSurface("role:screen");
+      // solar glass: anti-reflective, so it reads dark under a bright sky
+      g.useSurface("pv");
       frameQuad(g, row, a0 + 0.02, a0 + pw - 0.02, bb + 0.02, bb + ph - 0.02, lift + 0.037, cellCol, glow);
     }
   }

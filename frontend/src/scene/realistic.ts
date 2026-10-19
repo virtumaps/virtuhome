@@ -74,6 +74,7 @@ const OTHER_SPECS: Record<string, SurfaceSpec> = {
   slab: { tex: "concrete", scale: 3, rough: 0.9, relief: 0.2 },
   blind: { tex: "linen", scale: 0.3, rough: 0.9, relief: 0.2 },
   glass: { rough: 0.04, opacity: 0.3 },
+  pv: { rough: 0.38, metal: 0.05 },
 };
 
 const OUTDOOR_SPECS: Record<string, SurfaceSpec> = {

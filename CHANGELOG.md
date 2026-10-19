@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Solar panels on a roof look dark in the realistic look, as anti-reflective panel glass does; they
+  used to mirror a bright sky almost white.
+
 ## 0.8.0
 
 ### New
