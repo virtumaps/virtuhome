@@ -3,6 +3,11 @@
 Thank you for helping. VirtuHome is free to use and its source is open to read and improve; bug
 reports, ideas, furniture models, translations and pull requests are all welcome.
 
+Questions and ideas go to [Discussions](https://github.com/virtumaps/virtuhome/discussions), and
+[SUPPORT.md](SUPPORT.md) says where everything else goes. Issues labelled
+[`good first issue`](https://github.com/virtumaps/virtuhome/labels/good%20first%20issue) are a good
+place to start.
+
 ## Getting set up
 
 ```bash
