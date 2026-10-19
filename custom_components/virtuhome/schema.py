@@ -123,6 +123,8 @@ ROOF_ITEM = vol.Schema(
         vol.Required("d"): _SMALL,
         vol.Optional("cols"): vol.Any(None, vol.All(int, vol.Range(min=1, max=50))),
         vol.Optional("rows"): vol.Any(None, vol.All(int, vol.Range(min=1, max=20))),
+        # solar panels: one panel's long and short side (m)
+        vol.Optional("panel"): vol.Any(None, vol.All([vol.All(vol.Coerce(float), vol.Range(min=0.3, max=3))], vol.Length(min=2, max=2))),
         vol.Optional("entity"): _ENTITY,
         vol.Optional("cover"): _ENTITY,
         vol.Optional("color"): _COLOR,

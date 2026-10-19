@@ -129,7 +129,8 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   semi-detached (and on which side it joins) or terraced, pick the main roof's shape and covering, and
   tap Add the roof. Tap a roof in 3D for its shape, pitch, party wall ends, covering, colours, eaves
   and size; drag its blue corners to size it. Add solar panels (they go on the sunniest slope, as many
-  as fit), roof windows, a chimney (on the ridge), a dormer or a lantern, then drag them along the roof.
+  as fit; set their size and power from the label on the back of a panel), roof windows, a chimney
+  (on the ridge), a dormer or a lantern, then drag them along the roof.
   Link a string's power sensor to its panels and they shine with what it makes.
 - **Sun and weather:** Edit → Home → Sun and weather sets which way the top of the plan faces: drag
   the compass, type the bearing, or tap **Line up with the map** (it asks a public OpenStreetMap

@@ -192,6 +192,23 @@ describe("roofs on a plan", { timeout: 30_000 }, () => {
   it("sizes solar arrays from their panels", () => {
     expect(solarSize({ cols: 4, rows: 2 })).toEqual({ w: 4.596, d: 3.464 });
     expect(solarSize({ cols: 2, rows: 1, portrait: false })).toEqual({ w: 3.464, d: 1.134 });
+    // an array's own panels
+    expect(solarSize({ cols: 5, rows: 1, panel: [1.762, 1.134] })).toEqual({ w: 5.75, d: 1.762 });
+    expect(solarSize({ cols: 1, rows: 2, portrait: false, panel: [1.65, 0.992] })).toEqual({ w: 1.65, d: 2.004 });
+  });
+
+  it("keeps a usable panel size and sizes the array from it on load", () => {
+    const item = (panel: unknown) => {
+      const plan = normalizePlan({
+        version: 1, name: "t", settings: DEFAULT_SETTINGS,
+        floors: [{ id: "g", name: "G", level: 0, height: 2.5, rooms: [], openings: [], furniture: [], devices: [], walls: [],
+          roofs: [{ ...roof(), items: [{ id: "pv", kind: "solar", x: 3, z: 5.2, w: 1, d: 1, cols: 2, rows: 1, panel } as never] }] }],
+      });
+      return plan.floors[0].roofs![0].items![0];
+    };
+    expect(item([1.134, 1.762])).toMatchObject({ panel: [1.762, 1.134], w: 2.288, d: 1.762 });
+    expect(item(undefined)).toMatchObject({ panel: null, w: 2.288, d: 1.722 });
+    for (const bad of [[1.7], [1.7, "x"], [9, 1], [1.7, 0.1], "1762x1134"]) expect(item(bad).panel).toBeNull();
   });
 });
 
@@ -229,6 +246,9 @@ describe("roofs worked out from the plan", async () => {
     const fit = fitPanels(m, f)!;
     // the hipped end narrows the slope towards the ridge
     expect(fit.cols * fit.rows).toBe(4);
+    // bigger panels: fewer fit
+    const big = fitPanels(m, f, true, { long: 2.278, short: 1.134 })!;
+    expect(big.cols * big.rows).toBeLessThan(4);
     // with the plan's top facing east, its bottom faces west
     expect(faceBearing(m, f, 90)).toBeCloseTo(270, 6);
   });

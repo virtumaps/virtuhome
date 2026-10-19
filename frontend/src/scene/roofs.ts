@@ -8,7 +8,7 @@
 // plane. Walls fill up to the roof wherever it rises above them (gables, a lean-to's back, a
 // butterfly's front), and fascias and soffits finish its edges. A dormer and a lantern are small
 // roofs of their own, built the same way.
-import { PANEL, solarSize, type Floor, type Plan, type Roof, type RoofItem, type RoofShape, type Vec2 } from "../model/plan";
+import { PANEL, panelOf, solarSize, type Floor, type Plan, type Roof, type RoofItem, type RoofShape, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
 import { EXTERIOR_FINISHES, JOINERY_FINISHES, parseHex, ROOF_COVERINGS, type FinishDef } from "./finishes";
 import { ROOM_OUTSIDE, type Geo, type V3 } from "./geo";
@@ -490,16 +490,16 @@ function spanAt(poly: Vec2[], b: number): [number, number] | null {
 }
 
 /**
- * The most panels that fit on a face, keeping `margin` from its edges (and from roof windows,
- * chimneys and dormers on it): columns, rows, and the array's middle on the plan.
+ * The most panels of `panel`'s size that fit on a face, keeping `margin` from its edges (and from
+ * roof windows, chimneys and dormers on it): columns, rows, and the array's middle on the plan.
  */
-export function fitPanels(m: RoofModel, f: RoofFace, portrait = true, margin = 0.3): { cols: number; rows: number; x: number; z: number } | null {
+export function fitPanels(m: RoofModel, f: RoofFace, portrait = true, panel: { long: number; short: number } = PANEL, margin = 0.3): { cols: number; rows: number; x: number; z: number } | null {
   const c = f.poly.reduce((s, p) => [s[0] + p[0] / f.poly.length, s[1] + p[1] / f.poly.length], [0, 0]);
   const at = fromRoofFrame(m, c[0], c[1]);
   const fr = itemFrame(m, { x: at[0], z: at[1] });
   if (!fr || fr.face !== f) return null;
   const poly = faceInFrame(m, f, fr);
-  const pw = (portrait ? PANEL.short : PANEL.long) + PANEL.gap, ph = (portrait ? PANEL.long : PANEL.short) + PANEL.gap;
+  const pw = (portrait ? panel.short : panel.long) + PANEL.gap, ph = (portrait ? panel.long : panel.short) + PANEL.gap;
   // what else is on this face, as boxes in the same terms, to keep clear of
   const blocks = (m.roof.items ?? []).filter((it) => it.kind !== "solar").flatMap((it) => {
     const [iu, iv] = toRoofFrame(m, [it.x, it.z]);
@@ -974,7 +974,8 @@ function solar(it: RoofItem, fr: ItemFrame, d: RoofDraw): void {
   const g = d.geo;
   const cols = Math.max(1, Math.round(it.cols ?? 1)), rows = Math.max(1, Math.round(it.rows ?? 1));
   const portrait = it.portrait ?? true;
-  const pw = portrait ? PANEL.short : PANEL.long, ph = portrait ? PANEL.long : PANEL.short;
+  const panel = panelOf(it);
+  const pw = portrait ? panel.short : panel.long, ph = portrait ? panel.long : panel.short;
   const blue = it.style === "blue";
   const frameCol = d.colour(blue ? 0xb9bec4 : 0x232529, true);
   const cellCol = d.colour(blue ? 0x23396a : 0x15181d, true);
