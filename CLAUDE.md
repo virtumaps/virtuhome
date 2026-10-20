@@ -23,5 +23,5 @@ A change worth a line under `## Unreleased` in CHANGELOG.md is nearly always wor
 
 ```bash
 cd frontend && npm ci && npm run typecheck && npm test && npm run build   # commit the build
-pip install cryptography pytest && pytest -q tests                        # if Python changed
+pip install cryptography pytest voluptuous && pytest -q tests             # if Python changed
 ```
