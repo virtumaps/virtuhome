@@ -50,11 +50,17 @@ questions on it, label it `needs info`, and remove `in progress`.
 - The performance rules in [ARCHITECTURE.md](ARCHITECTURE.md) still hold: nothing renders while
   nothing changes, no extra draw calls per device, no per-pixel lighting, no allocations in the render
   loop.
+- `frontend/test/budget.test.ts` passes: draw calls per floor, the demo house's triangles at the Tablet
+  level, and the size of the loader and the app. Raise a budget in `frontend/test/budgets.ts` only on
+  purpose, and say in the pull request why it grew.
 - Old plans still load. Plan format changes go through `normalizePlan` (and `schema.py`).
   `frontend/test/fixtures/plans/` keeps the demo plan as every release saved it, and small plans
   with the rarer parts; `frontend/test/fixtures.test.ts` loads and builds each one, and
   `tests/test_plan_fixtures.py` checks them against the schema. When one stops loading, fix the
   loading, never the fixture.
+- It works in the oldest supported browsers (`frontend/browsers.json`: Chrome 87, Safari 15). The build
+  targets them, and `frontend/test/browsers.test.ts` fails on newer functions or CSS the build can't
+  turn into older code; add a stand-in to `frontend/src/compat.ts` when one is worth it.
 - User-visible changes get a line in `CHANGELOG.md` under `## Unreleased` (add the heading at the top
   if it is missing), in the same plain style as the existing entries.
 - **The user guide stays true.** Anything a user sees or does differently (a new feature, a renamed
@@ -115,6 +121,8 @@ Maintainers only:
 4. Wait for CI on `main`, then try it on a real Home Assistant: update through HACS, restart, open the
    panel and a wall tablet, and check an old plan still loads.
 5. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
+6. Publishing the release runs the Pages workflow, which rebuilds the
+   [online demo](https://virtumaps.github.io/virtuhome/demo/) from the tag. Check that it opens.
 
 ## Roadmap
 

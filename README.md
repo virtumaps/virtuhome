@@ -4,6 +4,9 @@ Your home as a live 3D model in Home Assistant. Lights glow in their real colour
 rooms, doors swing with their contact sensors, blinds follow their covers, cameras, motion and alarms
 show where they are, and walls between you and a room slide out of the way.
 
+**[Try the online demo](https://virtumaps.github.io/virtuhome/demo/)**: turn the house, switch the
+lights and open the editor in your browser, no Home Assistant needed.
+
 ![The ground floor at night, Ultra graphics](docs/screenshots/night.jpg)
 
 Built for wall tablets first: on a Fire HD 8 class tablet the view draws nothing while nothing changes,
@@ -131,6 +134,10 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   As in 3D, furniture, devices, doors and windows move only once they are selected.
   The fence tool draws a fence corner by corner: click its last point again to finish.
   Arrow keys nudge, R turns, Delete removes.
+- **Start from a house type:** Edit → Home → **Start from a house type…** gives a whole home (a
+  terrace, semi, detached house, bungalow, flat or open-plan single storey) with its rooms, doors,
+  windows, stairs and roof, fitted to your home's outside width and depth and mirrored if needed.
+  Smart Setup then links the rooms to areas and places the devices.
 - **Floors:** Edit → Home → Floors → **Add a floor** puts a storey on top; the 2D plan shows the floor
   below faintly to draw over. A roof's **Sits on** moves it onto another storey.
 - **Trace a floor plan picture:** no LiDAR phone needed. In the 2D plan, the picture button puts an
@@ -187,6 +194,7 @@ cd frontend
 npm install
 npm run dev        # rebuilds on change, dev harness on http://127.0.0.1:5173
 npm run build      # writes custom_components/virtuhome/frontend
+npm run site       # writes site/: the online demo in site/demo, for GitHub Pages
 npm test
 node ../tools/shot.mjs "floor=0&theme=night&quality=high" /tmp/shot.png   # screenshot with local Chrome
 ```
@@ -194,6 +202,9 @@ node ../tools/shot.mjs "floor=0&theme=night&quality=high" /tmp/shot.png   # scre
 The dev harness runs against pretend states (`?hass=demo`) or your Home Assistant (`?hass=live`,
 with `HA_URL` and `HA_TOKEN` in the dev server's environment; they are never written to a file).
 `?plan=catalog` shows every built-in item, labelled.
+The online demo (`frontend/dev/demo.ts`) is the demo house without the live mode or saving; the
+Pages workflow builds it from each release, and the build fails if live-mode code or any Home
+Assistant URL or token handling ends up in it.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md) and
 [CONTRIBUTING.md](CONTRIBUTING.md).

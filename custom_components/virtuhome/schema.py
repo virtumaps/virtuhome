@@ -172,11 +172,19 @@ FLOOR = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+# what Home Assistant's registries said about each linked entity: its registry id (kept when the
+# entity id changes, so a renamed entity is found again) and its device
+_REGISTRY_ID = vol.Any(None, vol.All(str, vol.Length(max=64)))
+LINK = vol.Schema({vol.Optional("id"): _REGISTRY_ID, vol.Optional("device_id"): _REGISTRY_ID}, extra=vol.ALLOW_EXTRA)
+_ENTITY_ID = vol.All(str, vol.Length(max=255), vol.Match(r"^[a-z0-9_]+\.[a-z0-9_]+$"))
+LINKS = vol.All(vol.Schema({_ENTITY_ID: LINK}, extra=vol.PREVENT_EXTRA), vol.Length(max=MAX_ITEMS * 2))
+
 PLAN = vol.Schema(
     {
         vol.Required("version"): 1,
         vol.Optional("settings", default=dict): dict,
         vol.Required("floors"): vol.All([FLOOR], vol.Length(max=MAX_FLOORS)),
+        vol.Optional("links"): LINKS,
     },
     extra=vol.ALLOW_EXTRA,
 )

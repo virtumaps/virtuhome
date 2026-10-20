@@ -4,6 +4,16 @@ import type { Plan } from "../src/model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../src/live/hass";
 import { demoHistory, storyState } from "./demo-history";
 
+/**
+ * Changes to the pretend registry, to try relinking (window.demo in the harness):
+ * demo.rename("light.stairs", "light.stair_lights"), demo.remove(id), demo.add(id, { name, area, device }).
+ */
+export const demoEdits = {
+  rename(_from: string, _to: string): void {},
+  remove(_id: string): void {},
+  add(_id: string, _reg: { name?: string; area?: string; device?: string } = {}): void {},
+};
+
 export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true): Hass {
   const states: Record<string, HassEntity> = {};
   const entities: Record<string, HassEntityReg> = {};
@@ -14,6 +24,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
   };
 
   for (const floor of plan.floors) {
+    for (const o of floor.outdoor ?? []) if (o.area_id) areas[o.area_id] = { area_id: o.area_id, name: o.name, floor_id: floor.ha_floor ?? null };
     for (const room of floor.rooms) {
       if (!room.area_id) continue;
       areas[room.area_id] = { area_id: room.area_id, name: room.name, floor_id: floor.ha_floor ?? null };
@@ -57,6 +68,14 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
       else if (dom === "climate") put(id, "heat", { hvac_action: "heating", current_temperature: 20.5, temperature: 21 });
       else if (dom === "cover") put(id, "open", { current_position: 60 });
       else put(id, "on");
+    }
+    // the roofs' solar strings (dark in the demo) and roof windows
+    for (const it of (floor.roofs ?? []).flatMap((r) => r.items ?? [])) {
+      if (it.entity && !states[it.entity]) {
+        if (it.kind === "solar") put(it.entity, "0", { device_class: "power", unit_of_measurement: "kW" });
+        else put(it.entity, "off", { device_class: "window" });
+        entities[it.entity] = { entity_id: it.entity, area_id: null };
+      }
     }
   }
   put("sun.sun", night ? "below_horizon" : "above_horizon", { azimuth: night ? 320 : 200, elevation: night ? -20 : 38 });
@@ -139,18 +158,55 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
       // replays read the recorder's history; the demo has a pretend day for them
       if (msg.type === "history/history_during_period") return demoHistory(msg as Parameters<typeof demoHistory>[0], states) as T;
       if (msg.type === "virtuhome/background/upload") return demoUpload(msg) as T;
+      // Check my setup: all well with the card, and no licence
+      if (msg.type === "virtuhome/checks" || msg.type === "virtuhome/checks/fix_card") {
+        return { version: __VERSION__, dashboard: { mode: "storage", urls: [`/local/virtuhome/card-loader.js?v=${__VERSION__}`], current: true }, licence: { status: "none", error: null, extensions: [] } } as T;
+      }
+      if (msg.type === "config/entity_registry/list") {
+        return Object.values(entities).map((e) => ({ id: regId(e.entity_id), entity_id: e.entity_id, device_id: e.device_id ?? null, area_id: e.area_id ?? null, platform: e.platform ?? "demo" })) as T;
+      }
       if (msg.type === "auth/sign_path") {
         const file = decodeURIComponent(String(msg.path).split("/").pop() ?? "");
         if (!demoImages.has(file)) throw new Error("not found");
         return { path: demoImages.get(file) } as T;
       }
-      throw new Error("demo");
+      // the rest (saving, restore points, licences) needs the integration
+      throw new Error("Not in the demo");
     },
     connection: {
       async subscribeMessage() {
         throw new Error("demo");
       },
     },
+  };
+  // registry ids stay with an entity when it is renamed
+  const regIds = new Map<string, string>();
+  const regId = (id: string) => {
+    if (!regIds.has(id)) regIds.set(id, Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
+    return regIds.get(id)!;
+  };
+  const publish = () => {
+    Object.assign(hass, { states: { ...states }, entities: { ...entities } });
+    onChange({ ...hass });
+  };
+  demoEdits.rename = (from, to) => {
+    if (!states[from]) return;
+    regId(from);
+    states[to] = { ...states[from], entity_id: to };
+    if (entities[from]) entities[to] = { ...entities[from], entity_id: to };
+    regIds.set(to, regIds.get(from)!);
+    demoEdits.remove(from);
+  };
+  demoEdits.remove = (id) => {
+    delete states[id];
+    delete entities[id];
+    regIds.delete(id);
+    publish();
+  };
+  demoEdits.add = (id, reg = {}) => {
+    put(id, id.startsWith("light.") ? "on" : "off", reg.name ? { friendly_name: reg.name } : {});
+    entities[id] = { entity_id: id, area_id: reg.area ?? null, device_id: reg.device ?? null };
+    publish();
   };
   return hass;
 }

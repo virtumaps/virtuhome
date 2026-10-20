@@ -18,6 +18,9 @@ TO_REDACT = {"key", "key_hint", "token", "activation", "act", "instance", "inst"
 # what a floor holds, counted per floor
 FLOOR_LISTS = ("rooms", "openings", "furniture", "devices", "walls", "outdoor", "fences")
 
+# Check my setup's checks: the frontend reports how many things each found, and nothing else
+CHECK_IDS = ("links", "rooms", "areas", "card", "graphics", "extensions", "repairs")
+
 # where a plan item names a Home Assistant entity
 _ENTITY_FIELDS = {
     "rooms": ("temperature", "humidity"),
@@ -69,6 +72,18 @@ def plan_summary(
     }
 
 
+def checks_summary(checks: dict[str, Any] | None) -> dict[str, Any]:
+    """What Check my setup found when an admin last opened VirtuHome: a count per check (0 is fine)."""
+    if not checks:
+        return {"reported": False}
+    counts = checks.get("counts") or {}
+    return {
+        "reported": True,
+        "time": checks.get("time"),
+        "counts": {k: counts[k] for k in CHECK_IDS if isinstance(counts.get(k), int)},
+    }
+
+
 def licence_summary(summary: dict[str, Any] | None, loaded: list[dict[str, Any]]) -> dict[str, Any]:
     """The licence state and each extension: from ExtensionManager.summary() and .extensions()."""
     if summary is None:
@@ -104,5 +119,6 @@ def build_report(
     }
     if store is not None:
         report["plan"] = plan_summary(store.plan, store.revision, store.snapshots, entity_exists)
+        report["checks"] = checks_summary(getattr(store, "checks", None))
     report["licence"] = licence_summary(licence, loaded)
     return report
