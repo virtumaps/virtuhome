@@ -23,7 +23,7 @@ To see your own home in the dev harness, start it with your Home Assistant in th
 `?hass=live`. Put your own plan files in `frontend/dev/plans/` and scans in `frontend/dev/scans/`
 (both git-ignored) and open `?plan=<name>` or `?scan=<folder>`.
 
-Python: `pip install cryptography pytest && pytest tests`.
+Python: `pip install cryptography pytest voluptuous && pytest tests`.
 
 ## How work flows
 

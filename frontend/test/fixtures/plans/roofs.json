@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "Roofs",
+  "settings": {"wall_exterior": 0.3, "wall_interior": 0.1, "north": 0, "theme": "auto", "exterior_finish": "render", "exterior_color": "#e8e0d0"},
+  "floors": [
+    {
+      "id": "ground", "name": "Ground Floor", "elevation": 0, "height": 2.7,
+      "rooms": [
+        {"id": "living", "name": "Living Room", "area_id": "living_room", "points": [[0, 0], [8, 0], [8, 6], [0, 6]]},
+        {"id": "extension", "name": "Kitchen", "area_id": "kitchen", "points": [[0, 6], [4, 6], [4, 9], [0, 9]], "floor": "tiles"}
+      ],
+      "openings": [
+        {"id": "through", "room_id": "extension", "edge": 0, "offset": 2, "width": 2.4, "height": 2.1, "sill": 0, "kind": "passage"}
+      ],
+      "furniture": [],
+      "devices": [],
+      "walls": [],
+      "roofs": [
+        {"id": "flat", "x": 2, "z": 7.5, "w": 4, "d": 3, "shape": "flat", "pitch": 0, "covering": "epdm", "parapet": true, "items": [
+          {"id": "lantern", "kind": "lantern", "x": 2, "z": 7.4, "w": 1.2, "d": 2, "h": 0.4},
+          {"id": "flat_pv", "kind": "solar", "x": 3.2, "z": 8.2, "w": 1.134, "d": 1.722, "cols": 1, "rows": 1, "tilt": 15, "rotation": 180, "entity": "sensor.pv_flat_power"}
+        ]},
+        {"id": "porch", "x": 6, "z": 6.6, "w": 2, "d": 1.2, "shape": "onion"},
+        {"id": "sliver", "x": 7.9, "z": 3, "w": 0.1, "d": 3, "shape": "gable", "pitch": 40}
+      ]
+    },
+    {
+      "id": "first", "name": "First Floor", "elevation": 2.7, "height": 2.5,
+      "exterior_finish": "timber", "exterior_color": null,
+      "rooms": [
+        {"id": "bed1", "name": "Bedroom 1", "area_id": "bedroom", "points": [[0, 0], [4, 0], [4, 6], [0, 6]], "floor": "carpet"},
+        {"id": "bed2", "name": "Bedroom 2", "area_id": null, "points": [[4, 0], [8, 0], [8, 6], [4, 6]], "floor": "carpet"}
+      ],
+      "openings": [],
+      "furniture": [],
+      "devices": [],
+      "walls": [],
+      "roofs": [
+        {"id": "main", "x": 4, "z": 3, "w": 8, "d": 6, "rotation": 0, "shape": "gable", "pitch": 40, "party": "left", "covering": "slate", "trim": "#203040", "eaves": null, "overhang": 0.35, "items": [
+          {"id": "dormer_box", "kind": "dormer", "x": 2, "z": 4.4, "w": 2, "d": 1.6, "h": 1.3, "style": "box"},
+          {"id": "dormer_gable", "kind": "dormer", "x": 6, "z": 4.6, "w": 1.4, "d": 1.4, "style": "gable", "color": "#ffffff"},
+          {"id": "skylight", "kind": "window", "x": 4.2, "z": 1.4, "w": 0.78, "d": 1.18, "style": "conservation", "entity": "binary_sensor.skylight", "cover": "cover.skylight_blind"},
+          {"id": "stack", "kind": "chimney", "x": 7.6, "z": 3, "w": 0.6, "d": 0.9, "h": 1.0, "style": "stone", "pots": 3},
+          {"id": "pv", "kind": "solar", "x": 4.2, "z": 0.9, "w": 3.544, "d": 1.134, "cols": 2, "rows": 1, "portrait": false, "watts": 440, "panel": [1.762, 1.134], "style": "blue", "entity": "sensor.pv_power"}
+        ]}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Floor plan pictures",
+  "settings": {"wall_exterior": 0.28, "wall_interior": 0.12, "north": 0, "theme": "auto", "exterior_finish": "brick"},
+  "floors": [
+    {
+      "id": "loft", "name": "Loft", "ha_floor": null, "elevation": 5.1, "height": 2.4,
+      "rooms": [], "openings": [], "furniture": [], "devices": [], "walls": [], "outdoor": [], "fences": [], "roofs": [],
+      "background": {"file": "loft-fedcba987654.jpg", "width": 800, "height": 600, "scale": 0.0125}
+    },
+    {
+      "id": "ground", "name": "Ground Floor", "ha_floor": "ground_floor", "elevation": 0, "height": 2.6,
+      "rooms": [
+        {"id": "front", "name": "Front Room", "area_id": "living_room", "points": [[0, 0], [5, 0], [5, 4], [0, 4]]},
+        {"id": "back", "name": "Back Room", "area_id": "dining_room", "points": [[0, 4], [5, 4], [5, 8], [0, 8]]}
+      ],
+      "openings": [
+        {"id": "between", "room_id": "front", "edge": 2, "offset": 2.5, "width": 0.8, "height": 2.0, "sill": 0, "kind": "door", "entity": null, "cover": null}
+      ],
+      "furniture": [],
+      "devices": [],
+      "walls": [],
+      "background": {"file": "ground-0123456789ab.png", "width": 2400, "height": 1600, "scale": 0.005, "x": 2.5, "z": 4, "rotation": -4.5, "opacity": 0.35}
+    },
+    {
+      "id": "first", "name": "First Floor", "ha_floor": "first_floor", "elevation": 2.6, "height": 2.5,
+      "rooms": [
+        {"id": "bedroom", "name": "Bedroom", "area_id": "bedroom", "points": [[0, 0], [5, 0], [5, 8], [0, 8]], "floor": "carpet"}
+      ],
+      "openings": [],
+      "furniture": [],
+      "devices": [],
+      "walls": [],
+      "background": null
+    }
+  ]
+}
