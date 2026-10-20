@@ -89,6 +89,13 @@ export const EDITOR_CSS = /* css */ `
 .ed-pick small { font-size: 11px; color: var(--vh-dim); }
 .ed-pick:hover { box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
 .ed-report { margin-top: 8px; color: var(--vh-dim); line-height: 1.45; }
+.ed-result span svg { width: 18px; height: 18px; display: block; fill: var(--vh-dim); }
+.ed-result.ok span svg { fill: #2bb673; }
+.ed-result.problem span svg { fill: #e5484d; }
+.ed-result.problem { box-shadow: inset 0 0 0 1.5px rgba(229,72,77,0.5); }
+.ed-result .ed-card { background: var(--vh-glass); }
+.ed-result.ok { padding: 5px 10px; }
+.ed-result.ok small { color: var(--vh-dim); flex-basis: 100%; padding-left: 24px; }
 .ed-id { display: block; color: var(--vh-dim); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .ed-list { margin-top: 4px; }
 .ed-confirm {
