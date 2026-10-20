@@ -1,5 +1,5 @@
 // The editor: a drawer next to the 3D view (loaded only when an admin taps Edit).
-//   Home     import a scan, place devices automatically, floors, plan files, restore points
+//   Home     import a scan or plan, place devices automatically, floors, plan files, restore points
 //   Rooms    names, Home Assistant areas, floor materials
 //   Devices  what is placed, and what of Home Assistant is not yet
 //   Selected the tapped room, device or furniture: link entities, move, turn, remove
@@ -7,6 +7,8 @@
 import { mdiAlertCircleOutline, mdiArrowULeftTop, mdiArrowURightTop, mdiCheckboxBlankCircleOutline, mdiCheckCircle, mdiCheckCircleOutline, mdiClose, mdiInformationOutline, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
 import { autoPlace, linkRoomsByName } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
+import { importSimple, isSimplePlan } from "../import/simple";
+import type { ImportSummary } from "../import/draft";
 import { labelPoint } from "../model/geom";
 import {
   newId, normalizePlan, PANEL, panelOf, panelSize, solarSize, spaces, splitEdge, type Device, type EnergySettings, type PresenceSettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
@@ -41,6 +43,7 @@ import type { VhView } from "../ui/view";
 import type { Check, Fix } from "../ui/checks";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { EDITOR_CSS } from "./styles";
+import { HouseTypes } from "./house-types";
 import { Collider, settle } from "./collide";
 import { imageUrl, uploadImage } from "./background";
 import { Plan2D, PLAN2D_CSS } from "./plan2d";
@@ -67,6 +70,25 @@ const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
 function isDetections(data: unknown): data is Detections {
   const d = data as Detections;
   return typeof d?.version === "number" && Array.isArray(d.objects) && d.objects.every((o) => typeof o?.label === "string" && Array.isArray(o.position));
+}
+
+/** What an import brought in and left out, for its report. */
+function importLines(s: ImportSummary): string[] {
+  const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+  const names = (list: string[]) => {
+    const counts = new Map<string, number>();
+    for (const x of list) counts.set(x, (counts.get(x) ?? 0) + 1);
+    const all = [...counts].map(([x, k]) => (k > 1 ? `${x} ×${k}` : x));
+    return all.length > 8 ? `${all.slice(0, 8).join("; ")} and ${all.length - 8} more` : all.join("; ");
+  };
+  return [
+    `In: ${n(s.floors, "floor")}, ${n(s.rooms, "room")}, ${n(s.doors, "door")}, ${n(s.windows, "window")}, ${n(s.furniture, "piece of furniture", "pieces of furniture")}.`,
+    ...(s.boxes.length ? [`As plain boxes (no matching type): ${names(s.boxes)}.`] : []),
+    ...(s.left.length ? [`Left out: ${names(s.left)}.`] : []),
+    s.north !== null
+      ? `North from the file: the top of the plan faces ${Math.round(s.north)}° (${compassName(s.north)}).`
+      : "Set north under Sun and weather for the sun's shadows.",
+  ];
 }
 
 /** Tiny DOM helper: h("div", { class: "x", onclick }, child, "text") */
@@ -97,6 +119,8 @@ export interface EditorHost {
   restorePoints?(): Promise<{ id: string; time: number; label: string | null; floors: number }[]>;
   restore?(id: string): Promise<void>;
   close(): void;
+  /** The online demo: everything can be edited, nothing can be saved. */
+  demo?: boolean;
 }
 
 /** A step of the undo history: the plan before a change, and what the change was. */
@@ -148,6 +172,10 @@ export class Editor {
   /** Whether a dashboard shows the card (getting started), once asked. */
   private cardSeen: boolean | null = null;
   private cardAsked = false;
+  /** The house type picker, while it is open. */
+  private houseTypes: HouseTypes | null = null;
+  /** A house type is going in: not a first room drawn by hand. */
+  private starting = false;
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
@@ -158,7 +186,7 @@ export class Editor {
     this.body = h("div", { class: "ed-body" });
     this.undoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowULeftTop)}<span>Undo</span>`, onclick: () => this.doUndo() });
     this.redoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowURightTop)}<span>Redo</span>`, onclick: () => this.doRedo() });
-    this.saveBtn = h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, disabled: true, title: "Nothing to save", onclick: () => this.save() });
+    this.saveBtn = h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, disabled: true, title: host.demo ? "The demo can't save" : "Nothing to save", onclick: () => this.save() });
     this.el = h("div", { class: "ed" },
       style,
       h("div", { class: "ed-head" },
@@ -189,8 +217,12 @@ export class Editor {
     this.updateSaveButton();
   }
 
-  /** A first-run choice: trace a picture or draw in the 2D plan, or the scan import on the Home tab. */
+  /** A first-run choice: trace a picture or draw in the 2D plan, or the house types or scan import on the Home tab. */
   startSetup(kind: StartKind): void {
+    if (kind === "starter") {
+      this.openHouseTypes();
+      return;
+    }
     if (kind === "scan") {
       this.show("home");
       const scan = this.body.querySelector<HTMLElement>(".ed-scan");
@@ -198,7 +230,7 @@ export class Editor {
         this.scrollDrawerTo(scan);
         scan.classList.add("ed-flash");
       }
-      this.status.textContent = "Tap Import a scan… and choose the scan's files together.";
+      this.status.textContent = "Tap Import a scan or plan… and choose the files.";
       return;
     }
     this.setPlanMode(true);
@@ -316,6 +348,7 @@ export class Editor {
 
   /** The first room of a new home: the getting-started list shows what comes next. */
   private firstRoom(): void {
+    if (this.starting) return;
     const items = setupItems(this.plan, this.hass, { cardOnDashboard: this.cardSeen });
     if (!showChecklist(this.plan, items)) return;
     // after the 2D plan has said its own piece about the tool
@@ -327,7 +360,7 @@ export class Editor {
     this.updateSelectionMarker();
     this.plan2d?.render();
     if (!quiet) this.render();
-    this.status.textContent = this.dirty ? "Unsaved changes" : "Saved";
+    this.status.textContent = this.savedText();
     this.updateHistoryButtons();
   }
 
@@ -391,12 +424,18 @@ export class Editor {
 
   private updateSaveButton(): void {
     if (!this.saveBtn) return;
-    this.saveBtn.disabled = !this.unsaved || this.saving;
-    this.saveBtn.title = this.saving ? "Saving…" : this.unsaved ? "Save changes" : "Nothing to save";
+    this.saveBtn.disabled = !this.unsaved || this.saving || !!this.host.demo;
+    this.saveBtn.title = this.host.demo ? "The demo can't save" : this.saving ? "Saving…" : this.unsaved ? "Save changes" : "Nothing to save";
+  }
+
+  /** The footer's word on saving. */
+  private savedText(): string {
+    if (this.host.demo) return "This is a demo: changes aren't saved.";
+    return this.dirty ? "Unsaved changes" : "Saved";
   }
 
   private async save(): Promise<void> {
-    if (!this.unsaved || this.saving) return;
+    if (!this.unsaved || this.saving || this.host.demo) return;
     this.saving = true;
     this.updateSaveButton();
     this.status.textContent = "Saving…";
@@ -408,7 +447,7 @@ export class Editor {
       this.savedJson = json;
       this.host.followed = [];
       this.changed();
-      this.status.textContent = this.unsaved ? "Unsaved changes" : "Saved";
+      this.status.textContent = this.savedText();
     };
     try {
       // our own save is the base for the next one, so only someone else's save is a conflict
@@ -779,19 +818,23 @@ export class Editor {
       this.tab === "devices" ? this.devicesTab() :
       this.tab === "extensions" ? this.extensionsTab() : this.selectedTab(),
     );
-    this.status.textContent = this.dirty ? "Unsaved changes" : "Saved";
+    this.status.textContent = this.savedText();
   }
 
   private homeTab(): HTMLElement {
     const fileIn = h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
     const box = h("div", {},
+      this.houseTypes?.el,
       ...this.setupSection(() => fileIn.click()),
       ...this.checkSection(),
+      this.houseTypes ? null : h("h4", {}, "House type"),
+      this.houseTypes ? null : h("p", { class: "ed-hint" }, "A ready-made home with its rooms, doors, windows, stairs and roof, fitted to your home's size."),
+      this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, "Start from a house type…"),
       h("div", { class: "ed-scan" },
-        h("h4", {}, "Scan"),
-        h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
-        h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan…"),
+        h("h4", {}, "Import"),
+        h("p", { class: "ed-hint" }, "A House Scan scan: choose house.json, manifest.json (room names) and detections.json (decor) together. Or a plan file in the simple plan format (.json)."),
+        h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan or plan…"),
       ),
       fileIn,
       h("h4", {}, "Devices"),
@@ -1010,7 +1053,7 @@ export class Editor {
     }, on ? `Done: ${it.title}` : `Not done: ${it.title}`);
     const ticked = (this.plan.settings.setup?.done ?? []).includes(it.id);
     const actions: Record<SetupId, () => HTMLElement[]> = {
-      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("Import a scan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
+      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("House type", () => this.startSetup("starter")), btn("Import a scan or plan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
       areas: () => [btn("Rooms", () => this.show("rooms"))],
       devices: () => [btn("Place devices automatically", () => this.runAutoPlace())],
       north: () => [btn("Sun and weather", () => this.scrollToHeading("Sun and weather")), btn("It's right", () => tick(true))],
@@ -2718,6 +2761,7 @@ export class Editor {
     let house: unknown = null;
     let manifest: Manifest | null = null;
     let detections: Detections | null = null;
+    let other: unknown = null;
     for (const file of Array.from(files)) {
       let data: unknown;
       try {
@@ -2727,35 +2771,55 @@ export class Editor {
       }
       if (isRoomPlan(data)) house = data;
       else if (isDetections(data)) detections = data;
+      else if (isSimplePlan(data)) other = data;
       else if (Array.isArray((data as Manifest).rooms) && (data as Manifest).rooms.every((r) => typeof r.name === "string")) manifest = data as Manifest;
+      else other ??= data;
     }
-    if (!house) {
-      this.toastInDrawer("None of the files is a RoomPlan scan (house.json).");
-      return;
-    }
-    const front = manifest?.rooms.find((r) => /hall|entrance|porch|front/i.test(r.name))?.name;
-    const { plan, report } = importRoomPlan(house as never, manifest, { frontDoorRoom: front, detections });
-    const go = () => {
-      this.change((p) => {
-        p.floors = plan.floors;
-        p.settings = { ...p.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior };
-        // a new scan faces its own way: the phone's compass, or unknown (north up) until set
-        p.settings.north = report.north?.bearing ?? 0;
-      });
-      this.host.view.viewer.setMode("house");
-      const placed = autoPlace(this.plan, this.hass);
-      this.change((p) => Object.assign(p, placed.plan), false);
-      this.showReport([
+    if (house) {
+      const front = manifest?.rooms.find((r) => /hall|entrance|porch|front/i.test(r.name))?.name;
+      const { plan, report } = importRoomPlan(house as never, manifest, { frontDoorRoom: front, detections });
+      // a new scan faces its own way: the phone's compass, or unknown (north up) until set
+      this.replaceWithImport(plan, report.north?.bearing ?? 0, "a scan", [
         `${report.rooms} rooms on ${report.floors} floor${report.floors === 1 ? "" : "s"}, ${report.openings} doors and windows, ${report.furniture} pieces of furniture${report.decor ? `, ${report.decor} decorations` : ""}.`,
-        `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
         report.north
           ? `North from the phone's compass: the top of the plan faces ${Math.round(report.north.bearing)}° (${compassName(report.north.bearing)})${report.north.spread !== null ? `, readings within ±${Math.round(report.north.spread)}°` : ""}${report.north.magnetic ? ", magnetic north" : ""}. Indoors a compass can be off: check it under Sun and weather.`
           : "The scan has no compass reading: set north under Sun and weather for the sun's shadows.",
         ...report.warnings,
       ]);
+      return;
+    }
+    if (other && isSimplePlan(other)) {
+      try {
+        const { buildPlan } = await import("../import/draft");
+        const { plan, summary } = buildPlan(importSimple(other));
+        this.replaceWithImport(plan, summary.north ?? 0, "a plan", importLines(summary));
+      } catch (e) {
+        this.toastInDrawer(`Can't import it: ${(e as Error).message}`);
+      }
+      return;
+    }
+    const plan = other as Partial<Plan> | null;
+    this.toastInDrawer(plan?.version === 1 && plan.settings
+      ? "That is a VirtuHome plan file: load it with Plan file → Load…"
+      : "None of the files is a scan or a plan VirtuHome can import.");
+  }
+
+  /** Puts an imported plan in place of this one (after asking, if this one has rooms) as one undo step, with Smart Setup. */
+  private replaceWithImport(plan: Plan, north: number, what: string, lines: string[]): void {
+    const go = () => {
+      const next: Plan = { ...structuredClone(this.plan), floors: plan.floors };
+      next.settings = { ...next.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior, north };
+      const placed = autoPlace(next, this.hass);
+      this.change((p) => Object.assign(p, placed.plan), false, `Import ${what}`);
+      this.host.view.viewer.setMode("house");
+      this.showReport([
+        ...lines,
+        `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
+      ]);
     };
-    if (this.plan.floors.length) this.confirm("Replace the current plan with this scan?", "Replace", go);
-    else go();
+    if (this.plan.floors.some((f) => f.rooms.length)) {
+      this.confirm("Replace the whole plan with the imported one? Until you save, Undo or closing without saving brings yours back; after saving, Restore points does.", "Replace", go);
+    } else go();
   }
 
   private runAutoPlace(): void {
@@ -2766,6 +2830,57 @@ export class Editor {
       ...(report.unplaced.length ? [`${report.unplaced.length} devices are in areas without a room in the plan.`] : []),
       ...report.placed.slice(0, 30),
     ]);
+  }
+
+  /** Opens the house type picker at the top of the Home tab. */
+  private openHouseTypes(): void {
+    this.houseTypes ??= new HouseTypes({
+      use: (plan, name) => this.useHouseType(plan, name),
+      close: () => {
+        this.houseTypes = null;
+        this.render();
+      },
+      reveal: (el) => this.scrollDrawerTo(el),
+    });
+    this.show("home");
+    this.body.scrollTop = 0;
+  }
+
+  /**
+   * A house type in place of the plan (asking first if it has rooms), its storeys linked to Home
+   * Assistant's floors of their level, then Smart Setup: one step to undo.
+   */
+  private useHouseType(house: Plan, name: string): void {
+    const go = () => {
+      const used = new Set<string>();
+      const floors = house.floors.map((f, i) => {
+        const ha = Object.values(this.hass.floors ?? {}).find((x) => x.level === i && !used.has(x.floor_id));
+        if (ha) used.add(ha.floor_id);
+        return { ...f, ha_floor: ha?.floor_id ?? null };
+      });
+      const { wall_exterior, wall_interior, exterior_finish } = house.settings;
+      const next: Plan = { ...structuredClone(this.plan), floors, settings: { ...this.plan.settings, wall_exterior, wall_interior, exterior_finish, exterior_color: null } };
+      const placed = autoPlace(next, this.hass);
+      this.houseTypes = null;
+      this.starting = true;
+      this.change((p) => Object.assign(p, placed.plan), false, `Start from ${name.toLowerCase()}`);
+      this.starting = false;
+      this.select(null);
+      this.host.view.viewer.setMode("house");
+      const rooms = floors.reduce((n, f) => n + f.rooms.length, 0);
+      const openings = floors.reduce((n, f) => n + f.openings.filter((o) => o.kind !== "passage").length, 0);
+      const r = placed.report;
+      this.showReport([
+        `${name}: ${rooms} rooms on ${floors.length} floor${floors.length === 1 ? "" : "s"}, ${openings} doors and windows. Drag the walls in the 2D plan to match your rooms.`,
+        `${r.placed.length} devices placed, ${r.linked.length} linked to doors, windows and TVs, ${r.roomsLinked.length} rooms linked to areas.`,
+        ...(r.unplaced.length ? [`${r.unplaced.length} devices are in areas without a room in the plan.`] : []),
+        ...r.roomsLinked.slice(0, 20),
+      ]);
+      const report = this.body.querySelector<HTMLElement>(".ed-report");
+      if (report) this.scrollDrawerTo(report);
+    };
+    if (this.plan.floors.some((f) => f.rooms.length)) this.confirm("Replace the current plan with this house type?", "Replace", go);
+    else go();
   }
 
   private showReport(lines: string[]): void {

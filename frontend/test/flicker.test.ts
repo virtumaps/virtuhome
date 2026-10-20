@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { buildPlan } from "../src/import/draft";
+import { importSimple } from "../src/import/simple";
 import { DEFAULT_SETTINGS, solarSize, type Plan, type Roof } from "../src/model/plan";
 import { ROOF_SHAPE_ORDER, ROOF_SHAPES } from "../src/scene/roofs";
 import { buildFloor } from "../src/scene/build";
@@ -156,6 +159,16 @@ describe("no flickering surfaces in a built floor", () => {
 
   it("with the walls cut down", () => {
     expect(flicker(house(), 1.15)).toEqual([]);
+  });
+
+  it("in imported plans", () => {
+    for (const file of ["simple.json", "storeys.json"]) {
+      const { plan } = buildPlan(importSimple(JSON.parse(readFileSync(new URL(`./fixtures/import/${file}`, import.meta.url), "utf8"))));
+      plan.floors.forEach((_, fi) => {
+        expect(flicker(plan, null, fi)).toEqual([]);
+        expect(flicker(plan, 1.15, fi)).toEqual([]);
+      });
+    }
   });
 });
 

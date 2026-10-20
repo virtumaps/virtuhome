@@ -368,7 +368,7 @@ function bed(w: number, d: number, h: number, upholstered = false): Part[] {
     box(0, 0.53, 0.25, w - 0.04, 0.04, d * 0.62, upholstered ? "cushion" : "fabric"),
     box(0, 0.08, -d / 2 + (upholstered ? 0.06 : 0.04), w + (upholstered ? 0.06 : 0), Math.max(0.9, h + (upholstered ? 0.6 : 0.35)), upholstered ? 0.12 : 0.08, frame),
     ...pillows.map((x) => box(x, 0.53, -d / 2 + 0.28, Math.min(0.6, w / 2 - 0.1), 0.12, 0.35, "white")),
-    ...legs(w, d, 0.08, 0.06, 0.02, "dark"),
+    ...legs(w, d, 0.08, 0.06, 0.03, "dark"),
   ];
 }
 

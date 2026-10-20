@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### New
+- Start from a house type: a two-bed mid-terrace, three-bed semi-detached, four-bed detached,
+  two-bed bungalow, two-bed flat or open-plan single storey, with its storeys, rooms named like Home
+  Assistant's usual areas, doors, windows, stairs, garden and roof. Fit to my home stretches it to
+  your home's outside width and depth (doors, windows and stairs keep their size) and mirrors it,
+  or picks the side a semi joins next door on. Smart Setup then links the rooms to areas and places
+  the devices. Offered on a new home, in Getting started and in Edit → Home.
+- Import plans from other programs: Edit → Home → Import a scan or plan… also takes a plan in a
+  simple JSON format (rooms as corner lists along the wall middles or the inner faces, doors and
+  windows by a point, furniture by type or name; described in docs/import-format.md with a prompt
+  that turns a floor plan picture into one with an AI chat).
+  Furniture without a match comes in as a plain box. An import is one step to undo, and its report
+  says what came in and what was left out.
 - A first run that needs no guide: a new home shows Let's get your home in with three ways to
   start (trace a floor plan picture, import a scan, or draw it), and each opens the editor on that
   step. Edit → Home then has Getting started: getting the home in, linking rooms to areas,
@@ -10,6 +22,11 @@
   each with a button that does it. Steps tick themselves off as they are done; north, the dashboard
   and the tablet can be ticked by hand. Hide this list puts it away. People who can't edit are
   told who can set VirtuHome up.
+- An online demo at virtumaps.github.io/virtuhome/demo: the demo house in any browser, on a phone or
+  a computer, with no Home Assistant. Everything works except saving. It is rebuilt with each release.
+- Find the rooms in the 2D plan's floor plan picture: once its scale is set, VirtuHome finds the
+  walls in the picture and offers the rooms it sees, with their doors and windows, to tick and add in
+  one go (one Undo takes them away again). It works in the browser; the picture goes nowhere.
 - People in their rooms: when a room tracker knows where someone is (Bermuda, ESPresense through
   mqtt_room or the ESPresense Companion), their picture or initials show over the room's name, and in
   the house view over the room, and the room glows softly. Tap a face for the person's dialog. The
