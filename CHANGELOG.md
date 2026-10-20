@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0
 
 ### New
 - Cosy dusk and dawn: with Realistic and Ultra graphics the evening goes from day to night
