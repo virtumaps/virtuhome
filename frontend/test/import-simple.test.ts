@@ -21,7 +21,7 @@ const within = (v: number, want: number, frac = 0.02) => expect(Math.abs(v - wan
 describe("simple plan format", () => {
   it("is recognised, and VirtuHome plan files and scans are not", () => {
     expect(isSimplePlan(fixture("simple.json"))).toBe(true);
-    expect(isSimplePlan(fixture("neonplan.json"))).toBe(true);
+    expect(isSimplePlan(fixture("storeys.json"))).toBe(true);
     expect(isSimplePlan({ rooms: [{ points: [[0, 0], [1, 0], [1, 1]] }] })).toBe(true);
     expect(isSimplePlan({ format: "something-else", floors: [] })).toBe(false);
     expect(isSimplePlan({ version: 1, settings: {}, floors: [{ rooms: [{ points: [[0, 0], [1, 0], [1, 1]] }] }] })).toBe(false);
@@ -82,8 +82,8 @@ describe("simple plan format", () => {
     expect(board).toMatchObject({ w: 1.2, d: 0.35, h: 0.9 });
   });
 
-  it("reads NeonPlan's import format: storeys, metres, furniture names in other languages", () => {
-    const { plan, summary } = buildPlan(importSimple(fixture("neonplan.json")));
+  it("reads the same layout under the other format id: storeys, metres, furniture names in other languages", () => {
+    const { plan, summary } = buildPlan(importSimple(fixture("storeys.json")));
     expect(plan.floors.map((f) => [f.name, f.elevation, f.height])).toEqual([["Ground floor", 0, 2.5], ["First floor", 2.7, 2.4]]);
     expect(summary).toMatchObject({ rooms: 4, doors: 3, windows: 2, furniture: 5, boxes: [] });
     expect(summary.left).toEqual(["A window at 12.0, 12.0 is on no room edge"]);
@@ -103,7 +103,7 @@ describe("simple plan format", () => {
   });
 
   it("gives back a plan that normalizePlan leaves as it is", () => {
-    for (const file of ["simple.json", "neonplan.json"]) {
+    for (const file of ["simple.json", "storeys.json"]) {
       const { plan } = buildPlan(importSimple(fixture(file)));
       expect(normalizePlan(structuredClone(plan))).toEqual(plan);
     }

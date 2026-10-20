@@ -165,7 +165,7 @@ describe("no flickering surfaces in a built floor", () => {
   it("in imported plans", async () => {
     const read = (file: string) => readFileSync(new URL(`./fixtures/import/${file}`, import.meta.url), "utf8");
     const plans = [
-      ...["simple.json", "neonplan.json"].map((file) => buildPlan(importSimple(JSON.parse(read(file)))).plan),
+      ...["simple.json", "storeys.json"].map((file) => buildPlan(importSimple(JSON.parse(read(file)))).plan),
       buildPlan(await importSh3d(new Uint8Array(readFileSync(new URL("./fixtures/import/house.sh3d", import.meta.url))))).plan,
     ];
     for (const plan of plans) {

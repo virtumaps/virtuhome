@@ -28,6 +28,8 @@ class PlanStore:
         # set up by __init__: licence and downloaded extensions, and the floor plan images
         self.extension_manager = None
         self.backgrounds = None
+        # what Check my setup last found (counts per check, from the frontend), for diagnostics
+        self.checks: dict[str, Any] | None = None
 
     async def async_load(self) -> None:
         data = await self._store.async_load()

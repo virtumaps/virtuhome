@@ -98,7 +98,7 @@ export function parseLength(text: string): number | null {
 
 /** A new image, `metresWide` across, centred on a plan point. */
 export function placeImage(file: string, width: number, height: number, centre: Vec2, metresWide: number): FloorBackground {
-  return { file, width, height, scale: metresWide / width, x: r3(centre[0]), z: r3(centre[1]), rotation: 0, opacity: 0.5 };
+  return { file, width, height, scale: metresWide / width, x: r3(centre[0]), z: r3(centre[1]), rotation: 0, opacity: 0.5, scaled: false };
 }
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -130,5 +130,26 @@ export function rescale(bg: FloorBackground, a: Vec2, b: Vec2, length: number): 
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (d < 1e-6 || !(length > 0)) return null;
   const k = length / d;
-  return { ...bg, scale: bg.scale * k, x: r3(a[0] + (bg.x - a[0]) * k), z: r3(a[1] + (bg.z - a[1]) * k) };
+  return { ...bg, scale: bg.scale * k, x: r3(a[0] + (bg.x - a[0]) * k), z: r3(a[1] + (bg.z - a[1]) * k), scaled: true };
+}
+
+/** The picture's pixels as grey levels, at most `maxSide` a side: what the room finder looks at. */
+export async function greyPixels(url: string, maxSide: number): Promise<{ grey: Uint8Array; width: number; height: number }> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("The picture can't be loaded.");
+  const bitmap = await createImageBitmap(await res.blob());
+  const k = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * k)), height = Math.max(1, Math.round(bitmap.height * k));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  const rgba = ctx.getImageData(0, 0, width, height).data;
+  const grey = new Uint8Array(width * height);
+  for (let i = 0; i < grey.length; i++) grey[i] = (rgba[i * 4] * 77 + rgba[i * 4 + 1] * 150 + rgba[i * 4 + 2] * 29) >> 8;
+  return { grey, width, height };
 }

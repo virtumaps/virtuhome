@@ -277,7 +277,7 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
   }
   const wallInterior = gaps.length ? clamp(median(gaps), 0.08, 0.3) : DEFAULT_SETTINGS.wall_interior;
 
-  // 4. outer edges out by half an outside wall: NeonPlan-style centred walls keep the scanned inside
+  // 4. outer edges out by half an outside wall: walls on the rooms' centre lines keep the scanned inside
   for (const r of rooms) {
     const poly = rebuild(r.poly, r.lines);
     r.lines = r.lines.map(([kind, v], e) => {
