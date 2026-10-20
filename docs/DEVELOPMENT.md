@@ -63,6 +63,29 @@ questions on it, label it `needs info`, and remove `in progress`.
   which sections changed, or why none needed to.
 - Text shown to users is short and plain.
 
+## End-to-end tests
+
+`tests/e2e/run.mjs` starts a scratch Home Assistant with VirtuHome (`tests/e2e/ha.py` makes a new
+config folder and finishes onboarding and the config flow through the API), saves every plan in
+`frontend/test/fixtures/plans/` through the WebSocket API, and checks in headless Chrome that each
+one draws in the panel, that the editor opens and a saved change survives a reload, that a
+dashboard card draws, and that the diagnostics download works and holds no names from the plan. CI
+runs it (the End-to-end workflow) against the oldest Home Assistant `hacs.json` allows and the
+newest, on pull requests that touch the integration, the loader or the build, and every night.
+
+To run it yourself, after `npm ci` in `frontend/` (Home Assistant 2025.1 runs on Python 3.12 or
+3.13; the newest needs 3.14):
+
+```bash
+python3.13 -m venv ~/ha-e2e && ~/ha-e2e/bin/pip install homeassistant==2025.1.0
+node tests/e2e/run.mjs --python ~/ha-e2e/bin/python
+```
+
+It listens on 127.0.0.1:8131 (`--port` for another, never that of a Home Assistant you use) and
+drives Google Chrome (`--chrome <path>`, or Playwright's Chromium after
+`npx playwright-core install chromium` in `frontend/`). Screenshots, Home Assistant's log and the
+diagnostics are left in the folder it names at the end (`--dir` picks it).
+
 ## Rules
 
 - **Never push to `main`, tag or publish releases** except as a maintainer doing a release.
