@@ -6,7 +6,7 @@
 // download it.
 import {
   ACESFilmicToneMapping, Box3, BufferGeometry, CanvasTexture, Color, DirectionalLight, DoubleSide, Fog,
-  HalfFloatType, Mesh, MeshBasicMaterial, MeshNormalMaterial, MeshStandardMaterial, NoBlending,
+  HalfFloatType, LinearSRGBColorSpace, Mesh, MeshBasicMaterial, MeshNormalMaterial, MeshStandardMaterial, NoBlending,
   Object3D, PCFShadowMap, PMREMGenerator, SRGBColorSpace, Vector2, Vector3, WebGLRenderTarget,
   type Material, type PerspectiveCamera, type Scene, type Texture, type WebGLProgramParametersWithUniforms, type WebGLRenderer,
 } from "three";
@@ -25,6 +25,7 @@ import { deckTile, pavingTile } from "./paving-tex";
 import { kelvinToRgb } from "./lighting";
 import { WeatherFx, type FxArea } from "./weather-fx";
 import { quietSky, type Sky } from "../live/sky";
+import { afterglow, darkAt, duskColours, moonlight, sunKelvin, sunlight, sunRose } from "./dusk";
 
 interface SurfaceSpec {
   tex?: string;
@@ -131,6 +132,8 @@ const LAMP_GAIN = { value: 1.0 };
 const WEATHER = {
   /** Rooms keep more of the sky's light than the garden (the light bounces around inside them). */
   uFill: { value: 1 },
+  /** Dusk's colour on the sky's light (a multiplier). */
+  uSkyTint: { value: new Color(1, 1, 1) },
   uWet: { value: 0 },
   uSnow: { value: 0 },
   uTime: { value: 0 },
@@ -163,6 +166,7 @@ transformed.xz += uSway * (0.55 + 0.35 * sin(vhP) + 0.15 * sin(vhP * 2.3)) * vhH
 const STD_FRAG_HEAD = FRAG_HEAD + /* glsl */ `
 uniform float uLampGain;
 uniform float uFill;
+uniform vec3 uSkyTint;
 uniform float uWet;
 uniform float uSnow;
 varying vec3 vLamp;
@@ -190,7 +194,7 @@ function injectStandard(mat: MeshStandardMaterial, u: FloorUniforms, key: string
       .replace("#include <color_fragment>", "#include <color_fragment>\n" + FRAG_BODY + WEATHER_COLOR)
       .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\n" + WEATHER_ROUGH)
       .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += vEmis;")
-      .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= mix(uFill, 1.0, vOut);\nreflectedLight.indirectDiffuse += vLamp * material.diffuseColor * uLampGain;");
+      .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= mix(uFill, 1.0, vOut) * uSkyTint;\nreflectedLight.indirectSpecular *= uSkyTint;\nreflectedLight.indirectDiffuse += vLamp * material.diffuseColor * uLampGain;");
   };
   mat.customProgramCacheKey = () => key;
 }
@@ -218,11 +222,12 @@ function skyTexture(): CanvasTexture {
   return t;
 }
 
-function paintSky(t: CanvasTexture, top: Color, bottom: Color): void {
+function paintSky(t: CanvasTexture, top: Color, mid: Color, bottom: Color): void {
   const c = t.image as HTMLCanvasElement;
   const ctx = c.getContext("2d")!;
   const g = ctx.createLinearGradient(0, 0, 0, 256);
   g.addColorStop(0, `#${top.getHexString()}`);
+  g.addColorStop(0.55, `#${mid.getHexString()}`);
   g.addColorStop(1, `#${bottom.getHexString()}`);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 4, 256);
@@ -234,6 +239,9 @@ const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 const mixHex = (a: number, b: number, t: number) => new Color(a).lerp(new Color(b), Math.max(0, Math.min(1, t)));
+
+/** The sun's colour right at the horizon, mixed into its golden light. */
+const ROSE = new Color(0xff8a6a);
 
 /** Where the light comes from when the look doesn't match the sky (the day look at night): front left, high. */
 const STUDIO = new Vector3(-0.45, 0.78, 0.45).normalize();
@@ -278,7 +286,7 @@ export class RealisticLook {
   private flash: { start: number } | null = null;
   private envBase = 0.55;
   /** How thick the air is: fog, and the gloom of heavy weather. */
-  private haze = { fog: 0, gloom: 0 };
+  private haze = { fog: 0, gloom: 0, glow: 0 };
   private calm = reducedMotion();
   /** Rain or snow is falling (the view keeps drawing). */
   private falling = false;
@@ -293,6 +301,9 @@ export class RealisticLook {
   private box = new Box3(new Vector3(-5, 0, -5), new Vector3(5, 3, 5));
   private groundY = 0;
   private night = false;
+  /** The light follows the sky's time of day (else it stays as `night` says). */
+  private follow = false;
+  private dark = 0;
   private texSize: number;
   private aniso: number;
 
@@ -432,11 +443,19 @@ export class RealisticLook {
 
   // ------------------------------------------------------------------ light
 
-  setNight(night: boolean): void {
+  /**
+   * The look: night or day as picked, or (`follow`) the sky's own time of day, when dusk and dawn blend
+   * the two as the sun sets and rises. `night` still decides when the sky has no sun to follow.
+   */
+  setNight(night: boolean, follow = false): void {
     this.night = night;
-    LAMP_GAIN.value = night ? 0.5 : 0.28;
-    if (this.bloom) this.bloom.strength = night ? 0.32 : 0.12;
+    this.follow = follow;
     this.applySky();
+  }
+
+  /** How dark the light is now: 0 by day .. 1 at night (the viewer fades lamp glows with it). */
+  get darkness(): number {
+    return this.dark;
   }
 
   /** The old way in: just where the sun is (azimuth clockwise from north, elevation in degrees). */
@@ -452,12 +471,13 @@ export class RealisticLook {
   }
 
   /**
-   * Light, sky and weather from the sky and the look. The light follows the real sun (or moon) when
-   * the look matches the sky; the day look at night (picked by hand) keeps a studio sun instead.
+   * Light, sky and weather from the sky and the look. Following the sky, the light is a smooth
+   * function of the sun's height: the sun sinks golden, the sky's light turns rose and blue, the
+   * moon takes over once the sun has gone and the lamps carry the house. A look picked by hand stays
+   * day or night; the day look at night keeps a studio sun.
    */
   private applySky(): void {
     const sky = this.sky;
-    const night = this.night;
     const cloud = sky?.cloud ?? 0.2;
     const rain = sky?.rain ?? 0;
     const snow = sky?.snow ?? 0;
@@ -467,69 +487,74 @@ export class RealisticLook {
     const gloom = Math.max(rain * 0.65, storm ? 0.6 : 0, snow * 0.25, fog * 0.2);
     const sun = sky?.sun ?? null;
     const shadow = this.sun.shadow;
-    let el = 40;
-    if (!night) {
-      const real = !!sun && sun.elevation > -1;
-      el = real ? sun!.elevation : 40;
+    const real = !!sun && sun.elevation > -1;
+    // the sun's height the light is made for
+    const el = this.follow && sun ? sun.elevation : this.night ? -90 : real ? sun!.elevation : 40;
+    const dark = darkAt(el);
+    this.dark = dark;
+    if (el > -1) {
       this.sunDir.copy(real ? skyDirection(sun!.azimuth, Math.max(0.5, el), this.north) : STUDIO);
-      // a low sun is weaker and redder; clouds take most of it and soften the shadows
-      const strength = smooth(-1, 3, el) * (0.35 + 0.65 * smooth(2, 30, el));
-      this.sun.intensity = 3.2 * strength * (1 - 0.9 * cloud) * (1 - 0.3 * gloom);
-      const warm = new Color().setRGB(...kelvinToRgb(2300 + 3300 * smooth(1, 28, el)));
+      // a low sun is weaker and golden, rose at the horizon; clouds take most of it and soften the shadows
+      this.sun.intensity = 3.2 * sunlight(el) * (1 - 0.9 * cloud) * (1 - 0.3 * gloom);
+      const warm = new Color().setRGB(...kelvinToRgb(sunKelvin(el))).lerp(ROSE, 0.3 * sunRose(el));
       this.sun.color.copy(warm.lerp(new Color(0xf4f6fa), cloud * 0.8));
       shadow.intensity = Math.max(0.06, 1 - 0.9 * cloud);
       shadow.radius = 3 + 7 * cloud;
-      // the sky's own light: less at dawn and dusk, a bit more of it (relatively) under cloud
-      // clear sun against a weaker sky, so shadows read outside; under cloud the sky carries the light
-      this.envBase = (0.25 + 0.4 * cloud) * (0.6 + 0.4 * smooth(-1, 12, el)) * (1 - 0.32 * gloom);
-      WEATHER.uFill.value = 1 + 0.75 * (1 - cloud);
     } else {
-      // by night the moon lights the outside faintly blue (a light from the front left when it's down)
+      // once the sun has gone the moon lights the outside faintly blue (a light from the front left
+      // when it's down); it comes up from nothing, so the one light turns from sun to moon unseen
       const moon = sky?.moon ?? null;
-      const up = !!moon && moon.elevation > 2;
-      this.sunDir.copy(up ? skyDirection(moon!.azimuth, moon!.elevation, this.north) : STUDIO);
-      this.sun.intensity = (up ? 0.38 * (0.3 + 0.7 * moon!.lit) : 0.2) * (1 - 0.7 * cloud);
+      const mel = moon?.elevation ?? -90;
+      const up = mel > 0;
+      // the light fades through nothing as the moon rises or sets, so its turn to and from the front left is unseen
+      const rise = up ? smooth(0, 6, mel) : smooth(0, -3, mel);
+      this.sunDir.copy(up ? skyDirection(moon!.azimuth, Math.max(0.5, mel), this.north) : STUDIO);
+      this.sun.intensity = (up ? 0.38 * (0.3 + 0.7 * moon!.lit) : 0.2) * rise * (1 - 0.7 * cloud) * moonlight(el);
       this.sun.color.setHex(0x8ea6ff);
       shadow.intensity = (up ? 0.65 : 0.3) * (1 - 0.8 * cloud);
       shadow.radius = 4 + 6 * cloud;
-      // a cloudy town sky gives back a little light
-      this.envBase = 0.05 + 0.025 * cloud;
-      WEATHER.uFill.value = 1;
     }
+    // the sky's own light: less at dawn and dusk, a bit more of it (relatively) under cloud; clear
+    // sun against a weaker sky, so shadows read outside. By night a cloudy town sky gives back a little.
+    const dayEnv = (0.25 + 0.4 * cloud) * (0.6 + 0.4 * smooth(-1, 12, el)) * (1 - 0.32 * gloom);
+    const nightEnv = 0.05 + 0.025 * cloud;
+    this.envBase = dayEnv + (nightEnv - dayEnv) * dark;
     this.scene.environmentIntensity = this.envBase;
     this.renderer.toneMappingExposure = 1.0;
-    this.paintSky(el, cloud, gloom, fog);
-    this.ground(sky);
+    WEATHER.uFill.value = 1 + 0.75 * (1 - cloud) * (1 - dark);
+    // dusk colours the sky's light, warm and then rose and blue; cloud greys it again
+    const { sky: clear, tint } = duskColours(el);
+    const k = 1 - 0.75 * cloud;
+    WEATHER.uSkyTint.value.setRGB(1 + (tint[0] - 1) * k, 1 + (tint[1] - 1) * k, 1 + (tint[2] - 1) * k, LinearSRGBColorSpace);
+    // the lamps carry the house as it gets dark
+    LAMP_GAIN.value = 0.154 + 0.346 * dark;
+    if (this.bloom) this.bloom.strength = 0.12 + 0.2 * dark;
+    // around sunset a soft haze in the sky's colours closes in on the garden (less under cloud)
+    const glow = afterglow(el) * (1 - cloud);
+    this.paintSky(clear, dark, cloud, gloom, fog, glow);
+    this.ground(sky, el, dark, glow);
     WEATHER.uWet.value = sky?.wet ?? 0;
     WEATHER.uSnow.value = sky?.snowCover ?? 0;
     this.placeSun();
+    this.applyFx();
   }
 
   /** The sky's gradient and the fog (in the sky's colour near the horizon). */
-  private paintSky(el: number, cloud: number, gloom: number, fog: number): void {
-    let top: Color, bottom: Color;
-    if (this.night) {
-      top = mixHex(0x060a16, 0x10141e, cloud);
-      bottom = mixHex(0x18213a, 0x262b36, cloud);
-    } else {
-      top = mixHex(0xb9d0e8, 0xb2bac3, cloud).lerp(new Color(0x666e78), gloom);
-      bottom = mixHex(0xeef2f4, 0xdadee2, cloud).lerp(new Color(0xa4aab1), gloom);
-      // golden light low in a clear sky; a darker top as the sun goes down
-      const low = 1 - smooth(1, 12, el);
-      bottom.lerp(new Color(0xf5cfa4), low * (1 - cloud) * 0.75);
-      top.lerp(new Color(0x7189b3), (1 - smooth(-1, 6, el)) * 0.5);
-    }
-    if (fog > 0) {
-      const f = new Color(this.night ? 0x2a2f3a : 0xd5d9dc);
-      top.lerp(f, fog * 0.85);
-      bottom.lerp(f, fog);
-    }
-    const key = top.getHexString() + bottom.getHexString();
+  private paintSky(clear: [number, number, number], dark: number, cloud: number, gloom: number, fog: number, glow: number): void {
+    // overcast is grey from day to night, darker in heavy weather by day
+    const grey = [mixHex(0xb2bac3, 0x10141e, dark), mixHex(0xc6ccd2, 0x1b2029, dark), mixHex(0xdadee2, 0x262b36, dark)];
+    const heavy = [0x666e78, 0x858c95, 0xa4aab1];
+    const haze = mixHex(0xd5d9dc, 0x2a2f3a, dark);
+    const [top, mid, bottom] = clear.map((c, i) => {
+      const col = mixHex(c, grey[i].getHex(), cloud).lerp(new Color(heavy[i]), gloom * (1 - dark));
+      return fog > 0 ? col.lerp(haze, fog * (0.85 + 0.075 * i)) : col;
+    });
+    const key = top.getHexString() + mid.getHexString() + bottom.getHexString();
     if (key !== this.skyPainted) {
       this.skyPainted = key;
-      paintSky(this.skyTex, top, bottom);
+      paintSky(this.skyTex, top, mid, bottom);
     }
-    this.haze = { fog, gloom };
+    this.haze = { fog, gloom, glow };
     const f = this.scene.fog as Fog | null;
     if (f) f.color.copy(bottom);
     else this.scene.fog = new Fog(bottom.getHex(), 1, 2);
@@ -545,17 +570,18 @@ export class RealisticLook {
     if (!f) return;
     const r = this.radius;
     const d = this.camera.position.distanceTo(this.centre);
-    const { fog, gloom } = this.haze;
-    f.near = Math.max(0.5, d + r * (1.5 - 1.9 * fog) * (1 - 0.3 * gloom));
-    f.far = d + r * (5 - 3.6 * fog) * (1 - 0.25 * gloom);
+    const { fog, gloom, glow } = this.haze;
+    f.near = Math.max(0.5, d + r * (1.5 - 1.9 * fog - 0.5 * glow) * (1 - 0.3 * gloom));
+    f.far = d + r * (5 - 3.6 * fog - 1.8 * glow) * (1 - 0.25 * gloom);
   }
 
-  /** The ground around the house: darker and glossier when wet, white under snow. */
-  private ground(sky: Sky | null): void {
-    const base = new Color(this.night ? 0x2a3326 : 0xc6cfbd);
+  /** The ground around the house: darker and glossier when wet, white under snow, in dusk's colours. */
+  private ground(sky: Sky | null, el: number, dark: number, glow: number): void {
+    // sage by day, sandier in the low sun, dark green at night
+    const base = mixHex(0xc6cfbd, 0xd6c6ae, glow * smooth(-3, 1, el)).lerp(new Color(0x2a3326), dark);
     const wet = sky?.wet ?? 0;
     const snow = sky?.snowCover ?? 0;
-    base.multiplyScalar(1 - 0.25 * wet).lerp(new Color(this.night ? 0x7d8796 : 0xeef2f6), snow);
+    base.multiplyScalar(1 - 0.25 * wet).lerp(mixHex(0xeef2f6, 0x7d8796, dark), snow).multiply(WEATHER.uSkyTint.value);
     this.groundMaterial.color.copy(base);
     this.groundMaterial.roughness = snow > 0.5 ? 0.9 : 1 - 0.45 * wet;
   }
@@ -627,7 +653,7 @@ export class RealisticLook {
   private applyFx(): void {
     const sky = this.sky;
     if (!sky) {
-      this.falling = this.fx.set({ rain: 0, snow: 0, drift: [0, 0], night: this.night });
+      this.falling = this.fx.set({ rain: 0, snow: 0, drift: [0, 0], dark: this.dark });
       return;
     }
     // the wind blows towards the opposite of where it comes from
@@ -636,7 +662,7 @@ export class RealisticLook {
     // plants lean a few centimetres per metre of height in a strong wind
     const lean = this.calm ? 0 : Math.min(1, Math.max(0, (sky.wind - 4) / 10)) * 0.05;
     WEATHER.uSway.value.set(Math.sin(b) * lean, -Math.cos(b) * lean);
-    this.falling = this.fx.set({ rain: sky.rain, snow: sky.snow, drift, night: this.night });
+    this.falling = this.fx.set({ rain: sky.rain, snow: sky.snow, drift, dark: this.dark });
   }
 
   /**
@@ -663,7 +689,7 @@ export class RealisticLook {
         const f = t < 0.08 ? t / 0.08 : t < 0.16 ? 1 - (t - 0.08) / 0.16 : t < 0.22 ? 0.5 + (t - 0.16) / 0.12 : Math.max(0, 1 - (t - 0.22) / 0.25);
         if (t > 0.5) this.endFlash(now + 10_000 + Math.random() * 30_000);
         else {
-          this.scene.environmentIntensity = this.envBase + (this.night ? 0.5 : 0.9) * f;
+          this.scene.environmentIntensity = this.envBase + (0.9 - 0.4 * this.dark) * f;
           this.scene.backgroundIntensity = 1 + 0.6 * f;
           flashing = true;
         }

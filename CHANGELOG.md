@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Cosy dusk and dawn: with Realistic and Ultra graphics the evening goes from day to night
+  gradually. The low sun turns golden, the sky and its light go rose and then blue, the moonlight
+  fades in once the sun has gone, and lit rooms glow more as it gets dark (window glow and lamp
+  halos fade in too), and the same way back in the morning. A warm haze closes in on the garden
+  around sunset. With Tablet and Standard graphics the sky behind the house takes sunset's colours.
+- A new day or night look fades in over the old one instead of switching at once.
+
+### Fixed
+- Sunset and sunrise flashed white and then flickered: for a moment after sunset the day look lit
+  the house with its studio sun, and the change of look rebuilt the whole house. The realistic look
+  no longer rebuilds anything when day turns to night.
+- Rain and snow only started to fall after the house was redrawn (another floor, an edit), not
+  when the weather turned.
+- The moonlight no longer jumps as the moon rises or sets.
+
 ## 0.10.0
 
 ### New
