@@ -12,7 +12,7 @@ them.
 
 - [Install](#install)
 - [Find your way around](#find-your-way-around)
-- [Get your home in](#get-your-home-in): scan it, draw it, or trace a floor plan picture
+- [Get your home in](#get-your-home-in): start from a house type, scan it, draw it, or trace a floor plan picture
 - [Place your devices](#place-your-devices)
 - [Make it look like home](#make-it-look-like-home)
 - [Outside: garden, fences and the roof](#outside-garden-fences-and-the-roof)
@@ -38,7 +38,8 @@ You need Home Assistant 2025.1 or later and [HACS](https://hacs.xyz).
 4. Reload the page in your browser. **VirtuHome** is now in the sidebar, and the VirtuHome card is
    in your dashboards' card picker.
 5. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
-   floor plan picture**, **Import a scan** or **Draw it myself**, and the editor opens on that step
+   floor plan picture**, **Start from a house type**, **Import a scan** or **Draw it myself**, and
+   the editor opens on that step
    (see [Get your home in](#get-your-home-in)). People who aren't administrators see who can set
    it up.
 
@@ -117,16 +118,16 @@ A level picked here is for this device only, and wins over the card's `quality`.
 
 ## Get your home in
 
-There are three ways, and they mix: scan it, draw it in the 2D plan, or trace an estate agent's
-floor plan. Everything here is in **Edit**.
+There are four ways, and they mix: start from a house type, scan it, draw it in the 2D plan, or
+trace an estate agent's floor plan. Everything here is in **Edit**.
 
 ### Getting started
 
 Until a new home is set up, Edit → **Home** starts with **Getting started**: the steps left, each
 with a button that does it or goes to where it is done.
 
-- **Get your home in**: **Trace a picture**, **Import a scan…** or **Draw rooms**. Done once there is
-  a room.
+- **Get your home in**: **Trace a picture**, **House type**, **Import a scan…** or **Draw rooms**.
+  Done once there is a room.
 - **Link the rooms to areas**: done when every room is linked to a Home Assistant area, or no area
   is left for the rest. **Rooms** opens the Rooms tab.
 - **Place your devices**: **Place devices automatically** (Smart Setup). Done once a device is in
@@ -142,6 +143,32 @@ started** brings it back until everything is done. Like any change, ticks are ke
 **Save**.
 
 ![Getting started](screenshots/getting-started.jpg)
+
+### Start from a house type
+
+Most homes are one of a handful of layouts. A house type gives you a whole home in a minute: its
+storeys, rooms named like Home Assistant's usual areas (Living Room, Kitchen, Hallway, Landing,
+Bedroom 1…), doors, windows, stairs, a garden and a roof. Then you drag the walls to fit.
+
+1. Edit → **Home** → **Start from a house type…** (on a new home: **Start from a house type**, or
+   **House type** in Getting started).
+2. Pick the one most like your home: **Two-bed mid-terrace**, **Three-bed semi-detached**,
+   **Four-bed detached**, **Two-bed bungalow**, **Two-bed flat** or **Open-plan single storey**.
+3. **Fit to my home**: type your home's outside **Width** and **Depth** in metres, as an estate
+   agent's listing gives them. The rooms, garden and roof stretch with the walls; doors, windows and
+   stairs keep their size and stay on their walls. **Mirror left to right** turns it the other way
+   round; for the semi, pick whether it **Joins next door on the** **Left** or **Right**.
+4. **Use this house type**. If the plan already has rooms, it asks before replacing them.
+
+Smart Setup then runs by itself: storeys are linked to Home Assistant's floors, rooms to the areas
+named like them, and devices go into their rooms (see [Smart Setup](#smart-setup)). What it did is
+listed in the Home tab, and one **Undo** takes it all back. Next, open the **2D plan** and drag the
+walls to your rooms' sizes, or put your floor plan picture under it to drag them to (see [Trace a
+floor plan picture](#trace-a-floor-plan-picture)).
+
+![Start from a house type](screenshots/house-types.jpg)
+
+![A semi-detached house and a bungalow, as they start](screenshots/house-types-3d.jpg)
 
 ### Scan it (iPhone or iPad with LiDAR)
 

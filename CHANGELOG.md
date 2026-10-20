@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### New
+- Start from a house type: a two-bed mid-terrace, three-bed semi-detached, four-bed detached,
+  two-bed bungalow, two-bed flat or open-plan single storey, with its storeys, rooms named like Home
+  Assistant's usual areas, doors, windows, stairs, garden and roof. Fit to my home stretches it to
+  your home's outside width and depth (doors, windows and stairs keep their size) and mirrors it,
+  or picks the side a semi joins next door on. Smart Setup then links the rooms to areas and places
+  the devices. Offered on a new home, in Getting started and in Edit → Home.
 - A first run that needs no guide: a new home shows Let's get your home in with three ways to
   start (trace a floor plan picture, import a scan, or draw it), and each opens the editor on that
   step. Edit → Home then has Getting started: getting the home in, linking rooms to areas,

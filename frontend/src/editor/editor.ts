@@ -39,6 +39,7 @@ import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { EDITOR_CSS } from "./styles";
+import { HouseTypes } from "./house-types";
 import { Collider, settle } from "./collide";
 import { imageUrl, uploadImage } from "./background";
 import { Plan2D, PLAN2D_CSS } from "./plan2d";
@@ -139,6 +140,10 @@ export class Editor {
   /** Whether a dashboard shows the card (getting started), once asked. */
   private cardSeen: boolean | null = null;
   private cardAsked = false;
+  /** The house type picker, while it is open. */
+  private houseTypes: HouseTypes | null = null;
+  /** A house type is going in: not a first room drawn by hand. */
+  private starting = false;
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
@@ -178,8 +183,12 @@ export class Editor {
     this.updateHistoryButtons();
   }
 
-  /** A first-run choice: trace a picture or draw in the 2D plan, or the scan import on the Home tab. */
+  /** A first-run choice: trace a picture or draw in the 2D plan, or the house types or scan import on the Home tab. */
   startSetup(kind: StartKind): void {
+    if (kind === "starter") {
+      this.openHouseTypes();
+      return;
+    }
     if (kind === "scan") {
       this.show("home");
       const scan = this.body.querySelector<HTMLElement>(".ed-scan");
@@ -305,6 +314,7 @@ export class Editor {
 
   /** The first room of a new home: the getting-started list shows what comes next. */
   private firstRoom(): void {
+    if (this.starting) return;
     const items = setupItems(this.plan, this.hass, { cardOnDashboard: this.cardSeen });
     if (!showChecklist(this.plan, items)) return;
     // after the 2D plan has said its own piece about the tool
@@ -772,7 +782,11 @@ export class Editor {
     const fileIn = h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
     const box = h("div", {},
+      this.houseTypes?.el,
       ...this.setupSection(() => fileIn.click()),
+      this.houseTypes ? null : h("h4", {}, "House type"),
+      this.houseTypes ? null : h("p", { class: "ed-hint" }, "A ready-made home with its rooms, doors, windows, stairs and roof, fitted to your home's size."),
+      this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, "Start from a house type…"),
       h("div", { class: "ed-scan" },
         h("h4", {}, "Scan"),
         h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
@@ -855,17 +869,17 @@ export class Editor {
     }, on ? `Done: ${it.title}` : `Not done: ${it.title}`);
     const ticked = (this.plan.settings.setup?.done ?? []).includes(it.id);
     const actions: Record<SetupId, () => HTMLElement[]> = {
-      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("Import a scan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
+      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("House type", () => this.startSetup("starter")), btn("Import a scan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
       areas: () => [btn("Rooms", () => this.show("rooms"))],
       devices: () => [btn("Place devices automatically", () => this.runAutoPlace())],
       north: () => [btn("Sun and weather", () => this.scrollToHeading("Sun and weather")), btn("It's right", () => tick(true))],
       card: () => [btn("Done", () => tick(true))],
       tablet: () => [btn("How", () => window.open("https://github.com/virtumaps/virtuhome/blob/main/docs/GUIDE.md#wall-tablets", "_blank", "noopener")), btn("Done", () => tick(true))],
     };
-    const icon = h("span", { class: `ed-check${it.done ? " on" : ""}`, html: svg(it.done ? mdiCheckCircle : mdiCheckboxBlankCircleOutline) });
+    const icon = h("span", { class: `ed-tick${it.done ? " on" : ""}`, html: svg(it.done ? mdiCheckCircle : mdiCheckboxBlankCircleOutline) });
     // a step ticked by hand can be unticked
     const mark = it.manual && ticked
-      ? h("button", { class: "ed-check on", title: "Not done after all", html: svg(mdiCheckCircle), onclick: () => tick(false) })
+      ? h("button", { class: "ed-tick on", title: "Not done after all", html: svg(mdiCheckCircle), onclick: () => tick(false) })
       : icon;
     return h("div", { class: `ed-step${it.done ? " done" : ""}` },
       mark,
@@ -2611,6 +2625,57 @@ export class Editor {
       ...(report.unplaced.length ? [`${report.unplaced.length} devices are in areas without a room in the plan.`] : []),
       ...report.placed.slice(0, 30),
     ]);
+  }
+
+  /** Opens the house type picker at the top of the Home tab. */
+  private openHouseTypes(): void {
+    this.houseTypes ??= new HouseTypes({
+      use: (plan, name) => this.useHouseType(plan, name),
+      close: () => {
+        this.houseTypes = null;
+        this.render();
+      },
+      reveal: (el) => this.scrollDrawerTo(el),
+    });
+    this.show("home");
+    this.body.scrollTop = 0;
+  }
+
+  /**
+   * A house type in place of the plan (asking first if it has rooms), its storeys linked to Home
+   * Assistant's floors of their level, then Smart Setup: one step to undo.
+   */
+  private useHouseType(house: Plan, name: string): void {
+    const go = () => {
+      const used = new Set<string>();
+      const floors = house.floors.map((f, i) => {
+        const ha = Object.values(this.hass.floors ?? {}).find((x) => x.level === i && !used.has(x.floor_id));
+        if (ha) used.add(ha.floor_id);
+        return { ...f, ha_floor: ha?.floor_id ?? null };
+      });
+      const { wall_exterior, wall_interior, exterior_finish } = house.settings;
+      const next: Plan = { ...structuredClone(this.plan), floors, settings: { ...this.plan.settings, wall_exterior, wall_interior, exterior_finish, exterior_color: null } };
+      const placed = autoPlace(next, this.hass);
+      this.houseTypes = null;
+      this.starting = true;
+      this.change((p) => Object.assign(p, placed.plan), false, `Start from ${name.toLowerCase()}`);
+      this.starting = false;
+      this.select(null);
+      this.host.view.viewer.setMode("house");
+      const rooms = floors.reduce((n, f) => n + f.rooms.length, 0);
+      const openings = floors.reduce((n, f) => n + f.openings.filter((o) => o.kind !== "passage").length, 0);
+      const r = placed.report;
+      this.showReport([
+        `${name}: ${rooms} rooms on ${floors.length} floor${floors.length === 1 ? "" : "s"}, ${openings} doors and windows. Drag the walls in the 2D plan to match your rooms.`,
+        `${r.placed.length} devices placed, ${r.linked.length} linked to doors, windows and TVs, ${r.roomsLinked.length} rooms linked to areas.`,
+        ...(r.unplaced.length ? [`${r.unplaced.length} devices are in areas without a room in the plan.`] : []),
+        ...r.roomsLinked.slice(0, 20),
+      ]);
+      const report = this.body.querySelector<HTMLElement>(".ed-report");
+      if (report) this.scrollDrawerTo(report);
+    };
+    if (this.plan.floors.some((f) => f.rooms.length)) this.confirm("Replace the current plan with this house type?", "Replace", go);
+    else go();
   }
 
   private showReport(lines: string[]): void {

@@ -2,7 +2,7 @@
 //   ?hass=demo (default)  pretend states, toggles work locally
 //   ?hass=live            your Home Assistant (dev/local.env.js gives the URL and a token)
 //   ?plan=demo|<file>     the demo house, or a plan JSON from dev/plans/<file>.json
-//   ?plan=empty           no home yet (the first run)
+//   ?plan=empty           no home yet (the first run), in a Home Assistant with the demo home's areas and devices
 //   ?plan=catalog[&cat=<category>]  every built-in item in a labelled grid
 //   ?theme=day|night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?stats
 import { createConnection, createLongLivedTokenAuth, subscribeEntities, type Connection } from "home-assistant-js-websocket";
@@ -107,7 +107,8 @@ async function main(): Promise<void> {
       view.applyPlan(next);
     }
   };
-  const hass = q.get("hass") === "live" ? await liveHass(set) : demoHass(plan, set, (q.get("theme") ?? "night") === "night");
+  const pretend = q.get("plan") === "empty" ? normalizePlan(DEMO_PLAN) : plan;
+  const hass = q.get("hass") === "live" ? await liveHass(set) : demoHass(pretend, set, (q.get("theme") ?? "night") === "night");
   set(hass);
   const floor = q.get("floor");
   if (floor !== null) view.showFloor(Number(floor));
