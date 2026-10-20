@@ -36,8 +36,14 @@ export async function unzipEntry(bytes: Uint8Array, name: string): Promise<Uint8
     const data = bytes.subarray(start, start + size);
     if (method === 0) return data;
     if (method !== 8) throw new Error("The zip archive is packed in a way that can't be read here.");
-    if (typeof DecompressionStream === "undefined") throw new Error("This browser can't unpack zip archives: try another browser.");
-    const stream = new Blob([data.slice()]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    // "deflate-raw" came with Chrome 103 and Safari 16.4: older browsers have no stream, or refuse the format
+    let inflate: DecompressionStream;
+    try {
+      inflate = new DecompressionStream("deflate-raw");
+    } catch {
+      throw new Error("This browser can't unpack zip archives: try another browser.");
+    }
+    const stream = new Blob([data.slice()]).stream().pipeThrough(inflate);
     return new Uint8Array(await new Response(stream).arrayBuffer());
   }
   return null;
