@@ -796,7 +796,7 @@ export class Editor {
       ...this.setupSection(() => fileIn.click()),
       h("div", { class: "ed-scan" },
         h("h4", {}, "Import"),
-        h("p", { class: "ed-hint" }, "A House Scan scan: choose house.json, manifest.json (room names) and detections.json (decor) together. Or a plan file from another program: the simple plan format or NeonPlan 3D's import format (.json)."),
+        h("p", { class: "ed-hint" }, "A House Scan scan: choose house.json, manifest.json (room names) and detections.json (decor) together. Or a plan file in the simple plan format (.json)."),
         h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan or plan…"),
       ),
       fileIn,

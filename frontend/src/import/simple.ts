@@ -1,10 +1,10 @@
-// The simple plan format (docs/import-format.md) and NeonPlan 3D's "neonplan-import" format, which
-// it follows: floors of rooms as corner lists, doors and windows by a point on a room edge,
-// furniture by type or name. Lengths in m, cm or mm.
+// The simple plan format (docs/import-format.md): floors of rooms as corner lists, doors and windows
+// by a point on a room edge, furniture by type or name. Lengths in m, cm or mm.
 import type { OpeningKind, Vec2 } from "../model/plan";
 import { DOOR_STYLES, GARAGE_STYLES, WINDOW_STYLES } from "../scene/joinery";
 import type { Draft, DraftFloor, DraftOpening } from "./draft";
 
+/** Our own format id, and one other programs write for files of the same layout. */
 export const SIMPLE_FORMATS = ["virtuhome-import", "neonplan-import"];
 
 type Obj = Record<string, unknown>;

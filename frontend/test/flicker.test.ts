@@ -162,7 +162,7 @@ describe("no flickering surfaces in a built floor", () => {
   });
 
   it("in imported plans", () => {
-    for (const file of ["simple.json", "neonplan.json"]) {
+    for (const file of ["simple.json", "storeys.json"]) {
       const { plan } = buildPlan(importSimple(JSON.parse(readFileSync(new URL(`./fixtures/import/${file}`, import.meta.url), "utf8"))));
       plan.floors.forEach((_, fi) => {
         expect(flicker(plan, null, fi)).toEqual([]);

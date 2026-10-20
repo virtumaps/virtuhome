@@ -6,9 +6,6 @@ point on a room's edge, and furniture by type; VirtuHome works out the walls, pu
 window on its wall and places the furniture. After the import it lists what came in and what it
 left out.
 
-It follows NeonPlan 3D's [import format](https://github.com/Mastershort/neonplan3d/blob/main/docs/plan-format.md),
-so a file written for that (`"format": "neonplan-import"`) imports too.
-
 ## Example
 
 ```json
@@ -43,7 +40,7 @@ drawing to the bottom). Points are `[x, z]`.
 
 | Field | Meaning |
 |---|---|
-| `format` | `"virtuhome-import"` (or `"neonplan-import"`) |
+| `format` | `"virtuhome-import"` |
 | `units` | `"m"` (the default), `"cm"` or `"mm"`, for every length in the file |
 | `rooms_at` | `"centre"` (the default): room outlines run along the **middle of the walls**, so rooms next to each other share an edge. `"inner"`: along the walls' **inner faces**, as measured inside a room; rooms a wall apart are joined in the middle of the wall. |
 | `wall_thickness` | optional: `{ "outside": 0.3, "inside": 0.1 }`. With `rooms_at: "inner"`, outside walls are taken this thick; inside walls come from the gaps between rooms. |

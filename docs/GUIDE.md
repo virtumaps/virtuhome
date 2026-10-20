@@ -170,7 +170,6 @@ programs:
 - **The simple plan format** (`.json`): rooms as corner lists, doors and windows by a point on a
   room's edge, furniture by type. Write it by hand or with a script, or let an AI chat read your
   floor plan picture: see [the format, with a prompt to copy](import-format.md).
-- **NeonPlan 3D's import format** (`.json` files with `"format": "neonplan-import"`).
 
 Rooms come in with their outlines along the middle of the walls, doors and windows go onto their
 room's edge, and furniture becomes the closest built-in piece; anything without a match comes in as

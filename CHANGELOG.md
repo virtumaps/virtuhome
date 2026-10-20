@@ -6,7 +6,7 @@
 - Import plans from other programs: Edit → Home → Import a scan or plan… also takes a plan in a
   simple JSON format (rooms as corner lists along the wall middles or the inner faces, doors and
   windows by a point, furniture by type or name; described in docs/import-format.md with a prompt
-  that turns a floor plan picture into one with an AI chat) and NeonPlan 3D's import format.
+  that turns a floor plan picture into one with an AI chat).
   Furniture without a match comes in as a plain box. An import is one step to undo, and its report
   says what came in and what was left out.
 - A first run that needs no guide: a new home shows Let's get your home in with three ways to
