@@ -58,6 +58,9 @@ questions on it, label it `needs info`, and remove `in progress`.
   with the rarer parts; `frontend/test/fixtures.test.ts` loads and builds each one, and
   `tests/test_plan_fixtures.py` checks them against the schema. When one stops loading, fix the
   loading, never the fixture.
+- It works in the oldest supported browsers (`frontend/browsers.json`: Chrome 87, Safari 15). The build
+  targets them, and `frontend/test/browsers.test.ts` fails on newer functions or CSS the build can't
+  turn into older code; add a stand-in to `frontend/src/compat.ts` when one is worth it.
 - User-visible changes get a line in `CHANGELOG.md` under `## Unreleased` (add the heading at the top
   if it is missing), in the same plain style as the existing entries.
 - **The user guide stays true.** Anything a user sees or does differently (a new feature, a renamed
