@@ -3,7 +3,14 @@
 ## Unreleased
 
 ### New
-- **Find the rooms** in the 2D plan's floor plan picture: once its scale is set, VirtuHome finds the
+- A first run that needs no guide: a new home shows Let's get your home in with three ways to
+  start (trace a floor plan picture, import a scan, or draw it), and each opens the editor on that
+  step. Edit → Home then has Getting started: getting the home in, linking rooms to areas,
+  placing devices, setting north, putting the house on a dashboard and (optionally) a wall tablet,
+  each with a button that does it. Steps tick themselves off as they are done; north, the dashboard
+  and the tablet can be ticked by hand. Hide this list puts it away. People who can't edit are
+  told who can set VirtuHome up.
+- Find the rooms in the 2D plan's floor plan picture: once its scale is set, VirtuHome finds the
   walls in the picture and offers the rooms it sees, with their doors and windows, to tick and add in
   one go (one Undo takes them away again). It works in the browser; the picture goes nowhere.
 - People in their rooms: when a room tracker knows where someone is (Bermuda, ESPresense through

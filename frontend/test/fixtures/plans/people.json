@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "name": "People and settings",
+  "settings": {
+    "wall_exterior": 0.25, "wall_interior": 0.1, "north": 45, "theme": "night", "exterior_finish": "render", "exterior_color": "#f0ebe0",
+    "presence": {"enabled": true, "people": {"person.alex": "sensor.alex_phone_area", "person.sam": null}},
+    "energy": {"enabled": true, "solar": ["sensor.pv1_power", "sensor.pv2_power"], "battery": "sensor.battery_power", "battery_level": "sensor.battery_soc", "grid": "sensor.grid_power", "price_import": "sensor.octopus_rate", "solar_peak": 3.9, "ev_enabled": true, "ev_charger": "sensor.charger_power", "ev_level": null},
+    "sky": {"enabled": true, "weather": "weather.home"}
+  },
+  "floors": [
+    {
+      "id": "flat", "name": "Flat", "ha_floor": "ground_floor", "elevation": 0, "height": 2.5,
+      "rooms": [
+        {"id": "lounge", "name": "Lounge", "area_id": "living_room", "points": [[0, 0], [5, 0], [5, 4], [0, 4]], "floor": "oak", "wall_finish": "wallpaper_leaves", "temperature": "sensor.lounge_temperature", "humidity": "sensor.lounge_humidity"},
+        {"id": "bedroom", "name": "Bedroom", "area_id": "bedroom", "points": [[0, 4], [3, 4], [3, 7], [0, 7]], "floor": "carpet", "wall_finish": "paint", "wall_color": "#c9d6c3"},
+        {"id": "garage", "name": "Garage", "area_id": null, "points": [[3, 4], [5, 4], [5, 9], [3, 9]], "floor": "concrete"}
+      ],
+      "openings": [
+        {"id": "o1", "room_id": "lounge", "edge": 2, "offset": 3.8, "width": 0.8, "height": 2.0, "sill": 0, "kind": "door", "hinge": "right", "swing": "out", "style": "glazed", "finish": "oak"},
+        {"id": "o2", "room_id": "lounge", "edge": 0, "offset": 2.5, "width": 1.6, "height": 1.2, "sill": 0.9, "kind": "window", "style": "sash", "bars": true, "color": "#ffffff", "entity": "binary_sensor.lounge_window", "cover": "cover.lounge_blind"},
+        {"id": "o3", "room_id": "garage", "edge": 2, "offset": 1, "width": 1.8, "height": 2.1, "sill": 0, "kind": "garage", "style": "roller", "cover": "cover.garage_door"}
+      ],
+      "furniture": [
+        {"id": "sofa", "type": "sofa", "x": 2.5, "z": 3.3, "rotation": 180, "w": 2.2, "d": 0.9, "h": 0.8, "y": null, "color": "#5a6b7c", "finish": "velvet", "mirror": true},
+        {"id": "lamp", "type": "lamp_ceiling", "x": 2.5, "z": 2, "rotation": 0, "w": 0.45, "d": 0.45, "h": 0.1, "entity": "light.lounge"},
+        {"id": "bed", "type": "bed", "x": 1.5, "z": 5.8, "rotation": 0, "w": 1.5, "d": 2, "h": 0.55, "entity": null},
+        {"id": "car", "type": "car", "x": 4, "z": 6.6, "rotation": 0, "w": 1.77, "d": 4.25, "h": 1.52, "parked": "device_tracker.car"}
+      ],
+      "devices": [
+        {"id": "fp2", "entity": "binary_sensor.lounge_presence", "x": 0.2, "z": 0.2, "y": 2.2, "mount": "wall", "rotation": 135},
+        {"id": "cam", "entity": "camera.garage", "x": 4.8, "z": 4.2, "y": 2.3, "mount": "ceiling", "rotation": 180, "fov": 110, "reach": 6},
+        {"id": "speaker", "entity": "media_player.bedroom", "x": 0.4, "z": 6.6, "mount": "table"},
+        {"id": "thermostat", "entity": "climate.flat", "x": 0.1, "z": 2, "y": null, "mount": null, "rotation": null}
+      ],
+      "walls": [
+        {"id": "half_wall", "a": [1, 2.5], "b": [1, 4], "thickness": null, "height": 1.1}
+      ]
+    }
+  ]
+}

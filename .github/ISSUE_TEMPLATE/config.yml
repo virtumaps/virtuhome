@@ -1,1 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://github.com/virtumaps/virtuhome/discussions/categories/q-a
+    about: How do I…? Is this supported? Questions and setup help go here, where answers stay findable.
+  - name: Share an idea
+    url: https://github.com/virtumaps/virtuhome/discussions/categories/ideas
+    about: Wishes and ideas, where others can vote for them. Votes help decide what comes next.
+  - name: Show your home
+    url: https://github.com/virtumaps/virtuhome/discussions/categories/show-and-tell
+    about: Screenshots of your VirtuHome, wall tablet setups and tips.
