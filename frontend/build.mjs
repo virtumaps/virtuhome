@@ -1,6 +1,7 @@
 // Builds the frontend into custom_components/virtuhome/frontend:
 //   virtuhome-loader.js  tiny, loaded on every Home Assistant page; defines the card and panel elements
 //   app/*.js             the 3D engine and editor, fetched by the loader only where they are shown
+//   app/roomfind-worker.js  finds the rooms in a floor plan picture, fetched only when asked to
 // `node build.mjs --dev` rebuilds on change and serves the dev harness (dev/index.html) on :5173.
 import * as esbuild from "esbuild";
 import { readFileSync, rmSync } from "node:fs";
@@ -33,14 +34,16 @@ const app = {
   splitting: true,
   chunkNames: "chunk-[hash]",
 };
+// the room finder runs in a worker of its own, fetched only when someone looks for rooms
+const worker = { ...common, entryPoints: { "roomfind-worker": "src/editor/roomfind-worker.ts" }, outdir: out + "app" };
 
 if (dev) {
-  const ctxs = await Promise.all([esbuild.context(loader), esbuild.context(app)]);
+  const ctxs = await Promise.all([esbuild.context(loader), esbuild.context(app), esbuild.context(worker)]);
   await Promise.all(ctxs.map((c) => c.watch()));
   const { startDevServer } = await import("./dev/server.mjs");
   startDevServer(out);
 } else {
   // old chunks would pile up next to the new ones
   rmSync(out + "app", { recursive: true, force: true });
-  await Promise.all([esbuild.build(loader), esbuild.build(app)]);
+  await Promise.all([esbuild.build(loader), esbuild.build(app), esbuild.build(worker)]);
 }
