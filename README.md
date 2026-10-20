@@ -11,9 +11,10 @@ each floor is one or two draw calls, and lighting is computed on the CPU only wh
 On a computer or a recent iPad it switches to a realistic look with textures, the real sun's light
 and shadows, and the weather.
 
-- **Get your home in:** import an iPhone/iPad LiDAR scan (Apple RoomPlan JSON), or draw rooms in the
-  2D plan. Furniture comes with the scan in the right style (corner sofa, bar stool, round table…),
-  and with the House Scan app plants, pictures, mirrors and gym kit too.
+- **Get your home in:** import an iPhone/iPad LiDAR scan (Apple RoomPlan JSON), a Sweet Home 3D home
+  or a plan in a [simple JSON format](docs/import-format.md), or draw rooms in the 2D plan. Furniture
+  comes with the scan in the right style (corner sofa, bar stool, round table…), and with the House
+  Scan app plants, pictures, mirrors and gym kit too.
 - **Smart setup:** rooms link to Home Assistant areas by name; lights, cameras, motion sensors,
   thermostats and plugs are placed in their rooms, door and window sensors attach to their doors and
   windows, the TV to its screen.
@@ -162,7 +163,7 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
 ## Scanning with House Scan
 
 Scan room by room with an iPhone or iPad with LiDAR, then choose `house.json`, `manifest.json` and
-`detections.json` together in Edit → Home → **Import a scan…**. While scanning, hold decoration in view
+`detections.json` together in Edit → Home → **Import a scan or plan…**. While scanning, hold decoration in view
 for a second, or point the crosshair at it and tap **Tag item** (best for dumbbells, mirrors and rugs).
 The app also notes which way the phone's compass points, so the imported plan faces north from the start
 (allow the location for true north; indoors a compass can be some degrees off, so check it with **Line

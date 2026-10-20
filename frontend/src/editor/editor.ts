@@ -2641,12 +2641,13 @@ export class Editor {
       const next: Plan = { ...structuredClone(this.plan), floors: plan.floors };
       next.settings = { ...next.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior, north };
       const placed = autoPlace(next, this.hass);
-      this.change((p) => Object.assign(p, placed.plan), false, `Import ${what}`);
+      // quiet: the report says what comes next, not the first-room hint
+      this.change((p) => Object.assign(p, placed.plan), true, `Import ${what}`);
       this.host.view.viewer.setMode("house");
       this.showReport([
         ...lines,
         `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
-      ]);
+      ], ".ed-scan");
     };
     if (this.plan.floors.some((f) => f.rooms.length)) {
       this.confirm("Replace the whole plan with the imported one? Until you save, Undo or closing without saving brings yours back; after saving, Restore points does.", "Replace", go);
@@ -2663,10 +2664,13 @@ export class Editor {
     ]);
   }
 
-  private showReport(lines: string[]): void {
+  /** The report on the Home tab, scrolled to `from` (a section above it) when given. */
+  private showReport(lines: string[], from?: string): void {
     this.show("home");
     const r = this.body.querySelector(".ed-report");
     r?.replaceChildren(...lines.map((l) => h("div", {}, l)));
+    const top = from ? this.body.querySelector<HTMLElement>(from) : null;
+    if (top) this.scrollDrawerTo(top);
   }
 
   /** A storey on top of the house: as high as the one below, linked to the Home Assistant floor of its level when there is one. */

@@ -86,7 +86,7 @@ describe("Sweet Home 3D import", () => {
     expect(g.openings[6]).toMatchObject({ width: 0.91, height: 1.34, sill: 0.87 });
     // the outward opening window belongs to the bedroom and swings out of it
     expect(f1.openings[5]).toMatchObject({ kind: "window", swing: "out", room_id: room(f1, "Bedroom 2").id });
-    expect(summary.left).toEqual(["2 text labels, dimension lines and lines drawn on the plan", "Roof window at 2.5, 2.0 is on no room edge"]);
+    expect(summary.left).toEqual(["labels, dimension lines and drawn lines", "Roof window at 2.5, 2.0 is on no room edge"]);
     for (const f of plan.floors) expect(layoutWalls(f, plan.settings).orphans).toEqual([]);
   });
 

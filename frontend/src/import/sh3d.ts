@@ -150,7 +150,7 @@ export function sh3dDraft(home: XmlElement): Draft {
   for (const e of home.children) visit(e);
 
   const drawings = of("label").length + of("dimensionLine").length + of("polyline").length;
-  if (drawings) left.push(`${drawings} text label${drawings === 1 ? "" : "s"}, dimension lines and lines drawn on the plan`);
+  if (drawings) left.push("labels, dimension lines and drawn lines");
 
   // the plan's thicknesses: walls with a room on one side are outside walls
   const median = (v: number[]) => (v.length ? v.sort((x, y) => x - y)[Math.floor(v.length / 2)] : null);

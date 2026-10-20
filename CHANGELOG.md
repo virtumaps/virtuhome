@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### New
+- Import Sweet Home 3D homes: Edit → Home → Import a scan or plan… takes .sh3d files (saved by
+  Sweet Home 3D 5.3 or later). Levels become floors, rooms come in on the middle of their walls,
+  doors and windows keep their size, sill and hinge side and go to the room they open into,
+  furniture and lights become built-in pieces (anything else a plain box), walls on no room edge
+  stay, curved ones as short straight pieces, and north comes from the compass.
 - Import plans from other programs: Edit → Home → Import a scan or plan… also takes a plan in a
   simple JSON format (rooms as corner lists along the wall middles or the inner faces, doors and
   windows by a point, furniture by type or name; described in docs/import-format.md with a prompt

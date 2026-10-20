@@ -167,6 +167,12 @@ Then go on to [Place your devices](#place-your-devices).
 Edit → **Home** → **Import** → **Import a scan or plan…** also takes plan files from other
 programs:
 
+- **Sweet Home 3D** (`.sh3d` files saved by version 5.3 or later; open an older one in Sweet Home 3D
+  and save it again). Each level becomes a floor. Rooms drawn along the inner faces of their walls
+  move out to the middle of the walls, and walls on no room's edge stay as walls of their own, curved
+  ones in short straight pieces. Doors and windows keep their width, height, sill and hinge side,
+  and belong to the room they open into. Furniture and lights become the closest built-in pieces,
+  and north comes from its compass. Colours, textures, labels and dimension lines stay behind.
 - **The simple plan format** (`.json`): rooms as corner lists, doors and windows by a point on a
   room's edge, furniture by type. Write it by hand or with a script, or let an AI chat read your
   floor plan picture: see [the format, with a prompt to copy](import-format.md).
@@ -180,6 +186,8 @@ what was left out.
 Importing replaces the whole plan, after asking. Until you save, **Undo** brings your plan back (or
 close the editor and **Discard**); after saving, the plan from before the import is in **Restore
 points**.
+
+![A Sweet Home 3D home after importing](screenshots/import.jpg)
 
 ### Draw it in the 2D plan
 
