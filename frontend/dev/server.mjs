@@ -9,7 +9,7 @@ const devDir = new URL(".", import.meta.url).pathname;
 
 export async function startDevServer(outDir, port = 5173, fast = process.argv.includes("--fast")) {
   const ctx = await esbuild.context({
-    entryPoints: { main: join(devDir, "main.ts") },
+    entryPoints: { main: join(devDir, "main.ts"), "roomfind-worker": join(devDir, "../src/editor/roomfind-worker.ts") },
     outdir: join(devDir, "out"),
     bundle: true,
     format: "esm",

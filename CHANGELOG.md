@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### New
+- Start from a house type: a two-bed mid-terrace, three-bed semi-detached, four-bed detached,
+  two-bed bungalow, two-bed flat or open-plan single storey, with its storeys, rooms named like Home
+  Assistant's usual areas, doors, windows, stairs, garden and roof. Fit to my home stretches it to
+  your home's outside width and depth (doors, windows and stairs keep their size) and mirrors it,
+  or picks the side a semi joins next door on. Smart Setup then links the rooms to areas and places
+  the devices. Offered on a new home, in Getting started and in Edit → Home.
 - Import plans from other programs: Edit → Home → Import a scan or plan… also takes a plan in a
   simple JSON format (rooms as corner lists along the wall middles or the inner faces, doors and
   windows by a point, furniture by type or name; described in docs/import-format.md with a prompt
@@ -16,6 +22,11 @@
   each with a button that does it. Steps tick themselves off as they are done; north, the dashboard
   and the tablet can be ticked by hand. Hide this list puts it away. People who can't edit are
   told who can set VirtuHome up.
+- An online demo at virtumaps.github.io/virtuhome/demo: the demo house in any browser, on a phone or
+  a computer, with no Home Assistant. Everything works except saving. It is rebuilt with each release.
+- Find the rooms in the 2D plan's floor plan picture: once its scale is set, VirtuHome finds the
+  walls in the picture and offers the rooms it sees, with their doors and windows, to tick and add in
+  one go (one Undo takes them away again). It works in the browser; the picture goes nowhere.
 - People in their rooms: when a room tracker knows where someone is (Bermuda, ESPresense through
   mqtt_room or the ESPresense Companion), their picture or initials show over the room's name, and in
   the house view over the room, and the room glows softly. Tap a face for the person's dialog. The
@@ -24,8 +35,21 @@
   people in their rooms** turns it off. Replays of the past never show rooms, only home or away.
 - A motion or presence sensor (an Aqara FP2, Everything Presence or Apollo mmWave sensor) placed in
   the plan counts for the room it is in, like a thermostat; one that isn't placed counts for its area.
+- Renamed entities are followed: the plan keeps the Home Assistant registry id of every entity it
+  links (devices, furniture, doors and windows, room sensors, solar strings, energy, weather, people),
+  so a link survives a new entity id. Links to entities that were removed or re-paired are listed in
+  Edit → Home → Check my setup, with the likely replacement (the same device, or a like name in the
+  same room) to Relink one by one or all at once, or another entity to pick.
+- Check my setup, at the top of Edit → Home: missing entities, rooms without an area and areas with
+  devices but no room, the dashboard card missing or an old version still loaded, graphics that
+  stepped down by themselves and why, extensions that need a newer VirtuHome or a licence that
+  expired or couldn't renew, and what was repaired while loading the plan. Each comes with a fix
+  where there is a safe one, and nothing changes until it is pressed. A red dot on Edit shows when
+  something doesn't work, and the diagnostics file says how many things each check found.
 
 ### Fixed
+- The editor opens on browsers older than Chrome 98 and Safari 15.4 (older wall tablets and iPads); it
+  stopped with an error there before.
 - On a wide screen the Graphics menu opened far from its button, in the middle of the view; it sits
   beside the buttons again (and left of the editor while editing).
 - The greenhouse's door and floor flickered where its glass lay on the frame, and a pane ran across
@@ -34,6 +58,7 @@
   flickered the same way and no longer do.
 - Dragging something with glass in it (a greenhouse, a summerhouse, a shower) left its glass behind
   until it was let go; the glass moves with it now.
+
 
 ## 0.9.0
 

@@ -1,0 +1,15 @@
+{"picture":"studio-flat.png","width":1450,"height":1850,"scale":0.006,
+ "rooms": [
+  {"name":"Living Room","points":[[325,425],[1191.67,425],[1191.67,1225],[325,1225]]},
+  {"name":"Shower Room","points":[[325,1225],[691.67,1225],[691.67,1525],[325,1525]]},
+  {"name":"Hall","points":[[691.67,1225],[1191.67,1225],[1191.67,1525],[691.67,1525]]}
+ ],
+ "openings": [
+  {"kind":"door","at":[1058.33,1525],"width":0.9},
+  {"kind":"door","at":[941.67,1225],"width":0.8},
+  {"kind":"door","at":[691.67,1375],"width":0.7},
+  {"kind":"window","at":[591.67,425],"width":1.4},
+  {"kind":"window","at":[975,425],"width":1.4},
+  {"kind":"window","at":[1191.67,825],"width":1}
+ ]
+}

@@ -89,6 +89,14 @@ export const EDITOR_CSS = /* css */ `
 .ed-pick small { font-size: 11px; color: var(--vh-dim); }
 .ed-pick:hover { box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
 .ed-report { margin-top: 8px; color: var(--vh-dim); line-height: 1.45; }
+.ed-result span svg { width: 18px; height: 18px; display: block; fill: var(--vh-dim); }
+.ed-result.ok span svg { fill: #2bb673; }
+.ed-result.problem span svg { fill: #e5484d; }
+.ed-result.problem { box-shadow: inset 0 0 0 1.5px rgba(229,72,77,0.5); }
+.ed-result .ed-card { background: var(--vh-glass); }
+.ed-result.ok { padding: 5px 10px; }
+.ed-result.ok small { color: var(--vh-dim); flex-basis: 100%; padding-left: 24px; }
+.ed-id { display: block; color: var(--vh-dim); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .ed-setup { margin: 2px 0 4px; }
 .ed-step { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--vh-chip); }
 .ed-step:last-child { border-bottom: 0; }
@@ -104,6 +112,20 @@ button.ed-tick { border: 0; background: none; cursor: pointer; border-radius: 50
 .ed-flash { animation: ed-flash 1.6s ease-out 1; border-radius: 10px; }
 @keyframes ed-flash { 0%, 40% { box-shadow: 0 0 0 2px var(--vh-accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 @media (prefers-reduced-motion: reduce) { .ed-flash { animation: none; box-shadow: 0 0 0 2px var(--vh-accent); } }
+.ed-houses { margin: 6px 0; padding: 0 10px 10px; border-radius: 14px; background: var(--vh-chip); }
+.ed-houses-head { display: flex; align-items: center; justify-content: space-between; }
+.ed-houses-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ed-house {
+  display: flex; flex-direction: column; gap: 2px; text-align: left; border: 0; border-radius: 10px; padding: 6px 8px 8px;
+  background: var(--vh-glass); color: var(--vh-text); font: inherit; cursor: pointer;
+}
+.ed-house span svg { width: 100%; height: 54px; display: block; margin-bottom: 4px; }
+.ed-house span.flip svg { transform: scaleX(-1); }
+.ed-house polygon { fill: var(--vh-chip-on); stroke: var(--vh-dim); stroke-width: 0.12; stroke-linejoin: round; }
+.ed-house b { font-size: 12px; font-weight: 600; }
+.ed-house small { font-size: 11px; color: var(--vh-dim); line-height: 1.3; }
+.ed-house:hover, .ed-house.on { box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
+.ed-houses-num { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
 .ed-list { margin-top: 4px; }
 .ed-confirm {
   position: absolute; left: 12px; right: 12px; bottom: 54px; padding: 12px 14px; border-radius: 14px; z-index: 6;

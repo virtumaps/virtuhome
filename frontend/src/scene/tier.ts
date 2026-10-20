@@ -73,6 +73,20 @@ export function capTier(t: Tier): void {
   }
 }
 
+/** Lets automatic picks go back up (after a "Try again" in Check my setup). */
+export function clearCap(): void {
+  try {
+    localStorage.removeItem(CAP_KEY);
+  } catch {
+    // nothing kept
+  }
+}
+
+/** Where Automatic stands on this device: what it would pick, the level it stepped down to, and whether WebGL runs without a GPU. */
+export function autoTierInfo(): { detected: Tier; cap: Tier | null; software: boolean } {
+  return { detected: detectTier(), cap: cap(), software: /SwiftShader|llvmpipe|softpipe|Software/i.test(gpuName()) };
+}
+
 function cap(): Tier | null {
   try {
     const v = localStorage.getItem(CAP_KEY);
