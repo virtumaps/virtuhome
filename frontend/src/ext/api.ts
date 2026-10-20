@@ -225,6 +225,10 @@ const context: ExtensionContext = {
 };
 
 /** Loads the extensions the integration serves (once per page). */
+const failed: { id: string; name: string; newer: boolean }[] = [];
+/** Extensions that could not load on this page; `newer`: they need a newer VirtuHome. */
+export const extensionFailures = (): readonly { id: string; name: string; newer: boolean }[] => failed;
+
 export function loadExtensions(hass: Hass, extra: string[] = []): Promise<void> {
   loading ??= (async () => {
     let list: ExtensionInfo[] = [];
@@ -245,6 +249,7 @@ export function loadExtensions(hass: Hass, extra: string[] = []): Promise<void> 
         loaded.set(m.id, { ...ext, id: m.id, name: m.name });
       } catch (err) {
         console.error(`VirtuHome extension ${ext.id} could not load:`, err);
+        failed.push({ id: ext.id, name: ext.name, newer: /newer VirtuHome/.test(String(err)) });
       }
     }
   })();

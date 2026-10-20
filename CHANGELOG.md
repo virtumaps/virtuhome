@@ -18,6 +18,17 @@
   people in their rooms** turns it off. Replays of the past never show rooms, only home or away.
 - A motion or presence sensor (an Aqara FP2, Everything Presence or Apollo mmWave sensor) placed in
   the plan counts for the room it is in, like a thermostat; one that isn't placed counts for its area.
+- Renamed entities are followed: the plan keeps the Home Assistant registry id of every entity it
+  links (devices, furniture, doors and windows, room sensors, solar strings, energy, weather, people),
+  so a link survives a new entity id. Links to entities that were removed or re-paired are listed in
+  Edit → Home → Check my setup, with the likely replacement (the same device, or a like name in the
+  same room) to Relink one by one or all at once, or another entity to pick.
+- Check my setup, at the top of Edit → Home: missing entities, rooms without an area and areas with
+  devices but no room, the dashboard card missing or an old version still loaded, graphics that
+  stepped down by themselves and why, extensions that need a newer VirtuHome or a licence that
+  expired or couldn't renew, and what was repaired while loading the plan. Each comes with a fix
+  where there is a safe one, and nothing changes until it is pressed. A red dot on Edit shows when
+  something doesn't work, and the diagnostics file says how many things each check found.
 
 ### Fixed
 - On a wide screen the Graphics menu opened far from its button, in the middle of the view; it sits

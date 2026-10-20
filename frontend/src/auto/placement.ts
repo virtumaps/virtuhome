@@ -35,16 +35,10 @@ const ALERT = new Set(["smoke", "gas", "moisture", "carbon_monoxide"]);
 
 const norm = (s: string) => s.toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
-export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: PlacementReport } {
-  const p: Plan = structuredClone(plan);
-  const report: PlacementReport = { roomsLinked: [], placed: [], linked: [], unplaced: [] };
+/** Links rooms and garden areas without an area to the area named like them. Mutates the plan; returns "Room → Area" lines. */
+export function linkRoomsByName(p: Plan, hass: Hass): string[] {
   const areas = Object.values(hass.areas ?? {});
-  const haFloors = Object.values(hass.floors ?? {}).sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
-
-  // ---------------------------------------------------------------- floors and rooms
-  p.floors.forEach((f, i) => {
-    if (!f.ha_floor && haFloors[i]) f.ha_floor = haFloors[i].floor_id;
-  });
+  const linked: string[] = [];
   const usedAreas = new Set(p.floors.flatMap((f) => f.rooms.map((r) => r.area_id).filter(Boolean)));
   for (const f of p.floors) {
     for (const r of [...f.rooms, ...(f.outdoor ?? [])]) {
@@ -56,10 +50,23 @@ export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: Placeme
       if (match) {
         r.area_id = match.area_id;
         usedAreas.add(match.area_id);
-        report.roomsLinked.push(`${r.name} → ${match.name}`);
+        linked.push(`${r.name} → ${match.name}`);
       }
     }
   }
+  return linked;
+}
+
+export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: PlacementReport } {
+  const p: Plan = structuredClone(plan);
+  const report: PlacementReport = { roomsLinked: [], placed: [], linked: [], unplaced: [] };
+  const haFloors = Object.values(hass.floors ?? {}).sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
+
+  // ---------------------------------------------------------------- floors and rooms
+  p.floors.forEach((f, i) => {
+    if (!f.ha_floor && haFloors[i]) f.ha_floor = haFloors[i].floor_id;
+  });
+  report.roomsLinked.push(...linkRoomsByName(p, hass));
 
   // ---------------------------------------------------------------- what is already in the plan
   const inPlan = new Set<string>();

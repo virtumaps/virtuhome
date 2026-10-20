@@ -58,7 +58,8 @@ The same view is in the sidebar and in every VirtuHome card.
 - **House** shows every storey; a button for each floor shows that floor alone.
 - The alarm chip (**Disarmed**, **Armed home**, **Armed away**…) shows your alarm panel. Tap it for
   its dialog.
-- **Edit** (sidebar only, administrators only) opens the editor.
+- **Edit** (sidebar only, administrators only) opens the editor. A red dot on it means
+  [Check my setup](#troubleshooting) found something that doesn't work.
 
 **Under the top bar**
 - A red banner when something needs you: a leak, smoke, gas. Tap it for the sensor's dialog.
@@ -536,6 +537,25 @@ feet and inches (`11'4"`).
 
 ## Troubleshooting
 
+**Check my setup**: Edit → **Home** starts with it. It lists what stops VirtuHome working as it
+should, with a fix where there is a safe one. Nothing changes until you press a fix, and
+**Check again** asks Home Assistant again.
+- **Linked entities**: links to entities Home Assistant no longer has (see below).
+- **Rooms and areas**: rooms not linked to an area, or linked to one that is gone. **Link rooms by
+  name** links them to the areas named like them; **Open Rooms** to pick by hand.
+- **Areas without a room**: areas with devices but no room in the plan. **Add a room** puts one,
+  named and linked like the area, beside the house, to move where it belongs.
+- **Dashboard card**: the card missing from your dashboards' resources, or an old version there
+  (**Add it again**), or this page still running an older VirtuHome than the one installed
+  (**Reload**).
+- **Graphics on this device**: Automatic stepped down because turning the view was slow (**Try
+  again**), or the browser draws without the graphics card.
+- **Extensions and licence**: an extension that needs a newer VirtuHome, or a licence that has
+  expired or couldn't renew (**Renew now**).
+- **Plan repairs**: what VirtuHome put right while loading the plan; **Save** keeps it.
+
+![Check my setup](screenshots/check-setup.jpg)
+
 **"Custom element doesn't exist: virtuhome-card"**, or the card stays empty
 - Check the integration is added (Settings → Devices & services → VirtuHome), then reload the page.
 - Dashboards with resources in YAML mode: add `/virtuhome_static/virtuhome-loader.js` as a
@@ -560,6 +580,15 @@ home in](#get-your-home-in). Dashboard cards only show the house once it is ther
 
 **A door or window doesn't open in 3D**: tap it in the editor and pick its **Sensor**.
 
+**Something stopped working after a device was renamed, re-paired or replaced in Home Assistant**
+- VirtuHome keeps the Home Assistant registry id of everything it links when you save, so an
+  entity renamed later is followed by itself. Open **Edit** and **Save** to keep the new name in
+  the plan.
+- Edit → **Home** → **Check my setup** → **Linked entities** lists links to entities Home
+  Assistant no longer has, with what most likely replaced each one (the same device, or a like name
+  in the same room). **Relink** takes it and **Relink all** takes every suggestion. **Pick
+  another…** links any entity of the same kind, or **Unlink** (**Remove from plan** for a device).
+
 **Someone is in the wrong room, or in none**
 - Check what their tracker says in Home Assistant: it must name an area (Bermuda's Area sensor, or a
   room of ESPresense named like the area).
@@ -579,4 +608,6 @@ doesn't work, a device to support, a scan that came in wrong or a slow device, o
 [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) with its form, and attach the
 diagnostics file: Settings → Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds
 the versions, the plan's size and what each floor counts, how the card reaches your dashboards and
-which extensions are loaded. It has no room, device or entity names, and no licence key or token.
+which extensions are loaded, and how many things each check of **Check my setup** found when an
+administrator last opened VirtuHome. It has no room, device or entity names, and no licence key or
+token.
