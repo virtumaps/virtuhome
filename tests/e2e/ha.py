@@ -12,6 +12,7 @@ Home Assistant keeps running until this is stopped (Ctrl-C or SIGTERM).
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import signal
 import subprocess
@@ -87,6 +88,22 @@ def onboard(url: str) -> dict:
     return {**tokens, "client_id": client_id}
 
 
+async def _keep_http_settings(url: str, token: str) -> None:
+    """Newer versions take the http: settings in configuration.yaml as a trial that reverts (to
+    port 8123) after five minutes unless confirmed: confirms them. Older ones lack the command."""
+    import aiohttp  # noqa: PLC0415 - Home Assistant's own dependency
+
+    async with aiohttp.ClientSession() as session, session.ws_connect(f"{url}/api/websocket") as ws:
+        await ws.receive_json()
+        await ws.send_json({"type": "auth", "access_token": token})
+        if (await ws.receive_json())["type"] != "auth_ok":
+            sys.exit("The WebSocket API refused the token")
+        await ws.send_json({"id": 1, "type": "http/config/promote"})
+        res = await ws.receive_json()
+        if not res["success"] and res["error"]["code"] not in ("unknown_command", "not_allowed"):
+            sys.exit(f"Could not keep the HTTP settings: {res['error']}")
+
+
 def add_virtuhome(url: str, token: str) -> str:
     """Adds VirtuHome through its config flow (one step, nothing to fill in); returns the entry id."""
     flow = call(url, "/api/config/config_entries/flow", {"handler": "virtuhome", "show_advanced_options": False}, token)
@@ -139,6 +156,7 @@ def main() -> None:
     try:
         wait_until_up(url, proc)
         tokens = onboard(url)
+        asyncio.run(_keep_http_settings(url, tokens["access_token"]))
         entry_id = add_virtuhome(url, tokens["access_token"])
         version = call(url, "/api/config", token=tokens["access_token"])["version"]
     except BaseException as err:
