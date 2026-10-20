@@ -84,7 +84,7 @@ The same view is in the sidebar and in every VirtuHome card.
 |---|---|
 | **Walls** | Steps through smart cutaway (walls between you and a room slide away), low, and full height. Its picture shows the mode |
 | **Roof** | Only when the house has a roof: takes the roofs off to look in from above, or puts them back. Each device remembers its own choice |
-| **Day / night** | Switches between the day and night looks. Normally the look follows the sun |
+| **Day / night** | Switches between the day and night looks. Normally the look follows the sun, and the picture fades from one to the other |
 | **Sun and weather** | Opens the [sun and weather panel](#sun-and-weather) |
 | **Show all** | Fits the whole view on the screen |
 | **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm |
@@ -503,6 +503,13 @@ The **Sun and weather** button in the view opens a panel to see the house at any
 **Sunset**, or play the day through), in any weather (**Live**, **Clear**, **Cloudy**, **Rain**,
 **Storm**, **Snow**, **Fog**). Shadows, clouds and rain show with **Realistic** graphics. Close the
 panel to go back to live.
+
+**Dusk and dawn:** while the look follows the sun, **Realistic** and **Ultra** go from day to night
+gradually: the low sun turns golden, the sky goes rose and then blue, the moonlight comes up and
+the lamps that are on light the house more and more, until it is dark about 9° after sunset (and
+the same way back at dawn). Clouds keep the colours muted. With **Tablet** and **Standard** the sky
+behind the house takes the colours of sunset, and the house fades from the day look to the night
+look at sunset.
 
 ![The ground floor at night](screenshots/night.jpg)
 

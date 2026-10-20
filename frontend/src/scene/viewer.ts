@@ -18,7 +18,8 @@ import { headingDir, type CameraRig } from "./cameras";
 import type { WallSegment } from "../model/walls";
 import { Halos, Markers, type HaloSpec, type MarkerSpec } from "./markers";
 import { floorUniforms, getCut, glassMaterial, opaqueMaterial, setCut, setTint, WALL_TRIM, type FloorUniforms } from "./materials";
-import { DAY, paletteFor, type Palette } from "./palette";
+import { DAY, NIGHT, paletteFor, type Palette } from "./palette";
+import { afterglow, duskColours } from "./dusk";
 import type { RealisticLook } from "./realistic";
 import type { Tier, TierSetting } from "./tier";
 import { quietSky, type Sky } from "../live/sky";
@@ -183,6 +184,13 @@ export class Viewer {
   /** Something moved in the scene (not just the camera): shadows need redrawing. */
   private sceneChanged = true;
   private sky: Sky | null = null;
+  /** The look follows the sky's time of day. */
+  private followSun = false;
+  /** How much the lamps glow like at night, 0..1 (the realistic look fades it in at dusk). */
+  private glowDark = 1;
+  private lampsOn = false;
+  /** The last picture, fading out over a new look. */
+  private fade: HTMLCanvasElement | null = null;
   /** The weather wants frames (rain, snow, wind, lightning): when the next one is due. */
   private fxTimer = 0;
   private slowWatch = { frames: 0, time: 0, fired: false };
@@ -304,8 +312,10 @@ export class Viewer {
   /** The sky over the house: the sun's and the moon's light and the weather (the realistic look); the sky's colour (the model look). */
   setSky(sky: Sky): void {
     this.sky = sky;
-    if (this.look) this.look.setSky(sky, this.plan?.settings.north ?? 0);
-    else this.applyPalette();
+    if (this.look) {
+      this.look.setSky(sky, this.plan?.settings.north ?? 0);
+      this.followGlow();
+    } else this.applyPalette();
     this.invalidate();
   }
 
@@ -348,11 +358,57 @@ export class Viewer {
     this.invalidate();
   }
 
-  setTheme(name: "day" | "night"): void {
-    if (this.pal.name === name) return;
+  /**
+   * Day or night; with `follow` the look goes with the sky's time of day. The realistic look then
+   * lights dusk and dawn on its own and a new palette only relights; the model look bakes its
+   * colours into the house, so a new palette rebuilds it. Either way the picture crossfades.
+   */
+  setTheme(name: "day" | "night", follow = false): void {
+    const changed = this.pal.name !== name;
+    if (!changed && this.followSun === follow) return;
+    if (changed) this.crossfade();
+    this.followSun = follow;
     this.pal = paletteFor(name);
     this.applyPalette();
-    if (this.plan) this.setPlan(this.plan, true, false);
+    if (!changed) return;
+    if (this.plan && !this.look) this.setPlan(this.plan, true, false);
+    else this.refreshAll();
+  }
+
+  /** The realistic look's lamp glows fade in with the dark (relit in quarter steps, only while lamps are on). */
+  private followGlow(): void {
+    const g = this.look ? Math.round(this.look.darkness * 4) / 4 : this.pal.name === "night" ? 1 : 0;
+    if (g === this.glowDark) return;
+    this.glowDark = g;
+    if (this.lampsOn) this.refreshLighting();
+  }
+
+  /**
+   * Fades from the picture shown now to the next one (a new look), in under a second: one copy of the
+   * canvas, then nothing but the browser's own opacity transition.
+   */
+  private crossfade(): void {
+    const src = this.renderer.domElement;
+    if (!this.plan || !this.visible || document.hidden || this.disposed || !src.width || !src.height || reducedMotion()) return;
+    // the canvas can only be copied right after a frame is drawn: draw one now
+    this.fitNearPlane();
+    if (this.look) this.look.render();
+    else this.renderer.render(this.scene, this.camera);
+    const c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(src, 0, 0);
+    c.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transition:opacity 0.8s ease-in-out";
+    this.fade?.remove();
+    this.fade = c;
+    src.after(c);
+    requestAnimationFrame(() => requestAnimationFrame(() => (c.style.opacity = "0")));
+    window.setTimeout(() => {
+      c.remove();
+      if (this.fade === c) this.fade = null;
+    }, 1000);
   }
 
   setLive(live: LiveSource): void {
@@ -362,11 +418,17 @@ export class Viewer {
 
   private applyPalette(): void {
     this.basicGround.color.setHex(this.pal.ground);
-    if (this.look) this.look.setNight(this.pal.name === "night");
-    else {
-      // the model look shows the weather in its sky only: greyer under cloud, darker in a storm, white ground under snow
+    if (this.look) {
+      this.look.setNight(this.pal.name === "night", this.followSun);
+      this.followGlow();
+    } else {
+      // the model look shows dusk and the weather in its sky only: rose and blue around sunset, greyer
+      // under cloud, darker in a storm, white ground under snow
       const sky = this.sky;
       const bg = new Color(this.pal.background);
+      const el = sky?.sun?.elevation;
+      if (this.followSun && typeof el === "number" && afterglow(el) > 0) bg.lerp(new Color(duskColours(el).sky[1]), 0.5 * afterglow(el));
+      this.glowDark = this.pal.name === "night" ? 1 : 0;
       if (sky && sky.source !== "none") {
         const night = this.pal.name === "night";
         bg.lerp(new Color(night ? 0x1a1f29 : 0xd3d8dd), sky.cloud * 0.7);
@@ -385,7 +447,8 @@ export class Viewer {
     // the light, and the floor plan image is only in the 2D editor
     const { north: _north, sky: _sky, ...settings } = plan.settings;
     const { background: _background, roofs: _roofs, ...floor } = plan.floors[i];
-    return JSON.stringify([settings, floor, stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.pal.name, !!this.look, this.low]);
+    // the realistic look builds in day colours and lights the time of day
+    return JSON.stringify([settings, floor, stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.look ? "" : this.pal.name, !!this.look, this.low]);
   }
 
   /** Everything a storey's roofs depend on: they are rebuilt on their own (dragging a panel along one is cheap). */
@@ -394,7 +457,7 @@ export class Viewer {
     const f = plan.floors[i];
     const s = plan.settings;
     return JSON.stringify([f.roofs ?? [], f.elevation, f.height, f.exterior_finish, f.exterior_color, f.rooms,
-      s.exterior_finish, s.exterior_color, s.wall_exterior, plan.floors.slice(i + 1).map((x) => x.rooms), this.pal.name, !!this.look, this.low]);
+      s.exterior_finish, s.exterior_color, s.wall_exterior, plan.floors.slice(i + 1).map((x) => x.rooms), this.look ? "" : this.pal.name, !!this.look, this.low]);
   }
 
   private buildFloor(i: number): FloorBuild {
@@ -1032,7 +1095,7 @@ export class Viewer {
   /** The inputs of the lighting pass for one floor. */
   private lightingFor(f: FloorView): LightingState {
     const live = this.live!;
-    const night = this.pal.name === "night";
+    const dark = this.glowDark;
     return {
       ambient: this.pal.ambient,
       lamp: (l) => live.lamp(l),
@@ -1044,9 +1107,9 @@ export class Viewer {
         const open = live.contact(g.entity);
         if (open !== null && open > 0.5) return lin(0xffb347);
         const lit = g.room >= 0 ? f.roomGlow[g.room] ?? 0 : 0;
-        if (night && lit > 0.05) {
+        if (dark > 0 && lit > 0.05) {
           const c = lin(this.pal.glassLit);
-          const k = Math.min(1, 0.35 + lit * 0.5);
+          const k = Math.min(1, 0.35 + lit * 0.5) * dark;
           return [c[0] * k, c[1] * k, c[2] * k];
         }
         return null;
@@ -1057,9 +1120,11 @@ export class Viewer {
   refreshLighting(): void {
     if (!this.live) return;
     const halos: HaloSpec[] = [];
+    let on = 0;
     for (const [fi, f] of this.floors.entries()) {
       const st = this.lightingFor(f);
-      const lights = roomLights(f.fb, this.pal, st);
+      const lights = roomLights(f.fb, this.lampPalette, st);
+      on += lights.reduce((n, r) => n + r.length, 0);
       f.roomGlow = roomGlow(lights);
       const fill = (mesh: Mesh, geo: Geo) => this.fillLight(f, mesh, geo, lights, st);
       fill(f.opaque, f.fb.opaque);
@@ -1072,9 +1137,9 @@ export class Viewer {
       for (const lamp of f.fb.lamps) {
         const s = st.lamp(lamp);
         if (!s?.on || s.level <= 0) continue;
-        if (this.pal.name === "day") continue; // by day a halo reads as haze, not light
+        if (this.glowDark <= 0) continue; // by day a halo reads as haze, not light
         // Ultra's bloom already makes lit shades glow
-        const k = 0.55 * (0.4 + 0.6 * s.level) * (this.tier === "ultra" ? 0.45 : 1);
+        const k = 0.55 * (0.4 + 0.6 * s.level) * (this.tier === "ultra" ? 0.45 : 1) * this.glowDark;
         halos.push({
           pos: [lamp.pos[0], lamp.pos[1] + f.offset - 0.05, lamp.pos[2]],
           rgb: [s.rgb[0] * k, s.rgb[1] * k, s.rgb[2] * k],
@@ -1082,8 +1147,14 @@ export class Viewer {
         });
       }
     }
+    this.lampsOn = on > 0;
     this.halos.set(this.low ? halos.slice(0, 24) : halos);
     this.invalidate();
+  }
+
+  /** The lamps' strength: the realistic look takes them at full and scales them with the dark in its shader. */
+  private get lampPalette(): Palette {
+    return this.look ? NIGHT : this.pal;
   }
 
   /** Writes a mesh's lighting: lit colours (model look) or lamp light and glow (realistic). */
@@ -1092,10 +1163,10 @@ export class Viewer {
       const lamp = mesh.geometry.getAttribute("aLamp") as BufferAttribute | undefined;
       const emis = mesh.geometry.getAttribute("aEmis") as BufferAttribute | undefined;
       if (!lamp || !emis || lamp.count !== geo.vertexCount) return;
-      const night = this.pal.name === "night";
+      const dark = this.glowDark;
       relightRealistic(geo, lamp.array as Float32Array, emis.array as Float32Array, lights, st, (slot) => {
         const kind = f.fb.glows[slot]?.kind;
-        if (kind === "lamp") return night ? 1.8 : 1.0;
+        if (kind === "lamp") return 1 + 0.8 * dark;
         if (kind === "window") return 0.9;
         return 0.8;
       });
@@ -1185,7 +1256,7 @@ export class Viewer {
     for (const o of old) o.dispose();
     if (this.live && (g.vertexCount || gl.vertexCount)) {
       const st = this.lightingFor(f);
-      const lights = roomLights(f.fb, this.pal, st);
+      const lights = roomLights(f.fb, this.lampPalette, st);
       this.fillLight(f, f.dyn, g, lights, st);
       this.fillLight(f, f.dynGlass, gl, lights, st);
     }
@@ -1948,6 +2019,7 @@ export class Viewer {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     window.clearTimeout(this.fxTimer);
+    this.fade?.remove();
     this.resizeObs.disconnect();
     this.interObs.disconnect();
     document.removeEventListener("visibilitychange", this.onVisibility);
@@ -2041,4 +2113,13 @@ function liftPart(from: Mesh, owner: number[], k: number): LiftedPart | null {
   const mesh = new Mesh(g, from.material);
   mesh.renderOrder = from.renderOrder;
   return { from, geometry: src, index, saved, mesh };
+}
+
+/** prefers-reduced-motion: a new look shows at once. */
+function reducedMotion(): boolean {
+  try {
+    return matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
 }

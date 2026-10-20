@@ -981,10 +981,16 @@ export class VhView {
 
   // ------------------------------------------------------------------ looks
 
-  private themeName(): "day" | "night" {
+  /** Day or night as set (the card, the plan, the button), or null: "auto", by the sun. */
+  private themeSet(): "day" | "night" | null {
     if (this.themeOverride) return this.themeOverride;
     const t = this.config.theme ?? this.plan?.settings.theme ?? "auto";
-    if (t === "day" || t === "night") return t;
+    return t === "day" || t === "night" ? t : null;
+  }
+
+  private themeName(): "day" | "night" {
+    const set = this.themeSet();
+    if (set) return set;
     // a picked time shows day or night as it would be then
     const picked = this.skyPick?.time != null ? this.viewer.currentSky?.sun : null;
     if (picked) return picked.elevation > -0.833 ? "day" : "night";
@@ -997,7 +1003,8 @@ export class VhView {
   private applyTheme(): void {
     const name = this.themeName();
     if ((this.replayed || this.skyPick?.time != null) && this.viewer.pal.name !== name) {
-      // a new look rebuilds the house: scrubbing back and forth over sunset changes it at most every 300 ms
+      // a new look crossfades (and rebuilds the model look): scrubbing back and forth over sunset
+      // changes it at most every 300 ms; the realistic look's light follows the sky meanwhile
       this.themeTimer ||= window.setTimeout(() => {
         this.themeTimer = 0;
         this.setLook(this.themeName());
@@ -1013,10 +1020,8 @@ export class VhView {
     this.root.classList.toggle("day", name === "day");
     this.live.day = name === "day";
     this.themeBtn.innerHTML = svg(name === "night" ? mdiWeatherNight : mdiWeatherSunny);
-    if (this.viewer.pal.name !== name) {
-      this.viewer.setTheme(name);
-      this.viewer.refreshAll();
-    }
+    // by the sun, the realistic look's light goes through dusk and dawn with it
+    this.viewer.setTheme(name, this.themeSet() === null);
   }
 
   private cycleTheme(): void {

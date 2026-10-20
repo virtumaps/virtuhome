@@ -22,7 +22,8 @@ export interface FxWeather {
   snow: number;
   /** Where the drops drift to (plan x and z, m/s). */
   drift: [number, number];
-  night: boolean;
+  /** 0 by day .. 1 at night (drops and flakes catch less light). */
+  dark: number;
 }
 
 const RAIN_VERT = /* glsl */ `
@@ -84,6 +85,9 @@ void main() {
   gl_FragColor = vec4(uColor, uAlpha * vAlpha * (1.0 - d * 3.2));
 }`;
 
+const NIGHT_RAIN = new Color(0x7d8ba0);
+const NIGHT_SNOW = new Color(0xc9d3e6);
+
 function material(vert: string, frag: string, u: Record<string, { value: unknown }>): ShaderMaterial {
   return new ShaderMaterial({ vertexShader: vert, fragmentShader: frag, uniforms: u, transparent: true, depthWrite: false, blending: NormalBlending, fog: false });
 }
@@ -136,9 +140,9 @@ export class WeatherFx {
     // a drop drifts with the wind while it falls; snow drifts with nearly all of it
     const k = this.rain.visible ? 0.55 : 0.9;
     this.shared.uWind.value.set(w.drift[0] * k, w.drift[1] * k);
-    this.rainU.uColor.value.setHex(w.night ? 0x7d8ba0 : 0xb8c4d2);
-    this.rainU.uAlpha.value = w.night ? 0.32 : 0.45;
-    this.snowU.uColor.value.setHex(w.night ? 0xc9d3e6 : 0xffffff);
+    this.rainU.uColor.value.setHex(0xb8c4d2).lerp(NIGHT_RAIN, w.dark);
+    this.rainU.uAlpha.value = 0.45 - 0.13 * w.dark;
+    this.snowU.uColor.value.setHex(0xffffff).lerp(NIGHT_SNOW, w.dark);
     // the columns depend on the house and on how far the wind blows the drops sideways
     const key = [a.minX, a.maxX, a.minZ, a.maxZ, a.top, a.ground, a.rooms.length, Math.round(w.drift[0]), Math.round(w.drift[1])].map((v) => Number(v).toFixed(1)).join("|");
     if (key !== this.key) {
