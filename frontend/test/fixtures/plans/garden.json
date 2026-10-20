@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "name": "Garden",
+  "settings": {"wall_exterior": 0.28, "wall_interior": 0.12, "north": 200, "theme": "day", "exterior_finish": "brick_buff"},
+  "floors": [
+    {
+      "id": "ground", "name": "Ground Floor", "ha_floor": null, "elevation": 0, "height": 2.6,
+      "rooms": [
+        {"id": "kitchen", "name": "Kitchen", "area_id": "kitchen", "points": [[0, 0], [6, 0], [6, 5], [0, 5]], "floor": "tiles"}
+      ],
+      "openings": [
+        {"id": "garden_door", "room_id": "kitchen", "edge": 0, "offset": 3, "width": 2.4, "height": 2.1, "sill": 0, "kind": "door", "style": "sliding", "finish": "aluminium", "entity": "binary_sensor.garden_door"},
+        {"id": "front_door", "room_id": "kitchen", "edge": 2, "offset": 4.5, "width": 0.9, "height": 2.02, "sill": 0, "kind": "door"}
+      ],
+      "furniture": [
+        {"id": "pergola", "type": "pergola_louvred", "x": 1.6, "z": -1.8, "rotation": 0, "w": 3, "d": 3, "h": 2.5, "canopy": "louvres"},
+        {"id": "shed", "type": "shed", "x": 5.5, "z": -10.5, "rotation": 180, "w": 2.4, "d": 1.8, "h": 2.2, "roofing": "sedum", "door": "double", "windows": 2, "trim": "#334455"},
+        {"id": "planter", "type": "planter_round", "x": 0.6, "z": -4.2, "rotation": 0, "w": 0.6, "d": 0.6, "h": 0.5, "material": "corten", "plants": "lavender"},
+        {"id": "car", "type": "car_suv", "x": 3, "z": 8.5, "rotation": 0, "w": 1.88, "d": 4.6, "h": 1.65, "color": "#2b4a6f", "parked": "plugged"},
+        {"id": "spot", "type": "lamp_garden", "x": -1.5, "z": -11, "rotation": 0, "w": 0.15, "d": 0.15, "h": 0.6, "entity": "switch.garden_lights"}
+      ],
+      "devices": [],
+      "walls": [],
+      "outdoor": [
+        {"id": "lawn", "name": "Garden", "kind": "lawn", "area_id": "garden", "points": [[-2, -12], [8, -12], [8, -0.14], [-2, -0.14]]},
+        {"id": "deck", "name": "Deck", "kind": "deck", "area_id": "garden", "points": [[3.2, -3.5], [6, -3.5], [6, -0.14], [3.2, -0.14]], "boards": "composite", "board_width": 145, "color": "#8e8b87", "border": "frame", "angle": 90, "height": 0.45, "steps": [{"edge": 0, "width": 1.2}, {"edge": 7}], "railing": "glass"},
+        {"id": "patio", "name": "Patio", "kind": "patio", "area_id": "garden", "points": [[0, -3.5], [3.2, -3.5], [3.2, -0.14], [0, -0.14]], "paving": "sandstone", "pattern": "random", "unit": "600x600", "joint": "#8a8781", "border": "brick", "height": 0.3, "walls": "sleepers", "steps": [{"edge": 3, "width": null}]},
+        {"id": "path", "name": "Path", "kind": "path", "area_id": null, "points": [[-1.2, -12], [-0.4, -12], [-0.4, -3.5], [-1.2, -3.5]], "paving": "setts", "pattern": "stretcher"},
+        {"id": "bed", "name": "Border", "kind": "bed", "area_id": "garden", "points": [[7, -12], [8, -12], [8, -3.5], [7, -3.5]]},
+        {"id": "gravel", "name": "Gravel", "kind": "gravel", "area_id": null, "points": [[-2, 5.14], [0.8, 5.14], [0.8, 11], [-2, 11]]},
+        {"id": "drive", "name": "Driveway", "kind": "driveway", "surface": "asphalt", "area_id": null, "points": [[0.8, 5.14], [6, 5.14], [6, 11], [0.8, 11]]},
+        {"id": "old", "name": "Lawn", "area_id": null, "points": [[6, 5.14], [8, 5.14], [8, 11], [6, 11]]}
+      ],
+      "fences": [
+        {"id": "back", "points": [[-2, -0.14], [-2, -12], [8, -12], [8, -0.14]], "style": "closeboard", "height": 1.8, "posts": "concrete", "gravel_board": true, "topper": "trellis", "gates": [{"at": 6, "width": 0.9}]},
+        {"id": "front", "points": [[-2, 11], [8, 11]], "style": "picket", "height": 0.9, "color": "#ffffff", "gates": [{"at": 5.4, "width": 3, "double": true}]},
+        {"id": "side", "points": [[-2, 5.14], [-2, 11]], "style": "brick_wall", "height": 1.1, "posts": "pier"},
+        {"id": "railings", "points": [[8, 5.14], [8, 11]], "style": "railings", "height": 1.2, "spacing": 2.4},
+        {"id": "stray", "points": [[0, 20]], "style": "lap", "height": 1.8, "gates": []}
+      ]
+    }
+  ]
+}
