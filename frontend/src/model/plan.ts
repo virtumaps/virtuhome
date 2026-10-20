@@ -408,11 +408,22 @@ export interface EnergySettings {
   ev_level?: string | null;
 }
 
+/**
+ * What Home Assistant's registries said about a linked entity when the plan was saved: its registry
+ * id stays the same when the entity id changes, so a renamed entity is found again (model/links.ts).
+ */
+export interface EntityLink {
+  id?: string | null;
+  device_id?: string | null;
+}
+
 export interface Plan {
   version: 1;
   name?: string;
   settings: PlanSettings;
   floors: Floor[];
+  /** Registry ids of the linked entities, by entity id. */
+  links?: Record<string, EntityLink>;
 }
 
 export const DEFAULT_SETTINGS: PlanSettings = {
@@ -445,7 +456,20 @@ export function normalizePlan(raw: unknown): Plan {
     roofs: (f.roofs ?? []).filter((r) => r.w > 0.2 && r.d > 0.2).map(normalizeRoof),
   }));
   floors.sort((a, b) => a.elevation - b.elevation);
-  return { version: 1, name: p.name, settings, floors };
+  const links = normalizeLinks(p.links);
+  return { version: 1, name: p.name, settings, floors, ...(links ? { links } : {}) };
+}
+
+/** Registry ids kept for linked entities: only string ids, and nothing when there are none. */
+function normalizeLinks(raw: unknown): Record<string, EntityLink> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out: Record<string, EntityLink> = {};
+  for (const [entity, v] of Object.entries(raw as Record<string, EntityLink>)) {
+    const id = typeof v?.id === "string" && v.id ? v.id : null;
+    const device = typeof v?.device_id === "string" && v.device_id ? v.device_id : null;
+    if (id || device) out[entity] = { ...(id ? { id } : {}), ...(device ? { device_id: device } : {}) };
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** A garden area with its kind and area set, its height in range and its steps on edges it has. */

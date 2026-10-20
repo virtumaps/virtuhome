@@ -1,6 +1,7 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
 import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
 import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
+import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
 import { HassLive, initials, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
 import { EnergyLive, type EnergyNow } from "../live/energy";
@@ -96,7 +97,14 @@ export class VhView {
   private revision: number | null = null;
   /** The plan as saved; while editing, the view shows the editor's copy instead. */
   private savedPlan: Plan | null = null;
-  private editor: { onHit(hit: Hit): void; el: HTMLElement } | null = null;
+  /** The saved plan as JSON, and the same before renamed entities were followed (the plan is unsaved since). */
+  private baseJson: string | null = null;
+  private unsavedFrom: string | null = null;
+  /** Entities followed to their new ids since the plan was loaded: [from, to]. */
+  private followed: [string, string][] = [];
+  /** The entity registry last seen (Home Assistant hands over a new object when it changes). */
+  private registrySeen: unknown = null;
+  private editor: { onHit(hit: Hit): void; el: HTMLElement; registryChanged(): void } | null = null;
   private alarmKey = "";
   private hassListeners = new Set<(h: Hass) => void>();
   private planListeners = new Set<(p: Plan) => void>();
@@ -260,7 +268,10 @@ export class VhView {
     this.skyLive.onChange = () => this.updateSky();
     // the sun moves about a quarter of a degree a minute
     this.skyTimer = window.setInterval(() => this.updateSky(), 60_000);
-    if (fixedPlan) this.applyPlan(fixedPlan);
+    if (fixedPlan) {
+      this.baseJson = JSON.stringify(fixedPlan);
+      this.applyPlan(fixedPlan);
+    }
   }
 
   // ------------------------------------------------------------------ hass and plan
@@ -276,6 +287,10 @@ export class VhView {
     if (!this.unregister) {
       this.unregister = registerView(this.handle());
       loadExtensions(h, this.config.dev_extensions ?? []);
+    }
+    if (h.entities !== this.registrySeen) {
+      this.registrySeen = h.entities;
+      this.followRenames();
     }
     for (const cb of this.hassListeners) {
       try {
@@ -718,7 +733,13 @@ export class VhView {
         (msg) => {
           this.revision = msg.revision;
           this.savedPlan = normalizePlan(msg.plan);
-          if (!this.editor) this.applyPlan(this.savedPlan);
+          this.baseJson = JSON.stringify(this.savedPlan);
+          this.unsavedFrom = null;
+          this.followed = [];
+          if (!this.editor) {
+            this.applyPlan(this.savedPlan);
+            this.followRenames();
+          }
         },
         { type: "virtuhome/plan/subscribe" },
       );
@@ -727,6 +748,26 @@ export class VhView {
     } finally {
       this.subscribing = false;
     }
+  }
+
+  /**
+   * Entities renamed in Home Assistant: links follow them by the registry ids the plan keeps. Only
+   * the plan in memory changes; the editor then has it unsaved. Runs when the registry changes.
+   */
+  private async followRenames(): Promise<void> {
+    const h = this._hass;
+    if (this.editor) return this.editor.registryChanged();
+    const plan = this.plan;
+    if (!h || !plan?.floors.length || !canFollow(plan, h)) return;
+    const registry = await entityRegistry(h);
+    if (!registry || this.plan !== plan || this.editor) return;
+    const next = structuredClone(plan);
+    const moved = followRenames(next, h, registry);
+    if (!moved.length) return;
+    this.unsavedFrom ??= this.baseJson;
+    this.followed.push(...moved);
+    if (this.savedPlan === plan) this.savedPlan = next;
+    this.applyPlan(next);
   }
 
   /** Shows a plan that is not saved (the editor's working copy). */
@@ -1068,12 +1109,20 @@ export class VhView {
       hass,
       plan: this.plan ?? normalizePlan({ version: 1, floors: [] }),
       revision: this.revision,
+      savedJson: this.unsavedFrom ?? undefined,
+      followed: this.followed,
       save: async (plan, base) => {
-        if (this.config.save) return this.config.save(plan);
+        const saved = (revision: number) => {
+          this.baseJson = JSON.stringify(plan);
+          this.unsavedFrom = null;
+          this.followed = [];
+          return revision;
+        };
+        if (this.config.save) return saved(await this.config.save(plan));
         const res = await hass.callWS<{ revision: number }>({ type: "virtuhome/plan/save", plan, ...(base !== null ? { base_revision: base } : {}) });
         this.revision = res.revision;
         this.savedPlan = plan;
-        return res.revision;
+        return saved(res.revision);
       },
       restorePoints: this.config.save ? undefined : () => hass.callWS({ type: "virtuhome/history/list" }),
       restore: this.config.save ? undefined : async (id) => {

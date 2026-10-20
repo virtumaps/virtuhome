@@ -89,6 +89,7 @@ export const EDITOR_CSS = /* css */ `
 .ed-pick small { font-size: 11px; color: var(--vh-dim); }
 .ed-pick:hover { box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
 .ed-report { margin-top: 8px; color: var(--vh-dim); line-height: 1.45; }
+.ed-id { display: block; color: var(--vh-dim); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .ed-list { margin-top: 4px; }
 .ed-confirm {
   position: absolute; left: 12px; right: 12px; bottom: 54px; padding: 12px 14px; border-radius: 14px; z-index: 6;

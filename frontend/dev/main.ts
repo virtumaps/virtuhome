@@ -11,7 +11,7 @@ import { VhView } from "../src/ui/view";
 import type { WallMode, Quality } from "../src/scene/viewer";
 import { DEMO_PLAN } from "./demo-plan";
 import { catalogPlan } from "./catalog-plan";
-import { demoHass } from "./demo-hass";
+import { demoEdits, demoHass } from "./demo-hass";
 import { importRoomPlan } from "../src/import/roomplan";
 import { autoPlace } from "../src/auto/placement";
 
@@ -110,6 +110,7 @@ async function main(): Promise<void> {
   const floor = q.get("floor");
   if (floor !== null) view.showFloor(Number(floor));
   (window as unknown as { vh: VhView }).vh = view;
+  (window as unknown as { demo: typeof demoEdits }).demo = demoEdits;
   window.dispatchEvent(new Event("virtuhome-ready"));
 }
 

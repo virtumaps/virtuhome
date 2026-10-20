@@ -13,6 +13,7 @@ import {
   type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type PartyEnds, type Plan, type Roof, type RoofCovering, type RoofItem, type RoofShape, type Room, type Vec2,
 } from "../model/plan";
 import { bounds } from "../model/geom";
+import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, recordLinks, replaceEntity, type Proposal, type RegistryEntry } from "../model/links";
 import { domainOf, type Hass } from "../live/hass";
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
@@ -86,6 +87,10 @@ export interface EditorHost {
   hass: Hass;
   plan: Plan;
   revision: number | null;
+  /** The plan as saved, when `plan` differs from it (entities renamed in Home Assistant were followed). */
+  savedJson?: string;
+  /** Those renamed entities: [from, to]. */
+  followed?: [string, string][];
   save(plan: Plan, baseRevision: number | null): Promise<number>;
   restorePoints?(): Promise<{ id: string; time: number; label: string | null; floors: number }[]>;
   restore?(id: string): Promise<void>;
@@ -135,10 +140,14 @@ export class Editor {
   private collider: Collider | null = null;
   /** The Home tab's choices for working out a roof. */
   private roofChoice: RoofChoice = {};
+  /** Home Assistant's entity registry, for what replaced missing entities (per registry change). */
+  private registry: { key: unknown; list: RegistryEntry[] | null } | null = null;
+  private registryLoading: unknown = null;
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
-    this.savedJson = JSON.stringify(this.plan);
+    this.savedJson = host.savedJson ?? JSON.stringify(this.plan);
+    this.unsaved = JSON.stringify(this.plan) !== this.savedJson;
     const style = h("style", {}, EDITOR_CSS + PLAN2D_CSS);
     this.status = h("span", { class: "ed-status" });
     this.body = h("div", { class: "ed-body" });
@@ -172,6 +181,7 @@ export class Editor {
     window.addEventListener("keydown", this.onKey);
     this.render();
     this.updateHistoryButtons();
+    this.updateSaveButton();
   }
 
   private modeButtons(): HTMLButtonElement[] {
@@ -356,16 +366,19 @@ export class Editor {
 
   private async save(): Promise<void> {
     if (!this.unsaved || this.saving) return;
+    this.saving = true;
+    this.updateSaveButton();
+    this.status.textContent = "Saving…";
+    // each linked entity's registry id goes with the plan, so a later rename is followed
+    recordLinks(this.plan, this.hass, await entityRegistry(this.hass));
     const json = JSON.stringify(this.plan);
     const saved = () => {
       // edits made while saving still need a save
       this.savedJson = json;
+      this.host.followed = [];
       this.changed();
       this.status.textContent = this.unsaved ? "Unsaved changes" : "Saved";
     };
-    this.saving = true;
-    this.updateSaveButton();
-    this.status.textContent = "Saving…";
     try {
       // our own save is the base for the next one, so only someone else's save is a conflict
       this.host.revision = await this.host.save(this.plan, this.host.revision);
@@ -742,6 +755,7 @@ export class Editor {
     const fileIn = h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
     const box = h("div", {},
+      ...this.linksSection(),
       h("h4", {}, "Scan"),
       h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
       h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan…"),
@@ -786,6 +800,84 @@ export class Editor {
       }).catch(() => list.replaceChildren(h("p", { class: "ed-hint" }, "Not available here.")));
     }
     return box;
+  }
+
+  /** The entity registry with registry ids; undefined while it loads (the Home tab is drawn again then). */
+  private registryNow(): RegistryEntry[] | null | undefined {
+    const key = this.hass.entities;
+    const known = this.registry;
+    if (known && known.key === key) return known.list;
+    if (this.registryLoading !== key) {
+      this.registryLoading = key;
+      entityRegistry(this.hass).then((list) => {
+        if (this.hass.entities !== key) return;
+        this.registry = { key, list };
+        if (this.tab === "home") this.render();
+      });
+    }
+    return undefined;
+  }
+
+  /** Home Assistant's entity registry changed: renamed entities are followed, and what is missing is shown. */
+  async registryChanged(): Promise<void> {
+    const hass = this.hass;
+    if (canFollow(this.plan, hass)) {
+      const registry = await entityRegistry(hass);
+      if (registry && followRenames(structuredClone(this.plan), hass, registry).length) {
+        this.change((p) => void followRenames(p, hass, registry), true, "Follow renamed entities");
+      }
+    }
+    if (this.tab === "home") this.render();
+  }
+
+  /** Linked entities Home Assistant no longer has: the likely replacement to relink, or another to pick. */
+  private linksSection(): HTMLElement[] {
+    const hass = this.hass;
+    const followed = this.host.followed ?? [];
+    const note = followed.length && this.dirty
+      ? h("p", { class: "ed-hint" }, `${followed.length === 1 ? "An entity was" : `${followed.length} entities were`} renamed in Home Assistant, and the plan followed. Save to keep it.`)
+      : null;
+    const missing = missingLinks(this.plan, hass);
+    if (!missing.length) return note ? [note] : [];
+    const registry = this.registryNow();
+    const proposals = new Map<string, Proposal>();
+    if (registry !== undefined) {
+      for (const m of missing) {
+        const p = proposeFor(m, this.plan, hass, registry);
+        if (p) proposals.set(m.entity, p);
+      }
+    }
+    const name = (id: string) => String(hass.states[id]?.attributes.friendly_name ?? id);
+    const why: Record<Proposal["why"], string> = { renamed: "", "same device": "same device", "same area": "same room, like name", "same name": "like name" };
+    const relink = (pairs: [string, string | null][]) => {
+      const label = pairs.length > 1 ? `Relink ${pairs.length} entities` : pairs[0][1] ? "Relink" : "Unlink";
+      this.change((p) => pairs.forEach(([from, to]) => replaceEntity(p, from, to)), false, label);
+      this.status.textContent = pairs.length > 1 ? `Relinked ${pairs.length} entities` : pairs[0][1] ? "Relinked" : "Unlinked";
+    };
+    const cards = missing.map((m) => {
+      const p = proposals.get(m.entity);
+      const others = this.entities((id) => domainOf(id) === domainOf(m.entity));
+      const unlink: [string, string] = ["-", m.uses.every((u) => u.device) ? "Remove from plan" : "Unlink"];
+      return h("div", { class: "ed-card" },
+        h("div", { class: "ed-row" }, h("b", {}, m.uses[0].label), m.uses.length > 1 ? h("small", {}, `and ${m.uses.length - 1} more`) : null),
+        h("small", { class: "ed-id" }, m.entity),
+        p ? h("div", { class: "ed-row" },
+          h("span", { class: "ed-col" }, `${p.why === "renamed" ? "Renamed" : "Likely"}: ${name(p.entity)}`, h("small", { class: "ed-id" }, p.why === "renamed" ? p.entity : `${p.entity} · ${why[p.why]}`)),
+          h("button", { class: "ed-btn small", onclick: () => relink([[m.entity, p.entity]]) }, "Relink"),
+        ) : registry !== undefined ? h("p", { class: "ed-hint" }, "Nothing like it found.") : null,
+        h("div", { class: "ed-row" }, this.dropdown([unlink, ...others], "", (v) => v && relink([[m.entity, v === "-" ? null : v]]), "Pick another…")),
+      );
+    });
+    const out: (HTMLElement | null)[] = [
+      h("h4", {}, `Missing entities (${missing.length})`),
+      h("p", { class: "ed-hint" }, registry === undefined
+        ? "Renamed or removed in Home Assistant. Looking for what replaced them…"
+        : "Renamed or removed in Home Assistant. Relink each to what replaced it, or pick another."),
+      ...(note ? [note] : []),
+      proposals.size > 1 ? h("div", { class: "ed-row" }, h("button", { class: "ed-btn small", onclick: () => relink([...proposals].map(([from, p]) => [from, p.entity])) }, `Relink all (${proposals.size})`)) : null,
+      ...cards,
+    ];
+    return out.filter((e): e is HTMLElement => !!e);
   }
 
   /** Solar, battery and grid: what was found, and a sensor picked by hand where that is wrong. */
@@ -2661,7 +2753,11 @@ export class Editor {
   private async loadPlanFile(file: File | undefined): Promise<void> {
     if (!file) return;
     const plan = normalizePlan(JSON.parse(await file.text()));
-    this.confirm("Replace the current plan with this file?", "Replace", () => this.change((p) => Object.assign(p, plan)));
+    this.confirm("Replace the current plan with this file?", "Replace", () => {
+      this.change((p) => Object.assign(p, plan));
+      // its entities may have been renamed since, or be missing here
+      this.registryChanged();
+    });
   }
 
   // ------------------------------------------------------------------ small widgets

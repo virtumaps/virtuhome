@@ -11,6 +11,11 @@
   people in their rooms** turns it off. Replays of the past never show rooms, only home or away.
 - A motion or presence sensor (an Aqara FP2, Everything Presence or Apollo mmWave sensor) placed in
   the plan counts for the room it is in, like a thermostat; one that isn't placed counts for its area.
+- Renamed entities are followed: the plan keeps the Home Assistant registry id of every entity it
+  links (devices, furniture, doors and windows, room sensors, solar strings, energy, weather, people),
+  so a link survives a new entity id. Links to entities that were removed or re-paired are listed in
+  Edit → Home → Missing entities, with the likely replacement (the same device, or a like name in the
+  same room) to Relink one by one or all at once, or another entity to pick.
 
 ### Fixed
 - On a wide screen the Graphics menu opened far from its button, in the middle of the view; it sits

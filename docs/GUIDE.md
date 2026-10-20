@@ -530,6 +530,15 @@ in](#get-your-home-in).
 
 **A door or window doesn't open in 3D**: tap it in the editor and pick its **Sensor**.
 
+**Something stopped working after a device was renamed, re-paired or replaced in Home Assistant**
+- VirtuHome keeps the Home Assistant registry id of everything it links when you save, so an
+  entity renamed later is followed by itself. Open **Edit** and **Save** to keep the new name in
+  the plan.
+- Edit → **Home** → **Missing entities** lists links to entities Home Assistant no longer has, with
+  what most likely replaced each one (the same device, or a like name in the same room). **Relink**
+  takes it and **Relink all** takes every suggestion. **Pick another…** links any entity of the
+  same kind, or **Unlink** (**Remove from plan** for a device).
+
 **Someone is in the wrong room, or in none**
 - Check what their tracker says in Home Assistant: it must name an area (Bermuda's Area sensor, or a
   room of ESPresense named like the area).
