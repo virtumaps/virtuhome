@@ -17,7 +17,10 @@ import { FLOOR_FINISHES, type FinishDef } from "../scene/finishes";
 import { CEILING_LAMPS, furnitureType } from "../scene/furniture-lib";
 import { fenceStyle } from "../scene/fences";
 import { styleOf } from "../scene/joinery";
-import { imageCorners, insideImage, parseLength, placeImage, prepareImage, rescale } from "./background";
+import { greyPixels, imageCorners, insideImage, parseLength, placeImage, prepareImage, rescale } from "./background";
+import type { FindResult } from "./roomfind";
+import { foundToPlan, startTicks } from "./roomfind-apply";
+import { findRoomsAside } from "./roomfind-client";
 import { Collider, settle } from "./collide";
 
 export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
@@ -51,6 +54,9 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const fmt = (m: number) => `${m.toFixed(2)} m`;
 const same = (a: Vec2, b: Vec2) => Math.abs(a[0] - b[0]) < 0.015 && Math.abs(a[1] - b[1]) < 0.015;
+/** Where a picture sits and how big it is: rooms found in it fit only while this stays the same. */
+const IMAGE_HINT = "Drag the picture to move it. Set its scale from a wall you know the length of, then find the rooms or draw them over it.";
+const placement = (bg: FloorBackground) => [bg.file, bg.x, bg.z, bg.rotation, bg.scale].join("|");
 
 const DOMAIN_COLOURS: Record<string, string> = {
   light: "#f5b83d", camera: "#3d7ff5", binary_sensor: "#e5484d", sensor: "#30a46c", climate: "#ff8b3e",
@@ -117,6 +123,10 @@ export class Plan2D {
   private imageError = "";
   /** Setting the image's scale: the ends of a wall of known length, as clicked. */
   private measure: Vec2[] | null = null;
+  /** Looking for the rooms in the picture (stopped by Cancel or leaving the tool). */
+  private finding: AbortController | null = null;
+  /** The rooms found, each ticked to keep or not, for the picture where it was then (moving it drops them). */
+  private found: { res: FindResult; keep: boolean[]; floor: number; at: string } | null = null;
 
   constructor(private host: Plan2DHost) {
     this.el = document.createElement("div");
@@ -280,6 +290,7 @@ export class Plan2D {
   }
 
   private setTool(t: Tool): void {
+    if (t !== "image") this.dropFound();
     this.tool = t;
     this.areaKind = null;
     this.drawing = [];
@@ -290,7 +301,7 @@ export class Plan2D {
     this.render();
     if (t === "image") {
       this.host.status(this.floor?.background
-        ? "Drag the picture to move it. Set its scale from a wall you know the length of, then draw the rooms over it."
+        ? IMAGE_HINT
         : "Choose a floor plan picture to trace the rooms over.");
       return;
     }
@@ -578,6 +589,7 @@ export class Plan2D {
       }
     }
     layers.handles.append(this.compass(plan.settings.north ?? 0));
+    this.drawFound(layers.guides);
   }
 
   /** Places the floor plan image (and outlines it while the image tool is on). */
@@ -622,7 +634,9 @@ export class Plan2D {
   /** The image tool's panel: rebuilt when what it shows changes, else only its values follow the plan. */
   private syncPanel(): void {
     const bg = this.floor?.background ?? null;
-    const key = this.tool !== "image" ? "" : [bg?.file ?? "", this.uploading !== null, this.measure?.length ?? -1, this.bgMissing, this.imageError].join("|");
+    const found = this.liveFound();
+    const key = this.tool !== "image" ? "" : [bg?.file ?? "", bg?.scaled, this.uploading !== null, this.measure?.length ?? -1, this.bgMissing, this.imageError,
+      !!this.finding, found ? found.keep.map(Number).join("") : "-"].join("|");
     if (key !== this.panelKey) {
       this.panelKey = key;
       this.renderPanel();
@@ -690,12 +704,29 @@ export class Plan2D {
             this.render();
           })),
         );
+      } else if (this.finding) {
+        panel.append(node("p", "", "Looking for the rooms in the picture…"), row(button("Cancel", "ed-btn ghost small", () => this.dropFound())));
+      } else if (this.liveFound()) {
+        const { res, keep } = this.liveFound()!;
+        const doors = res.gaps.filter((g) => g.kind !== "window" && keep[g.room]).length;
+        const kept = keep.filter(Boolean).length;
+        const add = button("Add these rooms", "ed-btn small", () => this.addFound());
+        add.disabled = !kept;
+        panel.append(
+          node("p", "", `Found ${res.rooms.length === 1 ? "1 room" : `${res.rooms.length} rooms`}${doors ? ` and ${doors === 1 ? "1 door" : `${doors} doors`}` : ""}. Tick the rooms to keep; nothing is added until you add them.`),
+          row(add, button("Cancel", "ed-btn ghost small", () => this.dropFound())),
+        );
       } else {
+        const find = button("Find the rooms", "ed-btn ghost small", () => void this.findRooms());
+        if (bg.scaled === false) {
+          find.disabled = true;
+          find.title = "Set the scale first";
+        }
         panel.append(row(button("Set the scale", "ed-btn small", () => {
           this.measure = [];
           this.host.status("Click both ends of a wall you know the length of.");
           this.render();
-        }, mdiRuler)));
+        }, mdiRuler), find));
       }
       const opacity = node("input");
       opacity.type = "range";
@@ -794,6 +825,95 @@ export class Plan2D {
     const free = fits(beside) >= fits(below) ? beside : below;
     const centre = this.toPlan((this.w + free.left) / 2, (this.h + 50 + free.top) / 2);
     return placeImage(name, width, height, centre, Math.max(1, (fits(free) * width) / this.s));
+  }
+
+  /** The rooms found for this floor's picture where it is now, if any. */
+  private liveFound(): Plan2D["found"] {
+    const bg = this.floor?.background;
+    const f = this.found;
+    return f && bg && f.floor === this.floorIndex && f.at === placement(bg) ? f : null;
+  }
+
+  /** Looks for the rooms in the picture, off the page's thread, and shows them to tick. */
+  private async findRooms(): Promise<void> {
+    const bg = this.floor?.background;
+    if (!bg || this.finding) return;
+    const fi = this.floorIndex;
+    const stop = new AbortController();
+    this.finding = stop;
+    this.found = null;
+    this.imageError = "";
+    this.host.status("Looking for the rooms in the picture…");
+    this.render();
+    try {
+      const px = await greyPixels(await this.host.images.url(bg.file), 2000);
+      const res = await findRoomsAside({ ...px, scale: (bg.scale * bg.width) / px.width, place: { x: bg.x, z: bg.z, rotation: bg.rotation } }, stop.signal);
+      if (this.finding !== stop) return;
+      this.found = { res, keep: startTicks(this.host.plan().floors[fi], res), floor: fi, at: placement(bg) };
+      this.host.status(res.rooms.length
+        ? "Tick the rooms to keep (those over rooms you have already drawn start unticked), then Add these rooms."
+        : "No rooms found. Check the scale, or draw the rooms with the room tools.");
+    } catch (err) {
+      if (this.finding !== stop) return;
+      this.imageError = String((err as { message?: string })?.message ?? err);
+      this.host.status(IMAGE_HINT);
+    } finally {
+      if (this.finding === stop) this.finding = null;
+      this.render();
+    }
+  }
+
+  /** Stops looking for rooms and forgets what was found. */
+  private dropFound(): void {
+    this.finding?.abort();
+    this.finding = null;
+    if (this.found && this.tool === "image") this.host.status(IMAGE_HINT);
+    this.found = null;
+    this.render();
+  }
+
+  /** The ticked rooms go on the plan with their doors and windows, as one change (one undo). */
+  private addFound(): void {
+    const found = this.liveFound();
+    if (!found) return;
+    const fi = found.floor;
+    const { rooms, openings } = foundToPlan(this.host.plan().floors[fi], found.res, found.keep);
+    this.found = null;
+    if (rooms.length) {
+      this.host.change((p) => {
+        p.floors[fi].rooms.push(...rooms);
+        p.floors[fi].openings.push(...openings);
+      }, rooms.length === 1 ? "Add a room from the picture" : "Add the rooms from the picture");
+      this.host.status(`Added ${rooms.length === 1 ? "1 room" : `${rooms.length} rooms`}. Rename them and link them to areas in the editor; Undo takes them all away again.`);
+    }
+    this.render();
+  }
+
+  /** The rooms found, over the picture: ticked ones solid, the others faint; their doors and windows on their walls. */
+  private drawFound(g: SVGGElement): void {
+    const found = this.tool === "image" ? this.liveFound() : null;
+    if (!found) return;
+    found.res.rooms.forEach((r, i) => {
+      const on = found.keep[i];
+      g.append(el("polygon", { points: this.pts(r.points), class: `p2-found${on ? " on" : ""}` }));
+    });
+    for (const gap of found.res.gaps) {
+      if (!found.keep[gap.room]) continue;
+      const r = found.res.rooms[gap.room].points;
+      const a = r[gap.edge], b = r[(gap.edge + 1) % r.length];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const u: Vec2 = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+      const [x1, y1] = this.toScreen([gap.at[0] - (u[0] * gap.width) / 2, gap.at[1] - (u[1] * gap.width) / 2]);
+      const [x2, y2] = this.toScreen([gap.at[0] + (u[0] * gap.width) / 2, gap.at[1] + (u[1] * gap.width) / 2]);
+      g.append(el("line", { x1, y1, x2, y2, class: `p2-found-gap ${gap.kind}` }));
+    }
+    found.res.rooms.forEach((r, i) => {
+      const [x, y] = this.toScreen(labelPoint(r.points));
+      const t = el("g", { class: `p2-tick${found.keep[i] ? " on" : ""}`, "data-found": i, transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})` });
+      t.append(el("circle", { r: 13 }));
+      if (found.keep[i]) t.append(el("path", { d: "M -6 0 L -2 4.5 L 6.5 -4.5" }));
+      g.append(t);
+    });
   }
 
   /** Both ends of the wall are clicked: ask how long it really is, and scale the picture to it. */
@@ -1322,6 +1442,15 @@ export class Plan2D {
     if (this.tool === "image") {
       const bg = this.floor?.background;
       const [sx, sy] = this.toScreen(p);
+      // a found room's tick: keep it or not
+      const tick = (e.target as Element).closest?.("[data-found]") as SVGElement | null;
+      const found = this.liveFound();
+      if (tick && found) {
+        const i = Number(tick.dataset.found);
+        found.keep[i] = !found.keep[i];
+        this.render();
+        return;
+      }
       if (bg && this.measure) {
         if (this.measure.length < 2) this.measure.push(p);
         // after the click is over: the press would take the focus straight back from the box
@@ -1735,6 +1864,15 @@ export const PLAN2D_CSS = /* css */ `
 .p2-svg.traced .p2-room.sel { fill-opacity: 0.3; }
 .p2-svg.traced .p2-out { fill-opacity: 0.14; }
 .p2-img-frame { fill: none; stroke: #2f7cf6; stroke-width: 1.5; stroke-dasharray: 6 4; pointer-events: none; }
+.p2-found { fill: none; stroke: #8a8f98; stroke-width: 1.5; stroke-dasharray: 5 4; pointer-events: none; }
+.p2-found.on { fill: rgba(47,124,246,0.16); stroke: #2f7cf6; stroke-width: 2; stroke-dasharray: none; }
+.p2-found-gap { stroke: #e5484d; stroke-width: 5; pointer-events: none; }
+.p2-found-gap.window { stroke: #12a594; }
+.p2-found-gap.passage { stroke: #f5b83d; }
+.p2-tick { cursor: pointer; }
+.p2-tick circle { fill: #fff; stroke: #8a8f98; stroke-width: 2; }
+.p2-tick.on circle { fill: #2f7cf6; stroke: #fff; }
+.p2-tick path { fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .p2-measure { stroke: #e5484d; stroke-width: 2; }
 .p2-measure-pt { fill: #e5484d; }
 .p2-panel { position: absolute; left: 10px; top: 56px; width: min(300px, calc(100% - 20px)); max-height: calc(100% - 66px); overflow: auto; box-sizing: border-box; padding: 10px 12px; border-radius: 14px; background: var(--vh-glass); color: var(--vh-text); box-shadow: 0 1px 6px rgba(0,0,0,0.16); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font: 12.5px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; z-index: 3; }

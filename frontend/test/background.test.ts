@@ -51,6 +51,8 @@ describe("placing and scaling the picture", () => {
     expect(next.scale).toBeCloseTo(0.015);
     expect(toImage(next, [0, 0])[0]).toBeCloseTo(toImage(bg, [0, 0])[0]);
     expect(toImage(next, [6, 0])[0]).toBeCloseTo(toImage(bg, [4, 0])[0]);
+    expect(bg.scaled).toBe(false);
+    expect(next.scaled).toBe(true);
     expect(rescale(bg, [1, 1], [1, 1], 3)).toBeNull();
     expect(rescale(bg, [0, 0], [1, 0], 0)).toBeNull();
   });

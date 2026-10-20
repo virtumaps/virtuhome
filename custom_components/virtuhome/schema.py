@@ -105,6 +105,8 @@ BACKGROUND = vol.Schema(
         vol.Optional("z", default=0): _COORD,
         vol.Optional("rotation", default=0): vol.All(vol.Coerce(float), vol.Range(min=-360, max=360)),
         vol.Optional("opacity", default=0.5): vol.All(vol.Coerce(float), vol.Range(min=0, max=1)),
+        # false until the scale is set from a wall (missing on pictures added before it was kept)
+        vol.Optional("scaled"): bool,
     },
     extra=vol.ALLOW_EXTRA,
 )

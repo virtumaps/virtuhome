@@ -172,7 +172,19 @@ No LiDAR phone? Almost every home has an estate agent's floor plan.
    8 MB; a screenshot of a PDF works, and so does a photo of a sketch).
 2. Click both ends of a wall you know the length of (an outside wall, or a room's width from the
    plan's labels), type its real length (`3.45`, `345 cm` or `11'4"`) and press Enter.
-3. Draw the rooms over it with the room tools.
+3. **Find the rooms** looks for the walls in the picture and shows the rooms it finds over it, with
+   their doors and windows. The rooms it is sure of are ticked; tap a room's tick to keep it or leave
+   it out (rooms over ones you have already drawn start unticked). **Add these rooms** puts the ticked
+   ones on the plan as Room 1, Room 2…, with their doors and windows, and one **Undo** takes them all
+   away again; **Cancel** adds nothing.
+4. Draw any rooms it missed with the room tools, then name the rooms and link them to areas as usual.
+
+![Rooms found in a floor plan picture, ticked to keep, then added](screenshots/find-rooms.jpg)
+
+**Find the rooms** needs the scale set first. It works in your browser, so the picture goes nowhere,
+and it does best on a clear plan with solid walls. Room names, measurements and furniture are left
+out, a gap in a wall up to 3 m wide is taken for a door, window or opening, and wider gaps leave
+rooms open to each other. Rooms come out along the middle of their walls, like rooms you draw.
 
 Drag the picture to move it. Its panel fades it, turns it (also a quarter turn at a time), sets the
 scale again, takes **Another picture…** or removes it. Each floor has its own picture: pick the floor

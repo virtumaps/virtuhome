@@ -316,6 +316,8 @@ export interface FloorBackground {
   rotation: number;
   /** 0 hides it, 1 shows it fully. */
   opacity: number;
+  /** false until its scale is set from a wall of known length (unset on pictures added before that was kept). */
+  scaled?: boolean;
 }
 
 /** The fence designs (scene/fences.ts builds them). */
