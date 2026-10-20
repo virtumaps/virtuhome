@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { buildPlan } from "../src/import/draft";
+import { importSh3d } from "../src/import/sh3d";
 import { importSimple } from "../src/import/simple";
 import { DEFAULT_SETTINGS, solarSize, type Plan, type Roof } from "../src/model/plan";
 import { ROOF_SHAPE_ORDER, ROOF_SHAPES } from "../src/scene/roofs";
@@ -161,9 +162,13 @@ describe("no flickering surfaces in a built floor", () => {
     expect(flicker(house(), 1.15)).toEqual([]);
   });
 
-  it("in imported plans", () => {
-    for (const file of ["simple.json", "neonplan.json"]) {
-      const { plan } = buildPlan(importSimple(JSON.parse(readFileSync(new URL(`./fixtures/import/${file}`, import.meta.url), "utf8"))));
+  it("in imported plans", async () => {
+    const read = (file: string) => readFileSync(new URL(`./fixtures/import/${file}`, import.meta.url), "utf8");
+    const plans = [
+      ...["simple.json", "neonplan.json"].map((file) => buildPlan(importSimple(JSON.parse(read(file)))).plan),
+      buildPlan(await importSh3d(new Uint8Array(readFileSync(new URL("./fixtures/import/house.sh3d", import.meta.url))))).plan,
+    ];
+    for (const plan of plans) {
       plan.floors.forEach((_, fi) => {
         expect(flicker(plan, null, fi)).toEqual([]);
         expect(flicker(plan, 1.15, fi)).toEqual([]);

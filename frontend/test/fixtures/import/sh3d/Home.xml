@@ -1,0 +1,156 @@
+<?xml version='1.0'?>
+<!-- A small two-storey house written by hand in Sweet Home 3D's Home.xml format (centimetres,
+     radians). make-sh3d.mjs packs it into ../house.sh3d. Rooms follow the inner faces of the walls;
+     the left part of the front wall is a thinner porch wall with its inner face in line. -->
+<home version='7200' name='house.sh3d' camera='topCamera' selectedLevel='level0' wallHeight='250'>
+  <property name='com.eteks.sweethome3d.SweetHome3D.FrameMaximized' value='true'/>
+  <furnitureVisibleProperty name='NAME'/>
+  <environment groundColor='#A8553F' skyColor='#CCE4FC' lightColor='#D0D0D0' wallsAlpha='0'/>
+  <compass x='-100' y='50' diameter='100' northDirection='0.5235988' longitude='-0.0022' latitude='0.8988' timeZone='Europe/London'/>
+  <camera attribute='topCamera' lens='PINHOLE' x='450' y='1500' z='1200' yaw='0' pitch='0.7' fieldOfView='1.0995574'/>
+  <level id='level0' name='Ground floor' elevation='0' floorThickness='12' height='250' elevationIndex='0'/>
+  <level id='level1' name='First floor' elevation='262' floorThickness='12' height='240' elevationIndex='0'/>
+
+  <pieceOfFurniture level='level0' catalogId='eTeks#sofa' name='Sofa' creator='eTeks' x='230' y='345' angle='3.1415927' width='147' depth='87' height='87' movable='true'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#coffeeTable' name='Coffee table' x='230' y='245' width='110' depth='60' height='40'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#tvUnit' name='TV unit' x='300' y='41' width='100' depth='52' height='93'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#armchair' name='Armchair' x='70' y='335' angle='4.712389' width='67' depth='81' height='87'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#plant' name='Plant' x='460' y='50' width='50' depth='50' height='95'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#sink' name='Sink' x='585' y='47' width='120' depth='64' height='105.72'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#dishwasher' name='Dishwasher' x='675' y='45' width='60' depth='60' height='85'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#cooker' name='Cooker' x='735' y='46' width='60' depth='62' height='85'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#kitchenCabinet' name='Kitchen cabinet' x='795' y='47' width='60' depth='64' height='85'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#fridgeFreezer' name='Fridge &amp; Freezer' x='855' y='48' width='60' depth='66' height='185'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#kitchenUpperCabinet' name='Kitchen upper cabinet' x='795' y='35' elevation='145' width='60' depth='40.1' height='86.2'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#hood' name='Hood' x='735' y='41' elevation='156' width='60' depth='52.6' height='94'/>
+  <furnitureGroup level='level0' name='Dining set' x='700' y='290' width='90' depth='182' height='90'>
+    <pieceOfFurniture catalogId='eTeks#squareTable' name='Square table' x='700' y='290' width='90' depth='90' height='74'/>
+    <pieceOfFurniture catalogId='eTeks#chair' name='Chair' x='700' y='225' width='42' depth='52' height='90'/>
+    <pieceOfFurniture catalogId='eTeks#chair' name='Chair' x='700' y='355' angle='3.1415927' width='42' depth='52' height='90'/>
+  </furnitureGroup>
+  <light level='level0' catalogId='eTeks#pendantLamp' name='Pendant lamp' x='700' y='290' elevation='170' width='60' depth='60' height='80' power='0.5'>
+    <lightSource x='0.5' y='0.5' z='0.125' color='#AA9770' diameter='0.333'/>
+  </light>
+  <pieceOfFurniture level='level0' catalogId='eTeks#staircase' name='Staircase' x='420' y='630' angle='4.712389' width='72' depth='222' height='262'/>
+  <pieceOfFurniture level='level0' catalogId='Contrib#coatStand' name='Coat stand' x='60' y='450' width='50' depth='50' height='180'/>
+  <light level='level0' catalogId='eTeks#wallUplight' name='Wall uplight' x='300' y='412' elevation='165' width='24' depth='12' height='26' power='0.5'>
+    <lightSource x='0.5' y='0.667' z='0.731' color='#998764' diameter='0.292'/>
+  </light>
+  <pieceOfFurniture level='level0' catalogId='eTeks#clothesWasher' name='Clothes washer' x='852' y='640' angle='1.5707964' width='60' depth='64' height='85'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#hotWaterRadiator' name='Hot water radiator' x='745' y='679' angle='3.1415927' elevation='15' width='80' depth='10' height='60'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#mannequin' name='Mannequin' x='680' y='470' width='50' depth='40' height='180'/>
+  <pieceOfFurniture level='level0' catalogId='Contrib#ironingBoard' name='Ironing board' x='740' y='560' width='120' depth='35' height='90'/>
+  <pieceOfFurniture level='level0' catalogId='eTeks#chair' name='Spare chair' x='800' y='500' width='42' depth='52' height='90' visible='false'/>
+
+  <pieceOfFurniture level='level1' catalogId='eTeks#bed140x190' name='Bed 140x190' x='255' y='125' width='158' depth='208' height='70' modelMirrored='true'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#bedsideTable' name='Bedside table' x='145' y='40' width='40' depth='40' height='55'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#bedsideTable' name='Bedside table' x='365' y='40' width='40' depth='40' height='55'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#wardrobe' name='Wardrobe' x='468' y='300' angle='1.5707964' width='100' depth='54' height='165'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#bath' name='Bath' x='800' y='53' width='167.5' depth='75.5' height='58'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#toiletUnit' name='Toilet unit' x='538' y='300' angle='4.712389' width='40' depth='65' height='80'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#washbasin' name='Washbasin' x='570' y='38' width='60' depth='45' height='85'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#shower' name='Shower' x='840' y='345' width='90' depth='90' height='200'/>
+  <light level='level1' catalogId='eTeks#lightSource' name='White light source' x='300' y='545' elevation='230' width='10' depth='10' height='10' power='0.5'>
+    <lightSource x='0.5' y='0.5' z='0.5' color='#BBBBBB' diameter='1'/>
+  </light>
+  <pieceOfFurniture level='level1' catalogId='eTeks#bed90x190' name='Bed 90x190' x='760' y='515' width='108' depth='208' height='70'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#desk' name='Desk' x='760' y='656' angle='3.1415927' width='120' depth='58' height='75'/>
+  <pieceOfFurniture level='level1' catalogId='eTeks#flatTV' name='Flat TV' x='670' y='420' elevation='120' width='121' depth='30' height='79.3'/>
+
+  <doorOrWindow level='level0' catalogId='eTeks#frontDoor' name='Front door' x='180' y='692.222' angle='3.1415927' width='101.5' depth='25.556' height='208.5' wallThickness='0.782609' wallDistance='0'>
+    <sash xAxis='0.049261' yAxis='0.782609' width='0.901478' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level0' catalogId='eTeks#door' name='Door' x='440' y='396.667' angle='3.1415927' width='91.5' depth='19.333' height='208.5' wallThickness='0.517241' wallDistance='0.068966'>
+    <sash xAxis='0.054645' yAxis='0.586207' width='0.89071' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level0' catalogId='eTeks#door' name='Door' x='550' y='403.333' width='91.5' depth='19.333' height='208.5' wallThickness='0.517241' wallDistance='0.068966' modelMirrored='true'>
+    <sash xAxis='0.054645' yAxis='0.586207' width='0.89071' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level0' catalogId='eTeks#door' name='Door' x='596.667' y='560' angle='1.5707964' width='91.5' depth='19.333' height='208.5' wallThickness='0.517241' wallDistance='0.068966'>
+    <sash xAxis='0.054645' yAxis='0.586207' width='0.89071' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level0' catalogId='eTeks#doorFrame' name='Door frame' x='500' y='200' angle='1.5707964' width='91.5' depth='12.667' height='208.5' wallThickness='0.789474' wallDistance='0.105263'/>
+  <doorOrWindow level='level0' catalogId='eTeks#doubleFrenchWindow126x200' name='Double French window' x='120' y='4.5' elevation='11' width='132' depth='34' height='210' wallThickness='0.735294'>
+    <sash xAxis='0.015152' yAxis='0.735294' width='0.481061' startAngle='0' endAngle='-1.5707964'/>
+    <sash xAxis='0.984848' yAxis='0.735294' width='0.481061' startAngle='3.1415927' endAngle='4.712389'/>
+  </doorOrWindow>
+  <doorOrWindow level='level0' catalogId='eTeks#window85x123' name='Small window' x='585' y='4.5' elevation='87' width='91' depth='34' height='134' wallThickness='0.735294'>
+    <sash xAxis='0.021978' yAxis='0.735294' width='0.945055' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level0' catalogId='eTeks#doubleWindow126x163' name='Double window' x='4.5' y='230' angle='4.712389' elevation='47' width='132' depth='34' height='174' wallThickness='0.735294'>
+    <sash xAxis='0.015152' yAxis='0.735294' width='0.481061' startAngle='0' endAngle='-1.5707964'/>
+    <sash xAxis='0.984848' yAxis='0.735294' width='0.481061' startAngle='3.1415927' endAngle='4.712389'/>
+  </doorOrWindow>
+  <doorOrWindow level='level0' catalogId='eTeks#window85x123' name='Small window' x='895.5' y='545' angle='1.5707964' elevation='87' width='91' depth='34' height='134' wallThickness='0.735294'>
+    <sash xAxis='0.021978' yAxis='0.735294' width='0.945055' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+
+  <doorOrWindow level='level1' catalogId='eTeks#door' name='Door' x='250' y='396.667' angle='3.1415927' width='91.5' depth='19.333' height='208.5' wallThickness='0.517241' wallDistance='0.068966'>
+    <sash xAxis='0.054645' yAxis='0.586207' width='0.89071' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level1' catalogId='eTeks#door' name='Door' x='550' y='396.667' angle='3.1415927' width='91.5' depth='19.333' height='208.5' wallThickness='0.517241' wallDistance='0.068966'>
+    <sash xAxis='0.054645' yAxis='0.586207' width='0.89071' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level1' catalogId='eTeks#door' name='Door' x='603.333' y='640' angle='4.712389' width='91.5' depth='19.333' height='208.5' wallThickness='0.517241' wallDistance='0.068966'>
+    <sash xAxis='0.054645' yAxis='0.586207' width='0.89071' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level1' catalogId='eTeks#window85x163' name='Window' x='100' y='4.5' elevation='47' width='91' depth='34' height='174' wallThickness='0.735294'>
+    <sash xAxis='0.021978' yAxis='0.735294' width='0.945055' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level1' catalogId='eTeks#window85x123' name='Small window' x='720' y='4.5' elevation='87' width='91' depth='34' height='134' wallThickness='0.735294'>
+    <sash xAxis='0.021978' yAxis='0.735294' width='0.945055' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level1' catalogId='eTeks#doubleOutwardOpeningWindow' name='Outward opening window' x='900' y='545' angle='1.5707964' elevation='87' width='115.2' depth='26' height='134' wallThickness='1'>
+    <sash xAxis='0.051215' yAxis='0.023077' width='0.440104' startAngle='1.5707964' endAngle='0'/>
+    <sash xAxis='0.948785' yAxis='0.023077' width='0.440104' startAngle='3.1415927' endAngle='1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level1' catalogId='eTeks#window85x123' name='Small window' x='300' y='695.5' angle='3.1415927' elevation='87' width='91' depth='34' height='134' wallThickness='0.735294'>
+    <sash xAxis='0.021978' yAxis='0.735294' width='0.945055' startAngle='0' endAngle='-1.5707964'/>
+  </doorOrWindow>
+  <doorOrWindow level='level1' catalogId='Contrib#roofWindow' name='Roof window' x='250' y='200' elevation='200' width='78' depth='12' height='98'/>
+
+  <wall id='wall0' level='level0' wallAtStart='wall3' wallAtEnd='wall1' xStart='0' yStart='0' xEnd='900' yEnd='0' height='250' thickness='30' pattern='hatchUp'/>
+  <wall id='wall1' level='level0' wallAtStart='wall0' wallAtEnd='wall2' xStart='900' yStart='0' xEnd='900' yEnd='700' height='250' thickness='30' pattern='hatchUp'/>
+  <wall id='wall2' level='level0' wallAtStart='wall1' wallAtEnd='wall2a' xStart='900' yStart='700' xEnd='300' yEnd='700' height='250' thickness='30' pattern='hatchUp'/>
+  <wall id='wall2a' level='level0' wallAtStart='wall2' wallAtEnd='wall3' xStart='300' yStart='695' xEnd='0' yEnd='695' height='250' thickness='20' pattern='hatchUp'/>
+  <wall id='wall3' level='level0' wallAtStart='wall2a' wallAtEnd='wall0' xStart='0' yStart='695' xEnd='0' yEnd='0' height='250' thickness='30' pattern='hatchUp'/>
+  <wall id='wall4' level='level0' xStart='500' yStart='0' xEnd='500' yEnd='400' height='250' thickness='10' pattern='hatchUp'/>
+  <wall id='wall5' level='level0' xStart='0' yStart='400' xEnd='900' yEnd='400' height='250' thickness='10' pattern='hatchUp'/>
+  <wall id='wall6' level='level0' xStart='600' yStart='400' xEnd='600' yEnd='700' height='250' thickness='10' pattern='hatchUp'/>
+  <wall id='wall7' level='level0' xStart='1000' yStart='150' xEnd='1200' yEnd='350' height='120' thickness='20' arcExtent='1.5707964' pattern='hatchUp'/>
+  <wall id='wall10' level='level1' wallAtStart='wall13' wallAtEnd='wall11' xStart='0' yStart='0' xEnd='900' yEnd='0' height='240' thickness='30' pattern='hatchUp'/>
+  <wall id='wall11' level='level1' wallAtStart='wall10' wallAtEnd='wall12' xStart='900' yStart='0' xEnd='900' yEnd='700' height='240' thickness='30' pattern='hatchUp'/>
+  <wall id='wall12' level='level1' wallAtStart='wall11' wallAtEnd='wall13' xStart='900' yStart='700' xEnd='0' yEnd='700' height='240' thickness='30' pattern='hatchUp'/>
+  <wall id='wall13' level='level1' wallAtStart='wall12' wallAtEnd='wall10' xStart='0' yStart='700' xEnd='0' yEnd='0' height='240' thickness='30' pattern='hatchUp'/>
+  <wall id='wall14' level='level1' xStart='500' yStart='0' xEnd='500' yEnd='400' height='240' thickness='10' pattern='hatchUp'/>
+  <wall id='wall15' level='level1' xStart='0' yStart='400' xEnd='900' yEnd='400' height='240' thickness='10' pattern='hatchUp'/>
+  <wall id='wall16' level='level1' xStart='600' yStart='400' xEnd='600' yEnd='700' height='240' thickness='10' pattern='hatchUp'/>
+
+  <room level='level0' name='Living room' areaVisible='true' floorColor='#C9A57B'>
+    <point x='15' y='15'/><point x='495' y='15'/><point x='495' y='395'/><point x='15' y='395'/>
+  </room>
+  <room level='level0' name='Kitchen' areaVisible='true'>
+    <point x='505' y='15'/><point x='885' y='15'/><point x='885' y='395'/><point x='505' y='395'/>
+  </room>
+  <room level='level0' name='Hall' areaVisible='true'>
+    <point x='15' y='405'/><point x='595' y='405'/><point x='595' y='685'/><point x='15' y='685'/>
+  </room>
+  <room level='level0' name='Utility' areaVisible='true'>
+    <point x='605' y='405'/><point x='885' y='405'/><point x='885' y='685'/><point x='605' y='685'/>
+  </room>
+  <room level='level1' name='Bedroom' areaVisible='true'>
+    <point x='15' y='15'/><point x='495' y='15'/><point x='495' y='395'/><point x='15' y='395'/>
+  </room>
+  <room level='level1' name='Bathroom' areaVisible='true'>
+    <point x='505' y='15'/><point x='885' y='15'/><point x='885' y='395'/><point x='505' y='395'/>
+  </room>
+  <room level='level1' areaVisible='true'>
+    <point x='15' y='405'/><point x='595' y='405'/><point x='595' y='685'/><point x='15' y='685'/>
+  </room>
+  <room level='level1' name='Bedroom 2' areaVisible='true'>
+    <point x='605' y='405'/><point x='885' y='405'/><point x='885' y='685'/><point x='605' y='685'/>
+  </room>
+
+  <dimensionLine level='level0' xStart='0' yStart='-60' xEnd='900' yEnd='-60' offset='20'/>
+  <label level='level0' text='Front garden' x='450' y='800'/>
+</home>
