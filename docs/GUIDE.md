@@ -10,6 +10,12 @@ VirtuHome shows your home as a live 3D model in Home Assistant. This guide takes
 it to a finished home on a wall tablet. Buttons and options are named exactly as VirtuHome shows
 them.
 
+To look around before installing, open the [online demo](https://virtumaps.github.io/virtuhome/demo/):
+a house with pretend lights, sensors and people that runs in any browser, on a phone or a computer.
+Turn the house, tap the lights, try the graphics levels, day and night and the floors, and open
+**Edit** to change the plan in 3D or the **2D plan**. The demo can't save, so its **Save** button
+stays off and a reload brings the house back as it was.
+
 - [Install](#install)
 - [Find your way around](#find-your-way-around)
 - [Get your home in](#get-your-home-in): scan it, draw it, or trace a floor plan picture

@@ -40,6 +40,8 @@ export interface ViewConfig {
   [option: string]: unknown;
   /** Saves somewhere else than the integration (dev harness). */
   save?: (plan: Plan) => Promise<number>;
+  /** The online demo: the editor works but can't save. */
+  demo?: boolean;
 }
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
@@ -1068,15 +1070,17 @@ export class VhView {
       hass,
       plan: this.plan ?? normalizePlan({ version: 1, floors: [] }),
       revision: this.revision,
+      demo: !!this.config.demo,
       save: async (plan, base) => {
+        if (this.config.demo) throw new Error("The demo can't save");
         if (this.config.save) return this.config.save(plan);
         const res = await hass.callWS<{ revision: number }>({ type: "virtuhome/plan/save", plan, ...(base !== null ? { base_revision: base } : {}) });
         this.revision = res.revision;
         this.savedPlan = plan;
         return res.revision;
       },
-      restorePoints: this.config.save ? undefined : () => hass.callWS({ type: "virtuhome/history/list" }),
-      restore: this.config.save ? undefined : async (id) => {
+      restorePoints: this.config.save || this.config.demo ? undefined : () => hass.callWS({ type: "virtuhome/history/list" }),
+      restore: this.config.save || this.config.demo ? undefined : async (id) => {
         await hass.callWS({ type: "virtuhome/history/restore", snapshot_id: id });
       },
       close: () => {
