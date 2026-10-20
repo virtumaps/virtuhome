@@ -121,6 +121,8 @@ Maintainers only:
 4. Wait for CI on `main`, then try it on a real Home Assistant: update through HACS, restart, open the
    panel and a wall tablet, and check an old plan still loads.
 5. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
+6. Publishing the release runs the Pages workflow, which rebuilds the
+   [online demo](https://virtumaps.github.io/virtuhome/demo/) from the tag. Check that it opens.
 
 ## Roadmap
 

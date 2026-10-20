@@ -98,6 +98,8 @@ export interface EditorHost {
   restorePoints?(): Promise<{ id: string; time: number; label: string | null; floors: number }[]>;
   restore?(id: string): Promise<void>;
   close(): void;
+  /** The online demo: everything can be edited, nothing can be saved. */
+  demo?: boolean;
 }
 
 /** A step of the undo history: the plan before a change, and what the change was. */
@@ -163,7 +165,7 @@ export class Editor {
     this.body = h("div", { class: "ed-body" });
     this.undoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowULeftTop)}<span>Undo</span>`, onclick: () => this.doUndo() });
     this.redoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowURightTop)}<span>Redo</span>`, onclick: () => this.doRedo() });
-    this.saveBtn = h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, disabled: true, title: "Nothing to save", onclick: () => this.save() });
+    this.saveBtn = h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, disabled: true, title: host.demo ? "The demo can't save" : "Nothing to save", onclick: () => this.save() });
     this.el = h("div", { class: "ed" },
       style,
       h("div", { class: "ed-head" },
@@ -337,7 +339,7 @@ export class Editor {
     this.updateSelectionMarker();
     this.plan2d?.render();
     if (!quiet) this.render();
-    this.status.textContent = this.dirty ? "Unsaved changes" : "Saved";
+    this.status.textContent = this.savedText();
     this.updateHistoryButtons();
   }
 
@@ -401,12 +403,18 @@ export class Editor {
 
   private updateSaveButton(): void {
     if (!this.saveBtn) return;
-    this.saveBtn.disabled = !this.unsaved || this.saving;
-    this.saveBtn.title = this.saving ? "Saving…" : this.unsaved ? "Save changes" : "Nothing to save";
+    this.saveBtn.disabled = !this.unsaved || this.saving || !!this.host.demo;
+    this.saveBtn.title = this.host.demo ? "The demo can't save" : this.saving ? "Saving…" : this.unsaved ? "Save changes" : "Nothing to save";
+  }
+
+  /** The footer's word on saving. */
+  private savedText(): string {
+    if (this.host.demo) return "This is a demo: changes aren't saved.";
+    return this.dirty ? "Unsaved changes" : "Saved";
   }
 
   private async save(): Promise<void> {
-    if (!this.unsaved || this.saving) return;
+    if (!this.unsaved || this.saving || this.host.demo) return;
     this.saving = true;
     this.updateSaveButton();
     this.status.textContent = "Saving…";
@@ -418,7 +426,7 @@ export class Editor {
       this.savedJson = json;
       this.host.followed = [];
       this.changed();
-      this.status.textContent = this.unsaved ? "Unsaved changes" : "Saved";
+      this.status.textContent = this.savedText();
     };
     try {
       // our own save is the base for the next one, so only someone else's save is a conflict
@@ -789,7 +797,7 @@ export class Editor {
       this.tab === "devices" ? this.devicesTab() :
       this.tab === "extensions" ? this.extensionsTab() : this.selectedTab(),
     );
-    this.status.textContent = this.dirty ? "Unsaved changes" : "Saved";
+    this.status.textContent = this.savedText();
   }
 
   private homeTab(): HTMLElement {

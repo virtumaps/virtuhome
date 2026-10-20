@@ -170,7 +170,8 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
         if (!demoImages.has(file)) throw new Error("not found");
         return { path: demoImages.get(file) } as T;
       }
-      throw new Error("demo");
+      // the rest (saving, restore points, licences) needs the integration
+      throw new Error("Not in the demo");
     },
     connection: {
       async subscribeMessage() {

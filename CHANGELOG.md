@@ -16,6 +16,11 @@
   each with a button that does it. Steps tick themselves off as they are done; north, the dashboard
   and the tablet can be ticked by hand. Hide this list puts it away. People who can't edit are
   told who can set VirtuHome up.
+- An online demo at virtumaps.github.io/virtuhome/demo: the demo house in any browser, on a phone or
+  a computer, with no Home Assistant. Everything works except saving. It is rebuilt with each release.
+- Find the rooms in the 2D plan's floor plan picture: once its scale is set, VirtuHome finds the
+  walls in the picture and offers the rooms it sees, with their doors and windows, to tick and add in
+  one go (one Undo takes them away again). It works in the browser; the picture goes nowhere.
 - People in their rooms: when a room tracker knows where someone is (Bermuda, ESPresense through
   mqtt_room or the ESPresense Companion), their picture or initials show over the room's name, and in
   the house view over the room, and the room glows softly. Tap a face for the person's dialog. The
