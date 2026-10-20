@@ -1,0 +1,40 @@
+name: Import problem
+description: A scan or floor plan picture didn't come in right
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What did you import?
+      options:
+        - A LiDAR scan (House Scan app or RoomPlan JSON)
+        - A floor plan picture to trace over
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What came out wrong?
+      placeholder: "e.g. the kitchen and dining room merged, the stairs are missing, a door is on the wrong wall"
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: The files, if you're happy to share them
+      description: >-
+        Attach the scan's house.json, manifest.json and detections.json (zipped), or the picture.
+        They show your home's layout and this page is public, so only attach what you're happy for
+        anyone to see. Without them we may not be able to find the cause.
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot of the result
+  - type: input
+    id: versions
+    attributes:
+      label: VirtuHome and Home Assistant versions, and the House Scan version for scans
+      placeholder: "VirtuHome 0.9.0, Home Assistant 2026.10.1"
+    validations:
+      required: true

@@ -368,6 +368,14 @@ export interface PlanSettings {
   sky?: SkySettings | null;
   /** Who is in which room; anything unset is found from Home Assistant. */
   presence?: PresenceSettings | null;
+  /** The getting-started checklist: hidden, and the steps ticked by hand. */
+  setup?: SetupSettings | null;
+}
+
+export interface SetupSettings {
+  dismissed?: boolean;
+  /** Steps marked done by hand (north, the dashboard card, a wall tablet). */
+  done?: string[];
 }
 
 /** People in their rooms, from room-level trackers (Bermuda, ESPresense, mqtt_room). */
@@ -427,10 +435,16 @@ export function emptyPlan(): Plan {
   return { version: 1, settings: { ...DEFAULT_SETTINGS }, floors: [] };
 }
 
+function normalizeSetup(s: SetupSettings): SetupSettings {
+  const done = Array.isArray(s.done) ? s.done.filter((x): x is string => typeof x === "string") : [];
+  return { dismissed: s.dismissed === true, done };
+}
+
 /** Fills in defaults so the rest of the code never sees a missing field. */
 export function normalizePlan(raw: unknown): Plan {
   const p = (raw ?? {}) as Partial<Plan>;
   const settings = { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) };
+  if (settings.setup) settings.setup = normalizeSetup(settings.setup);
   const floors = (p.floors ?? []).map((f) => ({
     ...f,
     ha_floor: f.ha_floor ?? null,

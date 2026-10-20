@@ -43,7 +43,7 @@ questions on it, label it `needs info`, and remove `in progress`.
 
 - `cd frontend && npm ci && npm run typecheck && npm test && npm run build` passes, and the build in
   `custom_components/virtuhome/frontend` is committed. CI checks that it matches the sources.
-- If Python changed: `pip install cryptography pytest && pytest -q tests`, and
+- If Python changed: `pip install cryptography pytest voluptuous && pytest -q tests`, and
   `python -m compileall -q custom_components/virtuhome` is clean.
 - New behaviour has tests where it can (`frontend/test`, vitest). Geometry changes keep
   `zfight.test.ts` and `flicker.test.ts` passing.
@@ -53,7 +53,11 @@ questions on it, label it `needs info`, and remove `in progress`.
 - `frontend/test/budget.test.ts` passes: draw calls per floor, the demo house's triangles at the Tablet
   level, and the size of the loader and the app. Raise a budget in `frontend/test/budgets.ts` only on
   purpose, and say in the pull request why it grew.
-- Old plans still load. Plan format changes go through `normalizePlan`.
+- Old plans still load. Plan format changes go through `normalizePlan` (and `schema.py`).
+  `frontend/test/fixtures/plans/` keeps the demo plan as every release saved it, and small plans
+  with the rarer parts; `frontend/test/fixtures.test.ts` loads and builds each one, and
+  `tests/test_plan_fixtures.py` checks them against the schema. When one stops loading, fix the
+  loading, never the fixture.
 - User-visible changes get a line in `CHANGELOG.md` under `## Unreleased` (add the heading at the top
   if it is missing), in the same plain style as the existing entries.
 - **The user guide stays true.** Anything a user sees or does differently (a new feature, a renamed
@@ -61,6 +65,29 @@ questions on it, label it `needs info`, and remove `in progress`.
   same pull request, naming buttons and options exactly as the source does. The pull request says
   which sections changed, or why none needed to.
 - Text shown to users is short and plain.
+
+## End-to-end tests
+
+`tests/e2e/run.mjs` starts a scratch Home Assistant with VirtuHome (`tests/e2e/ha.py` makes a new
+config folder and finishes onboarding and the config flow through the API), saves every plan in
+`frontend/test/fixtures/plans/` through the WebSocket API, and checks in headless Chrome that each
+one draws in the panel, that the editor opens and a saved change survives a reload, that a
+dashboard card draws, and that the diagnostics download works and holds no names from the plan. CI
+runs it (the End-to-end workflow) against the oldest Home Assistant `hacs.json` allows and the
+newest, on pull requests that touch the integration, the loader or the build, and every night.
+
+To run it yourself, after `npm ci` in `frontend/` (Home Assistant 2025.1 runs on Python 3.12 or
+3.13; the newest needs 3.14):
+
+```bash
+python3.13 -m venv ~/ha-e2e && ~/ha-e2e/bin/pip install homeassistant==2025.1.0
+node tests/e2e/run.mjs --python ~/ha-e2e/bin/python
+```
+
+It listens on 127.0.0.1:8131 (`--port` for another, never that of a Home Assistant you use) and
+drives Google Chrome (`--chrome <path>`, or Playwright's Chromium after
+`npx playwright-core install chromium` in `frontend/`). Screenshots, Home Assistant's log and the
+diagnostics are left in the folder it names at the end (`--dir` picks it).
 
 ## Rules
 
@@ -83,10 +110,14 @@ questions on it, label it `needs info`, and remove `in progress`.
 Maintainers only:
 1. Move `## Unreleased` in `CHANGELOG.md` to the new version and bump `version` in
    `custom_components/virtuhome/manifest.json`. Check that the user guide covers every line of it.
-2. `cd frontend && npm run build` (the loader carries the version) and commit.
-3. Wait for CI on `main`, then try it on a real Home Assistant: update through HACS, restart, open the
+2. Save the demo plan as the new fixture: `python tools/save_plan_fixture.py` writes
+   `frontend/test/fixtures/plans/vX.Y.Z.json` (it needs `npm ci` in `frontend/` and voluptuous).
+   From then on the tests load it, so every later release keeps loading this one's plans. The tests
+   fail until the new version has one.
+3. `cd frontend && npm run build` (the loader carries the version) and commit.
+4. Wait for CI on `main`, then try it on a real Home Assistant: update through HACS, restart, open the
    panel and a wall tablet, and check an old plan still loads.
-4. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
+5. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
 
 ## Roadmap
 
