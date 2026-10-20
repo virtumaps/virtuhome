@@ -72,6 +72,9 @@ import{a as ke,b as qo,c as Ko,d as Ot,e as Uo}from"./chunk-T2OAUYKU.js";import{
 }
 .vh-canvas { position: absolute; inset: 0; }
 .vh-root.vh-new .vh-canvas, .vh-root.vh-new .vh-tools { visibility: hidden; }
+/* the 3D view's own sky is hidden: the first run needs a background in the theme's colours */
+.vh-root.vh-new { background: #0c1220; }
+.vh-root.vh-new.day { background: #e4e8ee; }
 .vh-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .vh-label {
   position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: auto; cursor: pointer;
