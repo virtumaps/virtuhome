@@ -1,0 +1,6 @@
+{
+  "about": "The oldest browsers VirtuHome supports. build.mjs builds for them and test/browsers.test.ts checks the build. docs/GUIDE.md (FAQ) lists them for users.",
+  "chrome": 87,
+  "safari": 15,
+  "esbuild": ["es2020", "chrome87", "safari15"]
+}

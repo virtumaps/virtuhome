@@ -18,7 +18,7 @@ stays off and a reload brings the house back as it was.
 
 - [Install](#install)
 - [Find your way around](#find-your-way-around)
-- [Get your home in](#get-your-home-in): scan it, draw it, or trace a floor plan picture
+- [Get your home in](#get-your-home-in): start from a house type, scan it, draw it, or trace a floor plan picture
 - [Place your devices](#place-your-devices)
 - [Make it look like home](#make-it-look-like-home)
 - [Outside: garden, fences and the roof](#outside-garden-fences-and-the-roof)
@@ -44,7 +44,8 @@ You need Home Assistant 2025.1 or later and [HACS](https://hacs.xyz).
 4. Reload the page in your browser. **VirtuHome** is now in the sidebar, and the VirtuHome card is
    in your dashboards' card picker.
 5. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
-   floor plan picture**, **Import a scan** or **Draw it myself**, and the editor opens on that step
+   floor plan picture**, **Start from a house type**, **Import a scan** or **Draw it myself**, and
+   the editor opens on that step
    (see [Get your home in](#get-your-home-in)). People who aren't administrators see who can set
    it up.
 
@@ -64,7 +65,8 @@ The same view is in the sidebar and in every VirtuHome card.
 - **House** shows every storey; a button for each floor shows that floor alone.
 - The alarm chip (**Disarmed**, **Armed home**, **Armed away**…) shows your alarm panel. Tap it for
   its dialog.
-- **Edit** (sidebar only, administrators only) opens the editor.
+- **Edit** (sidebar only, administrators only) opens the editor. A red dot on it means
+  [Check my setup](#troubleshooting) found something that doesn't work.
 
 **Under the top bar**
 - A red banner when something needs you: a leak, smoke, gas. Tap it for the sensor's dialog.
@@ -123,16 +125,16 @@ A level picked here is for this device only, and wins over the card's `quality`.
 
 ## Get your home in
 
-There are three ways, and they mix: scan it, draw it in the 2D plan, or trace an estate agent's
-floor plan. Everything here is in **Edit**.
+There are four ways, and they mix: start from a house type, scan it, draw it in the 2D plan, or
+trace an estate agent's floor plan. Everything here is in **Edit**.
 
 ### Getting started
 
 Until a new home is set up, Edit → **Home** starts with **Getting started**: the steps left, each
 with a button that does it or goes to where it is done.
 
-- **Get your home in**: **Trace a picture**, **Import a scan…** or **Draw rooms**. Done once there is
-  a room.
+- **Get your home in**: **Trace a picture**, **House type**, **Import a scan…** or **Draw rooms**.
+  Done once there is a room.
 - **Link the rooms to areas**: done when every room is linked to a Home Assistant area, or no area
   is left for the rest. **Rooms** opens the Rooms tab.
 - **Place your devices**: **Place devices automatically** (Smart Setup). Done once a device is in
@@ -148,6 +150,32 @@ started** brings it back until everything is done. Like any change, ticks are ke
 **Save**.
 
 ![Getting started](screenshots/getting-started.jpg)
+
+### Start from a house type
+
+Most homes are one of a handful of layouts. A house type gives you a whole home in a minute: its
+storeys, rooms named like Home Assistant's usual areas (Living Room, Kitchen, Hallway, Landing,
+Bedroom 1…), doors, windows, stairs, a garden and a roof. Then you drag the walls to fit.
+
+1. Edit → **Home** → **Start from a house type…** (on a new home: **Start from a house type**, or
+   **House type** in Getting started).
+2. Pick the one most like your home: **Two-bed mid-terrace**, **Three-bed semi-detached**,
+   **Four-bed detached**, **Two-bed bungalow**, **Two-bed flat** or **Open-plan single storey**.
+3. **Fit to my home**: type your home's outside **Width** and **Depth** in metres, as an estate
+   agent's listing gives them. The rooms, garden and roof stretch with the walls; doors, windows and
+   stairs keep their size and stay on their walls. **Mirror left to right** turns it the other way
+   round; for the semi, pick whether it **Joins next door on the** **Left** or **Right**.
+4. **Use this house type**. If the plan already has rooms, it asks before replacing them.
+
+Smart Setup then runs by itself: storeys are linked to Home Assistant's floors, rooms to the areas
+named like them, and devices go into their rooms (see [Smart Setup](#smart-setup)). What it did is
+listed in the Home tab, and one **Undo** takes it all back. Next, open the **2D plan** and drag the
+walls to your rooms' sizes, or put your floor plan picture under it to drag them to (see [Trace a
+floor plan picture](#trace-a-floor-plan-picture)).
+
+![Start from a house type](screenshots/house-types.jpg)
+
+![A semi-detached house and a bungalow, as they start](screenshots/house-types-3d.jpg)
 
 ### Scan it (iPhone or iPad with LiDAR)
 
@@ -530,6 +558,12 @@ only when you use them: **Line up with the map** (your home's location, to OpenS
 **Will it slow down my tablet?** It draws nothing while nothing changes, and each floor is one or two
 draw calls. On slow tablets pick **Tablet** graphics.
 
+**Which tablets and browsers work?** Anything with WebGL 2 and a browser at least as new as
+**Chrome 87** or **Safari 15**. On Android that includes the Android System WebView, which Fully Kiosk
+and the Home Assistant app use (on a Fire tablet, update it in the Amazon Appstore if it is older). On
+iPhone and iPad it means iOS 15 or later, which runs from the iPad Air 2 and the 5th-generation iPad
+on. A Fire HD 8 (2022) runs it well with **Tablet** graphics.
+
 **Where is my plan kept?** In Home Assistant (`.storage/virtuhome.plan`, with the last 20 restore
 points in `.storage/virtuhome.history`), so Home Assistant's backups include it.
 
@@ -541,6 +575,25 @@ feet and inches (`11'4"`).
 **Is it free?** Yes, under the GPL-3.0 licence. Extensions are separate.
 
 ## Troubleshooting
+
+**Check my setup**: Edit → **Home** starts with it. It lists what stops VirtuHome working as it
+should, with a fix where there is a safe one. Nothing changes until you press a fix, and
+**Check again** asks Home Assistant again.
+- **Linked entities**: links to entities Home Assistant no longer has (see below).
+- **Rooms and areas**: rooms not linked to an area, or linked to one that is gone. **Link rooms by
+  name** links them to the areas named like them; **Open Rooms** to pick by hand.
+- **Areas without a room**: areas with devices but no room in the plan. **Add a room** puts one,
+  named and linked like the area, beside the house, to move where it belongs.
+- **Dashboard card**: the card missing from your dashboards' resources, or an old version there
+  (**Add it again**), or this page still running an older VirtuHome than the one installed
+  (**Reload**).
+- **Graphics on this device**: Automatic stepped down because turning the view was slow (**Try
+  again**), or the browser draws without the graphics card.
+- **Extensions and licence**: an extension that needs a newer VirtuHome, or a licence that has
+  expired or couldn't renew (**Renew now**).
+- **Plan repairs**: what VirtuHome put right while loading the plan; **Save** keeps it.
+
+![Check my setup](screenshots/check-setup.jpg)
 
 **"Custom element doesn't exist: virtuhome-card"**, or the card stays empty
 - Check the integration is added (Settings → Devices & services → VirtuHome), then reload the page.
@@ -566,6 +619,15 @@ home in](#get-your-home-in). Dashboard cards only show the house once it is ther
 
 **A door or window doesn't open in 3D**: tap it in the editor and pick its **Sensor**.
 
+**Something stopped working after a device was renamed, re-paired or replaced in Home Assistant**
+- VirtuHome keeps the Home Assistant registry id of everything it links when you save, so an
+  entity renamed later is followed by itself. Open **Edit** and **Save** to keep the new name in
+  the plan.
+- Edit → **Home** → **Check my setup** → **Linked entities** lists links to entities Home
+  Assistant no longer has, with what most likely replaced each one (the same device, or a like name
+  in the same room). **Relink** takes it and **Relink all** takes every suggestion. **Pick
+  another…** links any entity of the same kind, or **Unlink** (**Remove from plan** for a device).
+
 **Someone is in the wrong room, or in none**
 - Check what their tracker says in Home Assistant: it must name an area (Bermuda's Area sensor, or a
   room of ESPresense named like the area).
@@ -585,4 +647,6 @@ doesn't work, a device to support, a scan that came in wrong or a slow device, o
 [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) with its form, and attach the
 diagnostics file: Settings → Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds
 the versions, the plan's size and what each floor counts, how the card reaches your dashboards and
-which extensions are loaded. It has no room, device or entity names, and no licence key or token.
+which extensions are loaded, and how many things each check of **Check my setup** found when an
+administrator last opened VirtuHome. It has no room, device or entity names, and no licence key or
+token.

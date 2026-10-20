@@ -102,3 +102,13 @@ def test_not_loaded():
                            licence=None, loaded=[], dashboard={"mode": "yaml"}, panel=False)
     assert out["loaded"] is False and "plan" not in out
     assert out["licence"] == {"status": "unavailable"}
+
+
+def test_check_my_setup_counts_only():
+    assert report()["checks"] == {"reported": False}
+    checks = {"time": 1792279060.9, "counts": {"links": 2, "rooms": 0, "areas": "Kitchen", "light.kitchen": 1}}
+    store = SimpleNamespace(plan=PLAN, revision=7, snapshots=[], checks=checks)
+    out = report(store)
+    assert out["checks"] == {"reported": True, "time": 1792279060.9, "counts": {"links": 2, "rooms": 0}}
+    assert "Kitchen" not in json.dumps(out["checks"]) and "light.kitchen" not in json.dumps(out)
+    assert set(rep.CHECK_IDS) == {"links", "rooms", "areas", "card", "graphics", "extensions", "repairs"}

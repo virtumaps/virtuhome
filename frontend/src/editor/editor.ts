@@ -4,8 +4,8 @@
 //   Devices  what is placed, and what of Home Assistant is not yet
 //   Selected the tapped room, device or furniture: link entities, move, turn, remove
 // In edit mode a tap selects instead of switching, and devices, lamps and furniture can be dragged.
-import { mdiArrowULeftTop, mdiArrowURightTop, mdiCheckboxBlankCircleOutline, mdiCheckCircle, mdiClose, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
-import { autoPlace } from "../auto/placement";
+import { mdiAlertCircleOutline, mdiArrowULeftTop, mdiArrowURightTop, mdiCheckboxBlankCircleOutline, mdiCheckCircle, mdiCheckCircleOutline, mdiClose, mdiInformationOutline, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
+import { autoPlace, linkRoomsByName } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
 import {
@@ -13,6 +13,7 @@ import {
   type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type PartyEnds, type Plan, type Roof, type RoofCovering, type RoofItem, type RoofShape, type Room, type Vec2,
 } from "../model/plan";
 import { bounds } from "../model/geom";
+import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, recordLinks, replaceEntity, type Proposal, type RegistryEntry } from "../model/links";
 import { domainOf, type Hass } from "../live/hass";
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
@@ -37,8 +38,10 @@ import {
 import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
+import type { Check, Fix } from "../ui/checks";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { EDITOR_CSS } from "./styles";
+import { HouseTypes } from "./house-types";
 import { Collider, settle } from "./collide";
 import { imageUrl, uploadImage } from "./background";
 import { Plan2D, PLAN2D_CSS } from "./plan2d";
@@ -87,6 +90,10 @@ export interface EditorHost {
   hass: Hass;
   plan: Plan;
   revision: number | null;
+  /** The plan as saved, when `plan` differs from it (entities renamed in Home Assistant were followed). */
+  savedJson?: string;
+  /** Those renamed entities: [from, to]. */
+  followed?: [string, string][];
   save(plan: Plan, baseRevision: number | null): Promise<number>;
   restorePoints?(): Promise<{ id: string; time: number; label: string | null; floors: number }[]>;
   restore?(id: string): Promise<void>;
@@ -138,13 +145,21 @@ export class Editor {
   private collider: Collider | null = null;
   /** The Home tab's choices for working out a roof. */
   private roofChoice: RoofChoice = {};
+  /** Home Assistant's entity registry, for what replaced missing entities (per registry change). */
+  private registry: { key: unknown; list: RegistryEntry[] | null } | null = null;
+  private registryLoading: unknown = null;
   /** Whether a dashboard shows the card (getting started), once asked. */
   private cardSeen: boolean | null = null;
   private cardAsked = false;
+  /** The house type picker, while it is open. */
+  private houseTypes: HouseTypes | null = null;
+  /** A house type is going in: not a first room drawn by hand. */
+  private starting = false;
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
-    this.savedJson = JSON.stringify(this.plan);
+    this.savedJson = host.savedJson ?? JSON.stringify(this.plan);
+    this.unsaved = JSON.stringify(this.plan) !== this.savedJson;
     const style = h("style", {}, EDITOR_CSS + PLAN2D_CSS);
     this.status = h("span", { class: "ed-status" });
     this.body = h("div", { class: "ed-body" });
@@ -178,10 +193,15 @@ export class Editor {
     window.addEventListener("keydown", this.onKey);
     this.render();
     this.updateHistoryButtons();
+    this.updateSaveButton();
   }
 
-  /** A first-run choice: trace a picture or draw in the 2D plan, or the scan import on the Home tab. */
+  /** A first-run choice: trace a picture or draw in the 2D plan, or the house types or scan import on the Home tab. */
   startSetup(kind: StartKind): void {
+    if (kind === "starter") {
+      this.openHouseTypes();
+      return;
+    }
     if (kind === "scan") {
       this.show("home");
       const scan = this.body.querySelector<HTMLElement>(".ed-scan");
@@ -307,6 +327,7 @@ export class Editor {
 
   /** The first room of a new home: the getting-started list shows what comes next. */
   private firstRoom(): void {
+    if (this.starting) return;
     const items = setupItems(this.plan, this.hass, { cardOnDashboard: this.cardSeen });
     if (!showChecklist(this.plan, items)) return;
     // after the 2D plan has said its own piece about the tool
@@ -394,16 +415,19 @@ export class Editor {
 
   private async save(): Promise<void> {
     if (!this.unsaved || this.saving || this.host.demo) return;
+    this.saving = true;
+    this.updateSaveButton();
+    this.status.textContent = "Saving…";
+    // each linked entity's registry id goes with the plan, so a later rename is followed
+    recordLinks(this.plan, this.hass, await entityRegistry(this.hass));
     const json = JSON.stringify(this.plan);
     const saved = () => {
       // edits made while saving still need a save
       this.savedJson = json;
+      this.host.followed = [];
       this.changed();
       this.status.textContent = this.savedText();
     };
-    this.saving = true;
-    this.updateSaveButton();
-    this.status.textContent = "Saving…";
     try {
       // our own save is the base for the next one, so only someone else's save is a conflict
       this.host.revision = await this.host.save(this.plan, this.host.revision);
@@ -780,7 +804,12 @@ export class Editor {
     const fileIn = h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
     const box = h("div", {},
+      this.houseTypes?.el,
       ...this.setupSection(() => fileIn.click()),
+      ...this.checkSection(),
+      this.houseTypes ? null : h("h4", {}, "House type"),
+      this.houseTypes ? null : h("p", { class: "ed-hint" }, "A ready-made home with its rooms, doors, windows, stairs and roof, fitted to your home's size."),
+      this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, "Start from a house type…"),
       h("div", { class: "ed-scan" },
         h("h4", {}, "Scan"),
         h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
@@ -829,6 +858,146 @@ export class Editor {
     return box;
   }
 
+  /** The entity registry with registry ids; undefined while it loads (the Home tab is drawn again then). */
+  private registryNow(): RegistryEntry[] | null | undefined {
+    const key = this.hass.entities;
+    const known = this.registry;
+    if (known && known.key === key) return known.list;
+    if (this.registryLoading !== key) {
+      this.registryLoading = key;
+      entityRegistry(this.hass).then((list) => {
+        if (this.hass.entities !== key) return;
+        this.registry = { key, list };
+        if (this.tab === "home") this.render();
+      });
+    }
+    return undefined;
+  }
+
+  /** Home Assistant's entity registry changed: renamed entities are followed, and what is missing is shown. */
+  async registryChanged(): Promise<void> {
+    const hass = this.hass;
+    if (canFollow(this.plan, hass)) {
+      const registry = await entityRegistry(hass);
+      if (registry && followRenames(structuredClone(this.plan), hass, registry).length) {
+        this.change((p) => void followRenames(p, hass, registry), true, "Follow renamed entities");
+      }
+    }
+    if (this.tab === "home") this.render();
+  }
+
+  /** Check my setup: what stops VirtuHome working as it should, each with a fix where a safe one exists. */
+  private checkSection(): HTMLElement[] {
+    const view = this.host.view;
+    const icons = { ok: mdiCheckCircleOutline, note: mdiInformationOutline, problem: mdiAlertCircleOutline };
+    const followed = this.host.followed ?? [];
+    const cards = view.setupChecks(this.plan).map((c) => {
+      const buttons = c.fixes.map((f) => this.fixButton(f)).filter((b): b is HTMLButtonElement => !!b);
+      return h("div", { class: `ed-card ed-result ${c.level}` },
+        // all well takes one line
+        h("div", { class: "ed-row" }, h("span", { html: svg(icons[c.level]) }), h("b", {}, c.title), c.level === "ok" ? h("small", {}, c.text) : null),
+        c.level === "ok" ? null : h("p", { class: "ed-hint" }, c.text),
+        c.id === "links" && followed.length && this.dirty
+          ? h("p", { class: "ed-hint" }, `${followed.length === 1 ? "An entity was" : `${followed.length} entities were`} renamed in Home Assistant, and the plan followed. Save to keep it.`)
+          : null,
+        buttons.length ? h("div", { class: "ed-row" }, ...buttons) : null,
+        ...(c.fixes.includes("relink") ? this.linkFixes() : []),
+        ...(c.fixes.includes("add-rooms") ? this.areaFixes(c) : []),
+      );
+    });
+    return [
+      h("h4", {}, "Check my setup"),
+      h("p", { class: "ed-hint" }, "What stops VirtuHome working as it should, with a fix where there is one. Nothing changes until you press a fix."),
+      ...cards,
+      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: async () => {
+        await view.refreshServer();
+        this.render();
+      } }, "Check again")),
+    ];
+  }
+
+  /** A fix's button. Nothing changes until it is pressed. */
+  private fixButton(fix: Fix): HTMLButtonElement | null {
+    const view = this.host.view;
+    const hass = this.hass;
+    const run: Partial<Record<Fix, [string, () => unknown]>> = {
+      "link-rooms": ["Link rooms by name", () => this.change((p) => {
+        // areas Home Assistant no longer has are let go first
+        for (const r of p.floors.flatMap((f) => [...f.rooms, ...(f.outdoor ?? [])])) if (r.area_id && hass.areas && !hass.areas[r.area_id]) r.area_id = null;
+        linkRoomsByName(p, hass);
+      }, true, "Link rooms to areas")],
+      "open-rooms": ["Open Rooms", () => this.show("rooms")],
+      reload: ["Reload", () => location.reload()],
+      resource: ["Add it again", () => view.refreshServer(true)],
+      graphics: ["Try again", () => view.resetGraphics()],
+      renew: ["Renew now", async () => {
+        await hass.callWS({ type: "virtuhome/licence/refresh" }).catch(() => undefined);
+        await view.refreshServer();
+      }],
+      save: ["Save", () => {
+        this.unsaved = true;
+        return this.save();
+      }],
+    };
+    const f = run[fix];
+    if (!f) return null;
+    const b = h("button", { class: `ed-btn small${fix === "open-rooms" ? " ghost" : ""}`, onclick: async () => {
+      b.disabled = true;
+      await f[1]();
+      if (this.tab === "home") this.render();
+    } }, f[0]);
+    return b;
+  }
+
+  /** Areas with devices but no room: a room for each, named and linked like the area. */
+  private areaFixes(c: Check): HTMLElement[] {
+    return (c.areas ?? []).slice(0, 12).map((id) => {
+      const name = this.hass.areas?.[id]?.name ?? id;
+      return h("div", { class: "ed-item" }, h("span", {}, name), h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom(name, id) }, "Add a room"));
+    });
+  }
+
+  /** Linked entities Home Assistant no longer has: the likely replacement to relink, or another to pick. */
+  private linkFixes(): HTMLElement[] {
+    const hass = this.hass;
+    const missing = missingLinks(this.plan, hass);
+    const registry = this.registryNow();
+    const proposals = new Map<string, Proposal>();
+    if (registry !== undefined) {
+      for (const m of missing) {
+        const p = proposeFor(m, this.plan, hass, registry);
+        if (p) proposals.set(m.entity, p);
+      }
+    }
+    const name = (id: string) => String(hass.states[id]?.attributes.friendly_name ?? id);
+    const why: Record<Proposal["why"], string> = { renamed: "", "same device": "same device", "same area": "same room, like name", "same name": "like name" };
+    const relink = (pairs: [string, string | null][]) => {
+      const label = pairs.length > 1 ? `Relink ${pairs.length} entities` : pairs[0][1] ? "Relink" : "Unlink";
+      this.change((p) => pairs.forEach(([from, to]) => replaceEntity(p, from, to)), false, label);
+      this.status.textContent = pairs.length > 1 ? `Relinked ${pairs.length} entities` : pairs[0][1] ? "Relinked" : "Unlinked";
+    };
+    const cards = missing.map((m) => {
+      const p = proposals.get(m.entity);
+      const others = this.entities((id) => domainOf(id) === domainOf(m.entity));
+      const unlink: [string, string] = ["-", m.uses.every((u) => u.device) ? "Remove from plan" : "Unlink"];
+      return h("div", { class: "ed-card" },
+        h("div", { class: "ed-row" }, h("b", {}, m.uses[0].label), m.uses.length > 1 ? h("small", {}, `and ${m.uses.length - 1} more`) : null),
+        h("small", { class: "ed-id" }, m.entity),
+        p ? h("div", { class: "ed-row" },
+          h("span", { class: "ed-col" }, `${p.why === "renamed" ? "Renamed" : "Likely"}: ${name(p.entity)}`, h("small", { class: "ed-id" }, p.why === "renamed" ? p.entity : `${p.entity} · ${why[p.why]}`)),
+          h("button", { class: "ed-btn small", onclick: () => relink([[m.entity, p.entity]]) }, "Relink"),
+        ) : registry !== undefined ? h("p", { class: "ed-hint" }, "Nothing like it found.") : null,
+        h("div", { class: "ed-row" }, this.dropdown([unlink, ...others], "", (v) => v && relink([[m.entity, v === "-" ? null : v]]), "Pick another…")),
+      );
+    });
+    const out: (HTMLElement | null)[] = [
+      registry === undefined ? h("p", { class: "ed-hint" }, "Looking for what replaced them…") : null,
+      proposals.size > 1 ? h("div", { class: "ed-row" }, h("button", { class: "ed-btn small", onclick: () => relink([...proposals].map(([from, p]) => [from, p.entity])) }, `Relink all (${proposals.size})`)) : null,
+      ...cards,
+    ];
+    return out.filter((e): e is HTMLElement => !!e);
+  }
+
   /** Getting started: what is left to set up a new home, each with the way to do it. */
   private setupSection(importScan: () => void): HTMLElement[] {
     const items = setupItems(this.plan, this.hass, { cardOnDashboard: this.cardSeen });
@@ -863,7 +1032,7 @@ export class Editor {
     }, on ? `Done: ${it.title}` : `Not done: ${it.title}`);
     const ticked = (this.plan.settings.setup?.done ?? []).includes(it.id);
     const actions: Record<SetupId, () => HTMLElement[]> = {
-      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("Import a scan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
+      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("House type", () => this.startSetup("starter")), btn("Import a scan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
       areas: () => [btn("Rooms", () => this.show("rooms"))],
       devices: () => [btn("Place devices automatically", () => this.runAutoPlace())],
       north: () => [btn("Sun and weather", () => this.scrollToHeading("Sun and weather")), btn("It's right", () => tick(true))],
@@ -2621,6 +2790,57 @@ export class Editor {
     ]);
   }
 
+  /** Opens the house type picker at the top of the Home tab. */
+  private openHouseTypes(): void {
+    this.houseTypes ??= new HouseTypes({
+      use: (plan, name) => this.useHouseType(plan, name),
+      close: () => {
+        this.houseTypes = null;
+        this.render();
+      },
+      reveal: (el) => this.scrollDrawerTo(el),
+    });
+    this.show("home");
+    this.body.scrollTop = 0;
+  }
+
+  /**
+   * A house type in place of the plan (asking first if it has rooms), its storeys linked to Home
+   * Assistant's floors of their level, then Smart Setup: one step to undo.
+   */
+  private useHouseType(house: Plan, name: string): void {
+    const go = () => {
+      const used = new Set<string>();
+      const floors = house.floors.map((f, i) => {
+        const ha = Object.values(this.hass.floors ?? {}).find((x) => x.level === i && !used.has(x.floor_id));
+        if (ha) used.add(ha.floor_id);
+        return { ...f, ha_floor: ha?.floor_id ?? null };
+      });
+      const { wall_exterior, wall_interior, exterior_finish } = house.settings;
+      const next: Plan = { ...structuredClone(this.plan), floors, settings: { ...this.plan.settings, wall_exterior, wall_interior, exterior_finish, exterior_color: null } };
+      const placed = autoPlace(next, this.hass);
+      this.houseTypes = null;
+      this.starting = true;
+      this.change((p) => Object.assign(p, placed.plan), false, `Start from ${name.toLowerCase()}`);
+      this.starting = false;
+      this.select(null);
+      this.host.view.viewer.setMode("house");
+      const rooms = floors.reduce((n, f) => n + f.rooms.length, 0);
+      const openings = floors.reduce((n, f) => n + f.openings.filter((o) => o.kind !== "passage").length, 0);
+      const r = placed.report;
+      this.showReport([
+        `${name}: ${rooms} rooms on ${floors.length} floor${floors.length === 1 ? "" : "s"}, ${openings} doors and windows. Drag the walls in the 2D plan to match your rooms.`,
+        `${r.placed.length} devices placed, ${r.linked.length} linked to doors, windows and TVs, ${r.roomsLinked.length} rooms linked to areas.`,
+        ...(r.unplaced.length ? [`${r.unplaced.length} devices are in areas without a room in the plan.`] : []),
+        ...r.roomsLinked.slice(0, 20),
+      ]);
+      const report = this.body.querySelector<HTMLElement>(".ed-report");
+      if (report) this.scrollDrawerTo(report);
+    };
+    if (this.plan.floors.some((f) => f.rooms.length)) this.confirm("Replace the current plan with this house type?", "Replace", go);
+    else go();
+  }
+
   private showReport(lines: string[]): void {
     this.show("home");
     const r = this.body.querySelector(".ed-report");
@@ -2661,16 +2881,19 @@ export class Editor {
   }
 
   /** A 3 x 3 m room beside the house on the current floor. */
-  private addRoom(): void {
-    const fi = this.host.view.viewer.mode === "floor" ? this.host.view.viewer.activeFloor : 0;
+  private addRoom(name = "New room", area: string | null = null): void {
+    // a room for an area goes on its floor
+    const haFloor = area ? this.hass.areas?.[area]?.floor_id : null;
+    const onFloor = haFloor ? this.plan.floors.findIndex((x) => x.ha_floor === haFloor) : -1;
+    const fi = onFloor >= 0 ? onFloor : this.host.view.viewer.mode === "floor" ? this.host.view.viewer.activeFloor : 0;
     const f = this.plan.floors[fi];
     if (!f) return;
     const all = f.rooms.flatMap((r) => r.points);
     const b = all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 0, maxZ: 3 };
     const x0 = b.maxX;
-    const room: Room = { id: newId("room"), name: "New room", area_id: null, floor: "wood", points: [[x0, b.minZ], [x0 + 3, b.minZ], [x0 + 3, b.minZ + 3], [x0, b.minZ + 3]] };
-    this.change((p) => p.floors[fi].rooms.push(room));
-    this.select({ floor: fi, kind: "room", id: room.id });
+    const room: Room = { id: newId("room"), name, area_id: area, floor: "wood", points: [[x0, b.minZ], [x0 + 3, b.minZ], [x0 + 3, b.minZ + 3], [x0, b.minZ + 3]] };
+    this.change((p) => p.floors[fi].rooms.push(room), false, `Add ${name}`);
+    if (!area) this.select({ floor: fi, kind: "room", id: room.id });
   }
 
   /** Opens the 2D plan with its fence tool. */
@@ -2777,7 +3000,11 @@ export class Editor {
   private async loadPlanFile(file: File | undefined): Promise<void> {
     if (!file) return;
     const plan = normalizePlan(JSON.parse(await file.text()));
-    this.confirm("Replace the current plan with this file?", "Replace", () => this.change((p) => Object.assign(p, plan)));
+    this.confirm("Replace the current plan with this file?", "Replace", () => {
+      this.change((p) => Object.assign(p, plan));
+      // its entities may have been renamed since, or be missing here
+      this.registryChanged();
+    });
   }
 
   // ------------------------------------------------------------------ small widgets

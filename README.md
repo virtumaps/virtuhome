@@ -134,6 +134,10 @@ Open **VirtuHome** in the sidebar and tap **Edit** (admins only).
   As in 3D, furniture, devices, doors and windows move only once they are selected.
   The fence tool draws a fence corner by corner: click its last point again to finish.
   Arrow keys nudge, R turns, Delete removes.
+- **Start from a house type:** Edit → Home → **Start from a house type…** gives a whole home (a
+  terrace, semi, detached house, bungalow, flat or open-plan single storey) with its rooms, doors,
+  windows, stairs and roof, fitted to your home's outside width and depth and mirrored if needed.
+  Smart Setup then links the rooms to areas and places the devices.
 - **Floors:** Edit → Home → Floors → **Add a floor** puts a storey on top; the 2D plan shows the floor
   below faintly to draw over. A roof's **Sits on** moves it onto another storey.
 - **Trace a floor plan picture:** no LiDAR phone needed. In the 2D plan, the picture button puts an
