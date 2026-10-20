@@ -438,9 +438,16 @@ export function emptyPlan(): Plan {
   return { version: 1, settings: { ...DEFAULT_SETTINGS }, floors: [] };
 }
 
-/** Fills in defaults so the rest of the code never sees a missing field. */
-export function normalizePlan(raw: unknown): Plan {
+/** What normalizePlan put right or left out of a plan as it was saved. */
+export type Repair = "height" | "fence" | "background" | "steps" | "roof" | "shape" | "slope" | "panel" | "link";
+
+/**
+ * Fills in defaults so the rest of the code never sees a missing field. With `repairs`, it also
+ * says what it put right or left out (the plan it returns is the same either way).
+ */
+export function normalizePlan(raw: unknown, repairs?: Repair[]): Plan {
   const p = (raw ?? {}) as Partial<Plan>;
+  if (repairs) findRepairs(p, repairs);
   const settings = { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) };
   const floors = (p.floors ?? []).map((f) => ({
     ...f,
@@ -458,6 +465,30 @@ export function normalizePlan(raw: unknown): Plan {
   floors.sort((a, b) => a.elevation - b.elevation);
   const links = normalizeLinks(p.links);
   return { version: 1, name: p.name, settings, floors, ...(links ? { links } : {}) };
+}
+
+/** What normalizePlan and its helpers below put right or leave out (keep the two in step). */
+function findRepairs(p: Partial<Plan>, out: Repair[]): void {
+  for (const f of p.floors ?? []) {
+    for (const x of f.furniture ?? []) if (repairHeight(x) !== x) out.push("height");
+    for (const x of f.fences ?? []) if ((x.points ?? []).length < 2) out.push("fence");
+    if (f.background && !normalizeBackground(f.background)) out.push("background");
+    for (const o of f.outdoor ?? []) {
+      const n = (o.points ?? []).length;
+      for (const st of o.steps ?? []) if (!(Number.isInteger(st.edge) && st.edge >= 0 && st.edge < n)) out.push("steps");
+    }
+    for (const r of f.roofs ?? []) {
+      if (!(r.w > 0.2 && r.d > 0.2)) {
+        out.push("roof");
+        continue;
+      }
+      if (!ROOF_SHAPES.has(r.shape)) out.push("shape");
+      if (typeof r.pitch === "number" && !(r.pitch >= 0 && r.pitch <= 75)) out.push("slope");
+      for (const it of r.items ?? []) if (it.kind === "solar" && it.panel != null && !panelSize(it.panel)) out.push("panel");
+    }
+  }
+  const links = p.links && typeof p.links === "object" ? Object.keys(p.links).length : 0;
+  for (let i = Object.keys(normalizeLinks(p.links) ?? {}).length; i < links; i++) out.push("link");
 }
 
 /** Registry ids kept for linked entities: only string ids, and nothing when there are none. */

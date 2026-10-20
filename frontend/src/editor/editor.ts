@@ -4,8 +4,8 @@
 //   Devices  what is placed, and what of Home Assistant is not yet
 //   Selected the tapped room, device or furniture: link entities, move, turn, remove
 // In edit mode a tap selects instead of switching, and devices, lamps and furniture can be dragged.
-import { mdiArrowULeftTop, mdiArrowURightTop, mdiClose, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
-import { autoPlace } from "../auto/placement";
+import { mdiAlertCircleOutline, mdiArrowULeftTop, mdiArrowURightTop, mdiCheckCircleOutline, mdiClose, mdiInformationOutline, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
+import { autoPlace, linkRoomsByName } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
 import {
@@ -38,6 +38,7 @@ import {
 import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
+import type { Check, Fix } from "../ui/checks";
 import { EDITOR_CSS } from "./styles";
 import { Collider, settle } from "./collide";
 import { imageUrl, uploadImage } from "./background";
@@ -755,7 +756,7 @@ export class Editor {
     const fileIn = h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
     const box = h("div", {},
-      ...this.linksSection(),
+      ...this.checkSection(),
       h("h4", {}, "Scan"),
       h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
       h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan…"),
@@ -830,15 +831,81 @@ export class Editor {
     if (this.tab === "home") this.render();
   }
 
-  /** Linked entities Home Assistant no longer has: the likely replacement to relink, or another to pick. */
-  private linksSection(): HTMLElement[] {
-    const hass = this.hass;
+  /** Check my setup: what stops VirtuHome working as it should, each with a fix where a safe one exists. */
+  private checkSection(): HTMLElement[] {
+    const view = this.host.view;
+    const icons = { ok: mdiCheckCircleOutline, note: mdiInformationOutline, problem: mdiAlertCircleOutline };
     const followed = this.host.followed ?? [];
-    const note = followed.length && this.dirty
-      ? h("p", { class: "ed-hint" }, `${followed.length === 1 ? "An entity was" : `${followed.length} entities were`} renamed in Home Assistant, and the plan followed. Save to keep it.`)
-      : null;
+    const cards = view.setupChecks(this.plan).map((c) => {
+      const buttons = c.fixes.map((f) => this.fixButton(f)).filter((b): b is HTMLButtonElement => !!b);
+      return h("div", { class: `ed-card ed-result ${c.level}` },
+        // all well takes one line
+        h("div", { class: "ed-row" }, h("span", { html: svg(icons[c.level]) }), h("b", {}, c.title), c.level === "ok" ? h("small", {}, c.text) : null),
+        c.level === "ok" ? null : h("p", { class: "ed-hint" }, c.text),
+        c.id === "links" && followed.length && this.dirty
+          ? h("p", { class: "ed-hint" }, `${followed.length === 1 ? "An entity was" : `${followed.length} entities were`} renamed in Home Assistant, and the plan followed. Save to keep it.`)
+          : null,
+        buttons.length ? h("div", { class: "ed-row" }, ...buttons) : null,
+        ...(c.fixes.includes("relink") ? this.linkFixes() : []),
+        ...(c.fixes.includes("add-rooms") ? this.areaFixes(c) : []),
+      );
+    });
+    return [
+      h("h4", {}, "Check my setup"),
+      h("p", { class: "ed-hint" }, "What stops VirtuHome working as it should, with a fix where there is one. Nothing changes until you press a fix."),
+      ...cards,
+      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: async () => {
+        await view.refreshServer();
+        this.render();
+      } }, "Check again")),
+    ];
+  }
+
+  /** A fix's button. Nothing changes until it is pressed. */
+  private fixButton(fix: Fix): HTMLButtonElement | null {
+    const view = this.host.view;
+    const hass = this.hass;
+    const run: Partial<Record<Fix, [string, () => unknown]>> = {
+      "link-rooms": ["Link rooms by name", () => this.change((p) => {
+        // areas Home Assistant no longer has are let go first
+        for (const r of p.floors.flatMap((f) => [...f.rooms, ...(f.outdoor ?? [])])) if (r.area_id && hass.areas && !hass.areas[r.area_id]) r.area_id = null;
+        linkRoomsByName(p, hass);
+      }, true, "Link rooms to areas")],
+      "open-rooms": ["Open Rooms", () => this.show("rooms")],
+      reload: ["Reload", () => location.reload()],
+      resource: ["Add it again", () => view.refreshServer(true)],
+      graphics: ["Try again", () => view.resetGraphics()],
+      renew: ["Renew now", async () => {
+        await hass.callWS({ type: "virtuhome/licence/refresh" }).catch(() => undefined);
+        await view.refreshServer();
+      }],
+      save: ["Save", () => {
+        this.unsaved = true;
+        return this.save();
+      }],
+    };
+    const f = run[fix];
+    if (!f) return null;
+    const b = h("button", { class: `ed-btn small${fix === "open-rooms" ? " ghost" : ""}`, onclick: async () => {
+      b.disabled = true;
+      await f[1]();
+      if (this.tab === "home") this.render();
+    } }, f[0]);
+    return b;
+  }
+
+  /** Areas with devices but no room: a room for each, named and linked like the area. */
+  private areaFixes(c: Check): HTMLElement[] {
+    return (c.areas ?? []).slice(0, 12).map((id) => {
+      const name = this.hass.areas?.[id]?.name ?? id;
+      return h("div", { class: "ed-item" }, h("span", {}, name), h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom(name, id) }, "Add a room"));
+    });
+  }
+
+  /** Linked entities Home Assistant no longer has: the likely replacement to relink, or another to pick. */
+  private linkFixes(): HTMLElement[] {
+    const hass = this.hass;
     const missing = missingLinks(this.plan, hass);
-    if (!missing.length) return note ? [note] : [];
     const registry = this.registryNow();
     const proposals = new Map<string, Proposal>();
     if (registry !== undefined) {
@@ -869,11 +936,7 @@ export class Editor {
       );
     });
     const out: (HTMLElement | null)[] = [
-      h("h4", {}, `Missing entities (${missing.length})`),
-      h("p", { class: "ed-hint" }, registry === undefined
-        ? "Renamed or removed in Home Assistant. Looking for what replaced them…"
-        : "Renamed or removed in Home Assistant. Relink each to what replaced it, or pick another."),
-      ...(note ? [note] : []),
+      registry === undefined ? h("p", { class: "ed-hint" }, "Looking for what replaced them…") : null,
       proposals.size > 1 ? h("div", { class: "ed-row" }, h("button", { class: "ed-btn small", onclick: () => relink([...proposals].map(([from, p]) => [from, p.entity])) }, `Relink all (${proposals.size})`)) : null,
       ...cards,
     ];
@@ -2637,16 +2700,19 @@ export class Editor {
   }
 
   /** A 3 x 3 m room beside the house on the current floor. */
-  private addRoom(): void {
-    const fi = this.host.view.viewer.mode === "floor" ? this.host.view.viewer.activeFloor : 0;
+  private addRoom(name = "New room", area: string | null = null): void {
+    // a room for an area goes on its floor
+    const haFloor = area ? this.hass.areas?.[area]?.floor_id : null;
+    const onFloor = haFloor ? this.plan.floors.findIndex((x) => x.ha_floor === haFloor) : -1;
+    const fi = onFloor >= 0 ? onFloor : this.host.view.viewer.mode === "floor" ? this.host.view.viewer.activeFloor : 0;
     const f = this.plan.floors[fi];
     if (!f) return;
     const all = f.rooms.flatMap((r) => r.points);
     const b = all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 0, maxZ: 3 };
     const x0 = b.maxX;
-    const room: Room = { id: newId("room"), name: "New room", area_id: null, floor: "wood", points: [[x0, b.minZ], [x0 + 3, b.minZ], [x0 + 3, b.minZ + 3], [x0, b.minZ + 3]] };
-    this.change((p) => p.floors[fi].rooms.push(room));
-    this.select({ floor: fi, kind: "room", id: room.id });
+    const room: Room = { id: newId("room"), name, area_id: area, floor: "wood", points: [[x0, b.minZ], [x0 + 3, b.minZ], [x0 + 3, b.minZ + 3], [x0, b.minZ + 3]] };
+    this.change((p) => p.floors[fi].rooms.push(room), false, `Add ${name}`);
+    if (!area) this.select({ floor: fi, kind: "room", id: room.id });
   }
 
   /** Opens the 2D plan with its fence tool. */

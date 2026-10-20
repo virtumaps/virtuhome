@@ -24,6 +24,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
   };
 
   for (const floor of plan.floors) {
+    for (const o of floor.outdoor ?? []) if (o.area_id) areas[o.area_id] = { area_id: o.area_id, name: o.name, floor_id: floor.ha_floor ?? null };
     for (const room of floor.rooms) {
       if (!room.area_id) continue;
       areas[room.area_id] = { area_id: room.area_id, name: room.name, floor_id: floor.ha_floor ?? null };
@@ -157,6 +158,10 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
       // replays read the recorder's history; the demo has a pretend day for them
       if (msg.type === "history/history_during_period") return demoHistory(msg as Parameters<typeof demoHistory>[0], states) as T;
       if (msg.type === "virtuhome/background/upload") return demoUpload(msg) as T;
+      // Check my setup: all well with the card, and no licence
+      if (msg.type === "virtuhome/checks" || msg.type === "virtuhome/checks/fix_card") {
+        return { version: __VERSION__, dashboard: { mode: "storage", urls: [`/local/virtuhome/card-loader.js?v=${__VERSION__}`], current: true }, licence: { status: "none", error: null, extensions: [] } } as T;
+      }
       if (msg.type === "config/entity_registry/list") {
         return Object.values(entities).map((e) => ({ id: regId(e.entity_id), entity_id: e.entity_id, device_id: e.device_id ?? null, area_id: e.area_id ?? null, platform: e.platform ?? "demo" })) as T;
       }

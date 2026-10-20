@@ -1,20 +1,21 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
 import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
-import { normalizePlan, spaces, type Plan, type ThemeName } from "../model/plan";
+import { normalizePlan, spaces, type Plan, type Repair, type ThemeName } from "../model/plan";
 import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
 import { HassLive, initials, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
 import { EnergyLive, type EnergyNow } from "../live/energy";
 import { hereText } from "../live/presence";
-import { loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
+import { extensionFailures, loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
-import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
+import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { VIEW_CSS } from "./styles";
 import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
 import { SkyPanel, SKY_CSS, type SkyPick } from "./sky";
+import { checkCounts, runChecks, type Check, type ServerChecks } from "./checks";
 
 export interface ViewConfig {
   /** Floor to open on (id, name or index); otherwise the whole house. */
@@ -104,6 +105,12 @@ export class VhView {
   private followed: [string, string][] = [];
   /** The entity registry last seen (Home Assistant hands over a new object when it changes). */
   private registrySeen: unknown = null;
+  /** Check my setup, for admins: what normalizePlan put right, what the integration says, the problems for the dot on Edit. */
+  private repairs: Repair[] = [];
+  private server: ServerChecks | null | undefined = undefined;
+  private problems = 0;
+  private checksSeen: unknown[] = [];
+  private reported = "";
   private editor: { onHit(hit: Hit): void; el: HTMLElement; registryChanged(): void } | null = null;
   private alarmKey = "";
   private hassListeners = new Set<(h: Hass) => void>();
@@ -286,11 +293,16 @@ export class VhView {
     else this.checkParked();
     if (!this.unregister) {
       this.unregister = registerView(this.handle());
-      loadExtensions(h, this.config.dev_extensions ?? []);
+      // an extension that can't load shows in Check my setup
+      loadExtensions(h, this.config.dev_extensions ?? []).then(() => this.updateChecks());
     }
     if (h.entities !== this.registrySeen) {
       this.registrySeen = h.entities;
       this.followRenames();
+    }
+    if (h.entities !== this.checksSeen[0] || h.areas !== this.checksSeen[1] || h.devices !== this.checksSeen[2]) {
+      this.checksSeen = [h.entities, h.areas, h.devices];
+      this.updateChecks();
     }
     for (const cb of this.hassListeners) {
       try {
@@ -732,7 +744,8 @@ export class VhView {
       this.unsub = await this._hass.connection.subscribeMessage<{ plan: unknown; revision: number }>(
         (msg) => {
           this.revision = msg.revision;
-          this.savedPlan = normalizePlan(msg.plan);
+          this.repairs = [];
+          this.savedPlan = normalizePlan(msg.plan, this.repairs);
           this.baseJson = JSON.stringify(this.savedPlan);
           this.unsavedFrom = null;
           this.followed = [];
@@ -768,6 +781,57 @@ export class VhView {
     this.followed.push(...moved);
     if (this.savedPlan === plan) this.savedPlan = next;
     this.applyPlan(next);
+  }
+
+  /** Check my setup for a plan (the editor's, or the one shown). */
+  setupChecks(plan: Plan): Check[] {
+    const h = this._hass!;
+    return runChecks({
+      plan, hass: h, repairs: this.repairs, server: this.server, version: __VERSION__,
+      graphics: { tier: this.viewer.tier, auto: this.tierAuto, ...autoTierInfo() }, extensions: extensionFailures(),
+    });
+  }
+
+  /** Asks the integration about the card, its version and the licence (admins only). */
+  async refreshServer(fix = false): Promise<void> {
+    try {
+      this.server = await this._hass!.callWS<ServerChecks>({ type: fix ? "virtuhome/checks/fix_card" : "virtuhome/checks" });
+    } catch {
+      this.server = null;
+    }
+    this.updateChecks();
+  }
+
+  /** Lets Automatic graphics go back up after stepping down. */
+  resetGraphics(): void {
+    clearCap();
+    this.setGraphics("auto");
+  }
+
+  /**
+   * The problems Check my setup finds, for the dot on Edit (admins of the panel only). Runs when the
+   * plan or Home Assistant's registries change, never per frame. The counts go to the integration
+   * for the diagnostics file.
+   */
+  private updateChecks(): void {
+    if (!this.canEdit() || !this.plan || this.editor) return;
+    if (this.server === undefined) {
+      this.server = null;
+      this.refreshServer();
+      return;
+    }
+    const checks = this.setupChecks(this.plan);
+    const problems = checks.filter((c) => c.level === "problem").length;
+    if (problems !== this.problems) {
+      this.problems = problems;
+      this.renderChips();
+    }
+    const counts = checkCounts(checks);
+    const key = JSON.stringify(counts);
+    if (this.server && key !== this.reported) {
+      this.reported = key;
+      this._hass!.callWS({ type: "virtuhome/checks", report: counts }).catch(() => undefined);
+    }
   }
 
   /** Shows a plan that is not saved (the editor's working copy). */
@@ -813,6 +877,7 @@ export class VhView {
     // the weather may have been switched off or another entity picked
     this.updateSky();
     this.renderChips();
+    this.updateChecks();
     for (const cb of this.planListeners) {
       try {
         cb(plan);
@@ -1003,6 +1068,7 @@ export class VhView {
     const next = TIERS[i - 1];
     capTier(next);
     this.viewer.setTier(next);
+    this.updateChecks();
     this.toast(`Switched to ${TIER_NAMES[next]} graphics to keep it smooth`);
   }
 
@@ -1049,8 +1115,9 @@ export class VhView {
     const edit = () => {
       if (!this.canEdit() || this.editor) return;
       const b = document.createElement("button");
-      b.className = "vh-chip vh-edit";
+      b.className = `vh-chip vh-edit${this.problems ? " dot" : ""}`;
       b.innerHTML = `${svg(mdiPencilOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}Edit`;
+      if (this.problems) b.title = "Check my setup found something to fix (Edit → Home)";
       b.onclick = () => this.openEditor();
       const spacer = document.createElement("span");
       spacer.className = "vh-spacer";
@@ -1134,6 +1201,7 @@ export class VhView {
         if (this.savedPlan) this.applyPlan(this.savedPlan);
         else if (this.plan && !this.plan.floors.length) this.applyPlan(this.plan);
         this.renderChips();
+        this.updateChecks();
       },
     });
     this.editor = editor;
