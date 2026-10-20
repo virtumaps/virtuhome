@@ -117,6 +117,11 @@ describe("finding the rooms in floor plan pictures", () => {
       totals.opened += sc.openings;
       console.log(`${file.replace(".json", "").padEnd(16)} rooms ${sc.rooms}/${truth.rooms.length}  openings ${sc.openings}/${truth.openings.length}  ${png.width}x${png.height} in ${Math.round(ms)} ms`);
       expect(ms).toBeLessThan(3000);
+      // on the plan (the picture's middle at the origin), each opening sits where it is in the picture
+      for (const g of res.gaps) {
+        const p: Vec2 = [(g.pixel[0] - png.width / 2) * truth.scale, (g.pixel[1] - png.height / 2) * truth.scale];
+        expect(Math.hypot(g.at[0] - p[0], g.at[1] - p[1])).toBeLessThan(0.05);
+      }
     });
   }
 

@@ -119,10 +119,10 @@ export function findRooms(input: FindInput): FindResult {
   const gaps = findGaps(parts, ink, wall, w, h, s, kept.map((r) => r.pts)).map((g) => {
     const room = out[g.room];
     const a = room.points[g.edge], b = room.points[(g.edge + 1) % room.points.length];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const offset = Math.max(g.width / 2, Math.min(len - g.width / 2, g.along * s));
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), width = g.width * s;
+    const offset = Math.max(width / 2, Math.min(len - width / 2, g.along * s));
     const at: Vec2 = [a[0] + ((b[0] - a[0]) * offset) / len, a[1] + ((b[1] - a[1]) * offset) / len];
-    const gap: FoundGap = { kind: g.kind, room: g.room, edge: g.edge, offset: round3s(offset), width: round3s(g.width * s), pixel: round2(toPicture(g.centre)), at: round3(at) };
+    const gap: FoundGap = { kind: g.kind, room: g.room, edge: g.edge, offset: round3s(offset), width: round3s(width), pixel: round2(toPicture(g.centre)), at: round3(at) };
     if (g.kind === "door") {
       // as the plan has it: "left" hangs on the end nearer the start of the wall's line
       let ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
