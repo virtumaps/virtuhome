@@ -13,11 +13,13 @@ const out = dev
   ? new URL("./dev/out/ha/", import.meta.url).pathname
   : new URL("../custom_components/virtuhome/frontend/", import.meta.url).pathname;
 const version = JSON.parse(readFileSync(new URL("../custom_components/virtuhome/manifest.json", import.meta.url))).version;
+// the oldest browsers supported (test/browsers.test.ts checks the build against them)
+const browsers = JSON.parse(readFileSync(new URL("./browsers.json", import.meta.url)));
 
 const common = {
   bundle: true,
   format: "esm",
-  target: ["es2020", "chrome87", "safari15"],
+  target: browsers.esbuild,
   minify: !dev || fast,
   sourcemap: dev && !fast ? "inline" : false,
   legalComments: "none",

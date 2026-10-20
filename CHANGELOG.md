@@ -13,6 +13,8 @@
   the plan counts for the room it is in, like a thermostat; one that isn't placed counts for its area.
 
 ### Fixed
+- The editor opens on browsers older than Chrome 98 and Safari 15.4 (older wall tablets and iPads); it
+  stopped with an error there before.
 - On a wide screen the Graphics menu opened far from its button, in the middle of the view; it sits
   beside the buttons again (and left of the editor while editing).
 - The greenhouse's door and floor flickered where its glass lay on the frame, and a pane ran across
@@ -21,6 +23,7 @@
   flickered the same way and no longer do.
 - Dragging something with glass in it (a greenhouse, a summerhouse, a shower) left its glass behind
   until it was let go; the glass moves with it now.
+
 
 ## 0.9.0
 

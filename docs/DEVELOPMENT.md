@@ -50,6 +50,9 @@ questions on it, label it `needs info`, and remove `in progress`.
 - The performance rules in [ARCHITECTURE.md](ARCHITECTURE.md) still hold: nothing renders while
   nothing changes, no extra draw calls per device, no per-pixel lighting, no allocations in the render
   loop.
+- It works in the oldest supported browsers (`frontend/browsers.json`: Chrome 87, Safari 15). The build
+  targets them, and `frontend/test/browsers.test.ts` fails on newer functions or CSS the build can't
+  turn into older code; add a stand-in to `frontend/src/compat.ts` when one is worth it.
 - Old plans still load. Plan format changes go through `normalizePlan`.
 - User-visible changes get a line in `CHANGELOG.md` under `## Unreleased` (add the heading at the top
   if it is missing), in the same plain style as the existing entries.

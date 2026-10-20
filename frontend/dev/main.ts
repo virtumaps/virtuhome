@@ -4,6 +4,7 @@
 //   ?plan=demo|<file>     the demo house, or a plan JSON from dev/plans/<file>.json
 //   ?plan=catalog[&cat=<category>]  every built-in item in a labelled grid
 //   ?theme=day|night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?stats
+import "../src/compat";
 import { createConnection, createLongLivedTokenAuth, subscribeEntities, type Connection } from "home-assistant-js-websocket";
 import { normalizePlan, type Plan } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";

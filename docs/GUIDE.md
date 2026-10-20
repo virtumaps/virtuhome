@@ -494,6 +494,12 @@ only when you use them: **Line up with the map** (your home's location, to OpenS
 **Will it slow down my tablet?** It draws nothing while nothing changes, and each floor is one or two
 draw calls. On slow tablets pick **Tablet** graphics.
 
+**Which tablets and browsers work?** Anything with WebGL 2 and a browser at least as new as
+**Chrome 87** or **Safari 15**. On Android that includes the Android System WebView, which Fully Kiosk
+and the Home Assistant app use (on a Fire tablet, update it in the Amazon Appstore if it is older). On
+iPhone and iPad it means iOS 15 or later, which runs from the iPad Air 2 and the 5th-generation iPad
+on. A Fire HD 8 (2022) runs it well with **Tablet** graphics.
+
 **Where is my plan kept?** In Home Assistant (`.storage/virtuhome.plan`, with the last 20 restore
 points in `.storage/virtuhome.history`), so Home Assistant's backups include it.
 
