@@ -884,10 +884,10 @@ export class Editor {
       card: () => [btn("Done", () => tick(true))],
       tablet: () => [btn("How", () => window.open("https://github.com/virtumaps/virtuhome/blob/main/docs/GUIDE.md#wall-tablets", "_blank", "noopener")), btn("Done", () => tick(true))],
     };
-    const icon = h("span", { class: `ed-check${it.done ? " on" : ""}`, html: svg(it.done ? mdiCheckCircle : mdiCheckboxBlankCircleOutline) });
+    const icon = h("span", { class: `ed-tick${it.done ? " on" : ""}`, html: svg(it.done ? mdiCheckCircle : mdiCheckboxBlankCircleOutline) });
     // a step ticked by hand can be unticked
     const mark = it.manual && ticked
-      ? h("button", { class: "ed-check on", title: "Not done after all", html: svg(mdiCheckCircle), onclick: () => tick(false) })
+      ? h("button", { class: "ed-tick on", title: "Not done after all", html: svg(mdiCheckCircle), onclick: () => tick(false) })
       : icon;
     return h("div", { class: `ed-step${it.done ? " done" : ""}` },
       mark,

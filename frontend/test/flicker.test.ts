@@ -206,3 +206,18 @@ describe("no flickering roofs", { timeout: 30_000 }, () => {
     expect(flicker(roofed({ shape: "gable", overhang: 0 }), null, 0, true)).toEqual([]);
   });
 });
+
+describe("no flickering in the house types", { timeout: 60_000 }, async () => {
+  const { fitRange, STARTERS, starterPlan } = await import("../src/starters/houses");
+  for (const s of STARTERS) {
+    it(`${s.name}, as drawn, mirrored and bigger, walls up and cut down`, () => {
+      const own = fitRange(s.plan())!;
+      for (const plan of [starterPlan(s.id), starterPlan(s.id, { mirror: true }), starterPlan(s.id, { width: own.width * 1.3, depth: own.depth * 1.2 })]) {
+        plan.floors.forEach((_, fi) => {
+          expect(flicker(plan, null, fi, true)).toEqual([]);
+          expect(flicker(plan, 1.15, fi)).toEqual([]);
+        });
+      }
+    });
+  }
+});

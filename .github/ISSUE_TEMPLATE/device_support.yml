@@ -1,0 +1,40 @@
+name: Device support
+description: A device or integration VirtuHome should show, or shows wrongly
+labels: ["device support", "proposed"]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Device and integration
+      placeholder: "e.g. Tado X radiator valves, through the Tado integration"
+    validations:
+      required: true
+  - type: textarea
+    id: wanted
+    attributes:
+      label: What should VirtuHome show or do with it?
+      placeholder: "e.g. show the valve's setpoint on the room, and glow while it heats"
+    validations:
+      required: true
+  - type: textarea
+    id: entities
+    attributes:
+      label: Its entities, with their state and attributes
+      description: >-
+        In Home Assistant open Developer tools → States, find each entity of the device and copy its
+        entity id, state and attributes here. Remove anything private.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or photo
+      description: How it looks in VirtuHome now, or a photo of the device. Optional.
+  - type: input
+    id: versions
+    attributes:
+      label: VirtuHome and Home Assistant versions
+      placeholder: "VirtuHome 0.9.0, Home Assistant 2026.10.1"
+    validations:
+      required: true
