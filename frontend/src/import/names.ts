@@ -124,6 +124,9 @@ function lampFor(p: PieceInfo): string {
   return "lamp_floor";
 }
 
+/** A built-in furniture type (and not something every object has, like "constructor"). */
+export const isType = (t: string): boolean => Object.prototype.hasOwnProperty.call(FURNITURE, t);
+
 /** "Kühlschrank" -> "kuhlschrank". */
 const plain = (s: string): string => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -133,8 +136,8 @@ const plain = (s: string): string => s.normalize("NFD").replace(/[̀-ͯ]/g, "").
  */
 export function furnitureFor(name: string, p: PieceInfo = {}): string | null {
   const key = plain(name).trim().replace(/[\s-]+/g, "_");
-  if (FURNITURE[key]) return key;
-  if (ALIASES[key]) return ALIASES[key];
+  if (isType(key)) return key;
+  if (Object.prototype.hasOwnProperty.call(ALIASES, key)) return ALIASES[key];
   const text = plain(name).replace(/[_#]/g, " ");
   for (const [re, type] of NAMES) {
     if (re.test(text)) return typeof type === "string" ? type : type(p);

@@ -51,18 +51,19 @@ describe("import drafts", () => {
           { at: [2, 0.2], type: "kitchen_wall", elevation: 1.45 },
           { at: [0.5, 2.5], name: "Ironing board", w: 1.2, d: 0.35, h: 0.9 },
           { at: [1, 0.1], name: "Curtains" },
+          { at: [3, 2], type: "constructor", name: "toString" },
         ],
       }],
     });
     const f = plan.floors[0];
-    expect(f.furniture.map((x) => x.type)).toEqual(["sofa", "fridge", "lamp_ceiling", "kitchen_wall", "column"]);
+    expect(f.furniture.map((x) => x.type)).toEqual(["sofa", "fridge", "lamp_ceiling", "kitchen_wall", "column", "column"]);
     const [sofa, fridge, lamp, wall, box] = f.furniture;
     expect(sofa).toMatchObject({ rotation: 270, w: 2, d: 0.9, h: 0.8 });
     expect(fridge.h).toBe(1.8);
     expect(lamp.y).toBeUndefined();
     expect(wall.y).toBe(1.45);
     expect(box).toMatchObject({ w: 1.2, d: 0.35, h: 0.9 });
-    expect(summary).toMatchObject({ doors: 1, windows: 0, furniture: 5, boxes: ["Ironing board"], left: ["Roof window at 9.0, 9.0 is on no room edge", "Curtains"] });
+    expect(summary).toMatchObject({ doors: 1, windows: 0, furniture: 6, boxes: ["Ironing board", "toString"], left: ["Roof window at 9.0, 9.0 is on no room edge", "Curtains"] });
     expect(layoutWalls(f, plan.settings).orphans).toEqual([]);
     expect(normalizePlan(structuredClone(plan))).toEqual(plan);
   });

@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, newId, normalizePlan, type Floor, type Furniture, typ
 import { add, area, cross, dist, dot, norm, outwardNormal, scale, segmentDistance, sub } from "../model/geom";
 import { layoutWalls } from "../model/walls";
 import { CEILING_LAMPS, FURNITURE } from "../scene/furniture-lib";
-import { furnitureFor } from "./names";
+import { furnitureFor, isType } from "./names";
 
 export interface DraftRoom {
   name?: string;
@@ -168,7 +168,7 @@ export function buildPlan(draft: Draft): { plan: Plan; summary: ImportSummary } 
     for (const p of df.furniture) {
       const label = p.name || p.type || "A piece";
       const info = { w: p.w ?? undefined, h: p.h ?? undefined, elevation: p.elevation ?? undefined, storey: floor.height, light: p.light };
-      let type = p.type && FURNITURE[p.type] ? p.type : furnitureFor(p.type || p.name || "", info);
+      let type = p.type && isType(p.type) ? p.type : furnitureFor(p.type || p.name || "", info);
       if (type === null && p.type && p.name) type = furnitureFor(p.name, info);
       if (type === "") {
         left.push(label);
