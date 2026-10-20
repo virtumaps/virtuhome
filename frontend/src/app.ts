@@ -1,4 +1,5 @@
 // The 3D engine, loaded on demand by virtuhome-loader.js.
+import "./compat";
 import { CardImpl, type CardConfig } from "./ui/card";
 import { PanelImpl } from "./ui/panel";
 

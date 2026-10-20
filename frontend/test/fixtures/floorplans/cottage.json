@@ -1,0 +1,21 @@
+{"picture":"cottage.png","width":1450,"height":1475,"scale":0.008,
+ "rooms": [
+  {"name":"Sitting Room","points":[[275,350],[800,350],[800,925],[275,925]]},
+  {"name":"Kitchen","points":[[800,350],[1225,350],[1225,925],[800,925]]},
+  {"name":"Utility","points":[[275,925],[675,925],[675,1200],[275,1200]]},
+  {"name":"Bathroom","points":[[675,925],[1225,925],[1225,1200],[675,1200]]}
+ ],
+ "openings": [
+  {"kind":"door","at":[925,350],"width":0.85},
+  {"kind":"door","at":[800,775],"width":0.75},
+  {"kind":"door","at":[900,925],"width":0.7},
+  {"kind":"door","at":[475,925],"width":0.75},
+  {"kind":"door","at":[275,1062.5],"width":0.85},
+  {"kind":"window","at":[537.5,350],"width":1.2},
+  {"kind":"window","at":[1125,350],"width":0.9},
+  {"kind":"window","at":[275,637.5],"width":1},
+  {"kind":"window","at":[1225,637.5],"width":1},
+  {"kind":"window","at":[950,1200],"width":0.6},
+  {"kind":"window","at":[475,1200],"width":0.8}
+ ]
+}

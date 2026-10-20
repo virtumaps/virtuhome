@@ -5,6 +5,7 @@
 //   ?plan=empty           no home yet (the first run), in a Home Assistant with the demo home's areas and devices
 //   ?plan=catalog[&cat=<category>]  every built-in item in a labelled grid
 //   ?theme=day|night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?stats
+import "../src/compat";
 import { createConnection, createLongLivedTokenAuth, subscribeEntities, type Connection } from "home-assistant-js-websocket";
 import { emptyPlan, normalizePlan, type Plan } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
@@ -12,7 +13,7 @@ import { VhView } from "../src/ui/view";
 import type { WallMode, Quality } from "../src/scene/viewer";
 import { DEMO_PLAN } from "./demo-plan";
 import { catalogPlan } from "./catalog-plan";
-import { demoHass } from "./demo-hass";
+import { demoEdits, demoHass } from "./demo-hass";
 import { importRoomPlan } from "../src/import/roomplan";
 import { autoPlace } from "../src/auto/placement";
 
@@ -113,6 +114,7 @@ async function main(): Promise<void> {
   const floor = q.get("floor");
   if (floor !== null) view.showFloor(Number(floor));
   (window as unknown as { vh: VhView }).vh = view;
+  (window as unknown as { demo: typeof demoEdits }).demo = demoEdits;
   window.dispatchEvent(new Event("virtuhome-ready"));
 }
 

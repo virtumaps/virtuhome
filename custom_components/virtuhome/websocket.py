@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import time
 from typing import Any
 
 import voluptuous as vol
@@ -12,10 +13,12 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.loader import async_get_integration
 
+from . import card_resource
 from .backgrounds import CHUNK_BYTES, MAX_BYTES, BackgroundError
 from .const import DOMAIN
 from .schema import ID, PLAN
 from .licensing import LicenceError
+from .report import CHECK_IDS
 from .storage import PlanStore
 
 
@@ -23,7 +26,7 @@ def async_register(hass: HomeAssistant) -> None:
     for command in (
         ws_info, ws_get, ws_save, ws_subscribe, ws_history_list, ws_history_restore,
         ws_licence_get, ws_licence_activate, ws_licence_refresh, ws_licence_remove, ws_catalog,
-        ws_background_upload,
+        ws_background_upload, ws_checks, ws_checks_fix_card,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -136,6 +139,48 @@ async def ws_history_restore(
         return
     revision = await store.async_save(snapshot["plan"], label=f"Restored {snapshot['id']}")
     connection.send_result(msg["id"], {"revision": revision})
+
+
+# ---------------------------------------------------------------------------- check my setup
+
+
+async def _checks_state(hass: HomeAssistant, store: PlanStore) -> dict[str, Any]:
+    version = str((await async_get_integration(hass, DOMAIN)).version)
+    manager = store.extension_manager
+    return {
+        "version": version,
+        "dashboard": await card_resource.async_state(hass, version),
+        "licence": manager.summary() if manager else None,
+    }
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "virtuhome/checks",
+        # what Check my setup found: a count per check, nothing that names the home
+        vol.Optional("report"): vol.Schema({vol.In(CHECK_IDS): vol.All(int, vol.Range(min=0, max=100000))}),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_checks(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """The version, how dashboards get the card and the licence; keeps the frontend's counts for diagnostics."""
+    if (store := _store(hass, connection, msg)) is None:
+        return
+    if "report" in msg:
+        store.checks = {"time": time.time(), "counts": dict(msg["report"])}
+    connection.send_result(msg["id"], await _checks_state(hass, store))
+
+
+@websocket_api.websocket_command({vol.Required("type"): "virtuhome/checks/fix_card"})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_checks_fix_card(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Adds the card to the dashboards' resources again, as at startup, and checks again."""
+    if (store := _store(hass, connection, msg)) is None:
+        return
+    await card_resource.async_register(hass, str((await async_get_integration(hass, DOMAIN)).version))
+    connection.send_result(msg["id"], await _checks_state(hass, store))
 
 
 # ---------------------------------------------------------------------------- floor plan images

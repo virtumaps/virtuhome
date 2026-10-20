@@ -53,6 +53,8 @@ export const VIEW_CSS = /* css */ `
   box-shadow: 0 1px 6px rgba(0,0,0,0.16); display: inline-flex; gap: 6px; align-items: center;
 }
 .vh-chip.on { background: var(--vh-chip-on); box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
+.vh-edit.dot { position: relative; }
+.vh-edit.dot::after { content: ""; position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--vh-glass); }
 .vh-spacer { flex: 1; }
 .vh-tools { position: absolute; right: 10px; bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
 .vh-icon {
