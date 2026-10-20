@@ -13,6 +13,10 @@ export const VIEW_CSS = /* css */ `
   --vh-chip: rgba(0,0,0,0.05); --vh-chip-on: rgba(47,124,246,0.16); --vh-line: rgba(0,0,0,0.08);
 }
 .vh-canvas { position: absolute; inset: 0; }
+.vh-root.vh-new .vh-canvas, .vh-root.vh-new .vh-tools { visibility: hidden; }
+/* the 3D view's own sky is hidden: the first run needs a background in the theme's colours */
+.vh-root.vh-new { background: #0c1220; }
+.vh-root.vh-new.day { background: #e4e8ee; }
 .vh-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .vh-label {
   position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: auto; cursor: pointer;
@@ -82,6 +86,19 @@ export const VIEW_CSS = /* css */ `
 }
 .vh-empty h2 { margin: 0 0 8px; font-size: 20px; }
 .vh-empty p { margin: 0 0 14px; color: var(--vh-dim); max-width: 440px; }
+.vh-start {
+  pointer-events: auto; width: min(460px, 100%); max-height: 100%; overflow: auto; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 8px; align-items: stretch; padding: 4px;
+}
+.vh-start p { margin: 0 auto 6px; }
+.vh-start-choice {
+  border: 0; border-radius: 14px; padding: 12px 16px; font: inherit; text-align: left; cursor: pointer;
+  background: var(--vh-chip); color: var(--vh-text); box-shadow: inset 0 0 0 1px var(--vh-line);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.vh-start-choice b { font-size: 15px; }
+.vh-start-choice span { color: var(--vh-dim); font-size: 13px; line-height: 1.35; }
+.vh-start-choice:hover, .vh-start-choice:focus-visible { box-shadow: inset 0 0 0 1.5px var(--vh-accent); background: var(--vh-chip-on); outline: none; }
 .vh-toast {
   position: absolute; left: 50%; bottom: 18px; transform: translate(-50%, 30px); opacity: 0; transition: all 0.25s;
   background: var(--vh-glass); color: var(--vh-text); border-radius: 14px; padding: 8px 14px; font-size: 13px; pointer-events: none;

@@ -10,6 +10,7 @@ import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } f
 import { capTier, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
+import { isNewHome, START_CHOICES, type StartKind } from "./setup";
 import { VIEW_CSS } from "./styles";
 import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
@@ -98,8 +99,10 @@ export class VhView {
   private revision: number | null = null;
   /** The plan as saved; while editing, the view shows the editor's copy instead. */
   private savedPlan: Plan | null = null;
-  private editor: { onHit(hit: Hit): void; el: HTMLElement } | null = null;
+  private editor: { onHit(hit: Hit): void; el: HTMLElement; startSetup(kind: StartKind): void } | null = null;
   private alarmKey = "";
+  /** While the first run shows: for whom it was drawn (who may edit), else "". */
+  private firstRun = "";
   private hassListeners = new Set<(h: Hass) => void>();
   private planListeners = new Set<(p: Plan) => void>();
   private touchListeners = new Set<() => void>();
@@ -270,6 +273,8 @@ export class VhView {
   set hass(h: Hass) {
     this._hass = h;
     this.subscribe();
+    // who may edit is known once the user is: the first run shows its choices or who can set it up
+    if (this.firstRun && this.firstRun !== this.firstRunKey()) this.showFirstRun();
     const energyChanged = this.energy.update(h);
     // while a replay shows the past, live states wait for it to end
     if (!this.replayed) this.draw(h);
@@ -725,6 +730,7 @@ export class VhView {
         { type: "virtuhome/plan/subscribe" },
       );
     } catch (err) {
+      this.firstRun = "";
       this.showEmpty("VirtuHome is not set up", `Add the VirtuHome integration under Settings → Devices & services. (${(err as Error).message ?? err})`);
     } finally {
       this.subscribing = false;
@@ -749,11 +755,13 @@ export class VhView {
     }
     if (!plan.floors.length) {
       if (this.editor) return;
-      this.showEmpty("No home yet", this.canEdit() ? "Tap Edit to import a scan of your home, or trace an estate agent's floor plan in the 2D plan." : "Open VirtuHome in the sidebar to import a scan of your home or draw it.");
+      this.showFirstRun();
       this.renderChips();
       return;
     }
-    this.empty.hidden = true;
+    // floors but no rooms yet (a picture to trace, an empty storey): still the first run
+    if (isNewHome(plan) && !this.editor) this.showFirstRun();
+    else this.hideFirstRun();
     this.hasPanels = plan.floors.some((f) => f.furniture.some((x) => x.type === "solar_panels")
       || (f.roofs ?? []).some((r) => (r.items ?? []).some((it) => it.kind === "solar")));
     this.roofBtn.hidden = !plan.floors.some((f) => (f.roofs ?? []).length > 0);
@@ -1062,7 +1070,7 @@ export class VhView {
     // the editor works on the house as it is now
     this.endReplay();
     this.closeSheet();
-    this.empty.hidden = true;
+    this.hideFirstRun();
     const { Editor } = await import("../editor/editor");
     const hass = this._hass;
     const editor = new Editor({
@@ -1200,6 +1208,43 @@ export class VhView {
     this.toastEl.classList.add("show");
     window.clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => this.toastEl.classList.remove("show"), 1600);
+  }
+
+  /** A home with no rooms: the ways to get it in for those who can edit, else who can. */
+  private firstRunKey(): string {
+    return `${this.canEdit()}|${this._hass?.user?.is_admin ?? "?"}`;
+  }
+
+  private hideFirstRun(): void {
+    this.firstRun = "";
+    this.empty.hidden = true;
+    this.root.classList.remove("vh-new");
+  }
+
+  private showFirstRun(): void {
+    this.firstRun = this.firstRunKey();
+    // nothing to see yet: the ground alone looks broken behind the choices
+    this.root.classList.add("vh-new");
+    if (!this.canEdit()) {
+      this.showEmpty("No home yet", this._hass?.user?.is_admin
+        ? "Open VirtuHome in the sidebar and tap Edit to get your home in."
+        : "An admin of this Home Assistant can set VirtuHome up, from VirtuHome in the sidebar.");
+      return;
+    }
+    this.empty.hidden = false;
+    const box = document.createElement("div");
+    box.className = "vh-start";
+    box.innerHTML = `<h2>Let's get your home in</h2><p>Pick a way to start. Everything can be changed afterwards.</p>`;
+    for (const c of START_CHOICES) {
+      const b = document.createElement("button");
+      b.className = "vh-start-choice";
+      b.innerHTML = `<b></b><span></span>`;
+      b.querySelector("b")!.textContent = c.title;
+      b.querySelector("span")!.textContent = c.text;
+      b.onclick = () => void this.openEditor().then(() => this.editor?.startSetup(c.kind));
+      box.append(b);
+    }
+    this.empty.replaceChildren(box);
   }
 
   private showEmpty(title: string, text: string): void {
