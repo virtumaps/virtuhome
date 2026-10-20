@@ -3,6 +3,11 @@
 Thank you for helping. VirtuHome is free to use and its source is open to read and improve; bug
 reports, ideas, furniture models, translations and pull requests are all welcome.
 
+Questions and ideas go to [Discussions](https://github.com/virtumaps/virtuhome/discussions), and
+[SUPPORT.md](SUPPORT.md) says where everything else goes. Issues labelled
+[`good first issue`](https://github.com/virtumaps/virtuhome/labels/good%20first%20issue) are a good
+place to start.
+
 ## Getting set up
 
 ```bash
@@ -18,7 +23,7 @@ To see your own home in the dev harness, start it with your Home Assistant in th
 `?hass=live`. Put your own plan files in `frontend/dev/plans/` and scans in `frontend/dev/scans/`
 (both git-ignored) and open `?plan=<name>` or `?scan=<folder>`.
 
-Python: `pip install cryptography pytest && pytest tests`.
+Python: `pip install cryptography pytest voluptuous && pytest tests`.
 
 ## How work flows
 

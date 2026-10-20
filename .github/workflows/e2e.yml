@@ -1,0 +1,61 @@
+name: End-to-end
+on:
+  pull_request:
+    paths:
+      - "custom_components/**"
+      - "frontend/src/loader.ts"
+      - "frontend/build.mjs"
+      - "tests/e2e/**"
+      - ".github/workflows/e2e.yml"
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Home Assistant ${{ matrix.ha }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # the oldest version hacs.json allows, and the newest; each on a Python it supports
+          - ha: oldest
+            python: "3.13"
+          - ha: latest
+            python: "3.14"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: npm ci
+        working-directory: frontend
+      - name: Install Home Assistant
+        run: |
+          pip install uv
+          uv venv --python "${{ matrix.python }}" ~/ha
+          if [ "${{ matrix.ha }}" = oldest ]; then spec="homeassistant==$(jq -r .homeassistant hacs.json)"; else spec=homeassistant; fi
+          uv pip install --python ~/ha/bin/python "$spec"
+      - name: Run the end-to-end test
+        run: node tests/e2e/run.mjs --python ~/ha/bin/python --dir "$RUNNER_TEMP/e2e" --chrome "$(command -v google-chrome)"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-${{ matrix.ha }}
+          path: |
+            ${{ runner.temp }}/e2e/shots
+            ${{ runner.temp }}/e2e/diagnostics.json
+            ${{ runner.temp }}/e2e/config/home-assistant.log
+            ${{ runner.temp }}/e2e/config/hass.out
+          if-no-files-found: ignore
+          retention-days: 7

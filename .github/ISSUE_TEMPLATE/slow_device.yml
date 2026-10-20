@@ -1,0 +1,66 @@
+name: Slow on my device
+description: VirtuHome is slow or stutters on a tablet, phone or computer
+labels: ["perf"]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      placeholder: "e.g. Fire HD 8 (2022), Samsung Galaxy Tab A9, iPad 9th generation, a PC with Intel graphics"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser or app
+      placeholder: "e.g. Fully Kiosk Browser 1.56, Home Assistant Companion app, Chrome 130"
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Graphics level
+      description: The sliders button in the view shows it.
+      options:
+        - Automatic
+        - Tablet
+        - Standard
+        - Realistic
+        - Ultra
+    validations:
+      required: true
+  - type: dropdown
+    id: what
+    attributes:
+      label: What is slow?
+      multiple: true
+      options:
+        - Opening the view
+        - Turning or zooming the house
+        - Tapping a light or a room
+        - Editing
+        - Everything
+    validations:
+      required: true
+  - type: input
+    id: fps
+    attributes:
+      label: Frame rate while turning the house
+      description: >-
+        Add `stats: true` to the card in YAML; the corner then shows the frames per second and the
+        graphics level. Turn the house for a few seconds and note the number.
+      placeholder: "e.g. 14 fps · Tablet"
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: >-
+        Settings → Devices & services → VirtuHome → ⋮ → Download diagnostics, then attach the file.
+        It has no room, device or entity names.
+  - type: input
+    id: versions
+    attributes:
+      label: VirtuHome and Home Assistant versions
+      placeholder: "VirtuHome 0.9.0, Home Assistant 2026.10.1"
+    validations:
+      required: true

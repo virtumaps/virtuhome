@@ -97,6 +97,7 @@ people: true           # who is home, in the corner and in their rooms
 energy: true           # solar, battery and grid in the corner (when the house has them)
 roof: true             # roofs over the house (the roof button changes it on each device)
 alarm: alarm_control_panel.home   # optional; default: the first alarm panel, "none" hides it
+stats: false        # frame rate and graphics level in a corner (YAML only)
 ```
 
 Everything above can also be set in the card's visual editor. Extensions add their own options there.
@@ -169,7 +170,12 @@ up with the map**).
 
 ## Problems and support
 
-Open an [issue](https://github.com/virtumaps/virtuhome/issues) and attach the diagnostics file: Settings →
+Questions go to [Discussions → Q&A](https://github.com/virtumaps/virtuhome/discussions/categories/q-a)
+and ideas to [Ideas](https://github.com/virtumaps/virtuhome/discussions/categories/ideas), where others
+can vote for them. [SUPPORT.md](SUPPORT.md) says where everything else goes.
+
+To report a problem, open an [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) (there
+are forms for bugs, device support, imports and slow devices) and attach the diagnostics file: Settings →
 Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds the versions, the plan's size and
 what each floor counts, how the card reaches your dashboards and which extensions are loaded. It has no
 room, device or entity names, and no licence key or token.
