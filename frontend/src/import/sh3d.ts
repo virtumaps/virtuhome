@@ -9,6 +9,7 @@
 import { cross, dot, norm, outwardNormal, sub } from "../model/geom";
 import type { OpeningKind, Vec2 } from "../model/plan";
 import type { Draft, DraftFloor, DraftOpening, DraftPiece, DraftRoom } from "./draft";
+import { plain } from "./names";
 import { parseXml, type XmlElement } from "./xml";
 import { isZip, unzipEntry } from "./zip";
 
@@ -112,7 +113,7 @@ export function sh3dDraft(home: XmlElement): Draft {
     });
     floors[f].rooms.push(room);
   }
-  if (unwalled) left.push(`walls along ${unwalled} room edge${unwalled === 1 ? "" : "s"} that have none in Sweet Home 3D (they get one)`);
+  if (unwalled) left.push(`${unwalled} room side${unwalled === 1 ? "" : "s"} without a wall (VirtuHome draws one)`);
 
   // walls no room runs along stand on their own
   for (const w of pieces) {
@@ -140,8 +141,8 @@ export function sh3dDraft(home: XmlElement): Draft {
     const name = e.attrs.name ?? "";
     const id = (e.attrs.catalogId ?? "").split("#").pop()!;
     if (e.name === "doorOrWindow" || e.attrs.doorOrWindow === "true") {
-      const o = opening(e, at, angle, w, d, h, cm(e, "elevation"), name, id);
-      return o && f.openings.push(o);
+      f.openings.push(opening(e, at, angle, w, d, h, cm(e, "elevation"), name, id));
+      return;
     }
     const piece: DraftPiece = { at, name: name || id, w, d, h, rotation: (angle * 180) / Math.PI, elevation: cm(e, "elevation"), mirror: e.attrs.modelMirrored === "true", light: e.name === "light" };
     if (Object.prototype.hasOwnProperty.call(CATALOG, id)) piece.type = CATALOG[id];
@@ -229,13 +230,13 @@ function wallRuns(pts: Vec2[], i: number, walls: WallPiece[]): { from: number; s
 }
 
 /** A door or window, from its model's size, the part of it in the wall, and its sashes. */
-function opening(e: XmlElement, at: Vec2, angle: number, w: number, d: number, h: number, elevation: number, name: string, id: string): DraftOpening | null {
+function opening(e: XmlElement, at: Vec2, angle: number, w: number, d: number, h: number, elevation: number, name: string, id: string): DraftOpening {
   const f = (k: string, dflt: number) => (Number.isFinite(parseFloat(e.attrs[k])) ? parseFloat(e.attrs[k]) : dflt);
   const c = Math.cos(angle);
   const s = Math.sin(angle);
   const place = (lx: number, ly: number): Vec2 => [at[0] + c * lx - s * ly, at[1] + s * lx + c * ly];
   const inWall = -d / 2 + d * (f("wallDistance", 0) + f("wallThickness", 1) / 2);
-  const text = `${name} ${id}`.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const text = plain(`${name} ${id}`);
   const sashes = e.children.filter((x) => x.name === "sash");
   let kind: OpeningKind;
   if (/garage|roller door|up.?and.?over|sectional door/.test(text)) kind = "garage";

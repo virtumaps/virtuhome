@@ -140,7 +140,7 @@ describe("Sweet Home 3D import", () => {
     expect(plan.floors.map((f) => [f.name, f.elevation, f.height])).toEqual([["Ground Floor", 0, 2.5]]);
     // only the top edge has a wall in Sweet Home 3D
     expect(plan.floors[0].rooms[0].points).toEqual([[0, 0], [3.8, 0], [3.8, 2.9], [0, 2.9]]);
-    expect(summary.left).toEqual(["walls along 3 room edges that have none in Sweet Home 3D (they get one)"]);
+    expect(summary.left).toEqual(["3 room sides without a wall (VirtuHome draws one)"]);
     expect(plan.floors[0].furniture[0].type).toBe("bed");
     expect(plan.settings.north).toBe(0);
   });
