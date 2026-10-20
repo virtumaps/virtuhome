@@ -50,6 +50,9 @@ questions on it, label it `needs info`, and remove `in progress`.
 - The performance rules in [ARCHITECTURE.md](ARCHITECTURE.md) still hold: nothing renders while
   nothing changes, no extra draw calls per device, no per-pixel lighting, no allocations in the render
   loop.
+- `frontend/test/budget.test.ts` passes: draw calls per floor, the demo house's triangles at the Tablet
+  level, and the size of the loader and the app. Raise a budget in `frontend/test/budgets.ts` only on
+  purpose, and say in the pull request why it grew.
 - Old plans still load. Plan format changes go through `normalizePlan`.
 - User-visible changes get a line in `CHANGELOG.md` under `## Unreleased` (add the heading at the top
   if it is missing), in the same plain style as the existing entries.
