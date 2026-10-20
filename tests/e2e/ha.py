@@ -42,11 +42,26 @@ http:
 frontend:
 config:
 diagnostics:
+{integrations}
 logger:
   default: warning
   logs:
     custom_components.virtuhome: debug
 """
+
+
+# What a new Home Assistant sets up (default_config), less what searches the network or for
+# hardware, needs an account, or fetches from the internet. A pip install of Home Assistant comes
+# without these integrations' packages and installs them as it sets them up, like a real install;
+# the frontend needs some of them (listing the services imports cameras and voice satellites).
+LEAVE_OUT = {"bluetooth", "cloud", "dhcp", "go2rtc", "homeassistant_alerts", "ssdp", "usb", "zeroconf"}
+
+
+def default_integrations() -> list[str]:
+    import homeassistant  # noqa: PLC0415
+
+    manifest = Path(homeassistant.__file__).parent / "components/default_config/manifest.json"
+    return [d for d in json.loads(manifest.read_text())["dependencies"] if d not in LEAVE_OUT]
 
 
 def call(url: str, path: str, data: dict | None = None, token: str | None = None, form: bool = False):
@@ -73,6 +88,18 @@ def wait_until_up(url: str, proc: subprocess.Popen, timeout: float = 600) -> Non
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             time.sleep(1)
     sys.exit("Home Assistant did not start in time")
+
+
+def wait_until_running(url: str, token: str, timeout: float = 600) -> str:
+    """Until every integration is set up (installing their packages on the first start); returns
+    the version."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        config = call(url, "/api/config", token=token)
+        if config.get("state") == "RUNNING":
+            return config["version"]
+        time.sleep(1)
+    sys.exit("Home Assistant did not finish starting in time")
 
 
 def onboard(url: str) -> dict:
@@ -131,7 +158,8 @@ def main() -> None:
         sys.exit(f"{config} is not empty: give a new folder")
     (config / "custom_components").mkdir(parents=True)
     (config / "custom_components/virtuhome").symlink_to(ROOT / "custom_components/virtuhome")
-    (config / "configuration.yaml").write_text(CONFIGURATION.format(port=args.port))
+    integrations = "".join(f"{d}:\n" for d in default_integrations()).rstrip()
+    (config / "configuration.yaml").write_text(CONFIGURATION.format(port=args.port, integrations=integrations))
     # Onboarding's location step adds starter integrations (weather, radio, shopping list, text to
     # speech) that need the internet and packages a pip install lacks; its settings are in
     # configuration.yaml, so it is marked done here and the other steps go through the API
@@ -157,8 +185,8 @@ def main() -> None:
         wait_until_up(url, proc)
         tokens = onboard(url)
         asyncio.run(_keep_http_settings(url, tokens["access_token"]))
+        version = wait_until_running(url, tokens["access_token"])
         entry_id = add_virtuhome(url, tokens["access_token"])
-        version = call(url, "/api/config", token=tokens["access_token"])["version"]
     except BaseException as err:
         stop()
         proc.wait()

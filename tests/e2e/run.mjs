@@ -167,7 +167,7 @@ async function measure(png) {
 /** The 3D view's pixels under `selector` (a VirtuHome element): drawn, or blank. */
 async function canvasPixels(page, selector) {
   const canvas = page.locator(`${selector} canvas`).first();
-  await canvas.waitFor({ state: "attached", timeout: 60_000 });
+  if (!(await canvas.count())) return { error: "no 3D view on the page" };
   await page.evaluate(onlyCanvases, true);
   let png;
   try {
@@ -183,7 +183,7 @@ const waitDrawn = (page, selector, drawn = true, timeout = 60_000) =>
   until(async () => {
     const p = await canvasPixels(page, selector);
     return { ...p, ok: p.drawn === drawn };
-  }, drawn ? "the house was not drawn" : "the view did not clear", timeout);
+  }, drawn ? `${selector} drew no house` : `${selector} drew something without a plan`, timeout);
 
 // ------------------------------------------------------------------ plans
 
