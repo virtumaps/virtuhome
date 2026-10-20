@@ -330,7 +330,7 @@ export class Plan2D {
     this.drawBackground(f?.background ?? null, layers.guides);
     this.syncPanel();
     if (!f) {
-      layers.labels.append(el("text", { x: this.w / 2, y: this.h / 2, class: "p2-empty", "text-anchor": "middle" }, "No floors yet: import a scan, draw a room, or trace a floor plan picture."));
+      layers.labels.append(el("text", { x: this.w / 2, y: this.h / 2, class: "p2-empty", "text-anchor": "middle" }, "No floors yet: import a scan or plan, draw a room, or trace a floor plan picture."));
       return;
     }
     // the floor below, faintly, to line things up with

@@ -7,7 +7,7 @@ export type StartKind = "scan" | "trace" | "draw";
 
 export const START_CHOICES: { kind: StartKind; title: string; text: string }[] = [
   { kind: "trace", title: "Trace a floor plan picture", text: "An estate agent's plan, or a photo of a sketch. No scanner needed." },
-  { kind: "scan", title: "Import a scan", text: "From an iPhone or iPad with LiDAR, made with the House Scan app." },
+  { kind: "scan", title: "Import a scan or plan", text: "A scan from the House Scan app, or a plan file from another program." },
   { kind: "draw", title: "Draw it myself", text: "Drag out the rooms in the 2D plan and type their sizes." },
 ];
 
@@ -47,7 +47,7 @@ export function setupItems(plan: Plan, hass: Hass | null | undefined, facts: Set
     id, title, hint, optional, manual: seen === null, done: !!seen || ticked.has(id),
   });
   return [
-    item("home", "Get your home in", "Trace a floor plan picture, import a scan, or draw the rooms.", rooms.length > 0),
+    item("home", "Get your home in", "Trace a floor plan picture, import a scan or plan, or draw the rooms.", rooms.length > 0),
     item("areas", "Link the rooms to areas", "Each room shows the devices of its Home Assistant area.", areasDone),
     item("devices", "Place your devices", "Lights, sensors, cameras and thermostats go into their rooms, contacts onto their doors and windows.", placed),
     item("north", "Set north", "So the sun shines in from the right side.", plan.settings.north !== 0 ? true : null),

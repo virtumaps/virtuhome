@@ -1,5 +1,5 @@
 // The editor: a drawer next to the 3D view (loaded only when an admin taps Edit).
-//   Home     import a scan, place devices automatically, floors, plan files, restore points
+//   Home     import a scan or plan, place devices automatically, floors, plan files, restore points
 //   Rooms    names, Home Assistant areas, floor materials
 //   Devices  what is placed, and what of Home Assistant is not yet
 //   Selected the tapped room, device or furniture: link entities, move, turn, remove
@@ -7,6 +7,8 @@
 import { mdiArrowULeftTop, mdiArrowURightTop, mdiCheckboxBlankCircleOutline, mdiCheckCircle, mdiClose, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
 import { autoPlace } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
+import { importSimple, isSimplePlan } from "../import/simple";
+import type { ImportSummary } from "../import/draft";
 import { labelPoint } from "../model/geom";
 import {
   newId, normalizePlan, PANEL, panelOf, panelSize, solarSize, spaces, splitEdge, type Device, type EnergySettings, type PresenceSettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
@@ -65,6 +67,25 @@ const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
 function isDetections(data: unknown): data is Detections {
   const d = data as Detections;
   return typeof d?.version === "number" && Array.isArray(d.objects) && d.objects.every((o) => typeof o?.label === "string" && Array.isArray(o.position));
+}
+
+/** What an import brought in and left out, for its report. */
+function importLines(s: ImportSummary): string[] {
+  const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+  const names = (list: string[]) => {
+    const counts = new Map<string, number>();
+    for (const x of list) counts.set(x, (counts.get(x) ?? 0) + 1);
+    const all = [...counts].map(([x, k]) => (k > 1 ? `${x} ×${k}` : x));
+    return all.length > 8 ? `${all.slice(0, 8).join("; ")} and ${all.length - 8} more` : all.join("; ");
+  };
+  return [
+    `In: ${n(s.floors, "floor")}, ${n(s.rooms, "room")}, ${n(s.doors, "door")}, ${n(s.windows, "window")}, ${n(s.furniture, "piece of furniture", "pieces of furniture")}.`,
+    ...(s.boxes.length ? [`As plain boxes (no matching type): ${names(s.boxes)}.`] : []),
+    ...(s.left.length ? [`Left out: ${names(s.left)}.`] : []),
+    s.north !== null
+      ? `North from the file: the top of the plan faces ${Math.round(s.north)}° (${compassName(s.north)}).`
+      : "Set north under Sun and weather for the sun's shadows.",
+  ];
 }
 
 /** Tiny DOM helper: h("div", { class: "x", onclick }, child, "text") */
@@ -187,7 +208,7 @@ export class Editor {
         this.scrollDrawerTo(scan);
         scan.classList.add("ed-flash");
       }
-      this.status.textContent = "Tap Import a scan… and choose the scan's files together.";
+      this.status.textContent = "Tap Import a scan or plan… and choose the files.";
       return;
     }
     this.setPlanMode(true);
@@ -774,9 +795,9 @@ export class Editor {
     const box = h("div", {},
       ...this.setupSection(() => fileIn.click()),
       h("div", { class: "ed-scan" },
-        h("h4", {}, "Scan"),
-        h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
-        h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan…"),
+        h("h4", {}, "Import"),
+        h("p", { class: "ed-hint" }, "A House Scan scan: choose house.json, manifest.json (room names) and detections.json (decor) together. Or a plan file from another program: the simple plan format or NeonPlan 3D's import format (.json)."),
+        h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan or plan…"),
       ),
       fileIn,
       h("h4", {}, "Devices"),
@@ -855,7 +876,7 @@ export class Editor {
     }, on ? `Done: ${it.title}` : `Not done: ${it.title}`);
     const ticked = (this.plan.settings.setup?.done ?? []).includes(it.id);
     const actions: Record<SetupId, () => HTMLElement[]> = {
-      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("Import a scan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
+      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("Import a scan or plan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
       areas: () => [btn("Rooms", () => this.show("rooms"))],
       devices: () => [btn("Place devices automatically", () => this.runAutoPlace())],
       north: () => [btn("Sun and weather", () => this.scrollToHeading("Sun and weather")), btn("It's right", () => tick(true))],
@@ -2563,6 +2584,7 @@ export class Editor {
     let house: unknown = null;
     let manifest: Manifest | null = null;
     let detections: Detections | null = null;
+    let other: unknown = null;
     for (const file of Array.from(files)) {
       let data: unknown;
       try {
@@ -2572,35 +2594,55 @@ export class Editor {
       }
       if (isRoomPlan(data)) house = data;
       else if (isDetections(data)) detections = data;
+      else if (isSimplePlan(data)) other = data;
       else if (Array.isArray((data as Manifest).rooms) && (data as Manifest).rooms.every((r) => typeof r.name === "string")) manifest = data as Manifest;
+      else other ??= data;
     }
-    if (!house) {
-      this.toastInDrawer("None of the files is a RoomPlan scan (house.json).");
-      return;
-    }
-    const front = manifest?.rooms.find((r) => /hall|entrance|porch|front/i.test(r.name))?.name;
-    const { plan, report } = importRoomPlan(house as never, manifest, { frontDoorRoom: front, detections });
-    const go = () => {
-      this.change((p) => {
-        p.floors = plan.floors;
-        p.settings = { ...p.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior };
-        // a new scan faces its own way: the phone's compass, or unknown (north up) until set
-        p.settings.north = report.north?.bearing ?? 0;
-      });
-      this.host.view.viewer.setMode("house");
-      const placed = autoPlace(this.plan, this.hass);
-      this.change((p) => Object.assign(p, placed.plan), false);
-      this.showReport([
+    if (house) {
+      const front = manifest?.rooms.find((r) => /hall|entrance|porch|front/i.test(r.name))?.name;
+      const { plan, report } = importRoomPlan(house as never, manifest, { frontDoorRoom: front, detections });
+      // a new scan faces its own way: the phone's compass, or unknown (north up) until set
+      this.replaceWithImport(plan, report.north?.bearing ?? 0, "a scan", [
         `${report.rooms} rooms on ${report.floors} floor${report.floors === 1 ? "" : "s"}, ${report.openings} doors and windows, ${report.furniture} pieces of furniture${report.decor ? `, ${report.decor} decorations` : ""}.`,
-        `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
         report.north
           ? `North from the phone's compass: the top of the plan faces ${Math.round(report.north.bearing)}° (${compassName(report.north.bearing)})${report.north.spread !== null ? `, readings within ±${Math.round(report.north.spread)}°` : ""}${report.north.magnetic ? ", magnetic north" : ""}. Indoors a compass can be off: check it under Sun and weather.`
           : "The scan has no compass reading: set north under Sun and weather for the sun's shadows.",
         ...report.warnings,
       ]);
+      return;
+    }
+    if (other && isSimplePlan(other)) {
+      try {
+        const { buildPlan } = await import("../import/draft");
+        const { plan, summary } = buildPlan(importSimple(other));
+        this.replaceWithImport(plan, summary.north ?? 0, "a plan", importLines(summary));
+      } catch (e) {
+        this.toastInDrawer(`Can't import it: ${(e as Error).message}`);
+      }
+      return;
+    }
+    const plan = other as Partial<Plan> | null;
+    this.toastInDrawer(plan?.version === 1 && plan.settings
+      ? "That is a VirtuHome plan file: load it with Plan file → Load…"
+      : "None of the files is a scan or a plan VirtuHome can import.");
+  }
+
+  /** Puts an imported plan in place of this one (after asking, if this one has rooms) as one undo step, with Smart Setup. */
+  private replaceWithImport(plan: Plan, north: number, what: string, lines: string[]): void {
+    const go = () => {
+      const next: Plan = { ...structuredClone(this.plan), floors: plan.floors };
+      next.settings = { ...next.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior, north };
+      const placed = autoPlace(next, this.hass);
+      this.change((p) => Object.assign(p, placed.plan), false, `Import ${what}`);
+      this.host.view.viewer.setMode("house");
+      this.showReport([
+        ...lines,
+        `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
+      ]);
     };
-    if (this.plan.floors.length) this.confirm("Replace the current plan with this scan?", "Replace", go);
-    else go();
+    if (this.plan.floors.some((f) => f.rooms.length)) {
+      this.confirm("Replace the whole plan with the imported one? Until you save, Undo or closing without saving brings yours back; after saving, Restore points does.", "Replace", go);
+    } else go();
   }
 
   private runAutoPlace(): void {
