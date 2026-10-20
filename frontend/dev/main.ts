@@ -2,10 +2,11 @@
 //   ?hass=demo (default)  pretend states, toggles work locally
 //   ?hass=live            your Home Assistant (dev/local.env.js gives the URL and a token)
 //   ?plan=demo|<file>     the demo house, or a plan JSON from dev/plans/<file>.json
+//   ?plan=empty           no home yet (the first run)
 //   ?plan=catalog[&cat=<category>]  every built-in item in a labelled grid
 //   ?theme=day|night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?stats
 import { createConnection, createLongLivedTokenAuth, subscribeEntities, type Connection } from "home-assistant-js-websocket";
-import { normalizePlan, type Plan } from "../src/model/plan";
+import { emptyPlan, normalizePlan, type Plan } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
 import { VhView } from "../src/ui/view";
 import type { WallMode, Quality } from "../src/scene/viewer";
@@ -33,6 +34,7 @@ async function loadPlan(): Promise<Plan> {
   }
   const name = q.get("plan") ?? "demo";
   if (name === "demo") return normalizePlan(DEMO_PLAN);
+  if (name === "empty") return emptyPlan();
   // ?plan=catalog[&cat=plants]: every built-in item, labelled
   if (name === "catalog") return catalogPlan(q.get("cat"));
   const res = await fetch(`/dev/plans/${name}.json`);

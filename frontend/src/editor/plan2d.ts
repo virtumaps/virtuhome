@@ -267,6 +267,11 @@ export class Plan2D {
     }
   }
 
+  /** Starts tracing a floor plan picture, or drawing a room (the first-run choices). */
+  startTool(t: "image" | "rect"): void {
+    this.setTool(t);
+  }
+
   /** Starts drawing a fence (the editor's "Draw a fence" button). */
   drawFence(): void {
     this.setTool("fence");

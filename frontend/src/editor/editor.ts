@@ -4,7 +4,7 @@
 //   Devices  what is placed, and what of Home Assistant is not yet
 //   Selected the tapped room, device or furniture: link entities, move, turn, remove
 // In edit mode a tap selects instead of switching, and devices, lamps and furniture can be dragged.
-import { mdiAlertCircleOutline, mdiArrowULeftTop, mdiArrowURightTop, mdiCheckCircleOutline, mdiClose, mdiInformationOutline, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
+import { mdiAlertCircleOutline, mdiArrowULeftTop, mdiArrowURightTop, mdiCheckboxBlankCircleOutline, mdiCheckCircle, mdiCheckCircleOutline, mdiClose, mdiInformationOutline, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
 import { autoPlace, linkRoomsByName } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { labelPoint } from "../model/geom";
@@ -39,6 +39,7 @@ import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import type { Check, Fix } from "../ui/checks";
+import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { EDITOR_CSS } from "./styles";
 import { Collider, settle } from "./collide";
 import { imageUrl, uploadImage } from "./background";
@@ -144,6 +145,9 @@ export class Editor {
   /** Home Assistant's entity registry, for what replaced missing entities (per registry change). */
   private registry: { key: unknown; list: RegistryEntry[] | null } | null = null;
   private registryLoading: unknown = null;
+  /** Whether a dashboard shows the card (getting started), once asked. */
+  private cardSeen: boolean | null = null;
+  private cardAsked = false;
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
@@ -183,6 +187,22 @@ export class Editor {
     this.render();
     this.updateHistoryButtons();
     this.updateSaveButton();
+  }
+
+  /** A first-run choice: trace a picture or draw in the 2D plan, or the scan import on the Home tab. */
+  startSetup(kind: StartKind): void {
+    if (kind === "scan") {
+      this.show("home");
+      const scan = this.body.querySelector<HTMLElement>(".ed-scan");
+      if (scan) {
+        this.scrollDrawerTo(scan);
+        scan.classList.add("ed-flash");
+      }
+      this.status.textContent = "Tap Import a scan… and choose the scan's files together.";
+      return;
+    }
+    this.setPlanMode(true);
+    this.plan2d?.startTool(kind === "trace" ? "image" : "rect");
   }
 
   private modeButtons(): HTMLButtonElement[] {
@@ -284,12 +304,22 @@ export class Editor {
 
   /** Applies a change with undo; `quiet` skips re-rendering the drawer (while dragging). */
   private change(fn: (p: Plan) => void, quiet = false, label = "Change"): void {
-    this.undo.push({ plan: structuredClone(this.plan), label });
+    const before = structuredClone(this.plan);
+    this.undo.push({ plan: before, label });
     if (this.undo.length > 100) this.undo.shift();
     this.redo = [];
     fn(this.plan);
     this.changed();
     this.apply(quiet);
+    if (!quiet && before.floors.every((f) => f.rooms.length === 0) && this.plan.floors.some((f) => f.rooms.length > 0)) this.firstRoom();
+  }
+
+  /** The first room of a new home: the getting-started list shows what comes next. */
+  private firstRoom(): void {
+    const items = setupItems(this.plan, this.hass, { cardOnDashboard: this.cardSeen });
+    if (!showChecklist(this.plan, items)) return;
+    // after the 2D plan has said its own piece about the tool
+    queueMicrotask(() => (this.status.textContent = "Your first room. Once all the rooms are drawn: Home → Place devices automatically."));
   }
 
   private apply(quiet = false): void {
@@ -756,10 +786,13 @@ export class Editor {
     const fileIn = h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
     const box = h("div", {},
+      ...this.setupSection(() => fileIn.click()),
       ...this.checkSection(),
-      h("h4", {}, "Scan"),
-      h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
-      h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan…"),
+      h("div", { class: "ed-scan" },
+        h("h4", {}, "Scan"),
+        h("p", { class: "ed-hint" }, "Choose the scan's files together: house.json, manifest.json (room names) and detections.json (plants, pictures, gym kit…). Rooms, doors, windows, furniture and decor come from the scan."),
+        h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan…"),
+      ),
       fileIn,
       h("h4", {}, "Devices"),
       h("p", { class: "ed-hint" }, "Links rooms to areas, contacts to doors and windows, and puts lights, cameras and sensors into their rooms. Keeps what is already placed."),
@@ -941,6 +974,81 @@ export class Editor {
       ...cards,
     ];
     return out.filter((e): e is HTMLElement => !!e);
+  }
+
+  /** Getting started: what is left to set up a new home, each with the way to do it. */
+  private setupSection(importScan: () => void): HTMLElement[] {
+    const items = setupItems(this.plan, this.hass, { cardOnDashboard: this.cardSeen });
+    if (!showChecklist(this.plan, items)) {
+      if (!this.plan.settings.setup?.dismissed || setupComplete(items)) return [];
+      return [h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.setSetup((s) => (s.dismissed = false), "Show getting started") }, "Show getting started"))];
+    }
+    const card = items.find((it) => it.id === "card");
+    if (card && !card.done && !this.cardAsked) {
+      this.cardAsked = true;
+      cardOnDashboard(this.hass).then((seen) => {
+        this.cardSeen = seen;
+        if (seen && this.tab === "home") this.render();
+      });
+    }
+    const left = items.filter((it) => !it.done && !it.optional).length;
+    return [
+      h("h4", {}, "Getting started"),
+      h("p", { class: "ed-hint" }, left ? `${left} ${left === 1 ? "step" : "steps"} to go.` : "All done. The wall tablet is up to you."),
+      h("div", { class: "ed-setup" }, ...items.map((it) => this.setupRow(it, importScan))),
+      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.setSetup((s) => (s.dismissed = true), "Hide getting started") }, "Hide this list")),
+    ];
+  }
+
+  private setupRow(it: SetupItem, importScan: () => void): HTMLElement {
+    const btn = (label: string, onclick: () => void) => h("button", { class: "ed-btn ghost small", onclick }, label);
+    const tick = (on: boolean) => this.setSetup((s) => {
+      const done = new Set(s.done ?? []);
+      if (on) done.add(it.id);
+      else done.delete(it.id);
+      s.done = [...done];
+    }, on ? `Done: ${it.title}` : `Not done: ${it.title}`);
+    const ticked = (this.plan.settings.setup?.done ?? []).includes(it.id);
+    const actions: Record<SetupId, () => HTMLElement[]> = {
+      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("Import a scan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
+      areas: () => [btn("Rooms", () => this.show("rooms"))],
+      devices: () => [btn("Place devices automatically", () => this.runAutoPlace())],
+      north: () => [btn("Sun and weather", () => this.scrollToHeading("Sun and weather")), btn("It's right", () => tick(true))],
+      card: () => [btn("Done", () => tick(true))],
+      tablet: () => [btn("How", () => window.open("https://github.com/virtumaps/virtuhome/blob/main/docs/GUIDE.md#wall-tablets", "_blank", "noopener")), btn("Done", () => tick(true))],
+    };
+    const icon = h("span", { class: `ed-tick${it.done ? " on" : ""}`, html: svg(it.done ? mdiCheckCircle : mdiCheckboxBlankCircleOutline) });
+    // a step ticked by hand can be unticked
+    const mark = it.manual && ticked
+      ? h("button", { class: "ed-tick on", title: "Not done after all", html: svg(mdiCheckCircle), onclick: () => tick(false) })
+      : icon;
+    return h("div", { class: `ed-step${it.done ? " done" : ""}` },
+      mark,
+      h("div", {},
+        h("b", {}, it.title + (it.optional ? " (optional)" : "")),
+        it.done ? null : h("p", { class: "ed-hint" }, it.id === "areas" ? `${it.hint} Smart Setup links rooms named like an area; pick the rest in Rooms → Area.` : it.hint),
+        it.done ? null : h("div", { class: "ed-row" }, ...actions[it.id]()),
+      ),
+    );
+  }
+
+  private setSetup(fn: (s: NonNullable<Plan["settings"]["setup"]>) => void, label: string): void {
+    this.change((p) => {
+      const s = { dismissed: false, done: [], ...(p.settings.setup ?? {}) };
+      fn(s);
+      p.settings.setup = s;
+    }, false, label);
+  }
+
+  private scrollToHeading(text: string): void {
+    this.show("home");
+    const h4 = Array.from(this.body.querySelectorAll("h4")).find((x) => x.textContent === text);
+    if (h4) this.scrollDrawerTo(h4);
+  }
+
+  /** Scrolls the drawer (only the drawer: scrollIntoView would move the page around it too). */
+  private scrollDrawerTo(el: HTMLElement): void {
+    this.body.scrollTop += el.getBoundingClientRect().top - this.body.getBoundingClientRect().top - 6;
   }
 
   /** Solar, battery and grid: what was found, and a sensor picked by hand where that is wrong. */

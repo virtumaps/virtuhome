@@ -119,6 +119,17 @@ describe("flicker-free furniture", () => {
     expect(bad).toEqual([]);
   });
 
+  it("leaves no shared faces in the pieces of the house types", async () => {
+    const { STARTERS, starterPlan } = await import("../src/starters/houses");
+    const bad: string[] = [];
+    for (const s of STARTERS) {
+      for (const f of starterPlan(s.id, { mirror: true }).floors) {
+        for (const x of f.furniture) for (const fault of fights(separateFaces(FURNITURE[x.type].build(x.w, x.d, x.h, x)))) bad.push(`${s.id} ${x.type}: ${fault}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
   it("shows a bath's water below its rim", () => {
     const parts = FURNITURE.bathtub.build(1.7, 0.75, 0.55);
     const water = parts.find((p) => p.role === "water")!;

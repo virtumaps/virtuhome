@@ -97,6 +97,21 @@ export const EDITOR_CSS = /* css */ `
 .ed-result.ok { padding: 5px 10px; }
 .ed-result.ok small { color: var(--vh-dim); flex-basis: 100%; padding-left: 24px; }
 .ed-id { display: block; color: var(--vh-dim); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.ed-setup { margin: 2px 0 4px; }
+.ed-step { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--vh-chip); }
+.ed-step:last-child { border-bottom: 0; }
+.ed-step > div { flex: 1; min-width: 0; }
+.ed-step b { font-weight: 600; }
+.ed-step.done b { color: var(--vh-dim); font-weight: 500; }
+.ed-step .ed-hint { margin: 2px 0 4px; }
+.ed-step .ed-row { margin: 2px 0; }
+.ed-tick { flex: none; width: 22px; height: 22px; padding: 0; display: grid; place-items: center; fill: var(--vh-dim); }
+.ed-tick svg { width: 20px; height: 20px; }
+.ed-tick.on { fill: var(--vh-accent); }
+button.ed-tick { border: 0; background: none; cursor: pointer; border-radius: 50%; }
+.ed-flash { animation: ed-flash 1.6s ease-out 1; border-radius: 10px; }
+@keyframes ed-flash { 0%, 40% { box-shadow: 0 0 0 2px var(--vh-accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .ed-flash { animation: none; box-shadow: 0 0 0 2px var(--vh-accent); } }
 .ed-list { margin-top: 4px; }
 .ed-confirm {
   position: absolute; left: 12px; right: 12px; bottom: 54px; padding: 12px 14px; border-radius: 14px; z-index: 6;

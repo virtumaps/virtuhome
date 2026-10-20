@@ -368,6 +368,14 @@ export interface PlanSettings {
   sky?: SkySettings | null;
   /** Who is in which room; anything unset is found from Home Assistant. */
   presence?: PresenceSettings | null;
+  /** The getting-started checklist: hidden, and the steps ticked by hand. */
+  setup?: SetupSettings | null;
+}
+
+export interface SetupSettings {
+  dismissed?: boolean;
+  /** Steps marked done by hand (north, the dashboard card, a wall tablet). */
+  done?: string[];
 }
 
 /** People in their rooms, from room-level trackers (Bermuda, ESPresense, mqtt_room). */
@@ -438,6 +446,11 @@ export function emptyPlan(): Plan {
   return { version: 1, settings: { ...DEFAULT_SETTINGS }, floors: [] };
 }
 
+function normalizeSetup(s: SetupSettings): SetupSettings {
+  const done = Array.isArray(s.done) ? s.done.filter((x): x is string => typeof x === "string") : [];
+  return { dismissed: s.dismissed === true, done };
+}
+
 /** What normalizePlan put right or left out of a plan as it was saved. */
 export type Repair = "height" | "fence" | "background" | "steps" | "roof" | "shape" | "slope" | "panel" | "link";
 
@@ -449,6 +462,7 @@ export function normalizePlan(raw: unknown, repairs?: Repair[]): Plan {
   const p = (raw ?? {}) as Partial<Plan>;
   if (repairs) findRepairs(p, repairs);
   const settings = { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) };
+  if (settings.setup) settings.setup = normalizeSetup(settings.setup);
   const floors = (p.floors ?? []).map((f) => ({
     ...f,
     ha_floor: f.ha_floor ?? null,
