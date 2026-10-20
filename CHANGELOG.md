@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 ### New
 - Start from a house type: a two-bed mid-terrace, three-bed semi-detached, four-bed detached,
@@ -20,9 +20,9 @@
   that turns a floor plan picture into one with an AI chat).
   Furniture without a match comes in as a plain box. An import is one step to undo, and its report
   says what came in and what was left out.
-- A first run that needs no guide: a new home shows Let's get your home in with three ways to
-  start (trace a floor plan picture, import a scan, or draw it), and each opens the editor on that
-  step. Edit → Home then has Getting started: getting the home in, linking rooms to areas,
+- A first run that needs no guide: a new home shows Let's get your home in with four ways to
+  start (trace a floor plan picture, start from a house type, import a scan or plan, or draw it),
+  and each opens the editor on that step. Edit → Home then has Getting started: getting the home in, linking rooms to areas,
   placing devices, setting north, putting the house on a dashboard and (optionally) a wall tablet,
   each with a button that does it. Steps tick themselves off as they are done; north, the dashboard
   and the tablet can be ticked by hand. Hide this list puts it away. People who can't edit are
