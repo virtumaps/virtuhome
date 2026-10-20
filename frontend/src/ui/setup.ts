@@ -8,7 +8,7 @@ export type StartKind = "scan" | "trace" | "starter" | "draw";
 export const START_CHOICES: { kind: StartKind; title: string; text: string }[] = [
   { kind: "trace", title: "Trace a floor plan picture", text: "An estate agent's plan, or a photo of a sketch. No scanner needed." },
   { kind: "starter", title: "Start from a house type", text: "A terrace, semi, detached, bungalow or flat, fitted to your home's size." },
-  { kind: "scan", title: "Import a scan or plan", text: "A scan from the House Scan app, or a plan file from another program." },
+  { kind: "scan", title: "Import a scan or plan", text: "A scan from the House Scan app, or a plan from Sweet Home 3D or another program." },
   { kind: "draw", title: "Draw it myself", text: "Drag out the rooms in the 2D plan and type their sizes." },
 ];
 

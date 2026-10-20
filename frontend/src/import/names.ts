@@ -128,7 +128,7 @@ function lampFor(p: PieceInfo): string {
 export const isType = (t: string): boolean => Object.prototype.hasOwnProperty.call(FURNITURE, t);
 
 /** "Kühlschrank" -> "kuhlschrank". */
-const plain = (s: string): string => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+export const plain = (s: string): string => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 /**
  * The built-in furniture type for a type or name, or null when none fits. "" (from a door, a window

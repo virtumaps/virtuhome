@@ -8,6 +8,7 @@ import { mdiAlertCircleOutline, mdiArrowULeftTop, mdiArrowURightTop, mdiCheckbox
 import { autoPlace, linkRoomsByName } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { importSimple, isSimplePlan } from "../import/simple";
+import { isZip } from "../import/zip";
 import type { ImportSummary } from "../import/draft";
 import { labelPoint } from "../model/geom";
 import {
@@ -822,7 +823,7 @@ export class Editor {
   }
 
   private homeTab(): HTMLElement {
-    const fileIn = h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
+    const fileIn = h("input", { type: "file", accept: ".json,.sh3d,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
     const box = h("div", {},
       this.houseTypes?.el,
@@ -833,7 +834,7 @@ export class Editor {
       this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, "Start from a house type…"),
       h("div", { class: "ed-scan" },
         h("h4", {}, "Import"),
-        h("p", { class: "ed-hint" }, "A House Scan scan: choose house.json, manifest.json (room names) and detections.json (decor) together. Or a plan file in the simple plan format (.json)."),
+        h("p", { class: "ed-hint" }, "A House Scan scan: choose house.json, manifest.json (room names) and detections.json (decor) together. Or a plan from another program: a Sweet Home 3D file (.sh3d), or a file in the simple plan format (.json)."),
         h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan or plan…"),
       ),
       fileIn,
@@ -2762,10 +2763,16 @@ export class Editor {
     let manifest: Manifest | null = null;
     let detections: Detections | null = null;
     let other: unknown = null;
+    let sh3d: Uint8Array | null = null;
     for (const file of Array.from(files)) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (isZip(bytes)) {
+        sh3d ??= bytes;
+        continue;
+      }
       let data: unknown;
       try {
-        data = JSON.parse(await file.text());
+        data = JSON.parse(new TextDecoder().decode(bytes));
       } catch {
         continue;
       }
@@ -2788,11 +2795,12 @@ export class Editor {
       ]);
       return;
     }
-    if (other && isSimplePlan(other)) {
+    if (sh3d || (other && isSimplePlan(other))) {
       try {
         const { buildPlan } = await import("../import/draft");
-        const { plan, summary } = buildPlan(importSimple(other));
-        this.replaceWithImport(plan, summary.north ?? 0, "a plan", importLines(summary));
+        const draft = sh3d ? await (await import("../import/sh3d")).importSh3d(sh3d) : importSimple(other);
+        const { plan, summary } = buildPlan(draft);
+        this.replaceWithImport(plan, summary.north ?? 0, sh3d ? "a Sweet Home 3D home" : "a plan", importLines(summary));
       } catch (e) {
         this.toastInDrawer(`Can't import it: ${(e as Error).message}`);
       }
@@ -2810,12 +2818,13 @@ export class Editor {
       const next: Plan = { ...structuredClone(this.plan), floors: plan.floors };
       next.settings = { ...next.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior, north };
       const placed = autoPlace(next, this.hass);
-      this.change((p) => Object.assign(p, placed.plan), false, `Import ${what}`);
+      // quiet: the report says what comes next, not the first-room hint
+      this.change((p) => Object.assign(p, placed.plan), true, `Import ${what}`);
       this.host.view.viewer.setMode("house");
       this.showReport([
         ...lines,
         `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
-      ]);
+      ], ".ed-scan");
     };
     if (this.plan.floors.some((f) => f.rooms.length)) {
       this.confirm("Replace the whole plan with the imported one? Until you save, Undo or closing without saving brings yours back; after saving, Restore points does.", "Replace", go);
@@ -2883,10 +2892,13 @@ export class Editor {
     else go();
   }
 
-  private showReport(lines: string[]): void {
+  /** The report on the Home tab, scrolled to `from` (a section above it) when given. */
+  private showReport(lines: string[], from?: string): void {
     this.show("home");
     const r = this.body.querySelector(".ed-report");
     r?.replaceChildren(...lines.map((l) => h("div", {}, l)));
+    const top = from ? this.body.querySelector<HTMLElement>(from) : null;
+    if (top) this.scrollDrawerTo(top);
   }
 
   /** A storey on top of the house: as high as the one below, linked to the Home Assistant floor of its level when there is one. */
