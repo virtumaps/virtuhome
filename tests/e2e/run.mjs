@@ -60,6 +60,7 @@ async function step(name, fn) {
     console.log(`ok - ${name}${note ? `: ${note}` : ""} (${((Date.now() - t) / 1000).toFixed(1)} s)`);
   } catch (err) {
     console.log(`not ok - ${name}: ${err.message}`);
+    err.reported = true;
     throw err;
   }
 }
@@ -183,7 +184,7 @@ const waitDrawn = (page, selector, drawn = true, timeout = 60_000) =>
   until(async () => {
     const p = await canvasPixels(page, selector);
     return { ...p, ok: p.drawn === drawn };
-  }, drawn ? `${selector} drew no house` : `${selector} drew something without a plan`, timeout);
+  }, drawn ? `${selector} drew no house` : `${selector} did not show an empty view`, timeout);
 
 // ------------------------------------------------------------------ plans
 
@@ -342,7 +343,7 @@ try {
   await run();
 } catch (err) {
   failed = true;
-  if (!/^(not ok|Home Assistant did not)/.test(err.message)) console.error(err);
+  if (!err.reported) console.error(err);
   const log = join(dir, "config/home-assistant.log");
   if (existsSync(log)) console.error(`\nThe end of Home Assistant's log:\n${readFileSync(log, "utf8").split("\n").slice(-40).join("\n")}`);
 } finally {
