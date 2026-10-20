@@ -37,6 +37,12 @@ You need Home Assistant 2025.1 or later and [HACS](https://hacs.xyz).
    VirtuHome.
 4. Reload the page in your browser. **VirtuHome** is now in the sidebar, and the VirtuHome card is
    in your dashboards' card picker.
+5. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
+   floor plan picture**, **Import a scan** or **Draw it myself**, and the editor opens on that step
+   (see [Get your home in](#get-your-home-in)). People who aren't administrators see who can set
+   it up.
+
+![Let's get your home in](screenshots/first-run.jpg)
 
 Everyone can open VirtuHome in the sidebar. Only administrators see **Edit**, and only there, not on
 dashboard cards.
@@ -113,6 +119,29 @@ A level picked here is for this device only, and wins over the card's `quality`.
 
 There are three ways, and they mix: scan it, draw it in the 2D plan, or trace an estate agent's
 floor plan. Everything here is in **Edit**.
+
+### Getting started
+
+Until a new home is set up, Edit → **Home** starts with **Getting started**: the steps left, each
+with a button that does it or goes to where it is done.
+
+- **Get your home in**: **Trace a picture**, **Import a scan…** or **Draw rooms**. Done once there is
+  a room.
+- **Link the rooms to areas**: done when every room is linked to a Home Assistant area, or no area
+  is left for the rest. **Rooms** opens the Rooms tab.
+- **Place your devices**: **Place devices automatically** (Smart Setup). Done once a device is in
+  the plan.
+- **Set north**: done once north is turned; if the top of the plan really faces north, tap
+  **It's right**.
+- **Put the house on a dashboard**: done once a dashboard has the VirtuHome card, or tap **Done**.
+- **Set up a wall tablet (optional)**: **How** opens [Wall tablets](#wall-tablets); tap **Done**
+  when it's up.
+
+Tap a ticked step's tick to untick it. **Hide this list** puts it away, and **Show getting
+started** brings it back until everything is done. Like any change, ticks are kept when you
+**Save**.
+
+![Getting started](screenshots/getting-started.jpg)
 
 ### Scan it (iPhone or iPad with LiDAR)
 
@@ -515,8 +544,8 @@ feet and inches (`11'4"`).
 
 **"VirtuHome is not set up"**: add the integration under Settings → Devices & services.
 
-**"No home yet"**: open **VirtuHome** in the sidebar, tap **Edit**, and [get your home
-in](#get-your-home-in).
+**"No home yet"**: an administrator opens **VirtuHome** in the sidebar and picks how to [get the
+home in](#get-your-home-in). Dashboard cards only show the house once it is there.
 
 **The tablet is slow**
 - Pick **Tablet** under **Graphics** on that tablet (or `quality: low`).
