@@ -9,6 +9,12 @@
   your home's outside width and depth (doors, windows and stairs keep their size) and mirrors it,
   or picks the side a semi joins next door on. Smart Setup then links the rooms to areas and places
   the devices. Offered on a new home, in Getting started and in Edit → Home.
+- Import plans from other programs: Edit → Home → Import a scan or plan… also takes a plan in a
+  simple JSON format (rooms as corner lists along the wall middles or the inner faces, doors and
+  windows by a point, furniture by type or name; described in docs/import-format.md with a prompt
+  that turns a floor plan picture into one with an AI chat).
+  Furniture without a match comes in as a plain box. An import is one step to undo, and its report
+  says what came in and what was left out.
 - A first run that needs no guide: a new home shows Let's get your home in with three ways to
   start (trace a floor plan picture, import a scan, or draw it), and each opens the editor on that
   step. Edit → Home then has Getting started: getting the home in, linking rooms to areas,

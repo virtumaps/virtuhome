@@ -18,7 +18,8 @@ stays off and a reload brings the house back as it was.
 
 - [Install](#install)
 - [Find your way around](#find-your-way-around)
-- [Get your home in](#get-your-home-in): start from a house type, scan it, draw it, or trace a floor plan picture
+- [Get your home in](#get-your-home-in): start from a house type, scan it, draw it, trace a floor plan
+  picture, or import it
 - [Place your devices](#place-your-devices)
 - [Make it look like home](#make-it-look-like-home)
 - [Outside: garden, fences and the roof](#outside-garden-fences-and-the-roof)
@@ -44,8 +45,8 @@ You need Home Assistant 2025.1 or later and [HACS](https://hacs.xyz).
 4. Reload the page in your browser. **VirtuHome** is now in the sidebar, and the VirtuHome card is
    in your dashboards' card picker.
 5. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
-   floor plan picture**, **Start from a house type**, **Import a scan** or **Draw it myself**, and
-   the editor opens on that step
+   floor plan picture**, **Start from a house type**, **Import a scan or plan** or **Draw it
+   myself**, and the editor opens on that step
    (see [Get your home in](#get-your-home-in)). People who aren't administrators see who can set
    it up.
 
@@ -125,16 +126,16 @@ A level picked here is for this device only, and wins over the card's `quality`.
 
 ## Get your home in
 
-There are four ways, and they mix: start from a house type, scan it, draw it in the 2D plan, or
-trace an estate agent's floor plan. Everything here is in **Edit**.
+There are five ways, and they mix: start from a house type, scan it, draw it in the 2D plan, trace
+an estate agent's floor plan, or import it from another program. Everything here is in **Edit**.
 
 ### Getting started
 
 Until a new home is set up, Edit → **Home** starts with **Getting started**: the steps left, each
 with a button that does it or goes to where it is done.
 
-- **Get your home in**: **Trace a picture**, **House type**, **Import a scan…** or **Draw rooms**.
-  Done once there is a room.
+- **Get your home in**: **Trace a picture**, **House type**, **Import a scan or plan…** or **Draw
+  rooms**. Done once there is a room.
 - **Link the rooms to areas**: done when every room is linked to a Home Assistant area, or no area
   is left for the rest. **Rooms** opens the Rooms tab.
 - **Place your devices**: **Place devices automatically** (Smart Setup). Done once a device is in
@@ -189,12 +190,30 @@ While scanning with House Scan:
 - Allow the location: the app notes which way the phone's compass points, so the plan faces north
   from the start.
 
-To import: Edit → **Home** → **Scan** → **Import a scan…**, and choose the scan's files together:
+To import: Edit → **Home** → **Import** → **Import a scan or plan…**, and choose the scan's files together:
 `house.json`, `manifest.json` (room names) and `detections.json` (decoration). Rooms, doors,
 windows, furniture and decor come from the scan, with the walls straightened. Importing replaces the
 plan you have, after asking.
 
 Then go on to [Place your devices](#place-your-devices).
+
+### Import from another program
+
+Edit → **Home** → **Import** → **Import a scan or plan…** also takes plan files from other
+programs:
+
+- **The simple plan format** (`.json`): rooms as corner lists, doors and windows by a point on a
+  room's edge, furniture by type. Write it by hand or with a script, or let an AI chat read your
+  floor plan picture: see [the format, with a prompt to copy](import-format.md).
+
+Rooms come in with their outlines along the middle of the walls, doors and windows go onto their
+room's edge, and furniture becomes the closest built-in piece; anything without a match comes in as
+a plain box of its size. Smart Setup then places your devices, and a list says what came in and
+what was left out.
+
+Importing replaces the whole plan, after asking. Until you save, **Undo** brings your plan back (or
+close the editor and **Discard**); after saving, the plan from before the import is in **Restore
+points**.
 
 ### Draw it in the 2D plan
 
@@ -560,8 +579,9 @@ your home. The licence is then renewed about once a day while Home Assistant is 
 
 ## FAQ
 
-**Do I need an iPhone with LiDAR?** No. Trace an estate agent's floor plan or draw the rooms in the
-2D plan, floor by floor. A scan is quicker and brings furniture and decoration.
+**Do I need an iPhone with LiDAR?** No. Trace an estate agent's floor plan, draw the rooms in the 2D
+plan floor by floor, or [import a plan](#import-from-another-program). A scan is quicker and brings
+furniture and decoration.
 
 **Does VirtuHome send my data anywhere?** No. It runs inside Home Assistant. Only these go out, and
 only when you use them: **Line up with the map** (your home's location, to OpenStreetMap), and the
