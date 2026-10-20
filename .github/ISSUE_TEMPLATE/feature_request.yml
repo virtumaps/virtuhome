@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something VirtuHome should do
+description: A specific change you'd like. For a broad idea, start in Discussions → Ideas so others can vote for it.
 labels: ["feature", "proposed"]
 body:
   - type: textarea

@@ -515,6 +515,7 @@ height: 440
 | `energy` | Show solar, battery and grid | `true` / `false` | `true` |
 | `roof` | Show the roofs (each device can change it) | `true` / `false` | `true` |
 | `alarm` | Alarm panel in the top bar | an `alarm_control_panel` entity, or `none` | the first alarm panel |
+| `stats` | (YAML only) | `true` shows the frame rate and graphics level in a corner, for reporting a slow device | `false` |
 
 Extensions add their own sections to the visual editor (below).
 
@@ -599,7 +600,10 @@ pick the sensors in Edit → **Home** → **Energy**.
 
 **Extensions don't show after activating**: tap **Reload now**, or reload the page.
 
-**Still stuck?** Open an [issue](https://github.com/virtumaps/virtuhome/issues) and attach the
+**Still stuck?** Ask in [Discussions →
+Q&A](https://github.com/virtumaps/virtuhome/discussions/categories/q-a). To report something that
+doesn't work, a device to support, a scan that came in wrong or a slow device, open an
+[issue](https://github.com/virtumaps/virtuhome/issues/new/choose) with its form, and attach the
 diagnostics file: Settings → Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds
 the versions, the plan's size and what each floor counts, how the card reaches your dashboards and
 which extensions are loaded. It has no room, device or entity names, and no licence key or token.
