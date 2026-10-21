@@ -13,6 +13,7 @@ import { pointInPolygon } from "../model/geom";
 import { EXTERIOR_FINISHES, JOINERY_FINISHES, parseHex, ROOF_COVERINGS, type FinishDef } from "./finishes";
 import { ROOM_OUTSIDE, type Geo, type V3 } from "./geo";
 import type { GlowSlot } from "./build";
+import type { PlainKey } from "../i18n";
 
 /** A slope: its height above the eaves is h0 + k * (c - n . p) at a point p of the roof's frame, n being its eave's outward normal. */
 export interface RoofPlane {
@@ -76,18 +77,18 @@ export interface RoofModel {
 }
 
 /** A shape's usual slope (degrees) and covering, for new roofs. */
-export const ROOF_SHAPES: Record<RoofShape, { name: string; pitch: number; hint: string }> = {
-  gable: { name: "Gable", pitch: 35, hint: "Two slopes, walls up to the ridge at the ends" },
-  hip: { name: "Hipped", pitch: 35, hint: "Slopes on all four sides" },
-  half_hip: { name: "Half-hipped", pitch: 40, hint: "Gable ends with their tops hipped (jerkinhead)" },
-  dutch: { name: "Dutch gable", pitch: 35, hint: "Hipped, with a small gable at the top of each end" },
-  pyramid: { name: "Pyramid", pitch: 35, hint: "Four slopes meeting at a point" },
-  mansard: { name: "Mansard", pitch: 25, hint: "Steep lower slopes all round under shallow upper ones" },
-  gambrel: { name: "Gambrel", pitch: 30, hint: "A barn roof: steep lower slopes, gable ends" },
-  lean_to: { name: "Lean-to", pitch: 15, hint: "One slope rising to its back (mono-pitch, skillion)" },
-  flat: { name: "Flat", pitch: 0, hint: "Flat, with eaves or a parapet" },
-  butterfly: { name: "Butterfly", pitch: 12, hint: "Two slopes falling to a valley in the middle" },
-  m_shaped: { name: "M-shaped", pitch: 35, hint: "Two gables side by side with a valley between" },
+export const ROOF_SHAPES: Record<RoofShape, { label: PlainKey; pitch: number; hint: PlainKey }> = {
+  gable: { label: "roofShape.gable", pitch: 35, hint: "roofShape.gable.hint" },
+  hip: { label: "roofShape.hip", pitch: 35, hint: "roofShape.hip.hint" },
+  half_hip: { label: "roofShape.half_hip", pitch: 40, hint: "roofShape.half_hip.hint" },
+  dutch: { label: "roofShape.dutch", pitch: 35, hint: "roofShape.dutch.hint" },
+  pyramid: { label: "roofShape.pyramid", pitch: 35, hint: "roofShape.pyramid.hint" },
+  mansard: { label: "roofShape.mansard", pitch: 25, hint: "roofShape.mansard.hint" },
+  gambrel: { label: "roofShape.gambrel", pitch: 30, hint: "roofShape.gambrel.hint" },
+  lean_to: { label: "roofShape.lean_to", pitch: 15, hint: "roofShape.lean_to.hint" },
+  flat: { label: "roofShape.flat", pitch: 0, hint: "roofShape.flat.hint" },
+  butterfly: { label: "roofShape.butterfly", pitch: 12, hint: "roofShape.butterfly.hint" },
+  m_shaped: { label: "roofShape.m_shaped", pitch: 35, hint: "roofShape.m_shaped.hint" },
 };
 
 export const ROOF_SHAPE_ORDER = Object.keys(ROOF_SHAPES) as RoofShape[];
@@ -928,12 +929,12 @@ function pot(g: Geo, at: V3, r: number, h: number, taper: number, col: V3, seg: 
 }
 
 /** Usual sizes of new roof items. */
-export const ROOF_ITEM_DEFAULTS: Record<RoofItem["kind"], { name: string; w: number; d: number; h?: number }> = {
-  window: { name: "Roof window", w: 0.78, d: 1.18 },
-  chimney: { name: "Chimney", w: 1.1, d: 0.6, h: 1.0 },
-  dormer: { name: "Dormer", w: 2.2, d: 2.0, h: 1.3 },
-  solar: { name: "Solar panels", w: 0, d: 0 },
-  lantern: { name: "Roof lantern", w: 2.0, d: 1.2, h: 0.5 },
+export const ROOF_ITEM_DEFAULTS: Record<RoofItem["kind"], { label: PlainKey; w: number; d: number; h?: number }> = {
+  window: { label: "roofItem.window", w: 0.78, d: 1.18 },
+  chimney: { label: "roofItem.chimney", w: 1.1, d: 0.6, h: 1.0 },
+  dormer: { label: "roofItem.dormer", w: 2.2, d: 2.0, h: 1.3 },
+  solar: { label: "roofItem.solar", w: 0, d: 0 },
+  lantern: { label: "roofItem.lantern", w: 2.0, d: 1.2, h: 0.5 },
 };
 
 /** Draws something on a roof. */
