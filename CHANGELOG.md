@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0
 
 ### New
 - Bins and post boxes for the garden: wheelie bins (140, 240 and 360 l), a communal bin, a food
