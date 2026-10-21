@@ -174,12 +174,14 @@ describe("loading", () => {
 /** The files whose text has moved into the table: text written straight into them is caught here. */
 const SCANNED = [
   "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/demo.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
-  "editor/house-types.ts",
+  "editor/editor.ts", "editor/house-types.ts",
   "scene/fences.ts", "scene/finishes.ts", "scene/garden.ts", "scene/paving.ts", "scene/roofs.ts",
 ];
 
 /** Strings in them that look like text but aren't shown to users. */
 const NOT_TEXT: Record<string, string[]> = {
+  // class lists and key names
+  "editor/editor.ts": ['"ed-btn ghost small"', 'e.key === "Backspace"'],
   // what Copy details copies and the error reports say: read by whoever fixes the bug, in English
   "ui/errors.ts": ["(\\d+)", "const SYSTEMS", "Another browser", "graphics, ${browserName(ua)}", "`In: ${info.where}`", "the details could not be worked out"],
 };
