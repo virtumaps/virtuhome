@@ -111,10 +111,13 @@ export class VhView {
   /** Check my setup, for admins: what normalizePlan put right, what the integration says, the problems for the dot on Edit. */
   private repairs: Repair[] = [];
   private server: ServerChecks | null | undefined = undefined;
+  /** Asks the integration again while Home Assistant is still starting. */
+  private serverTimer = 0;
+  private serverTries = 0;
   private problems = 0;
   private checksSeen: unknown[] = [];
   private reported = "";
-  private editor: { onHit(hit: Hit): void; el: HTMLElement; registryChanged(): void; startSetup(kind: StartKind): void } | null = null;
+  private editor: { onHit(hit: Hit): void; el: HTMLElement; registryChanged(): void; checksChanged(): void; startSetup(kind: StartKind): void } | null = null;
   private alarmKey = "";
   /** While the first run shows: for whom it was drawn (who may edit), else "". */
   private firstRun = "";
@@ -802,10 +805,16 @@ export class VhView {
 
   /** Asks the integration about the card, its version and the licence (admins only). */
   async refreshServer(fix = false): Promise<void> {
+    window.clearTimeout(this.serverTimer);
     try {
       this.server = await this._hass!.callWS<ServerChecks>({ type: fix ? "virtuhome/checks/fix_card" : "virtuhome/checks" });
     } catch {
       this.server = null;
+    }
+    // Home Assistant is still starting: ask again until it knows about the card (for up to 5 minutes)
+    if (!this.server?.dashboard.pending) this.serverTries = 0;
+    else if (this.serverTries++ < 30) {
+      this.serverTimer = window.setTimeout(() => void this.refreshServer().then(() => this.editor?.checksChanged()), 10_000);
     }
     this.updateChecks();
   }
@@ -931,6 +940,7 @@ export class VhView {
   destroy(): void {
     this.endReplay();
     window.clearTimeout(this.themeTimer);
+    window.clearTimeout(this.serverTimer);
     window.clearInterval(this.skyTimer);
     this.skyPanel.dispose();
     this.disconnect();

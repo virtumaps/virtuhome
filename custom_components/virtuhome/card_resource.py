@@ -25,6 +25,8 @@ _LOGGER = logging.getLogger(__name__)
 WWW_DIR = "virtuhome"
 WWW_FILE = "card-loader.js"
 WWW_URL = f"/local/{WWW_DIR}/{WWW_FILE}"
+# set once the card's resource was put right in this Home Assistant run (after it has started)
+DATA_REGISTERED = "virtuhome_card_registered"
 
 _RETRY_LOADER = """// VirtuHome: loads the dashboard card (written by the integration, changes are overwritten).
 // Dashboards opened while Home Assistant is still starting get nothing at first, so this retries.
@@ -72,6 +74,13 @@ def _write_loader(www: Path, card_url: str) -> None:
 
 async def async_register(hass: HomeAssistant, version: str) -> None:
     """Adds (or updates) the card's resource."""
+    try:
+        await _async_register(hass, version)
+    finally:
+        hass.data[DATA_REGISTERED] = True
+
+
+async def _async_register(hass: HomeAssistant, version: str) -> None:
     resources = _resources(hass)
     if resources is None:
         _LOGGER.info("Lovelace resources are in YAML mode: add %s/%s as a module resource", URL_BASE, LOADER_FILE)
@@ -99,13 +108,18 @@ async def async_register(hass: HomeAssistant, version: str) -> None:
 
 
 async def async_state(hass: HomeAssistant, version: str) -> dict[str, Any]:
-    """How the card reaches dashboards, for diagnostics: the resource URLs and whether they're current."""
+    """How the card reaches dashboards, for diagnostics: the resource URLs and whether they're current.
+
+    pending: Home Assistant is still starting and the resource wasn't put right yet, so after an
+    update it can still name the old version; that is not known yet rather than wrong.
+    """
     resources = _resources(hass)
     loader = Path(hass.config.path("www", WWW_DIR, WWW_FILE))
     www_loader = await hass.async_add_executor_job(loader.is_file)
+    pending = not hass.data.get(DATA_REGISTERED)
     if resources is None:
         mode = "not loaded" if hass.data.get("lovelace") is None else "yaml"
-        return {"mode": mode, "www_loader": www_loader}
+        return {"mode": mode, "www_loader": www_loader, "pending": pending}
     if not resources.loaded:
         await resources.async_load()
         resources.loaded = True
@@ -115,6 +129,7 @@ async def async_state(hass: HomeAssistant, version: str) -> dict[str, Any]:
         "urls": urls,
         "current": len(urls) == 1 and urls[0].endswith(f"?v={version}"),
         "www_loader": www_loader,
+        "pending": pending,
     }
 
 
