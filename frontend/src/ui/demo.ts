@@ -8,14 +8,7 @@ import type { Hass } from "../live/hass";
 import { DEMO_PLAN } from "../demo/plan";
 import { demoHass, type DemoOptions } from "../demo/hass";
 import type { ViewConfig } from "./view";
-
-export const DEMO_TEXT = {
-  title: "This is a demo home.",
-  short: "Demo home",
-  more: "Its devices are pretend: tap them to try. Nothing here is saved.",
-  start: "Start my own home",
-  close: "Close",
-};
+import { t } from "../i18n";
 
 /** What the demo needs of its view (a VhView). */
 export interface DemoView {
@@ -82,13 +75,13 @@ export function openDemo(
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `<style>${CSS}</style><div class="box"></div>
     <div class="bar"><span class="t"><b class="l"></b><b class="s"></b> <span class="more"></span></span><button class="start"></button><button class="close"></button></div>`;
-  shadow.querySelector(".l")!.textContent = DEMO_TEXT.title;
-  shadow.querySelector(".s")!.textContent = DEMO_TEXT.short;
-  shadow.querySelector(".more")!.textContent = DEMO_TEXT.more;
+  shadow.querySelector(".l")!.textContent = t("demo.title");
+  shadow.querySelector(".s")!.textContent = t("demo.short");
+  shadow.querySelector(".more")!.textContent = t("demo.more");
   const start = shadow.querySelector<HTMLButtonElement>(".start")!;
   const close = shadow.querySelector<HTMLButtonElement>(".close")!;
-  start.textContent = DEMO_TEXT.start;
-  close.textContent = DEMO_TEXT.close;
+  start.textContent = t("demo.start");
+  close.textContent = t("demo.close");
   start.onclick = () => done(true);
   close.onclick = () => done(false);
   under.append(host);

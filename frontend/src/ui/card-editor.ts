@@ -1,14 +1,17 @@
 // The card's visual editor in the dashboard UI, built on Home Assistant's own ha-form.
 import type { Hass } from "../live/hass";
 import { cardSchemas, loadExtensions } from "../ext/api";
+import { t, useLanguage } from "../i18n";
+import { tierName } from "../scene/tier";
 
-const SCHEMA = [
+/** The form, in the user's language. */
+const schema = () => [
   { name: "floor", selector: { text: {} } },
   {
     type: "grid", name: "", schema: [
-      { name: "theme", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Auto (day/night by the sun)" }, { value: "day", label: "Day" }, { value: "night", label: "Night" }] } } },
-      { name: "walls", selector: { select: { mode: "dropdown", options: [{ value: "smart", label: "Smart cutaway" }, { value: "low", label: "Low" }, { value: "full", label: "Full height" }] } } },
-      { name: "quality", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Automatic" }, { value: "low", label: "Tablet (fastest)" }, { value: "medium", label: "Standard" }, { value: "high", label: "Realistic" }, { value: "ultra", label: "Ultra" }] } } },
+      { name: "theme", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: t("card.theme.auto") }, { value: "day", label: t("card.theme.day") }, { value: "night", label: t("card.theme.night") }] } } },
+      { name: "walls", selector: { select: { mode: "dropdown", options: [{ value: "smart", label: t("card.walls.smart") }, { value: "low", label: t("card.walls.low") }, { value: "full", label: t("card.walls.full") }] } } },
+      { name: "quality", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: t("view.graphics.auto") }, { value: "low", label: t("card.quality.low") }, { value: "medium", label: tierName("medium") }, { value: "high", label: tierName("high") }, { value: "ultra", label: tierName("ultra") }] } } },
       { name: "height", selector: { number: { min: 200, max: 1600, step: 10, unit_of_measurement: "px", mode: "box" } } },
     ],
   },
@@ -23,12 +26,8 @@ const SCHEMA = [
   { name: "alarm", selector: { entity: { domain: "alarm_control_panel" } } },
 ];
 
-const LABELS: Record<string, string> = {
-  floor: "Open on floor (name, id or number; empty = whole house)",
-  theme: "Look", walls: "Walls", quality: "Graphics", people: "Show who is home, and in which room", height: "Height",
-  room_panel: "Tap a room to open it", floor_chips: "Floor buttons", fill: "Fill the screen",
-  alarm: "Alarm panel in the top bar", energy: "Show solar, battery and grid", roof: "Show the roofs (each device can change it)",
-};
+/** The options the form labels itself. */
+const OPTIONS = ["floor", "theme", "walls", "quality", "people", "height", "room_panel", "floor_chips", "fill", "alarm", "energy", "roof"] as const;
 
 type Config = Record<string, unknown>;
 
@@ -47,7 +46,8 @@ export class VirtuHomeCardEditor extends HTMLElement {
     if (this.form) this.form.hass = h;
     else {
       this.render();
-      // extensions add their own options once they are loaded
+      // in the user's language, and with the extensions' own options, once they are loaded
+      useLanguage(h).then(() => this.render());
       loadExtensions(h).then(() => this.render());
     }
   }
@@ -60,9 +60,9 @@ export class VirtuHomeCardEditor extends HTMLElement {
       this.appendChild(form);
       this.form = form;
     }
-    const labels = Object.assign({}, LABELS, ...cardSchemas.map((s) => s.labels));
+    const labels = Object.assign(Object.fromEntries(OPTIONS.map((o) => [o, t(`card.${o}`)])), ...cardSchemas.map((s) => s.labels));
     this.form!.hass = this._hass;
-    this.form!.schema = [...SCHEMA, ...cardSchemas.map((s) => s.section)];
+    this.form!.schema = [...schema(), ...cardSchemas.map((s) => s.section)];
     this.form!.computeLabel = (s: { name: string; title?: string }) => labels[s.name] ?? s.title ?? s.name;
     this.form!.data = { ...this.config };
   }

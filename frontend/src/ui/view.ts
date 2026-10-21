@@ -8,11 +8,11 @@ import { EnergyLive, type EnergyNow } from "../live/energy";
 import { hereText } from "../live/presence";
 import { extensionFailures, loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
-import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
+import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveTier, setDeviceTier, tierHint, tierName, tierNameEn, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { isNewHome, START_CHOICES, type StartKind } from "./setup";
-import { t, th } from "../i18n";
+import { esc, t, th } from "../i18n";
 import { VIEW_CSS } from "./styles";
 import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
@@ -53,7 +53,7 @@ const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg
 
 /** Why the plan can't be saved now, or null: a demo never saves, and nothing saves while the demo home shows. */
 export function saveRefused(config: ViewConfig, demoShown: boolean): string | null {
-  return config.demo ? "The demo can't save" : demoShown ? "Close the demo first" : null;
+  return config.demo ? t("view.demoCantSave") : demoShown ? t("demo.closeFirst") : null;
 }
 
 /** The walls button shows its mode: a whole brick wall, one stepped down where it is cut away, or a low one. */
@@ -62,13 +62,15 @@ const WALL_ICONS: Record<WallMode, string> = {
   smart: "M3,4H11V9H3V4M2,10H8V15H2V10M9,10H15V15H9V10M3,16H12V21H3V16M13,16H21V21H13V16Z",
   low: "M2,10H8V15H2V10M9,10H15V15H9V10M16,10H22V15H16V10M3,16H12V21H3V16M13,16H21V21H13V16Z",
 };
-const WALL_NAMES: Record<WallMode, string> = { smart: "Walls: smart cutaway", low: "Walls: low", full: "Walls: full height" };
 
 /** What the chargers' lights show, and what the cars' labels say (redrawn only when these change). */
 function evKeys(now: EnergyNow | null): [string, string] {
   const ev = now?.ev ?? [];
   return [ev.map((c) => c.state).join("|"), ev.map((c) => `${c.state}:${c.level === null ? "" : Math.round(c.level)}`).join("|")];
 }
+
+/** Alarm states the chip names (others show as Home Assistant gives them). */
+const ALARM_STATES = ["disarmed", "armed_home", "armed_away", "armed_night", "armed_vacation", "armed_custom_bypass", "arming", "pending", "triggered"] as const;
 
 const ROOF_KEY = "virtuhome.roof";
 /** The roof button's choice on this device, if made. */
@@ -185,13 +187,13 @@ export class VhView {
       <div class="vh-overlay"></div>
       <div class="vh-bar"></div>
       <div class="vh-tools">
-        <button class="vh-icon" data-act="walls" title="Walls">${svg(WALL_ICONS.smart)}</button>
-        <button class="vh-icon" data-act="roof" title="Roof" hidden>${svg(mdiHomeRoof)}</button>
-        <button class="vh-icon" data-act="theme" title="Day / night">${svg(mdiWeatherNight)}</button>
-        <button class="vh-icon" data-act="sky" title="Sun and weather">${svg(mdiWeatherPartlyCloudy)}</button>
-        <button class="vh-icon" data-act="frame" title="Show all">${svg(mdiArrowExpandAll)}</button>
-        <button class="vh-icon" data-act="heat" title="Temperature map">${svg(mdiThermometer)}</button>
-        <button class="vh-icon" data-act="graphics" title="Graphics">${svg(mdiTune)}</button>
+        <button class="vh-icon" data-act="walls" title="${th("view.tool.walls")}">${svg(WALL_ICONS.smart)}</button>
+        <button class="vh-icon" data-act="roof" title="${th("view.tool.roof")}" hidden>${svg(mdiHomeRoof)}</button>
+        <button class="vh-icon" data-act="theme" title="${th("view.tool.theme")}">${svg(mdiWeatherNight)}</button>
+        <button class="vh-icon" data-act="sky" title="${th("view.tool.sky")}">${svg(mdiWeatherPartlyCloudy)}</button>
+        <button class="vh-icon" data-act="frame" title="${th("view.tool.frame")}">${svg(mdiArrowExpandAll)}</button>
+        <button class="vh-icon" data-act="heat" title="${th("view.tool.heat")}">${svg(mdiThermometer)}</button>
+        <button class="vh-icon" data-act="graphics" title="${th("view.tool.graphics")}">${svg(mdiTune)}</button>
       </div>
       <button class="vh-alert" hidden></button>
       <div class="vh-status"></div>
@@ -237,7 +239,7 @@ export class VhView {
     this.viewer.onSlow = () => this.onSlow();
     this.viewer.onError = (err, fatal, where) => (fatal ? this.fail(err, where) : logError(err, where));
     // errors go to the integration stripped of what this view knows
-    this.unreport = reportFrom(() => ({ hass: this._hass, plan: this.plan, graphics: TIER_NAMES[this.viewer.tier] }));
+    this.unreport = reportFrom(() => ({ hass: this._hass, plan: this.plan, graphics: tierNameEn(this.viewer.tier) }));
     this.ensureLook();
     this.viewer.walls = config.walls ?? "smart";
     this.viewer.roofOn = roofSetting() ?? config.roof ?? true;
@@ -279,7 +281,7 @@ export class VhView {
     if (config.stats) {
       this.statsEl.hidden = false;
       this.statsTimer = window.setInterval(() => {
-        this.statsEl.textContent = `${this.viewer.fps.toFixed(0)} fps · ${TIER_NAMES[this.viewer.tier]}`;
+        this.statsEl.textContent = `${this.viewer.fps.toFixed(0)} fps · ${tierName(this.viewer.tier)}`;
       }, 1000);
     }
     this.updateWallsButton();
@@ -313,7 +315,7 @@ export class VhView {
     this.failed = true;
     this.viewer.halt();
     this.root.classList.add("vh-failed");
-    this.root.append(errorBox(() => errorDetails(err, { where, graphics: TIER_NAMES[this.viewer.tier], hass: this._hass, plan: this.plan })));
+    this.root.append(errorBox(() => errorDetails(err, { where, graphics: tierNameEn(this.viewer.tier), hass: this._hass, plan: this.plan })));
   }
 
   /** Before the house is drawn, an error would leave the view blank; afterwards the view carries on. */
@@ -637,7 +639,7 @@ export class VhView {
     this.alertEl.hidden = !alerts.length;
     if (alerts.length) {
       this.alertEl.innerHTML = `${svg(mdiAlert)}<span></span>`;
-      this.alertEl.querySelector("span")!.textContent = alerts.length > 1 ? `${alerts[0].text} · and ${alerts.length - 1} more` : alerts[0].text;
+      this.alertEl.querySelector("span")!.textContent = alerts.length > 1 ? t("view.alerts.more", { alert: alerts[0].text, n: alerts.length - 1 }) : alerts[0].text;
     }
     const floor = this.viewer.mode === "floor" ? this.viewer.activeFloor : null;
     // a replay shows who was home then; the lights chip (a switch) and today's energy would be about now
@@ -650,7 +652,7 @@ export class VhView {
     this.statusKey = key;
     const parts: string[] = [];
     if (energy) parts.push(energy);
-    if (on) parts.push(`<button class="vh-chip vh-lights" data-status="lights" title="Turn them off">${svg(mdiLightbulbOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span>${on} on</span></button>`);
+    if (on) parts.push(`<button class="vh-chip vh-lights" data-status="lights" title="${th("view.lights.turnOff")}">${svg(mdiLightbulbOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span>${th("view.lights.on", { n: on })}</span></button>`);
     for (const p of people) {
       parts.push(`<button class="vh-person ${p.home ? "home" : "away"}" data-status="${p.id}" title="">${p.picture ? `<img alt="" src="${p.picture.replace(/"/g, "")}">` : "<i></i>"}</button>`);
     }
@@ -672,9 +674,10 @@ export class VhView {
     if (!ids.length) return;
     try {
       await h.callService("light", "turn_off", {}, { entity_id: ids });
-      this.toast(`Turned off ${ids.length} light${ids.length === 1 ? "" : "s"}${floor !== null ? ` on ${this.plan?.floors[floor]?.name ?? "this floor"}` : ""}`);
+      const n = ids.length;
+      this.toast(floor === null ? t("view.lights.turnedOff", { n }) : t("view.lights.turnedOffOn", { n, floor: this.plan?.floors[floor]?.name ?? t("view.lights.thisFloor") }));
     } catch (err) {
-      this.toast(`Could not turn them off: ${String((err as { message?: string }).message ?? err)}`);
+      this.toast(t("view.lights.failed", { error: String((err as { message?: string }).message ?? err) }));
     }
   }
 
@@ -750,11 +753,11 @@ export class VhView {
   private evActions: EvActions = {
     setMode: (i, option) => {
       const id = this.energy.sources.ev[i]?.mode;
-      if (id) this.callFromSheet("select", "select_option", { option }, id, "Could not change the charge mode");
+      if (id) this.callFromSheet("select", "select_option", { option }, id, "view.ev.modeFailed");
     },
     approve: (i) => {
       const id = this.energy.sources.ev[i]?.approve;
-      if (id) this.callFromSheet("button", "press", {}, id, "Could not approve the charge");
+      if (id) this.callFromSheet("button", "press", {}, id, "view.ev.approveFailed");
     },
     open: (i) => {
       const c = this.energy.sources.ev[i];
@@ -763,11 +766,11 @@ export class VhView {
     },
   };
 
-  private async callFromSheet(domain: string, service: string, data: Record<string, unknown>, entity: string, failed: string): Promise<void> {
+  private async callFromSheet(domain: string, service: string, data: Record<string, unknown>, entity: string, failed: "view.ev.modeFailed" | "view.ev.approveFailed"): Promise<void> {
     try {
       await this._hass?.callService(domain, service, data, { entity_id: entity });
     } catch (err) {
-      this.toast(`${failed}: ${String((err as { message?: string }).message ?? err)}`);
+      this.toast(t(failed, { error: String((err as { message?: string }).message ?? err) }));
     }
   }
 
@@ -790,7 +793,7 @@ export class VhView {
     this.live.heatmap = !this.live.heatmap;
     this.root.querySelector('[data-act="heat"]')?.classList.toggle("on", this.live.heatmap);
     this.viewer.refreshTints();
-    this.toast(this.live.heatmap ? "Temperature map: blue is cold, red is warm" : "Temperature map off");
+    this.toast(t(this.live.heatmap ? "view.heat.on" : "view.heat.off"));
   }
 
   private async subscribe(): Promise<void> {
@@ -820,7 +823,7 @@ export class VhView {
       );
     } catch (err) {
       this.firstRun = "";
-      this.showEmpty("VirtuHome is not set up", `Add the VirtuHome integration under Settings → Devices & services. (${(err as Error).message ?? err})`);
+      this.showEmpty(t("view.notSetUp.title"), t("view.notSetUp.text", { error: String((err as Error).message ?? err) }));
     } finally {
       this.subscribing = false;
     }
@@ -1088,7 +1091,7 @@ export class VhView {
     window.clearTimeout(this.themeTimer);
     this.themeTimer = 0;
     this.setLook(this.themeOverride);
-    this.toast(this.themeOverride === "night" ? "Night look" : "Day look");
+    this.toast(t(this.themeOverride === "night" ? "view.look.night" : "view.look.day"));
   }
 
   // ------------------------------------------------------------------ graphics
@@ -1113,7 +1116,7 @@ export class VhView {
     this.menu.hidden = true;
     this.viewer.setTier(tier);
     this.ensureLook();
-    this.toast(`Graphics: ${TIER_NAMES[tier]}${auto ? " (auto)" : ""}`);
+    this.toast(t(auto ? "view.graphics.setAuto" : "view.graphics.set", { tier: tierName(tier) }));
   }
 
   private toggleGraphicsMenu(): void {
@@ -1127,10 +1130,10 @@ export class VhView {
       `<button class="vh-menu-row${picked === value ? " on" : ""}" data-tier="${value}">
         <span class="tick">${picked === value ? svg(mdiCheck) : ""}</span>
         <span><b>${name}</b><small>${hint}</small></span></button>`;
-    const autoName = parseTierSetting(this.config.quality) !== "auto" ? `card setting: ${TIER_NAMES[autoTier.tier]}` : TIER_NAMES[autoTier.tier];
-    this.menu.innerHTML = `<div class="vh-menu-title">Graphics on this device</div>` +
-      row("auto", "Automatic", autoName) +
-      TIERS.map((t: Tier) => row(t, TIER_NAMES[t], TIER_HINTS[t])).join("");
+    const autoName = parseTierSetting(this.config.quality) !== "auto" ? th("view.graphics.cardSetting", { tier: tierName(autoTier.tier) }) : esc(tierName(autoTier.tier));
+    this.menu.innerHTML = `<div class="vh-menu-title">${th("view.graphics.title")}</div>` +
+      row("auto", th("view.graphics.auto"), autoName) +
+      TIERS.map((tier: Tier) => row(tier, esc(tierName(tier)), esc(tierHint(tier)))).join("");
     this.menu.hidden = false;
   }
 
@@ -1143,14 +1146,14 @@ export class VhView {
     capTier(next);
     this.viewer.setTier(next);
     this.updateChecks();
-    this.toast(`Switched to ${TIER_NAMES[next]} graphics to keep it smooth`);
+    this.toast(t("view.graphics.slow", { tier: tierName(next) }));
   }
 
   private cycleWalls(): void {
     const next: Record<WallMode, WallMode> = { smart: "low", low: "full", full: "smart" };
     this.viewer.setWalls(next[this.viewer.walls]);
     this.updateWallsButton();
-    this.toast(WALL_NAMES[this.viewer.walls]);
+    this.toast(t(`view.walls.${this.viewer.walls}`));
   }
 
   /** The roof button: roofs over the house, or the house open to the sky. Kept per device. */
@@ -1165,19 +1168,19 @@ export class VhView {
     }
     this.updateRoofButton();
     this.viewer.frame(true);
-    this.toast(on ? "Roof on" : "Roof off");
+    this.toast(t(on ? "view.roof.on" : "view.roof.off"));
   }
 
   private updateRoofButton(): void {
     this.roofBtn.classList.toggle("on", this.viewer.roofOn);
-    this.roofBtn.title = this.viewer.roofOn ? "Roof on (tap to see in from above)" : "Roof off (tap to show it)";
+    this.roofBtn.title = t(this.viewer.roofOn ? "view.roof.onTap" : "view.roof.offTap");
   }
 
   private updateWallsButton(): void {
     const mode = this.viewer.walls;
     this.wallsBtn.classList.toggle("on", mode !== "full");
     this.wallsBtn.innerHTML = svg(WALL_ICONS[mode]);
-    this.wallsBtn.title = `${WALL_NAMES[mode]} (tap to change)`;
+    this.wallsBtn.title = t("view.walls.tap", { walls: t(`view.walls.${mode}`) });
   }
 
   // ------------------------------------------------------------------ floors, rooms and gestures
@@ -1191,8 +1194,8 @@ export class VhView {
       if (!this.canEdit() || this.editor) return;
       const b = document.createElement("button");
       b.className = `vh-chip vh-edit${this.problems ? " dot" : ""}`;
-      b.innerHTML = `${svg(mdiPencilOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}Edit`;
-      if (this.problems) b.title = "Check my setup found something to fix (Edit → Home)";
+      b.innerHTML = `${svg(mdiPencilOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}${th("view.edit")}`;
+      if (this.problems) b.title = t("view.editProblems");
       b.onclick = () => this.openEditor();
       const spacer = document.createElement("span");
       spacer.className = "vh-spacer";
@@ -1204,7 +1207,7 @@ export class VhView {
       return;
     }
     const house = this.viewer.mode === "house";
-    const parts = [`<button class="vh-chip ${house ? "on" : ""}" data-floor="-1">${svg(mdiHomeOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}House</button>`];
+    const parts = [`<button class="vh-chip ${house ? "on" : ""}" data-floor="-1">${svg(mdiHomeOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}${th("view.house")}</button>`];
     this.plan.floors.forEach((_, i) => {
       const on = !house && this.viewer.activeFloor === i;
       parts.push(`<button class="vh-chip ${on ? "on" : ""}" data-floor="${i}"></button>`);
@@ -1229,11 +1232,8 @@ export class VhView {
     const b = document.createElement("button");
     b.className = `vh-chip vh-alarm ${armed ? "armed" : ""} ${alert ? "alert" : ""}`;
     b.innerHTML = `${svg(alert ? mdiShieldAlert : armed ? mdiShieldHome : mdiShieldOffOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span></span>`;
-    const label: Record<string, string> = {
-      disarmed: "Disarmed", armed_home: "Armed home", armed_away: "Armed away", armed_night: "Armed night",
-      armed_vacation: "Armed vacation", armed_custom_bypass: "Armed", arming: "Arming…", pending: "Entry delay", triggered: "Alarm!",
-    };
-    b.querySelector("span")!.textContent = label[s.state] ?? s.state;
+    const state = ALARM_STATES.find((x) => x === s.state);
+    b.querySelector("span")!.textContent = state ? t(`alarm.${state}`) : s.state;
     b.onclick = () => this.dialog(id);
     this.chips.append(b);
   }
@@ -1292,7 +1292,7 @@ export class VhView {
 
   /** Home Assistant's dialog for an entity. The demos have none: their devices are pretend. */
   private dialog(entityId: string): void {
-    if (this.config.demo) this.toast("The demo has no device dialogs");
+    if (this.config.demo) this.toast(t("demo.noDialogs"));
     else moreInfo(this.root, entityId);
   }
 
@@ -1423,10 +1423,10 @@ export class VhView {
     const room = floor ? spaces(floor)[ri] : undefined;
     if (!floor || !room || !this._hass) return;
     const lights = this.live.roomLights(floor, room);
-    if (!lights.length) return this.toast(`No lights in ${room.name}`);
+    if (!lights.length) return this.toast(t("view.room.noLights", { room: room.name }));
     const anyOn = lights.some((id) => this._hass!.states[id]?.state === "on");
     await this._hass.callService("light", anyOn ? "turn_off" : "turn_on", {}, { entity_id: lights });
-    this.toast(`${room.name}: lights ${anyOn ? "off" : "on"}`);
+    this.toast(t(anyOn ? "view.room.lightsOff" : "view.room.lightsOn", { room: room.name }));
   }
 
   private nameOf(entityId: string): string {
@@ -1457,9 +1457,7 @@ export class VhView {
     // nothing to see yet: the ground alone looks broken behind the choices
     this.root.classList.add("vh-new");
     if (!this.canEdit()) {
-      this.showEmpty("No home yet", this._hass?.user?.is_admin
-        ? "Open VirtuHome in the sidebar and tap Edit to get your home in."
-        : "An admin of this Home Assistant can set VirtuHome up, from VirtuHome in the sidebar.");
+      this.showEmpty(t("view.noHome.title"), t(this._hass?.user?.is_admin ? "view.noHome.admin" : "view.noHome.user"));
       return;
     }
     this.empty.hidden = false;
@@ -1521,14 +1519,14 @@ export class VhView {
       <div class="actions"></div>
       <div class="vh-tiles"></div>`;
     this.sheet.querySelector(".t")!.textContent = room.name;
-    this.sheet.querySelector(".sub")!.textContent = [text, here, room.area_id ? null : "Not linked to an area"].filter(Boolean).join(" · ") || " ";
+    this.sheet.querySelector(".sub")!.textContent = [text, here, room.area_id ? null : t("view.room.notLinked")].filter(Boolean).join(" · ") || " ";
     this.sheet.querySelector<HTMLButtonElement>(".vh-close")!.onclick = () => this.closeSheet();
     const actions = this.sheet.querySelector(".actions")!;
     if (lights.length) {
       const b = document.createElement("button");
       b.className = "vh-chip";
       b.innerHTML = `${svg(anyOn ? mdiLightbulbGroupOff : mdiLightbulbGroup).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span></span>`;
-      b.querySelector("span")!.textContent = anyOn ? "All lights off" : "All lights on";
+      b.querySelector("span")!.textContent = t(anyOn ? "view.room.allOff" : "view.room.allOn");
       b.onclick = () => this.toggleRoomLights(this.sheetRoom!.floor, this.sheetRoom!.room);
       actions.appendChild(b);
     }

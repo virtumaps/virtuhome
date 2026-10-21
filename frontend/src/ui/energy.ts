@@ -2,14 +2,13 @@
 // power flowing between solar, battery, grid, the house and the car, and today's totals.
 import { mdiBatteryCharging, mdiBatteryHigh, mdiBatteryLow, mdiBatteryMedium, mdiCarElectric, mdiClose, mdiHomeLightningBoltOutline, mdiSolarPower, mdiTransmissionTower } from "@mdi/js";
 import { formatEnergy, formatPower, formatPrice, formatRate, type EnergyLive, type EnergyNow, type Flows } from "../live/energy";
-import { EV_STATE_TEXT, modeName, type EvNow } from "../live/ev";
+import { evStateText, modeName, type EvNow } from "../live/ev";
+import { esc, t, th } from "../i18n";
 
 const svg = (path: string, size = 16) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="fill:currentColor"><path d="${path}"/></svg>`;
 
 /** Colours of the ends (lines take their source's colour). */
 const COL = { solar: "#f2a33a", grid: "#8f9db3", home: "#56c7ff", battery: "#2bb673", car: "#a98bff" };
-
-const esc = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** Below this (kW) a flow is nothing. */
 const IDLE = 0.01;
@@ -35,7 +34,7 @@ export function energyChip(n: EnergyNow | null): string {
     parts.push(`<span class="car${car.state === "charging" ? " on" : ""}">${svg(mdiCarElectric)}</span><span>${car.level !== null ? `${Math.round(car.level)}%` : formatPower(car.power)}</span>`);
   }
   if (!parts.length) return "";
-  return `<button class="vh-chip vh-energy" data-status="energy" title="Energy">${parts.join("")}</button>`;
+  return `<button class="vh-chip vh-energy" data-status="energy" title="${th("energy.title")}">${parts.join("")}</button>`;
 }
 
 // ------------------------------------------------------------------ the flow diagram
@@ -102,37 +101,37 @@ function flowSvg(n: EnergyNow, motion: boolean): string {
   const hasBattery = n.battery !== null || n.batteryLevel !== null;
   const hasSolar = n.solar !== null;
   const hasGrid = n.grid !== null;
-  return `<svg class="vh-flow" viewBox="0 0 340 258" role="img" aria-label="Energy flow">
+  return `<svg class="vh-flow" viewBox="0 0 340 258" role="img" aria-label="${th("energy.flow")}">
     ${lines}
     ${hasSolar ? node("solar", mdiSolarPower, formatPower(n.solar), (n.solar ?? 0) > IDLE) : ""}
     ${hasGrid ? node("grid", mdiTransmissionTower, formatPower(n.grid === null ? null : Math.abs(n.grid)), Math.abs(n.grid ?? 0) > IDLE) : ""}
     ${node("home", mdiHomeLightningBoltOutline, formatPower(n.home), true)}
     ${hasBattery ? node("battery", batteryIcon(n), formatPower(n.battery === null ? null : Math.abs(n.battery)), Math.abs(n.battery ?? 0) > IDLE) : ""}
     ${hasCar ? node("car", mdiCarElectric, formatPower(carPower(n)), (carPower(n) ?? 0) > IDLE) : ""}
-    ${hasSolar ? `<text x="${L.solar[0]}" y="${L.solar[1] - R - 7}" text-anchor="middle" class="cap">Solar</text>` : ""}
-    ${hasGrid ? `<text x="${L.grid[0]}" y="${L.grid[1] + R + 15}" text-anchor="middle" class="cap" data-cap="grid">${gridCaption(n)}</text>` : ""}
-    <text x="${L.home[0]}" y="${L.home[1] + R + 15}" text-anchor="middle" class="cap">House</text>
-    ${hasBattery ? `<text x="${L.battery[0]}" y="${L.battery[1] + R + 15}" text-anchor="middle" class="cap" data-cap="battery">${batteryCaption(n)}</text>` : ""}
-    ${hasCar ? `<text x="${L.car[0]}" y="${L.car[1] + R + 15}" text-anchor="middle" class="cap" data-cap="car">${carCaption(n)}</text>` : ""}
+    ${hasSolar ? `<text x="${L.solar[0]}" y="${L.solar[1] - R - 7}" text-anchor="middle" class="cap">${th("energy.solar")}</text>` : ""}
+    ${hasGrid ? `<text x="${L.grid[0]}" y="${L.grid[1] + R + 15}" text-anchor="middle" class="cap" data-cap="grid">${esc(gridCaption(n))}</text>` : ""}
+    <text x="${L.home[0]}" y="${L.home[1] + R + 15}" text-anchor="middle" class="cap">${th("energy.house")}</text>
+    ${hasBattery ? `<text x="${L.battery[0]}" y="${L.battery[1] + R + 15}" text-anchor="middle" class="cap" data-cap="battery">${esc(batteryCaption(n))}</text>` : ""}
+    ${hasCar ? `<text x="${L.car[0]}" y="${L.car[1] + R + 15}" text-anchor="middle" class="cap" data-cap="car">${esc(carCaption(n))}</text>` : ""}
   </svg>`;
 }
 
 function carCaption(n: EnergyNow): string {
-  if (n.ev.length > 1) return "Cars";
+  if (n.ev.length > 1) return t("energy.cars");
   const l = n.ev[0]?.level;
-  return l !== null && l !== undefined ? `Car · ${Math.round(l)}%` : "Car";
+  return l !== null && l !== undefined ? t("energy.carLevel", { level: Math.round(l) }) : t("energy.car");
 }
 
 function gridCaption(n: EnergyNow): string {
   const g = n.grid ?? 0;
-  return g > IDLE ? "Buying" : g < -IDLE ? "Selling" : "Grid";
+  return t(g > IDLE ? "energy.buying" : g < -IDLE ? "energy.selling" : "energy.grid");
 }
 
 function batteryCaption(n: EnergyNow): string {
   const b = n.battery ?? 0;
   const lvl = n.batteryLevel !== null ? `${Math.round(n.batteryLevel)}%` : "";
-  const what = b > IDLE ? "using" : b < -IDLE ? "charging" : "";
-  return ["Battery", lvl, what].filter(Boolean).join(" · ");
+  const what = b > IDLE ? t("energy.battery.using") : b < -IDLE ? t("energy.battery.charging") : "";
+  return [t("energy.battery"), lvl, what].filter(Boolean).join(" · ");
 }
 
 /** The line under the title: prices now, and what buying or selling costs or earns an hour. */
@@ -141,13 +140,16 @@ function priceLine(n: EnergyNow): string {
   const parts: string[] = [];
   if (g > IDLE) {
     const r = formatRate(g, n.priceImport);
-    if (r) parts.push(`Buying at ${formatPrice(n.priceImport)}/kWh: ${r}`);
+    if (r) parts.push(t("energy.price.buying", { price: formatPrice(n.priceImport), rate: r }));
   } else if (g < -IDLE) {
     const r = formatRate(-g, n.priceExport);
-    if (r) parts.push(`Selling at ${formatPrice(n.priceExport)}/kWh: ${r}`);
+    if (r) parts.push(t("energy.price.selling", { price: formatPrice(n.priceExport), rate: r }));
   }
-  if (!parts.length && n.priceImport) parts.push(`${formatPrice(n.priceImport)}/kWh to buy${n.priceExport ? `, ${formatPrice(n.priceExport)} to sell` : ""}`);
-  if (n.homeComputed) parts.push("house worked out from the others");
+  if (!parts.length && n.priceImport) {
+    const price = formatPrice(n.priceImport);
+    parts.push(n.priceExport ? t("energy.price.toBuySell", { price, sell: formatPrice(n.priceExport) }) : t("energy.price.toBuy", { price }));
+  }
+  if (n.homeComputed) parts.push(t("energy.houseComputed"));
   return parts.join(" · ");
 }
 
@@ -171,15 +173,16 @@ export interface EvActions {
 /** Each car: what it is doing, its battery with the level it charges to, and its charge modes. */
 function evCards(ev: EvNow[]): string {
   return ev.map((c, i) => {
-    const status = [EV_STATE_TEXT[c.state], c.state === "charging" && c.power !== null ? formatPower(c.power) : ""].filter(Boolean).join(" · ");
+    const status = [evStateText(c.state), c.state === "charging" && c.power !== null ? formatPower(c.power) : ""].filter(Boolean).join(" · ");
     const level = c.level !== null ? Math.max(0, Math.min(100, c.level)) : null;
-    const goal = c.target !== null ? `to ${Math.round(c.target)}%${c.by ? ` by ${c.by}` : ""}` : c.by ? `ready by ${c.by}` : "";
-    const meta = [level !== null ? `${Math.round(level)}%` : "", goal, c.slots ? `charging ${c.slots}` : ""].filter(Boolean).join(" · ");
+    const goal = c.target !== null ? (c.by ? t("energy.ev.toBy", { level: Math.round(c.target), time: c.by }) : t("energy.ev.to", { level: Math.round(c.target) }))
+      : c.by ? t("energy.ev.readyBy", { time: c.by }) : "";
+    const meta = [level !== null ? `${Math.round(level)}%` : "", goal, c.slots ? t("energy.ev.slots", { slots: c.slots }) : ""].filter(Boolean).join(" · ");
     const bar = level !== null
       ? `<div class="bar"><i style="width:${level.toFixed(1)}%"></i>${c.target !== null ? `<u style="left:${Math.max(0, Math.min(100, c.target)).toFixed(1)}%"></u>` : ""}</div>`
       : "";
     const modes = c.modes.map((o) => `<button class="vh-chip${o === c.mode ? " on" : ""}" data-mode="${esc(o)}">${esc(modeName(o))}</button>`).join("");
-    const approve = c.canApprove ? `<button class="vh-chip vh-approve" data-approve="1">Approve charge</button>` : "";
+    const approve = c.canApprove ? `<button class="vh-chip vh-approve" data-approve="1">${th("energy.ev.approve")}</button>` : "";
     return `<div class="vh-ev ${c.state}" data-i="${i}">
       <div class="top"><span class="ic">${svg(mdiCarElectric, 18)}</span><b>${esc(c.name)}</b><span class="st">${esc(status)}</span></div>
       ${bar}${meta ? `<div class="meta">${esc(meta)}</div>` : ""}${modes || approve ? `<div class="modes">${modes}${approve}</div>` : ""}
@@ -203,7 +206,7 @@ export function renderEnergySheet(sheet: HTMLElement, energy: EnergyLive, sectio
   if (sheet.dataset.key !== "energy") {
     sheet.dataset.key = "energy";
     sheet.innerHTML = `
-      <h3><span class="t">Energy</span><button class="vh-icon vh-close" style="width:32px;height:32px">${svg(mdiClose, 22)}</button></h3>
+      <h3><span class="t">${th("energy.title")}</span><button class="vh-icon vh-close" style="width:32px;height:32px">${svg(mdiClose, 22)}</button></h3>
       <div class="sub"></div>
       <div class="vh-flow-box"></div>
       <div class="vh-ev-box"></div>
@@ -242,14 +245,14 @@ export function renderEnergySheet(sheet: HTMLElement, energy: EnergyLive, sectio
     evBox.innerHTML = cards;
   }
   evBox.onclick = (e) => {
-    const t = e.target as HTMLElement;
-    const card = t.closest<HTMLElement>("[data-i]");
+    const target = e.target as HTMLElement;
+    const card = target.closest<HTMLElement>("[data-i]");
     if (!card) return;
     const i = Number(card.dataset.i);
-    const mode = t.closest<HTMLElement>("[data-mode]")?.dataset.mode;
+    const mode = target.closest<HTMLElement>("[data-mode]")?.dataset.mode;
     if (mode !== undefined) actions.setMode(i, mode);
-    else if (t.closest("[data-approve]")) actions.approve(i);
-    else if (t.closest(".top")) actions.open(i);
+    else if (target.closest("[data-approve]")) actions.approve(i);
+    else if (target.closest(".top")) actions.open(i);
   };
   renderToday(sheet.querySelector(".vh-today")!, energy);
   sections.forEach((s, i) => {
@@ -262,21 +265,21 @@ export function renderEnergySheet(sheet: HTMLElement, energy: EnergyLive, sectio
 }
 
 function renderToday(el: HTMLElement, energy: EnergyLive): void {
-  const t = energy.today;
-  if (!t || [t.solar, t.home, t.gridIn, t.gridOut, t.car].every((x) => x === null)) {
+  const today = energy.today;
+  if (!today || [today.solar, today.home, today.gridIn, today.gridOut, today.car].every((x) => x === null)) {
     el.hidden = true;
     return;
   }
   el.hidden = false;
-  const self = t.home && t.gridIn !== null ? Math.max(0, Math.min(1, 1 - t.gridIn / t.home)) : null;
+  const self = today.home && today.gridIn !== null ? Math.max(0, Math.min(1, 1 - today.gridIn / today.home)) : null;
   const cells: [string, string][] = [];
-  if (t.solar !== null) cells.push(["Solar", formatEnergy(t.solar)]);
-  if (t.home !== null) cells.push(["House", formatEnergy(t.home)]);
-  if (t.car !== null) cells.push(["Car", formatEnergy(t.car)]);
-  if (t.gridIn !== null) cells.push(["Bought", formatEnergy(t.gridIn)]);
-  if (t.gridOut !== null) cells.push(["Sold", formatEnergy(t.gridOut)]);
-  if (self !== null) cells.push(["Own power", `${Math.round(self * 100)}%`]);
-  const html = `<div class="h">Today</div><div class="cells">${cells.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("")}</div>`;
+  if (today.solar !== null) cells.push([th("energy.solar"), formatEnergy(today.solar)]);
+  if (today.home !== null) cells.push([th("energy.house"), formatEnergy(today.home)]);
+  if (today.car !== null) cells.push([th("energy.car"), formatEnergy(today.car)]);
+  if (today.gridIn !== null) cells.push([th("energy.today.bought"), formatEnergy(today.gridIn)]);
+  if (today.gridOut !== null) cells.push([th("energy.today.sold"), formatEnergy(today.gridOut)]);
+  if (self !== null) cells.push([th("energy.today.own"), `${Math.round(self * 100)}%`]);
+  const html = `<div class="h">${th("energy.today")}</div><div class="cells">${cells.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("")}</div>`;
   if (el.innerHTML !== html) el.innerHTML = html;
 }
 

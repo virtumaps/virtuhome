@@ -2,21 +2,13 @@
 // home), keeping extensions' errors away from the core view, and sending recent errors to the
 // integration for the diagnostics file.
 import { mdiAlertCircleOutline } from "@mdi/js";
+import { t } from "../i18n";
 import type { Hass } from "../live/hass";
 import { privateStrings, stripPrivate } from "../live/strip";
 import type { Plan } from "../model/plan";
-import { parseTierSetting, resolveTier, TIER_NAMES } from "../scene/tier";
+import { parseTierSetting, resolveTier, tierNameEn } from "../scene/tier";
 
 const VERSION = typeof __VERSION__ === "string" ? __VERSION__ : "dev";
-
-/** What the box says (kept together for the one table of strings to come). */
-export const ERROR_TEXT = {
-  title: "Something went wrong drawing the house",
-  copy: "Copy details",
-  copied: "Copied",
-  copyHint: "Copy this to report it:",
-  reload: "Reload",
-};
 
 /** Where an error happened and what it can be stripped with. */
 export interface ErrorInfo {
@@ -251,14 +243,14 @@ export function errorBox(details: () => string): HTMLElement {
   box.innerHTML = `<style>${BOX_CSS}</style><div><svg viewBox="0 0 24 24"><path d="${mdiAlertCircleOutline}"/></svg><b></b>
     <div class="row"><button data-act="copy"></button><button class="main" data-act="reload"></button></div>
     <small hidden></small><textarea readonly hidden></textarea></div>`;
-  box.querySelector("b")!.textContent = ERROR_TEXT.title;
+  box.querySelector("b")!.textContent = t("error.title");
   const copy = box.querySelector<HTMLButtonElement>('[data-act="copy"]')!;
   const reload = box.querySelector<HTMLButtonElement>('[data-act="reload"]')!;
   const hint = box.querySelector("small")!;
   const area = box.querySelector("textarea")!;
-  copy.textContent = ERROR_TEXT.copy;
-  reload.textContent = ERROR_TEXT.reload;
-  hint.textContent = ERROR_TEXT.copyHint;
+  copy.textContent = t("error.copy");
+  reload.textContent = t("error.reload");
+  hint.textContent = t("error.copyHint");
   copy.onclick = async () => {
     let text: string;
     try {
@@ -267,7 +259,7 @@ export function errorBox(details: () => string): HTMLElement {
       // never the raw error: it may hold the names the details would have taken out
       text = `VirtuHome ${VERSION}: the details could not be worked out`;
     }
-    if (await copyText(text, area)) copy.textContent = ERROR_TEXT.copied;
+    if (await copyText(text, area)) copy.textContent = t("error.copied");
     else hint.hidden = false;
   };
   reload.onclick = () => location.reload();
@@ -279,7 +271,7 @@ export function errorBox(details: () => string): HTMLElement {
  * returned object takes Home Assistant when it comes, for Copy details to strip names with.
  */
 export function failedView(parent: ShadowRoot, err: unknown, where: string, quality?: unknown): { hass: Hass | null } {
-  const graphics = TIER_NAMES[resolveTier(parseTierSetting(quality)).tier];
+  const graphics = tierNameEn(resolveTier(parseTierSetting(quality)).tier);
   let hass: Hass | null = null;
   reportFrom(() => ({ hass, plan: null, graphics }));
   logError(err, where);
