@@ -14,5 +14,5 @@ export const LOADER_BYTES = 4 * 1024;
  * The built app (custom_components/virtuhome/frontend/app), in bytes: everything, and what a tablet
  * loads to show the house (app.js and the chunks it imports up front). The test allows 10% over these.
  */
-export const APP_BYTES = 1_554_920;
+export const APP_BYTES = 1_555_106;
 export const FIRST_LOAD_BYTES = 1_123_987;

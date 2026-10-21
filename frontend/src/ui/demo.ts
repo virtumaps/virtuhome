@@ -11,6 +11,7 @@ import type { ViewConfig } from "./view";
 
 export const DEMO_TEXT = {
   title: "This is a demo home.",
+  short: "Demo home",
   more: "Its devices are pretend: tap them to try. Nothing here is saved.",
   start: "Start my own home",
   close: "Close",
@@ -66,7 +67,9 @@ button { flex: none; border: 0; border-radius: 999px; padding: 8px 14px; font: i
 .start { color: #0c1220; background: #56c7ff; }
 .close { color: #eef3fb; background: rgba(255, 255, 255, 0.12); }
 button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.s { display: none; }
 @media (max-width: 720px) { .more { display: none; } }
+@media (max-width: 480px) { .l { display: none; } .s { display: inline; } }
 `;
 
 /** Shows the demo over `under` (the user's view), with its banner; `done` hears which button closed it. */
@@ -78,8 +81,9 @@ export function openDemo(
   host.className = "vh-demo";
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `<style>${CSS}</style><div class="box"></div>
-    <div class="bar"><span class="t"><b></b> <span class="more"></span></span><button class="start"></button><button class="close"></button></div>`;
-  shadow.querySelector("b")!.textContent = DEMO_TEXT.title;
+    <div class="bar"><span class="t"><b class="l"></b><b class="s"></b> <span class="more"></span></span><button class="start"></button><button class="close"></button></div>`;
+  shadow.querySelector(".l")!.textContent = DEMO_TEXT.title;
+  shadow.querySelector(".s")!.textContent = DEMO_TEXT.short;
   shadow.querySelector(".more")!.textContent = DEMO_TEXT.more;
   const start = shadow.querySelector<HTMLButtonElement>(".start")!;
   const close = shadow.querySelector<HTMLButtonElement>(".close")!;

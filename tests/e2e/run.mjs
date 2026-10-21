@@ -255,6 +255,8 @@ async function run() {
   await step("The panel opens with nothing drawn before there is a plan", async () => {
     await page.goto(`${url}/virtuhome`);
     const p = await waitDrawn(page, panel, false);
+    // the first run offers the demo home
+    await page.locator(`${panel} .vh-start-demo`).waitFor({ state: "visible", timeout: 30_000 });
     await page.screenshot({ path: join(shots, "empty.png") });
     return `${p.share}% of the view drawn`;
   });
@@ -343,7 +345,7 @@ async function run() {
     page.off("websocket", listen);
     const now = await ws.call({ type: "virtuhome/plan/get" });
     check(now.revision === saved.revision && canonical(now.plan) === canonical(saved.plan), "the demo changed the stored plan");
-    return `${p.share}% of the demo drawn, ${during.length} messages to Home Assistant meanwhile, none of them a service or a save`;
+    return `${p.share}% of the demo drawn; meanwhile the page sent ${[...new Set(during)].join(", ") || "nothing"}, no service call or save`;
   });
 
   await step("A dashboard card draws the house", async () => {
