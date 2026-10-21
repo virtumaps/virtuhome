@@ -70,6 +70,12 @@ describe("check my setup", () => {
     expect(checkCard({ ...SERVER, dashboard: { mode: "storage", urls: [] } }, "0.10.0")).toMatchObject({ level: "problem", fixes: ["resource"] });
     expect(checkCard({ ...SERVER, dashboard: { mode: "storage", urls: ["x?v=0.9.0"], current: false } }, "0.10.0")).toMatchObject({ level: "problem", fixes: ["resource"] });
     expect(checkCard({ ...SERVER, dashboard: { mode: "yaml" } }, "0.10.0")).toMatchObject({ level: "note", fixes: [] });
+    // just after a restart the resources still name the old version: checking, not a problem
+    const starting = { ...SERVER, dashboard: { mode: "storage", urls: ["x?v=0.9.0"], current: false, pending: true } };
+    expect(checkCard(starting, "0.10.0")).toMatchObject({ level: "ok", count: 0, fixes: [], text: "Checking… Home Assistant is still starting." });
+    expect(checkCard({ ...starting, dashboard: { mode: "storage", urls: [], pending: true } }, "0.10.0").level).toBe("ok");
+    // a page older than what is installed is known at once
+    expect(checkCard(starting, "0.9.0")).toMatchObject({ level: "problem", fixes: ["reload"] });
   });
 
   it("graphics: stepped down by itself, or drawing in software", () => {
