@@ -6,6 +6,9 @@
 - When the house can't be drawn, the card or panel says "Something went wrong drawing the house"
   with **Copy details** and **Reload** instead of staying blank. Copy details leaves out the names
   of rooms, areas, devices and people, entity ids and web addresses.
+- The diagnostics file holds the last 50 errors the cards and the panel ran into (where, the error,
+  the version, the graphics level and the browser), with names, entity ids and web addresses
+  taken out.
 
 ### Fixed
 - An extension that goes wrong no longer stops the house: its room colours, labels, roof colours,

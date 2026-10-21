@@ -185,8 +185,9 @@ can vote for them. [SUPPORT.md](SUPPORT.md) says where everything else goes.
 To report a problem, open an [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) (there
 are forms for bugs, device support, imports and slow devices) and attach the diagnostics file: Settings →
 Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds the versions, the plan's size and
-what each floor counts, how the card reaches your dashboards and which extensions are loaded. It has no
-room, device or entity names, and no licence key or token.
+what each floor counts, how the card reaches your dashboards, which extensions are loaded and the last
+errors the cards and the panel ran into. It has no room, device or entity names, no web addresses, and no
+licence key or token.
 
 ## Development
 

@@ -11,11 +11,13 @@ import voluptuous as vol
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import area_registry as ar, device_registry as dr, floor_registry as fr
 from homeassistant.loader import async_get_integration
 
 from . import card_resource
 from .backgrounds import CHUNK_BYTES, MAX_BYTES, BackgroundError
 from .const import DOMAIN
+from .errors import LIMITS, private_strings
 from .schema import ID, PLAN
 from .licensing import LicenceError
 from .report import CHECK_IDS
@@ -26,7 +28,7 @@ def async_register(hass: HomeAssistant) -> None:
     for command in (
         ws_info, ws_get, ws_save, ws_subscribe, ws_history_list, ws_history_restore,
         ws_licence_get, ws_licence_activate, ws_licence_refresh, ws_licence_remove, ws_catalog,
-        ws_background_upload, ws_checks, ws_checks_fix_card,
+        ws_background_upload, ws_checks, ws_checks_fix_card, ws_errors_report,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -181,6 +183,38 @@ async def ws_checks_fix_card(hass: HomeAssistant, connection: websocket_api.Acti
         return
     await card_resource.async_register(hass, str((await async_get_integration(hass, DOMAIN)).version))
     connection.send_result(msg["id"], await _checks_state(hass, store))
+
+
+# ---------------------------------------------------------------------------- errors
+
+
+def _names(hass: HomeAssistant, store: PlanStore) -> list[str]:
+    """Everything that names the home, its people or its devices, to strip from reports."""
+    names: list[Any] = [hass.config.location_name]
+    for state in hass.states.async_all():
+        names += [state.entity_id, state.name]
+    for area in ar.async_get(hass).async_list_areas():
+        names += [area.id, area.name, *area.aliases]
+    for floor in fr.async_get(hass).async_list_floors():
+        names += [floor.floor_id, floor.name, *floor.aliases]
+    for device in dr.async_get(hass).devices.values():
+        names += [device.name, device.name_by_user]
+    return private_strings(names, store.plan)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "virtuhome/errors/report",
+        # stripped of names by the frontend, and again here; longer text is cut
+        **{vol.Optional(field, default=""): vol.All(vol.Coerce(str), vol.Length(max=limit * 4)) for field, limit in LIMITS.items()},
+    }
+)
+@callback
+def ws_errors_report(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """An error from a card or the panel (any user: wall tablets rarely sign in as admins), for diagnostics."""
+    if (store := _store(hass, connection, msg)) is None:
+        return
+    connection.send_result(msg["id"], {"kept": store.errors.add(msg, _names(hass, store), time.time())})
 
 
 # ---------------------------------------------------------------------------- floor plan images

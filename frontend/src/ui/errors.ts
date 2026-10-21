@@ -1,5 +1,6 @@
 // Errors: the box shown when the house can't be drawn, its details (with nothing that names the
-// home), and keeping extensions' errors away from the core view.
+// home), keeping extensions' errors away from the core view, and sending recent errors to the
+// integration for the diagnostics file.
 import { mdiAlertCircleOutline } from "@mdi/js";
 import type { Hass } from "../live/hass";
 import { privateStrings, stripPrivate } from "../live/strip";
@@ -27,14 +28,14 @@ export interface ErrorInfo {
   plan: Plan | null;
 }
 
-/** An error's message and the first lines of its stack, whatever was thrown. */
+/** An error's message and the first lines of its stack, whatever was thrown (cut again once stripped). */
 export function describeError(err: unknown): { message: string; stack: string } {
   const e = (err && typeof err === "object" ? err : {}) as { name?: unknown; message?: unknown; stack?: unknown };
   const message = typeof e.message === "string" ? (typeof e.name === "string" && e.name ? `${e.name}: ${e.message}` : e.message) : String(err);
   const lines = (typeof e.stack === "string" ? e.stack : "").split("\n").map((l) => l.trim()).filter(Boolean);
   // Chrome's stack starts with the message again
   if (lines.length && message.startsWith(lines[0])) lines.shift();
-  return { message: message.slice(0, 300), stack: lines.slice(0, 12).join("\n").slice(0, 2000) };
+  return { message: message.slice(0, 1200), stack: lines.slice(0, 12).join("\n").slice(0, 8000) };
 }
 
 const BROWSERS: [RegExp, string][] = [
@@ -64,14 +65,99 @@ export function errorDetails(err: unknown, info: ErrorInfo): string {
   return [
     `VirtuHome ${VERSION}, ${info.graphics} graphics, ${browserName(ua)}`,
     `In: ${info.where}`,
-    stripPrivate(message, names),
-    stripPrivate(stack, names),
+    stripPrivate(message, names).slice(0, 300),
+    stripPrivate(stack, names).slice(0, 2000),
   ].filter(Boolean).join("\n");
 }
 
-/** An error the view carries on after (an extension's, a frame that failed once). */
+/** An error the view carries on after (an extension's, a frame that failed once): logged and reported. */
 export function logError(err: unknown, where: string): void {
   console.error(`VirtuHome error (${where})`, err);
+  reportError(err, where);
+}
+
+// ------------------------------------------------------------------ reports to the integration
+
+/** At most this many reports a minute, and this many different errors a page. */
+const REPORT_RATE = 5;
+const REPORT_MAX = 20;
+
+type ReportSource = () => Omit<ErrorInfo, "where">;
+const sources = new Set<ReportSource>();
+/** Errors already sent (once each), when the last few went, and those waiting for Home Assistant. */
+const reported = new Set<string>();
+const sentAt: number[] = [];
+let held: [unknown, string][] = [];
+let reporting = false;
+
+/** Where reports take Home Assistant, the plan and the graphics level from (each view gives its own); returns the removal. */
+export function reportFrom(source: ReportSource): () => void {
+  sources.add(source);
+  watchPage();
+  return () => sources.delete(source);
+}
+
+/** Home Assistant arrived: errors from before it are sent now. */
+export function sendHeld(): void {
+  const waiting = held;
+  held = [];
+  for (const [err, where] of waiting) reportError(err, where);
+}
+
+/**
+ * Sends an error to the integration (virtuhome/errors/report), which keeps the last 50 for the
+ * diagnostics file. Stripped of names first, each error once, a few a minute at most. Nothing here
+ * throws, and an error while reporting is never reported.
+ */
+export function reportError(err: unknown, where: string): void {
+  if (reporting) return;
+  reporting = true;
+  try {
+    let info: Omit<ErrorInfo, "where"> | null = null;
+    for (const source of sources) {
+      const i = source();
+      if (i.hass) {
+        info = i;
+        break;
+      }
+    }
+    if (!info?.hass) {
+      if (held.length < REPORT_RATE) held.push([err, where]);
+      return;
+    }
+    const { message, stack } = describeError(err);
+    const key = `${where}\n${message}\n${stack.split("\n", 1)[0]}`;
+    const now = Date.now();
+    while (sentAt.length && now - sentAt[0] > 60_000) sentAt.shift();
+    if (reported.has(key) || reported.size >= REPORT_MAX || sentAt.length >= REPORT_RATE) return;
+    reported.add(key);
+    sentAt.push(now);
+    const names = privateStrings(info.hass, info.plan);
+    const sent = info.hass.callWS({
+      type: "virtuhome/errors/report", where, message: stripPrivate(message, names).slice(0, 300),
+      stack: stripPrivate(stack, names).slice(0, 2000), version: VERSION, graphics: info.graphics,
+      browser: browserName(typeof navigator === "undefined" ? "" : navigator.userAgent),
+    });
+    // an integration without the command (older, or the dev harness) just doesn't keep it
+    Promise.resolve(sent).catch(() => undefined);
+  } catch {
+    // reporting never throws
+  } finally {
+    reporting = false;
+  }
+}
+
+/** Our scripts (the app's chunks and the extensions), to tell our uncaught errors from Home Assistant's. */
+const OURS = [new URL(".", import.meta.url).href, "/virtuhome_ext/"];
+let watching = false;
+
+/** Errors of ours that nothing caught (in a timer, a click, a promise) are reported too. */
+function watchPage(): void {
+  if (watching || typeof window === "undefined") return;
+  watching = true;
+  const ours = (err: unknown, file = "") => OURS.some((u) => file.includes(u) || String((err as Error)?.stack ?? "").includes(u));
+  window.addEventListener("error", (e) => ours(e.error, e.filename) && reportError(e.error ?? e.message, "page"));
+  window.addEventListener("unhandledrejection", (e) => ours(e.reason) && reportError(e.reason, "page"));
 }
 
 /**
@@ -193,9 +279,18 @@ export function errorBox(details: () => string): HTMLElement {
  * returned object takes Home Assistant when it comes, for Copy details to strip names with.
  */
 export function failedView(parent: ShadowRoot, err: unknown, where: string, quality?: unknown): { hass: Hass | null } {
-  logError(err, where);
-  const state: { hass: Hass | null } = { hass: null };
   const graphics = TIER_NAMES[resolveTier(parseTierSetting(quality)).tier];
-  parent.replaceChildren(errorBox(() => errorDetails(err, { where, graphics, hass: state.hass, plan: null })));
-  return state;
+  let hass: Hass | null = null;
+  reportFrom(() => ({ hass, plan: null, graphics }));
+  logError(err, where);
+  parent.replaceChildren(errorBox(() => errorDetails(err, { where, graphics, hass, plan: null })));
+  return {
+    get hass() {
+      return hass;
+    },
+    set hass(h) {
+      hass = h;
+      sendHeld();
+    },
+  };
 }

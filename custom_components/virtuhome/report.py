@@ -1,8 +1,9 @@
 """What "Download diagnostics" puts in the file (no Home Assistant imports: testable alone).
 
-Only versions, counts and states go in. No room or device names and no entity ids from the plan, and
-never the licence key, token, activation id or installation hash: the licence part is built from a
-short list of safe fields. diagnostics.py also runs Home Assistant's redaction over the result, in case
+Only versions, counts and states go in, and the frontend's last errors with names, entity ids and
+addresses stripped (errors.py). No room or device names and no entity ids from the plan, and never
+the licence key, token, activation id or installation hash: the licence part is built from a short
+list of safe fields. diagnostics.py also runs Home Assistant's redaction over the result, in case
 a secret ever ends up in one of the dicts copied here.
 """
 
@@ -120,5 +121,7 @@ def build_report(
     if store is not None:
         report["plan"] = plan_summary(store.plan, store.revision, store.snapshots, entity_exists)
         report["checks"] = checks_summary(getattr(store, "checks", None))
+        errors = getattr(store, "errors", None)
+        report["errors"] = errors.summary() if errors is not None else []
     report["licence"] = licence_summary(licence, loaded)
     return report

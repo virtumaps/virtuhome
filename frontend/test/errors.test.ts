@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { privateStrings, stripPrivate } from "../src/live/strip";
 import { browserName, callEach, describeError, errorDetails, isolate } from "../src/ui/errors";
 import { extensionFailures, loadExtensions, registerView, type ViewHandle } from "../src/ext/api";
@@ -98,7 +98,7 @@ describe("describing errors", () => {
   it("describes whatever was thrown", () => {
     expect(describeError("plain text")).toEqual({ message: "plain text", stack: "" });
     expect(describeError(null).message).toBe("null");
-    expect(describeError({ message: "x".repeat(1000) }).message).toHaveLength(300);
+    expect(describeError({ message: "x".repeat(5000) }).message).toHaveLength(1200);
   });
 
   it("names the browser and system only", () => {
@@ -161,5 +161,74 @@ describe("extensions that throw", () => {
     expect(extensionFailures().map((f) => f.name)).toEqual([urls[0]]);
     // a cleanup that throws doesn't stop the view going away
     expect(() => unregister()).not.toThrow();
+  });
+});
+
+describe("reporting errors to the integration", () => {
+  type Sent = Record<string, unknown>;
+  let errs: typeof import("../src/ui/errors");
+  let sent: Sent[];
+  const fakeHass = (callWS: (msg: Sent) => Promise<unknown> = (msg) => (sent.push(msg), Promise.resolve({ kept: true }))) =>
+    ({ ...hass(), callWS } as unknown as Hass);
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    errs = await import("../src/ui/errors");
+    sent = [];
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("sends each error once, stripped of names", () => {
+    errs.reportFrom(() => ({ hass: fakeHass(), plan: plan(), graphics: "Tablet" }));
+    const err = new RangeError("No room for Kitchen near light.kitchen");
+    err.stack = "RangeError: No room for Kitchen near light.kitchen\n    at build (http://ha.local:8123/virtuhome_static/app/chunk-ABC.js:3:14)";
+    errs.logError(err, "plan");
+    errs.reportError(err, "plan");
+    expect(sent).toEqual([{
+      type: "virtuhome/errors/report", where: "plan", message: "RangeError: No room for <name> near <entity>",
+      stack: "at build (chunk-ABC.js:3:14)", version: "dev", graphics: "Tablet", browser: expect.any(String),
+    }]);
+  });
+
+  it("sends a few a minute at most", () => {
+    vi.useFakeTimers();
+    errs.reportFrom(() => ({ hass: fakeHass(), plan: null, graphics: "Tablet" }));
+    for (let i = 0; i < 8; i++) errs.reportError(new Error(`error ${i}`), "view");
+    expect(sent).toHaveLength(5);
+    vi.advanceTimersByTime(61_000);
+    errs.reportError(new Error("error 6"), "view");
+    expect(sent.map((m) => m.message)).toEqual(["Error: error 0", "Error: error 1", "Error: error 2", "Error: error 3", "Error: error 4", "Error: error 6"]);
+  });
+
+  it("never reports an error while reporting, and never throws", () => {
+    let calls = 0;
+    errs.reportFrom(() => ({
+      hass: fakeHass(() => {
+        calls++;
+        // sending fails and fails again while failing
+        errs.reportError(new Error("while sending"), "view");
+        throw new Error("no connection");
+      }),
+      plan: null, graphics: "Tablet",
+    }));
+    expect(() => errs.reportError(new Error("first"), "view")).not.toThrow();
+    expect(calls).toBe(1);
+    // an integration without the command answers with an error: nothing more happens
+    errs.reportFrom(() => ({ hass: fakeHass(() => Promise.reject(new Error("unknown command"))), plan: null, graphics: "Tablet" }));
+    expect(() => errs.reportError(new Error("second"), "view")).not.toThrow();
+  });
+
+  it("keeps errors from before Home Assistant came until it does", () => {
+    let h: Hass | null = null;
+    errs.reportFrom(() => ({ hass: h, plan: null, graphics: "Standard" }));
+    errs.reportError(new Error("too early"), "card");
+    expect(sent).toEqual([]);
+    h = fakeHass();
+    errs.sendHeld();
+    expect(sent.map((m) => [m.where, m.message])).toEqual([["card", "Error: too early"]]);
   });
 });

@@ -17,7 +17,7 @@ import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky"
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
 import { SkyPanel, SKY_CSS, type SkyPick } from "./sky";
 import { checkCounts, runChecks, type Check, type ServerChecks } from "./checks";
-import { callEach, errorBox, errorDetails, isolate, logError } from "./errors";
+import { callEach, errorBox, errorDetails, isolate, logError, reportFrom, sendHeld } from "./errors";
 
 export interface ViewConfig {
   /** Floor to open on (id, name or index); otherwise the whole house. */
@@ -162,6 +162,7 @@ export class VhView {
   private skyPanel: SkyPanel;
   /** The house can't be drawn: the error box shows instead. */
   private failed = false;
+  private unreport: () => void;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
@@ -224,6 +225,8 @@ export class VhView {
     this.viewer = new Viewer(canvas, overlay, { tier, theme: "night", realistic: realisticModule });
     this.viewer.onSlow = () => this.onSlow();
     this.viewer.onError = (err, fatal, where) => (fatal ? this.fail(err, where) : logError(err, where));
+    // errors go to the integration stripped of what this view knows
+    this.unreport = reportFrom(() => ({ hass: this._hass, plan: this.plan, graphics: TIER_NAMES[this.viewer.tier] }));
     this.ensureLook();
     this.viewer.walls = config.walls ?? "smart";
     this.viewer.roofOn = roofSetting() ?? config.roof ?? true;
@@ -320,6 +323,7 @@ export class VhView {
   // ------------------------------------------------------------------ hass and plan
 
   set hass(h: Hass) {
+    if (!this._hass) queueMicrotask(sendHeld);
     if (this.failed) {
       // kept for Copy details, which strips the names it knows
       this._hass = h;
@@ -969,6 +973,7 @@ export class VhView {
     this.disconnect();
     this.unregister?.();
     this.unregister = null;
+    this.unreport();
     window.clearInterval(this.statsTimer);
     window.clearInterval(this.todayTimer);
     this.barWatch?.disconnect();
