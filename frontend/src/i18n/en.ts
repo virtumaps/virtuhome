@@ -14,6 +14,9 @@ export const EN = {
   "start.scan.text": "A scan from the House Scan app, or a plan from Sweet Home 3D or another program.",
   "start.draw.title": "Draw it myself",
   "start.draw.text": "Drag out the rooms in the 2D plan and type their sizes.",
+  // in the first-run choices and in Edit → Home
+  "start.demo.title": "Look at the demo home",
+  "start.demo.text": "A finished home with pretend devices, to see what VirtuHome can do.",
 
   // ---------------------------------------------------------------- getting started (the editor's checklist)
   "setup.home.title": "Get your home in",

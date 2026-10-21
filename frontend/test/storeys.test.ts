@@ -3,7 +3,7 @@ import { normalizePlan, type Floor, type Plan } from "../src/model/plan";
 
 // A storey added by hand has no rooms until they are drawn: everything that walks the floors copes.
 describe("a storey without rooms yet", async () => {
-  const { DEMO_PLAN } = await import("../dev/demo-plan");
+  const { DEMO_PLAN } = await import("../src/demo/plan");
   const { buildFloor } = await import("../src/scene/build");
   const { DAY } = await import("../src/scene/palette");
   const { suggestRoofs } = await import("../src/auto/roof");

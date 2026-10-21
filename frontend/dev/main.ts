@@ -5,15 +5,16 @@
 //   ?plan=empty           no home yet (the first run), in a Home Assistant with the demo home's areas and devices
 //   ?plan=catalog[&cat=<category>]  every built-in item in a labelled grid
 //   ?theme=day|night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?stats
+//   ?weather=rainy|snowy|pouring|fog|lightning-rainy|none  ?where=<area id> (where Alex is)  ?leak
 import "../src/compat";
 import { createConnection, createLongLivedTokenAuth, subscribeEntities, type Connection } from "home-assistant-js-websocket";
 import { emptyPlan, normalizePlan, type Plan } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
 import { VhView } from "../src/ui/view";
 import type { WallMode, Quality } from "../src/scene/viewer";
-import { DEMO_PLAN } from "./demo-plan";
+import { DEMO_PLAN } from "../src/demo/plan";
 import { catalogPlan } from "./catalog-plan";
-import { demoEdits, demoHass } from "./demo-hass";
+import { demoEdits, demoHass } from "../src/demo/hass";
 import { importRoomPlan } from "../src/import/roomplan";
 import { autoPlace } from "../src/auto/placement";
 
@@ -109,7 +110,12 @@ async function main(): Promise<void> {
     }
   };
   const pretend = q.get("plan") === "empty" ? normalizePlan(DEMO_PLAN) : plan;
-  const hass = q.get("hass") === "live" ? await liveHass(set) : demoHass(pretend, set, (q.get("theme") ?? "night") === "night");
+  const hass = q.get("hass") === "live" ? await liveHass(set) : demoHass(pretend, set, {
+    night: (q.get("theme") ?? "night") === "night",
+    weather: q.get("weather") ?? undefined,
+    where: q.get("where") ?? undefined,
+    leak: q.has("leak"),
+  });
   set(hass);
   const floor = q.get("floor");
   if (floor !== null) view.showFloor(Number(floor));

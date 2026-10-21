@@ -5,8 +5,8 @@
 import { normalizePlan } from "../src/model/plan";
 import { VhView } from "../src/ui/view";
 import type { Quality, WallMode } from "../src/scene/viewer";
-import { DEMO_PLAN } from "./demo-plan";
-import { demoHass } from "./demo-hass";
+import { DEMO_PLAN } from "../src/demo/plan";
+import { demoHass } from "../src/demo/hass";
 
 const q = new URLSearchParams(location.search);
 
@@ -19,8 +19,9 @@ function start(): void {
     editable: true,
     demo: true,
   }, plan);
-  // it opens in daylight; the day / night button (or ?theme=night) shows the lights at night
-  view.hass = demoHass(plan, (h) => (view.hass = h), q.get("theme") === "night");
+  // it opens in daylight; the day / night button (or ?theme=night) shows the lights at night.
+  // Its devices change by themselves, as in the demo home inside Home Assistant.
+  view.hass = demoHass(plan, (h) => (view.hass = h), { night: q.get("theme") === "night", lively: true });
   const floor = q.get("floor");
   if (floor !== null) view.showFloor(Number(floor));
   (window as unknown as { vh: VhView }).vh = view;

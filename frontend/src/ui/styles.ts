@@ -101,6 +101,10 @@ export const VIEW_CSS = /* css */ `
 .vh-start-choice b { font-size: 15px; }
 .vh-start-choice span { color: var(--vh-dim); font-size: 13px; line-height: 1.35; }
 .vh-start-choice:hover, .vh-start-choice:focus-visible { box-shadow: inset 0 0 0 1.5px var(--vh-accent); background: var(--vh-chip-on); outline: none; }
+.vh-start-demo { align-self: center; border: 0; background: none; padding: 8px; font: inherit; font-size: 14px; color: var(--vh-accent); cursor: pointer; }
+.vh-start-demo:hover, .vh-start-demo:focus-visible { text-decoration: underline; outline: none; }
+/* the demo home covers the view, which stays hidden (and draws nothing) underneath */
+.vh-root.vh-demo-on > :not(.vh-demo) { display: none !important; }
 .vh-toast {
   position: absolute; left: 50%; bottom: 18px; transform: translate(-50%, 30px); opacity: 0; transition: all 0.25s;
   background: var(--vh-glass); color: var(--vh-text); border-radius: 14px; padding: 8px 14px; font-size: 13px; pointer-events: none;

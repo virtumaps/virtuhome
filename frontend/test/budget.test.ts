@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { normalizePlan, type Plan } from "../src/model/plan";
 import { buildFloor } from "../src/scene/build";
 import { DAY } from "../src/scene/palette";
-import { DEMO_PLAN } from "../dev/demo-plan";
+import { DEMO_PLAN } from "../src/demo/plan";
 import { APP_BYTES, DEMO_TRIANGLES, FIRST_LOAD_BYTES, LOADER_BYTES } from "./budgets";
 
 const built = new URL("../../custom_components/virtuhome/frontend/", import.meta.url).pathname;
@@ -86,5 +86,12 @@ describe("bundle size", () => {
     expect(first[0]).toBe("app.js");
     expect(first.length).toBeGreaterThan(1);
     expect(first.length).toBeLessThan(files.length);
+  });
+
+  it("fetches the demo home only when someone opens it", () => {
+    // the demo house and its pretend states are in a chunk of their own, not in what shows the house
+    const demo = files.filter((f) => readFileSync(app + f, "utf8").includes("Demo house"));
+    expect(demo.length).toBe(1);
+    expect(firstLoad(app)).not.toContain(demo[0]);
   });
 });
