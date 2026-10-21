@@ -7,6 +7,7 @@ import { add, area, cross, dist, dot, norm, outwardNormal, scale, segmentDistanc
 import { layoutWalls } from "../model/walls";
 import { CEILING_LAMPS, FURNITURE } from "../scene/furniture-lib";
 import { furnitureFor, isType } from "./names";
+import { t, type EditorPlainKey } from "../i18n/editor";
 
 export interface DraftRoom {
   name?: string;
@@ -83,7 +84,7 @@ export interface ImportSummary {
   north: number | null;
 }
 
-const FLOOR_NAMES = ["Ground Floor", "First Floor", "Second Floor", "Third Floor"];
+const FLOOR_NAMES: EditorPlainKey[] = ["editor.floor.groundFloor", "editor.floor.firstFloor", "editor.floor.secondFloor", "editor.floor.thirdFloor"];
 /** Furthest a door or window may lie from its room edge, and the widest gap two rooms a wall apart have. */
 const NEAR = 0.45;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -104,10 +105,10 @@ export function buildPlan(draft: Draft): { plan: Plan; summary: ImportSummary } 
     const rooms: { name: string; points: Vec2[]; outset?: number[] }[] = [];
     for (const r of df.rooms) {
       roomNo++;
-      const name = r.name?.trim() || `Room ${roomNo}`;
+      const name = r.name?.trim() || t("editor.import.roomRoomno", { roomNo });
       const kept = tidy(r.points, r.outset);
       if (kept.points.length < 3 || area(kept.points) < 0.1) {
-        left.push(`${name}: too few corners`);
+        left.push(t("editor.import.nameTooFewCorners", { name }));
         continue;
       }
       rooms.push({ name, ...kept });
@@ -117,7 +118,7 @@ export function buildPlan(draft: Draft): { plan: Plan; summary: ImportSummary } 
 
     const used = new Set<string>();
     const floor: Floor = {
-      id: `floor_${fi}`, name: df.name?.trim() || FLOOR_NAMES[fi] || `Floor ${fi + 1}`, ha_floor: null,
+      id: `floor_${fi}`, name: df.name?.trim() || (FLOOR_NAMES[fi] && t(FLOOR_NAMES[fi])) || t("editor.floor.floorX", { x: fi + 1 }), ha_floor: null,
       elevation: r3(df.elevation), height: r3(Math.max(2, df.height)),
       rooms: rooms.map((r, i): Room => {
         let id = r.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "room";
@@ -131,16 +132,16 @@ export function buildPlan(draft: Draft): { plan: Plan; summary: ImportSummary } 
     // doors and windows onto the nearest room edge (the room they open into, when known)
     const hinges = new Map<Opening, Vec2>();
     for (const o of df.openings) {
-      const what = o.label || (o.kind === "window" ? "A window" : "A door");
+      const what = o.label || (o.kind === "window" ? t("editor.import.aWindow") : t("editor.import.aDoor"));
       const found = edgeFor(floor.rooms, o);
       if (!found) {
-        left.push(`${what} at ${fmt(o.at)} is on no room edge`);
+        left.push(t("editor.import.whatAtAtIs", { what, at: fmt(o.at) }));
         continue;
       }
-      const { room, edge, t, len, inward } = found;
+      const { room, edge, t: along, len, inward } = found;
       const width = Math.min(o.width, len);
       const op: Opening = {
-        id: newId("op"), room_id: room.id, edge, offset: r3(Math.max(width / 2, Math.min(len - width / 2, t))),
+        id: newId("op"), room_id: room.id, edge, offset: r3(Math.max(width / 2, Math.min(len - width / 2, along))),
         width: r3(width), height: r3(o.height), sill: o.kind === "window" ? r3(Math.max(0, o.sill)) : 0, kind: o.kind,
       };
       if (o.style) op.style = o.style;
@@ -166,7 +167,7 @@ export function buildPlan(draft: Draft): { plan: Plan; summary: ImportSummary } 
     }
 
     for (const p of df.furniture) {
-      const label = p.name || p.type || "A piece";
+      const label = p.name || p.type || t("editor.import.aPiece");
       const info = { w: p.w ?? undefined, h: p.h ?? undefined, elevation: p.elevation ?? undefined, storey: floor.height, light: p.light };
       let type = p.type && isType(p.type) ? p.type : furnitureFor(p.type || p.name || "", info);
       if (type === null && p.type && p.name) type = furnitureFor(p.name, info);
@@ -175,14 +176,14 @@ export function buildPlan(draft: Draft): { plan: Plan; summary: ImportSummary } 
         continue;
       }
       if (type === null) boxes.push(label);
-      const t = type ?? "column";
-      const [dw, dd, dh] = FURNITURE[t].size;
+      const kind = type ?? "column";
+      const [dw, dd, dh] = FURNITURE[kind].size;
       const size = (v: number | null | undefined, d: number) => r3(v && v > 0.005 ? v : d);
       const piece: Furniture = {
-        id: newId("f"), type: t, x: r3(p.at[0]), z: r3(p.at[1]),
+        id: newId("f"), type: kind, x: r3(p.at[0]), z: r3(p.at[1]),
         rotation: r3((((p.rotation ?? 0) % 360) + 360) % 360), w: size(p.w, dw), d: size(p.d, dd), h: size(p.h, dh),
       };
-      if ((p.elevation ?? 0) > 0.02 && !CEILING_LAMPS.has(t)) piece.y = r3(p.elevation!);
+      if ((p.elevation ?? 0) > 0.02 && !CEILING_LAMPS.has(kind)) piece.y = r3(p.elevation!);
       if (p.mirror) piece.mirror = true;
       floor.furniture.push(piece);
     }

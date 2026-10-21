@@ -12,6 +12,7 @@ import type { Draft, DraftFloor, DraftOpening, DraftPiece, DraftRoom } from "./d
 import { plain } from "./names";
 import { parseXml, type XmlElement } from "./xml";
 import { isZip, unzipEntry } from "./zip";
+import { t } from "../i18n/editor";
 
 /** Sweet Home 3D's own catalogue ids: a type, or a name to find one by (with the piece's size and height). */
 const CATALOG: Record<string, string> = {
@@ -45,14 +46,14 @@ interface WallPiece {
 }
 
 export async function importSh3d(bytes: Uint8Array): Promise<Draft> {
-  if (!isZip(bytes)) throw new Error("The file is not a Sweet Home 3D file.");
+  if (!isZip(bytes)) throw new Error(t("editor.import.theFileIsNot"));
   const xml = await unzipEntry(bytes, "Home.xml");
-  if (!xml) throw new Error("The file has no Home.xml in it: open it in Sweet Home 3D 5.3 or later and save it again.");
+  if (!xml) throw new Error(t("editor.import.theFileHasNoHome"));
   return sh3dDraft(parseXml(new TextDecoder().decode(xml)));
 }
 
 export function sh3dDraft(home: XmlElement): Draft {
-  if (home.name !== "home") throw new Error("The file is not a Sweet Home 3D home.");
+  if (home.name !== "home") throw new Error(t("editor.import.theFileIsNotA"));
   const num = (e: XmlElement, k: string, d = 0) => {
     const v = parseFloat(e.attrs[k]);
     return Number.isFinite(v) ? v : d;
@@ -113,7 +114,7 @@ export function sh3dDraft(home: XmlElement): Draft {
     });
     floors[f].rooms.push(room);
   }
-  if (unwalled) left.push(`${unwalled} room side${unwalled === 1 ? "" : "s"} without a wall (VirtuHome draws one)`);
+  if (unwalled) left.push(t("editor.import.unwalled", { n: unwalled }));
 
   // walls no room runs along stand on their own
   for (const w of pieces) {
@@ -151,7 +152,7 @@ export function sh3dDraft(home: XmlElement): Draft {
   for (const e of home.children) visit(e);
 
   const drawings = of("label").length + of("dimensionLine").length + of("polyline").length;
-  if (drawings) left.push("labels, dimension lines and drawn lines");
+  if (drawings) left.push(t("editor.import.labelsDimensionLinesAnd"));
 
   // the plan's thicknesses: walls with a room on one side are outside walls
   const median = (v: number[]) => (v.length ? v.sort((x, y) => x - y)[Math.floor(v.length / 2)] : null);

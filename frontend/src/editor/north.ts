@@ -2,6 +2,7 @@
 // Assistant's home location, matched to the plan's walls. A wall's direction gives north to within
 // a quarter turn; the building's proportions and the plan's current north settle the rest.
 import type { Plan, Vec2 } from "../model/plan";
+import { t } from "../i18n/editor";
 
 /** A building from the map, in metres east (x) and north (y) of the home location. */
 export interface Footprint {
@@ -143,14 +144,14 @@ export async function fetchBuildings(lat: number, lon: number, radius = 60): Pro
         body: "data=" + encodeURIComponent(query),
         signal: abort.signal,
       });
-      if (!res.ok) throw new Error(`OpenStreetMap answered ${res.status}`);
+      if (!res.ok) throw new Error(t("editor.sky.openstreetmapAnsweredStatus", { status: res.status }));
       const json = (await res.json()) as { elements?: { type: string; id: number; geometry?: { lat: number; lon: number }[] }[] };
       return (json.elements ?? [])
         .filter((e) => e.type === "way" && e.geometry)
         .map((e) => footprint(e.id, e.geometry!, lat, lon))
         .filter((f): f is Footprint => !!f);
     } catch (err) {
-      last = abort.signal.aborted ? new Error("no answer in time") : err;
+      last = abort.signal.aborted ? new Error(t("editor.sky.noAnswerInTime")) : err;
     } finally {
       clearTimeout(timer);
     }

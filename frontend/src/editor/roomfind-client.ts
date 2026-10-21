@@ -1,6 +1,7 @@
 // Runs the room finder in its worker. The worker's script is fetched only when rooms are looked for,
 // so nobody else downloads it.
 import type { FindInput, FindResult } from "./roomfind";
+import { t } from "../i18n/editor";
 
 declare const __VERSION__: string;
 
@@ -13,7 +14,7 @@ export function findRoomsAside(input: FindInput, signal?: AbortSignal): Promise<
     try {
       worker = new Worker(workerUrl(), { type: "module" });
     } catch {
-      reject(new Error("This browser can't look for rooms."));
+      reject(new Error(t("editor.findRooms.thisBrowserCantLook")));
       return;
     }
     const done = () => {
@@ -29,12 +30,12 @@ export function findRoomsAside(input: FindInput, signal?: AbortSignal): Promise<
     worker.onmessage = (e: MessageEvent<{ ok: boolean; result?: FindResult; error?: string }>) => {
       done();
       if (e.data.ok && e.data.result) resolve(e.data.result);
-      else reject(new Error(e.data.error || "Looking for rooms went wrong."));
+      else reject(new Error(e.data.error || t("editor.findRooms.lookingForRoomsWent")));
     };
     worker.onerror = (e) => {
       done();
       e.preventDefault?.();
-      reject(new Error("Looking for rooms went wrong."));
+      reject(new Error(t("editor.findRooms.lookingForRoomsWent")));
     };
     worker.postMessage(input, [input.grey.buffer]);
   });

@@ -7,6 +7,7 @@
 import { newId, normalizePlan, DEFAULT_SETTINGS, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec2 } from "../model/plan";
 import { centroid, pointInPolygon, segmentDistance } from "../model/geom";
 import { FURNITURE } from "../scene/furniture-lib";
+import { t, type EditorPlainKey } from "../i18n/editor";
 
 type M = number[];
 
@@ -146,8 +147,9 @@ const ROOMPLAN_TYPES: Record<string, string> = {
   table: "table", sofa: "sofa", chair: "chair", fireplace: "fireplace", television: "tv_board", stairs: "stairs",
 };
 
-const LABELS: Record<string, string> = {
-  livingRoom: "Living Room", bedroom: "Bedroom", bathroom: "Bathroom", kitchen: "Kitchen", diningRoom: "Dining Room",
+const LABELS: Record<string, EditorPlainKey> = {
+  livingRoom: "editor.import.room.livingRoom", bedroom: "editor.import.room.bedroom", bathroom: "editor.import.room.bathroom", kitchen: "editor.import.room.kitchen",
+  diningRoom: "editor.import.room.diningRoom",
 };
 
 const flat = (t: number[] | number[][]): M => (Array.isArray(t[0]) ? (t as number[][]).flat() : (t as number[]));
@@ -178,7 +180,7 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
     return list.length ? list : rawRooms.flatMap((r) => (r[k] as Surface[] | undefined) ?? []);
   };
   const walls = top("walls");
-  if (!walls.length) throw new Error("The file has no walls: is it a RoomPlan JSON?");
+  if (!walls.length) throw new Error(t("editor.import.theFileHasNo"));
 
   // 1. straighten: the walls' main direction (length weighted, modulo 90 degrees)
   let sx = 0;
@@ -193,7 +195,7 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
   const straighten = (-Math.atan2(sy, sx) * 180) / Math.PI / 4;
 
   const names = manifest?.rooms?.slice().sort((a, b) => a.order - b.order).map((r) => r.name) ?? [];
-  if (names.length && names.length !== rawRooms.length) warnings.push(`The manifest names ${names.length} rooms, the scan has ${rawRooms.length}.`);
+  if (names.length && names.length !== rawRooms.length) warnings.push(t("editor.import.theManifestNamesN", { n: names.length, n2: rawRooms.length }));
 
   interface Work {
     name: string;
@@ -206,13 +208,13 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
   rawRooms.forEach((r, i) => {
     const f = (r.floors ?? []).find((s) => (s.polygonCorners?.length ?? 0) >= 3 && s.transform);
     if (!f) {
-      warnings.push(`Room ${i + 1} has no floor outline (scanned before iOS 17?) and was left out.`);
+      warnings.push(t("editor.import.roomXHasNo", { x: i + 1 }));
       return;
     }
     const m = flat(f.transform!);
     const poly = f.polygonCorners!.map((c) => rot(apply(m, c), straighten));
     const label = r.sections?.find((s) => s.label && s.label !== "unidentified")?.label;
-    const name = names[i] ?? (label ? LABELS[label] ?? label : `Room ${i + 1}`);
+    const name = names[i] ?? (label ? (LABELS[label] ? t(LABELS[label]) : label) : t("editor.findRooms.roomX", { x: i + 1 }));
     rooms.push({ name: cleanName(name), story: r.story ?? f.story ?? 0, poly, lines: [], shared: [] });
   });
 
@@ -351,11 +353,11 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
 
   // floors by storey
   const stories = [...new Set(rooms.map((r) => r.story))].sort((a, b) => a - b);
-  const floorNames = ["Ground Floor", "First Floor", "Second Floor", "Third Floor"];
+  const floorNames = [t("editor.floor.groundFloor"), t("editor.floor.firstFloor"), t("editor.floor.secondFloor"), t("editor.floor.thirdFloor")];
   const base = level.get(stories[0] ?? 0) ?? 0;
   const floors: Floor[] = stories.map((s, i) => ({
     id: `floor_${i}`,
-    name: floorNames[i] ?? `Floor ${i + 1}`,
+    name: floorNames[i] ?? t("editor.floor.floorX", { x: i + 1 }),
     ha_floor: null,
     elevation: round((level.get(s) ?? base) - base),
     height: round(median(heights) + 0.2),
@@ -400,7 +402,7 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
       }
       const b = best as { d: number; r: Work; e: number; t: number; len: number } | null;
       if (!b || b.d > 0.45) {
-        warnings.push(`A ${kind ?? "opening"} at ${p.map((v) => v.toFixed(1)).join(", ")} lies on no room edge and was left out.`);
+        warnings.push(t("editor.import.aXAtList", { x: kind ?? "opening", list: p.map((v) => v.toFixed(1)).join(", ") }));
         continue;
       }
       const isDoor = kind === "door" || (kind === null && bottom < 0.15);
@@ -507,7 +509,7 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
   let decorCount = 0;
   const det = opt.detections;
   if (det?.objects?.length) {
-    if (det.space && det.space !== "structure") warnings.push("detections.json is from an unfinished scan: decor may sit in the wrong place.");
+    if (det.space && det.space !== "structure") warnings.push(t("editor.import.detectionsJsonIsFrom"));
     let assumed = 0;
     for (const o of det.objects) {
       const type = DECOR_TYPES[o.label];
@@ -556,7 +558,7 @@ export function importRoomPlan(data: CapturedStructureJson, manifest?: Manifest 
       fl.furniture.push(piece);
       decorCount++;
     }
-    if (assumed) warnings.push(`${assumed} decor item${assumed === 1 ? "" : "s"} could not be lined up exactly: check where they stand.`);
+    if (assumed) warnings.push(t("editor.import.decorNotLinedUp", { n: assumed }));
   }
 
   // north: the scan's -Z axis ends up turned by straighten + turn on the plan (clockwise from its top)
