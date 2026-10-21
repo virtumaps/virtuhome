@@ -50,6 +50,11 @@ export interface ViewConfig {
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
 
+/** Why the plan can't be saved now, or null: a demo never saves, and nothing saves while the demo home shows. */
+export function saveRefused(config: ViewConfig, demoShown: boolean): string | null {
+  return config.demo ? "The demo can't save" : demoShown ? "Close the demo first" : null;
+}
+
 /** The walls button shows its mode: a whole brick wall, one stepped down where it is cut away, or a low one. */
 const WALL_ICONS: Record<WallMode, string> = {
   full: mdiWall,
@@ -1247,8 +1252,8 @@ export class VhView {
       savedJson: this.unsavedFrom ?? undefined,
       followed: this.followed,
       save: async (plan, base) => {
-        if (this.config.demo) throw new Error("The demo can't save");
-        if (this.demo) throw new Error("Close the demo first");
+        const refused = saveRefused(this.config, !!this.demo);
+        if (refused) throw new Error(refused);
         const saved = (revision: number) => {
           this.baseJson = JSON.stringify(plan);
           this.unsavedFrom = null;

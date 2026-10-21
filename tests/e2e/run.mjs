@@ -1,7 +1,8 @@
 // End-to-end test against a real Home Assistant: starts one with VirtuHome (tests/e2e/ha.py), saves
 // the plan fixtures through VirtuHome's WebSocket API and checks in headless Chrome that each one
-// draws in the panel, that the editor opens and a save survives a reload, that a dashboard card
-// draws, and that the diagnostics download works without names from the plan in it.
+// draws in the panel, that the editor opens and a save survives a reload, that the demo home opens
+// without saving or calling a service, that a dashboard card draws, and that the diagnostics
+// download works without names from the plan in it.
 //
 //   node tests/e2e/run.mjs --python <the Python Home Assistant is installed in> [--port 8131]
 //                          [--dir <new folder for the config, logs and screenshots>] [--chrome <path>]
@@ -305,6 +306,44 @@ async function run() {
     await page.locator(`${panel} .ed-head button[title="Close"]`).click();
     const now = await ws.call({ type: "virtuhome/plan/get" });
     check(now.revision === saved.revision && canonical(now.plan) === canonical(saved.plan), "opening the editor changed the stored plan");
+  });
+
+  await step("The demo home opens from Edit → Home, saves nothing, calls no service and closes back to the home", async () => {
+    const saved = await ws.call({ type: "virtuhome/plan/get" });
+    // everything the page sends Home Assistant from here on
+    const sent = [];
+    const listen = (socket) => socket.on("framesent", (f) => typeof f.payload === "string" && sent.push(f.payload));
+    page.on("websocket", listen);
+    await page.reload();
+    await waitDrawn(page, panel);
+    await page.locator(`${panel} .vh-edit`).click();
+    await page.locator(`${panel} .ed-btn`, { hasText: "Look at the demo home" }).click();
+    const demo = `${panel} .vh-demo`;
+    await page.locator(`${demo} .bar`).waitFor({ state: "visible", timeout: 30_000 });
+    const from = sent.length;
+    const p = await waitDrawn(page, demo);
+    // taps switch the pretend devices: the lights off, a room's devices, the temperature map
+    const lights = page.locator(`${demo} .vh-lights`);
+    if (await lights.count()) await lights.click();
+    await page.locator(`${demo} [data-act="heat"]`).click();
+    await page.locator(`${demo} .vh-chip`, { hasText: "Ground Floor" }).click();
+    await page.locator(`${demo} .vh-label`, { hasText: "Living Room" }).first().click();
+    await page.locator(`${demo} .vh-row`).first().click();
+    // and they change by themselves
+    await page.waitForTimeout(8000);
+    await page.screenshot({ path: join(shots, "demo.png") });
+    const during = sent.slice(from).map((m) => JSON.parse(m).type);
+    const banned = during.filter((t) => t === "call_service" || t === "execute_script" || /^virtuhome\/(plan\/save|history\/restore)/.test(t));
+    check(!banned.length, `the demo sent ${banned.join(", ")}`);
+    await page.locator(`${demo} button`, { hasText: "Close" }).click();
+    await page.locator(demo).waitFor({ state: "detached" });
+    await waitDrawn(page, panel);
+    check(await page.locator(`${panel} .ed`).isVisible(), "the editor did not come back");
+    await page.locator(`${panel} .ed-head button[title="Close"]`).click();
+    page.off("websocket", listen);
+    const now = await ws.call({ type: "virtuhome/plan/get" });
+    check(now.revision === saved.revision && canonical(now.plan) === canonical(saved.plan), "the demo changed the stored plan");
+    return `${p.share}% of the demo drawn, ${during.length} messages to Home Assistant meanwhile, none of them a service or a save`;
   });
 
   await step("A dashboard card draws the house", async () => {

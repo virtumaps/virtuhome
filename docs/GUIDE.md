@@ -11,10 +11,11 @@ it to a finished home on a wall tablet. Buttons and options are named exactly as
 them.
 
 To look around before installing, open the [online demo](https://virtumaps.github.io/virtuhome/demo/):
-a house with pretend lights, sensors and people that runs in any browser, on a phone or a computer.
-Turn the house, tap the lights, try the graphics levels, day and night and the floors, and open
-**Edit** to change the plan in 3D or the **2D plan**. The demo can't save, so its **Save** button
-stays off and a reload brings the house back as it was.
+a house with pretend lights, sensors and people that change by themselves, in any browser, on a
+phone or a computer. Turn the house, tap the lights, try the graphics levels, day and night and the
+floors, and open **Edit** to change the plan in 3D or the **2D plan**. The demo can't save, so its
+**Save** button stays off and a reload brings the house back as it was. Once VirtuHome is
+installed, the same house is in Home Assistant too: see [The demo home](#the-demo-home).
 
 - [Install](#install)
 - [Find your way around](#find-your-way-around)
@@ -47,8 +48,9 @@ You need Home Assistant 2025.1 or later and [HACS](https://hacs.xyz).
 5. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
    floor plan picture**, **Start from a house type**, **Import a scan or plan** or **Draw it
    myself**, and the editor opens on that step
-   (see [Get your home in](#get-your-home-in)). People who aren't administrators see who can set
-   it up.
+   (see [Get your home in](#get-your-home-in)). To see a finished home first, tap **Look at the
+   demo home** (see [The demo home](#the-demo-home)). People who aren't administrators see who can
+   set it up.
 
 ![Let's get your home in](screenshots/first-run.jpg)
 
@@ -123,6 +125,21 @@ The same view is in the sidebar and in every VirtuHome card.
 A level picked here is for this device only, and wins over the card's `quality`.
 
 ![Realistic look by day](screenshots/day.jpg)
+
+### The demo home
+
+To see what VirtuHome does with a finished house before you draw yours, tap **Look at the demo
+home** under **Let's get your home in**, or in Edit → **Home** (administrators). The demo house
+opens in the sidebar with pretend lights, doors, windows, blinds, sensors and people that change by
+themselves, under the sky where your home is.
+
+- Tap a lamp or a device to switch it, and open the rooms, the floors, the **Temperature map**, day
+  and night and the graphics levels, as in your own home. Long-presses open no dialogs: the devices
+  are pretend.
+- A banner at the bottom says it's a demo. **Start my own home** closes it and opens the editor;
+  **Close** goes back to where you were.
+- The demo can't be edited and never saves. It switches nothing in your Home Assistant and leaves
+  your plan, and any changes you haven't saved yet, as they were.
 
 ## Get your home in
 
