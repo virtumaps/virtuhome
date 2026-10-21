@@ -71,6 +71,15 @@ describe("stripping names and ids", () => {
     expect(out).toContain("<email>");
   });
 
+  it("takes out the address Home Assistant is reached at, without its https:// too", () => {
+    vi.stubGlobal("location", { hostname: "oak-house.duckdns.org" });
+    try {
+      expect(stripPrivate("Failed to fetch oak-house.duckdns.org:8123", privateStrings(null, null))).toBe("Failed to fetch <name>:8123");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("leaves names shorter than three letters alone", () => {
     expect(privateStrings({ states: {}, areas: { tv: { area_id: "tv", name: "TV" } } } as unknown as Hass, null)).toEqual([]);
   });
