@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { HassLive } from "../src/live/live";
 import { normalizePlan } from "../src/model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../src/live/hass";
-import { demoHistory, storyState } from "../dev/demo-history";
+import { demoHistory, storyState } from "../src/demo/history";
 
 const rect = (x0: number, z0: number, x1: number, z1: number): [number, number][] => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
 

@@ -21,7 +21,7 @@ FIXTURES = ROOT / "frontend/test/fixtures/plans"
 # the demo plan through normalizePlan: what the editor sends when it saves
 DEMO = """
 const { build } = await import("esbuild");
-const entry = 'import { DEMO_PLAN } from "./dev/demo-plan"; import { normalizePlan } from "./src/model/plan";'
+const entry = 'import { DEMO_PLAN } from "./src/demo/plan"; import { normalizePlan } from "./src/model/plan";'
   + "console.log(JSON.stringify(normalizePlan(structuredClone(DEMO_PLAN))));";
 const out = await build({ stdin: { contents: entry, resolveDir: ".", loader: "ts" }, bundle: true, format: "esm", platform: "node", write: false, logLevel: "error" });
 await import("data:text/javascript;base64," + Buffer.from(out.outputFiles[0].text).toString("base64"));

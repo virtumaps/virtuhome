@@ -1,8 +1,9 @@
 // A pretend Home Assistant for the dev harness and the online demo: states for every entity the
 // plan uses, areas taken from the plan's rooms, and services that flip states like the real thing.
-import type { Plan } from "../src/model/plan";
-import type { Hass, HassEntity, HassEntityReg } from "../src/live/hass";
-import { demoHistory, storyState } from "./demo-history";
+// It never reaches a real Home Assistant.
+import type { Plan } from "../model/plan";
+import type { Hass, HassEntity, HassEntityReg } from "../live/hass";
+import { demoHistory, storyState } from "./history";
 
 /**
  * Changes to the pretend registry, to try relinking (window.demo in the harness):
@@ -14,7 +15,20 @@ export const demoEdits = {
   add(_id: string, _reg: { name?: string; area?: string; device?: string } = {}): void {},
 };
 
-export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true): Hass {
+/** How the pretend house starts (the harness takes these from its address). */
+export interface DemoOptions {
+  /** Night: more lights on, the sun down (default). */
+  night?: boolean;
+  /** The weather's state (rainy, snowy, pouring, fog, lightning-rainy...; "none" leaves it out). */
+  weather?: string;
+  /** The area Alex is in. */
+  where?: string;
+  /** The kitchen's leak sensor is on, to show the alert banner. */
+  leak?: boolean;
+}
+
+export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOptions = {}): Hass {
+  const night = opts.night ?? true;
   const states: Record<string, HassEntity> = {};
   const entities: Record<string, HassEntityReg> = {};
   const areas: NonNullable<Hass["areas"]> = {};
@@ -79,8 +93,8 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
     }
   }
   put("sun.sun", night ? "below_horizon" : "above_horizon", { azimuth: night ? 320 : 200, elevation: night ? -20 : 38 });
-  // the weather (?weather=rainy, snowy, pouring, fog, lightning-rainy...; ?weather=none leaves it out)
-  const weather = new URLSearchParams(location.search).get("weather") ?? "partlycloudy";
+  // the weather
+  const weather = opts.weather ?? "partlycloudy";
   if (weather !== "none") {
     const cloud: Record<string, number> = { sunny: 5, "clear-night": 5, partlycloudy: 45, cloudy: 95, fog: 100, rainy: 100, pouring: 100, snowy: 100, "lightning-rainy": 100 };
     put("weather.forecast_home", weather, {
@@ -88,7 +102,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
       cloud_coverage: cloud[weather] ?? 50, wind_bearing: 240, wind_speed: weather === "lightning-rainy" ? 38 : 14, wind_speed_unit: "km/h",
     });
   }
-  // two people and the alarm, where the pretend day (demo-history.ts) has them now
+  // two people and the alarm, where the pretend day (history.ts) has them now
   const story = (id: string, fallback: string) => storyState(id, Date.now())?.s ?? fallback;
   put("person.alex", story("person.alex", "home"), { friendly_name: "Alex" });
   put("person.sam", story("person.sam", "not_home"), { friendly_name: "Sam" });
@@ -109,10 +123,10 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
   for (const [id, device] of [["camera.doorbell", "doorbell"], ["camera.kitchen", "kitchen_camera"]]) {
     if (entities[id]) entities[id].device_id = device;
   }
-  // who is in which room (?where=<area id> moves Alex): Alex's phone through Bermuda, on the same device
+  // who is in which room: Alex's phone through Bermuda, on the same device
   // as the tracker in Alex's person; Sam's watch through ESPresense's mqtt_room, found by its name
   devices.alex_phone = { id: "alex_phone", name: "Alex's phone" };
-  const alexArea = new URLSearchParams(location.search).get("where") ?? "living_room";
+  const alexArea = opts.where ?? "living_room";
   states["person.alex"].attributes.device_trackers = ["device_tracker.alexs_phone_bermuda_tracker"];
   put("device_tracker.alexs_phone_bermuda_tracker", "home", { friendly_name: "Alex's phone Bermuda Tracker" });
   entities["device_tracker.alexs_phone_bermuda_tracker"] = { entity_id: "device_tracker.alexs_phone_bermuda_tracker", device_id: "alex_phone", platform: "bermuda" };
@@ -123,9 +137,9 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, night = true):
   // an mmWave presence sensor in the main bedroom
   put("binary_sensor.bedroom_presence", "on", { device_class: "occupancy", friendly_name: "Bedroom presence" });
   entities["binary_sensor.bedroom_presence"] = { entity_id: "binary_sensor.bedroom_presence", area_id: "bedroom" };
-  // a leak sensor (?leak turns it on to show the alert banner)
+  // a leak sensor
   const kitchenArea = plan.floors[0]?.rooms.find((r) => /kitchen/i.test(r.name))?.area_id ?? null;
-  put("binary_sensor.kitchen_leak", new URLSearchParams(location.search).has("leak") ? "on" : "off", { device_class: "moisture", friendly_name: "Kitchen leak" });
+  put("binary_sensor.kitchen_leak", opts.leak ? "on" : "off", { device_class: "moisture", friendly_name: "Kitchen leak" });
   entities["binary_sensor.kitchen_leak"] = { entity_id: "binary_sensor.kitchen_leak", area_id: kitchenArea };
 
   const hass: Hass = {

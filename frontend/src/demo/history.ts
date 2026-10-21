@@ -2,7 +2,7 @@
 // for work and the alarm is set, a parcel comes, someone lets the dog out at lunchtime, everyone is
 // home by the evening. It answers Home Assistant's history/history_during_period the way the
 // recorder does, every day the same story with its times shifted a little.
-import type { HassEntity } from "../src/live/hass";
+import type { HassEntity } from "../live/hass";
 
 type Attrs = Record<string, unknown>;
 /** Minutes after the scene starts, the entity, its new state (and attributes). */
