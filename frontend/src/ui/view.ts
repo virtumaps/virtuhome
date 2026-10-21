@@ -980,6 +980,8 @@ export class VhView {
     const u = this.unsub;
     this.unsub = null;
     u?.().catch(() => undefined);
+    // leaving the page closes the demo home: its pretend devices stop, its graphics are let go
+    this.closeDemo(false);
   }
 
   destroy(): void {
