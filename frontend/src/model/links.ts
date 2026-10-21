@@ -3,7 +3,7 @@
 // so an entity renamed in Home Assistant is followed by itself; for the rest a replacement is
 // proposed: the same registry id (renamed) > the same device > the same area, each with a like name.
 import { areaOf, domainOf, type Hass } from "../live/hass";
-import { FURNITURE } from "../scene/furniture-lib";
+import { furnitureName } from "../scene/furniture-lib";
 import { pointInPolygon } from "./geom";
 import { spaces, type EnergySettings, type EntityLink, type Plan } from "./plan";
 import { t } from "../i18n";
@@ -82,7 +82,7 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
     }
     for (const x of f.furniture) {
       const s = at(x.x, x.z);
-      const name = FURNITURE[x.type]?.name ?? t("links.furniture");
+      const name = furnitureName(x.type) ?? t("links.furniture");
       if (isEntityId(x.entity)) visit({ entity: x.entity, label: where(name, s?.name), area: s?.area_id ?? null, device: false }, (to) => (x.entity = to));
       if (isEntityId(x.parked)) visit({ entity: x.parked, label: t("links.parked", { name }), area: null, device: false }, (to) => {
         if (to) x.parked = to;

@@ -722,59 +722,59 @@ const planterPaint = (type: string) => (item?: Furniture): Role[] => [planterRol
 
 export const GARDEN_FURNITURE: Record<string, FurnitureType> = {
   // ---------------------------------------------------------------- pergolas
-  pergola: { name: "Pergola", category: "outdoor", family: "pergola", size: [3.0, 3.0, 2.5], paint: ["softwood"], build: (w, d, h, item) => pergola(w, d, h, item) },
-  pergola_louvred: { name: "Louvred pergola", category: "outdoor", family: "pergola", size: [4.0, 3.0, 2.6], paint: ["dark"], build: (w, d, h, item) => louvred(w, d, h, item) },
-  pergola_leanto: { name: "Pergola on a wall", category: "outdoor", family: "pergola", size: [4.0, 2.5, 2.7], paint: ["softwood"], build: (w, d, h, item) => leanTo(w, d, h, item) },
-  gazebo: { name: "Gazebo", category: "outdoor", family: "pergola", size: [3.0, 3.0, 3.0], paint: ["softwood"], build: (w, d, h, item) => gazebo(w, d, h, item) },
-  garden_arch: { name: "Garden arch", category: "outdoor", family: "pergola", size: [1.4, 0.6, 2.3], paint: ["softwood"], build: (w, d, h, item) => arch(w, d, h, item) },
-  arbour: { name: "Arbour", category: "outdoor", family: "pergola", size: [1.6, 0.7, 2.2], paint: ["softwood"], build: (w, d, h, item) => arch(w, d, h, item, true) },
+  pergola: { label: "furniture.pergola", category: "outdoor", family: "pergola", size: [3.0, 3.0, 2.5], paint: ["softwood"], build: (w, d, h, item) => pergola(w, d, h, item) },
+  pergola_louvred: { label: "furniture.pergola_louvred", category: "outdoor", family: "pergola", size: [4.0, 3.0, 2.6], paint: ["dark"], build: (w, d, h, item) => louvred(w, d, h, item) },
+  pergola_leanto: { label: "furniture.pergola_leanto", category: "outdoor", family: "pergola", size: [4.0, 2.5, 2.7], paint: ["softwood"], build: (w, d, h, item) => leanTo(w, d, h, item) },
+  gazebo: { label: "furniture.gazebo", category: "outdoor", family: "pergola", size: [3.0, 3.0, 3.0], paint: ["softwood"], build: (w, d, h, item) => gazebo(w, d, h, item) },
+  garden_arch: { label: "furniture.garden_arch", category: "outdoor", family: "pergola", size: [1.4, 0.6, 2.3], paint: ["softwood"], build: (w, d, h, item) => arch(w, d, h, item) },
+  arbour: { label: "furniture.arbour", category: "outdoor", family: "pergola", size: [1.6, 0.7, 2.2], paint: ["softwood"], build: (w, d, h, item) => arch(w, d, h, item, true) },
   // ---------------------------------------------------------------- sheds and garden buildings
   shed: {
-    name: "Apex shed", category: "outdoor", family: "shed", size: [1.83, 2.44, 2.2], paint: ["shiplap"], trim: ["softwood"],
+    label: "furniture.shed", category: "outdoor", family: "shed", size: [1.83, 2.44, 2.2], paint: ["shiplap"], trim: ["softwood"],
     // the ridge runs back from the door in the gable end: made door towards +x, turned to face +z
     build: (w, d, h, item) => turned(apexShed(d, w, h, shedSpec("shed", item, { wall: "shiplap", trim: "softwood", doorEnd: true, pitch: 0.42, eaves: 0.1 }))),
   },
   shed_reverse: {
-    name: "Reverse apex shed", category: "outdoor", family: "shed", size: [2.44, 1.83, 2.15], paint: ["shiplap"], trim: ["softwood"],
+    label: "furniture.shed_reverse", category: "outdoor", family: "shed", size: [2.44, 1.83, 2.15], paint: ["shiplap"], trim: ["softwood"],
     build: (w, d, h, item) => apexShed(w, d, h, shedSpec("shed_reverse", item, { wall: "shiplap", trim: "softwood", doorEnd: false, pitch: 0.45, eaves: 0.1 })),
   },
   shed_pent: {
-    name: "Pent shed", category: "outdoor", family: "shed", size: [2.44, 1.83, 2.05], paint: ["shiplap"], trim: ["softwood"],
+    label: "furniture.shed_pent", category: "outdoor", family: "shed", size: [2.44, 1.83, 2.05], paint: ["shiplap"], trim: ["softwood"],
     build: (w, d, h, item) => pentShed(w, d, h, shedSpec("shed_pent", item, { wall: "shiplap", trim: "softwood", doorEnd: false, pitch: 0, eaves: 0.1 })),
   },
   summerhouse: {
-    name: "Summerhouse", category: "outdoor", family: "shed", size: [3.0, 2.6, 2.7], paint: ["shiplap"], trim: ["primed"],
+    label: "furniture.summerhouse", category: "outdoor", family: "shed", size: [3.0, 2.6, 2.7], paint: ["shiplap"], trim: ["primed"],
     build: (w, d, h, item) => apexShed(w, d, h, {
       ...shedSpec("summerhouse", item, { wall: "shiplap", trim: "primed", doorEnd: false, pitch: 0.5, eaves: 0.15, glazed: true, porch: 0.6, windowSize: [0.45, 1.1] }),
       door: "double",
     }),
   },
   log_cabin: {
-    name: "Log cabin", category: "outdoor", family: "shed", size: [4.0, 3.6, 2.7], paint: ["logs"], trim: ["woodDark"],
+    label: "furniture.log_cabin", category: "outdoor", family: "shed", size: [4.0, 3.6, 2.7], paint: ["logs"], trim: ["woodDark"],
     build: (w, d, h, item) => apexShed(w, d, h, {
       ...shedSpec("log_cabin", item, { wall: "logs", trim: "woodDark", doorEnd: false, pitch: 0.42, eaves: 0.25, glazed: true, porch: 0.8, logs: true, windowSize: [0.7, 0.9] }),
       door: "double",
     }),
   },
   garden_office: {
-    name: "Garden office", category: "outdoor", family: "shed", size: [4.0, 3.0, 2.5], paint: ["shiplap"], trim: ["dark"],
+    label: "furniture.garden_office", category: "outdoor", family: "shed", size: [4.0, 3.0, 2.5], paint: ["shiplap"], trim: ["dark"],
     build: (w, d, h, item) => gardenOffice(w, d, h, ROOF_ROLE[gardenChoice("garden_office", item).roofing!], gardenChoice("garden_office", item).door!),
   },
   metal_shed: {
-    name: "Metal shed", category: "outdoor", family: "shed", size: [2.6, 1.8, 1.95], paint: ["corrugated"], trim: ["galvanised"],
+    label: "furniture.metal_shed", category: "outdoor", family: "shed", size: [2.6, 1.8, 1.95], paint: ["corrugated"], trim: ["galvanised"],
     build: (w, d, h) => apexShed(w, d, h, { wall: "corrugated", roof: "corrugated", trim: "galvanised", door: "double", doorEnd: false, windows: 0, pitch: 0.18, eaves: 0.06, doorWidth: Math.min(1.5, w * 0.55) }),
   },
   greenhouse: {
-    name: "Greenhouse", category: "outdoor", family: "shed", size: [1.9, 2.5, 2.2], paint: ["metal"],
+    label: "furniture.greenhouse", category: "outdoor", family: "shed", size: [1.9, 2.5, 2.2], paint: ["metal"],
     build: (w, d, h) => turned(greenhouse(d, w, h, "metal")),
   },
   // ---------------------------------------------------------------- planters
   planter: {
-    name: "Trough planter", category: "outdoor", family: "planter", size: [1.2, 0.45, 0.45], paintFor: planterPaint("planter"),
+    label: "furniture.planter", category: "outdoor", family: "planter", size: [1.2, 0.45, 0.45], paintFor: planterPaint("planter"),
     build: (w, d, h, item) => planter("planter", (r) => boxPlanter(w, d, h, r, 0.06))(w, d, h, item),
   },
   raised_bed: {
-    name: "Raised bed", category: "outdoor", family: "planter", size: [2.4, 1.2, 0.4], paintFor: planterPaint("raised_bed"),
+    label: "furniture.raised_bed", category: "outdoor", family: "planter", size: [2.4, 1.2, 0.4], paintFor: planterPaint("raised_bed"),
     build: (w, d, h, item) => planter("raised_bed", (r) => {
       // sleepers laid in courses, lapping at the corners
       const t = 0.1, n = Math.max(1, Math.round(h / 0.2)), ch = h / n;
@@ -789,22 +789,22 @@ export const GARDEN_FURNITURE: Record<string, FurnitureType> = {
     })(w, d, h, item),
   },
   planter_cube: {
-    name: "Cube planter", category: "outdoor", family: "planter", size: [0.5, 0.5, 0.5], paintFor: planterPaint("planter_cube"),
+    label: "furniture.planter_cube", category: "outdoor", family: "planter", size: [0.5, 0.5, 0.5], paintFor: planterPaint("planter_cube"),
     build: (w, d, h, item) => planter("planter_cube", (r) => boxPlanter(w, d, h, r))(w, d, h, item),
   },
   planter_round: {
-    name: "Round planter", category: "outdoor", family: "planter", size: [0.6, 0.6, 0.5], paintFor: planterPaint("planter_round"),
+    label: "furniture.planter_round", category: "outdoor", family: "planter", size: [0.6, 0.6, 0.5], paintFor: planterPaint("planter_round"),
     build: (w, d, h, item) => planter("planter_round", (r) => ({
       parts: [cyl(0, 0, 0, w * 0.82, h, d * 0.82, r, 18, 1.22), cyl(0, h - 0.04, 0, w * 0.94, 0.01, d * 0.94, "soil", 18)],
       soil: h - 0.03, w: w * 0.9, d: d * 0.9, round: true,
     }))(w, d, h, item),
   },
   planter_tall: {
-    name: "Tall planter", category: "outdoor", family: "planter", size: [0.4, 0.4, 0.9], paintFor: planterPaint("planter_tall"),
+    label: "furniture.planter_tall", category: "outdoor", family: "planter", size: [0.4, 0.4, 0.9], paintFor: planterPaint("planter_tall"),
     build: (w, d, h, item) => planter("planter_tall", (r) => boxPlanter(w, d, h, r))(w, d, h, item),
   },
   planter_tiered: {
-    name: "Tiered planter", category: "outdoor", family: "planter", size: [1.0, 0.8, 0.6], paintFor: planterPaint("planter_tiered"),
+    label: "furniture.planter_tiered", category: "outdoor", family: "planter", size: [1.0, 0.8, 0.6], paintFor: planterPaint("planter_tiered"),
     build: (w, d, h, item) => {
       // three troughs stepping up to the back, each with its own plants
       const role = planterRole("planter_tiered", item);

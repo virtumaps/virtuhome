@@ -33,6 +33,8 @@ type Forms<T> = T extends string ? T : T[keyof T] & string;
 type VarNames<T> = Names<Forms<T>> | (T extends string ? never : "n");
 /** What t() takes after the key: nothing for a plain text, else every placeholder. */
 export type Args<T> = [VarNames<T>] extends [never] ? [] : [vars: Record<VarNames<T>, string | number>];
+/** A key whose text takes nothing: what a catalogue's entries name themselves with. */
+export type PlainKey = { [K in Key]: Args<(typeof EN)[K]> extends [] ? K : never }[Key];
 
 /**
  * Languages besides English, each loaded the first time it is needed, so none of them adds to
