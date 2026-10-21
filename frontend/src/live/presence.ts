@@ -3,6 +3,7 @@
 // trackers (a room's name). The plan's rooms are linked to areas, so the name finds the room.
 import { spaces, type Plan, type PresenceSettings } from "../model/plan";
 import { domainOf, type Hass, type HassEntity } from "./hass";
+import { t } from "../i18n";
 
 /** States that say nothing about a room. */
 const NOT_A_ROOM = new Set(["home", "not_home", "away", "unknown", "unavailable", "none", ""]);
@@ -108,6 +109,6 @@ export function sourcesOf(hass: Hass, person: string, set: PresenceSettings | nu
 /** "Kadir is here", "Kadir and Thea are here", "Alex, Sam and Kim are here". */
 export function hereText(names: string[]): string | null {
   if (!names.length) return null;
-  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-  return `${list} ${names.length === 1 ? "is" : "are"} here`;
+  const list = names.length === 1 ? names[0] : t("list.and", { first: names.slice(0, -1).join(", "), last: names[names.length - 1] });
+  return t("person.here", { n: names.length, names: list });
 }

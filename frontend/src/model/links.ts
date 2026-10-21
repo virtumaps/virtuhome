@@ -6,6 +6,7 @@ import { areaOf, domainOf, type Hass } from "../live/hass";
 import { FURNITURE } from "../scene/furniture-lib";
 import { pointInPolygon } from "./geom";
 import { spaces, type EnergySettings, type EntityLink, type Plan } from "./plan";
+import { t } from "../i18n";
 
 /** One place the plan names an entity. */
 export interface Use {
@@ -45,19 +46,18 @@ export interface RegistryEntry {
   entity_category?: string | null;
 }
 
-const ENERGY_NAMES: Partial<Record<keyof EnergySettings, string>> = {
-  home: "house", battery: "battery", battery_charge: "battery in", battery_discharge: "battery out", battery_level: "battery level",
-  grid: "grid", grid_import: "grid import", grid_export: "grid export", price_import: "price to buy", price_export: "price to sell",
-  ev_charger: "car charger", ev_level: "car battery",
-};
+/** The energy settings that name a sensor, besides solar (each labelled links.energy.<setting>). */
+const ENERGY_SENSORS = [
+  "home", "battery", "battery_charge", "battery_discharge", "battery_level", "grid", "grid_import", "grid_export", "price_import", "price_export",
+  "ev_charger", "ev_level",
+] as const satisfies readonly (keyof EnergySettings)[];
 
-const DOMAIN_NAMES: Record<string, string> = {
-  light: "Light", camera: "Camera", binary_sensor: "Sensor", sensor: "Sensor", climate: "Thermostat", media_player: "Media player",
-  switch: "Switch", cover: "Blind", lock: "Lock", fan: "Fan", vacuum: "Vacuum", alarm_control_panel: "Alarm panel",
-  assist_satellite: "Voice assistant", water_heater: "Water heater", humidifier: "Humidifier",
-};
-
-const OPENING_NAMES = { door: "Door", window: "Window", passage: "Opening", garage: "Garage door" };
+/** Device markers' kinds by domain (each labelled links.device.<domain>; others are a Device). */
+const DEVICE_DOMAINS = [
+  "light", "camera", "binary_sensor", "sensor", "climate", "media_player", "switch", "cover", "lock", "fan", "vacuum", "alarm_control_panel",
+  "assist_satellite", "water_heater", "humidifier",
+] as const;
+const OPENING_KINDS = ["door", "window", "passage", "garage"] as const;
 
 export const isEntityId = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9_]+\.[a-z0-9_]+$/.test(v);
 
@@ -66,24 +66,25 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
   plan.floors.forEach((f) => {
     const sp = spaces(f);
     const at = (x: number, z: number) => sp.find((s) => pointInPolygon([x, z], s.points)) ?? null;
-    const where = (name: string | null | undefined) => (name ? ` in ${name}` : ` on ${f.name}`);
+    // "Light in Kitchen", else "Light on Ground Floor"
+    const where = (what: string, room: string | null | undefined) => (room ? t("links.in", { what, room }) : t("links.on", { what, floor: f.name }));
     for (const r of f.rooms) {
       for (const k of ["temperature", "humidity"] as const) {
         const e = r[k];
-        if (isEntityId(e)) visit({ entity: e, label: `${r.name} ${k}`, area: r.area_id, device: false }, (to) => (r[k] = to));
+        if (isEntityId(e)) visit({ entity: e, label: t(`links.${k}`, { room: r.name }), area: r.area_id, device: false }, (to) => (r[k] = to));
       }
     }
     for (const o of f.openings) {
       const room = f.rooms.find((r) => r.id === o.room_id);
-      const name = OPENING_NAMES[o.kind] ?? "Opening";
-      if (isEntityId(o.entity)) visit({ entity: o.entity, label: `${name} sensor${where(room?.name)}`, area: room?.area_id ?? null, device: false }, (to) => (o.entity = to));
-      if (isEntityId(o.cover)) visit({ entity: o.cover, label: `Blind${where(room?.name)}`, area: room?.area_id ?? null, device: false }, (to) => (o.cover = to));
+      const kind = OPENING_KINDS.find((k) => k === o.kind) ?? "passage";
+      if (isEntityId(o.entity)) visit({ entity: o.entity, label: where(t(`links.sensor.${kind}`), room?.name), area: room?.area_id ?? null, device: false }, (to) => (o.entity = to));
+      if (isEntityId(o.cover)) visit({ entity: o.cover, label: where(t("links.blind"), room?.name), area: room?.area_id ?? null, device: false }, (to) => (o.cover = to));
     }
     for (const x of f.furniture) {
       const s = at(x.x, x.z);
-      const name = FURNITURE[x.type]?.name ?? "Furniture";
-      if (isEntityId(x.entity)) visit({ entity: x.entity, label: `${name}${where(s?.name)}`, area: s?.area_id ?? null, device: false }, (to) => (x.entity = to));
-      if (isEntityId(x.parked)) visit({ entity: x.parked, label: `${name}: when it is here`, area: null, device: false }, (to) => {
+      const name = FURNITURE[x.type]?.name ?? t("links.furniture");
+      if (isEntityId(x.entity)) visit({ entity: x.entity, label: where(name, s?.name), area: s?.area_id ?? null, device: false }, (to) => (x.entity = to));
+      if (isEntityId(x.parked)) visit({ entity: x.parked, label: t("links.parked", { name }), area: null, device: false }, (to) => {
         if (to) x.parked = to;
         else delete x.parked;
       });
@@ -92,7 +93,8 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
     for (const d of f.devices) {
       const s = at(d.x, d.z);
       if (!isEntityId(d.entity)) continue;
-      visit({ entity: d.entity, label: `${DOMAIN_NAMES[domainOf(d.entity)] ?? "Device"}${where(s?.name)}`, area: s?.area_id ?? null, device: true }, (to) => {
+      const dom = DEVICE_DOMAINS.find((x) => x === domainOf(d.entity));
+      visit({ entity: d.entity, label: where(dom ? t(`links.device.${dom}`) : t("links.device"), s?.name), area: s?.area_id ?? null, device: true }, (to) => {
         if (to) d.entity = to;
         else gone.add(d.id);
       });
@@ -100,9 +102,9 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
     if (gone.size) f.devices = f.devices.filter((d) => !gone.has(d.id));
     for (const roof of f.roofs ?? []) {
       for (const it of roof.items ?? []) {
-        const label = it.kind === "solar" ? "Solar panels' sensor" : "Roof window sensor";
+        const label = t(it.kind === "solar" ? "links.solarSensor" : "links.roofWindowSensor");
         if (isEntityId(it.entity)) visit({ entity: it.entity, label, area: null, device: false }, (to) => (it.entity = to));
-        if (isEntityId(it.cover)) visit({ entity: it.cover, label: "Roof window blind", area: null, device: false }, (to) => (it.cover = to));
+        if (isEntityId(it.cover)) visit({ entity: it.cover, label: t("links.roofWindowBlind"), area: null, device: false }, (to) => (it.cover = to));
       }
     }
   });
@@ -111,7 +113,7 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
     const solar = energy.solar;
     if (Array.isArray(solar)) {
       solar.forEach((e, i) => {
-        if (isEntityId(e)) visit({ entity: e, label: "Energy: solar", area: null, device: false }, (to) => (solar[i] = to));
+        if (isEntityId(e)) visit({ entity: e, label: t("links.energy.solar"), area: null, device: false }, (to) => (solar[i] = to));
       });
       if (solar.some((e) => e === null)) {
         const left = solar.filter((e) => e !== null);
@@ -119,28 +121,28 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
         else delete energy.solar;
       }
     }
-    for (const [k, name] of Object.entries(ENERGY_NAMES)) {
+    for (const k of ENERGY_SENSORS) {
       const e = energy[k];
-      if (isEntityId(e)) visit({ entity: e, label: `Energy: ${name}`, area: null, device: false }, (to) => {
+      if (isEntityId(e)) visit({ entity: e, label: t(`links.energy.${k}`), area: null, device: false }, (to) => {
         if (to) energy[k] = to;
         else delete energy[k];
       });
     }
   }
   const sky = plan.settings.sky;
-  if (sky && isEntityId(sky.weather)) visit({ entity: sky.weather, label: "Weather", area: null, device: false }, (to) => (sky.weather = to));
+  if (sky && isEntityId(sky.weather)) visit({ entity: sky.weather, label: t("links.weather"), area: null, device: false }, (to) => (sky.weather = to));
   const people = plan.settings.presence?.people;
   if (people) {
     for (const [person, tracker] of Object.entries(people)) {
       // the person's own entity can change first: its tracker follows it to the new key
       let key: string | null = person;
-      if (isEntityId(person)) visit({ entity: person, label: "Person in People", area: null, device: false }, (to) => {
-        const t = people[person];
+      if (isEntityId(person)) visit({ entity: person, label: t("links.person"), area: null, device: false }, (to) => {
+        const tracked = people[person];
         delete people[person];
-        if (to) people[to] = t;
+        if (to) people[to] = tracked;
         key = to;
       });
-      if (isEntityId(tracker)) visit({ entity: tracker, label: `Room tracker of ${person}`, area: null, device: false }, (to) => {
+      if (isEntityId(tracker)) visit({ entity: tracker, label: t("links.tracker", { person }), area: null, device: false }, (to) => {
         if (!key) return;
         if (to) people[key] = to;
         else delete people[key];

@@ -3,6 +3,7 @@
 // runs a railing takes round the open edges, leaving gaps for the steps.
 import { labelPoint, pointInPolygon, segmentDistance } from "../model/geom";
 import { newId, type AreaSteps, type Floor, type OutdoorArea, type Vec2 } from "../model/plan";
+import { t } from "../i18n";
 
 /** +1 if the outline turns one way, -1 the other (which side of each edge is inside). */
 export function turnOf(points: Vec2[]): number {
@@ -171,7 +172,7 @@ export function newArea(floor: Floor, kind: NewAreaKind, points: Vec2[]): Outdoo
   const r3 = (v: number) => Math.round(v * 1000) / 1000;
   const all = floor.outdoor ?? [];
   const n = all.filter((o) => o.kind === kind).length + 1;
-  const name = { patio: "Patio", deck: "Deck", path: "Path" }[kind] + (n > 1 ? ` ${n}` : "");
+  const name = n > 1 ? t("name.numbered", { name: t(`name.${kind}`), n }) : t(`name.${kind}`);
   const at = labelPoint(points);
   const under = all.find((o) => o.kind === "lawn" && pointInPolygon(at, o.points)) ?? all.find((o) => pointInPolygon(at, o.points));
   return {

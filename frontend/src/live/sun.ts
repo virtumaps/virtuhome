@@ -2,6 +2,7 @@
 // moment (now, a replay's past, a picked date), smoothly, without waiting for sun.sun's updates.
 // The sun follows NOAA's solar calculator (well within 0.1° of the real thing); the moon a shorter
 // series, good to about a degree, which is plenty for moonlight.
+import { t } from "../i18n";
 
 export interface SunPlace {
   /** Degrees clockwise from north. */
@@ -98,11 +99,11 @@ export function moonPosition(time: number, lat: number, lon: number): MoonPlace 
   return { azimuth: mod(az + 180, 360), elevation: alt + refraction(alt), lit: (1 + Math.cos(inc)) / 2 };
 }
 
-const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"] as const;
 
 /** "SW" for 225: a bearing as a point of the compass. */
 export function compassName(bearing: number): string {
-  return COMPASS[Math.round(mod(bearing, 360) / 22.5) % 16];
+  return t(`compass.${COMPASS[Math.round(mod(bearing, 360) / 22.5) % 16]}`);
 }
 
 /** Sunrise, solar noon and sunset (ms) of the day starting at `dayStart`; null where the sun doesn't rise or set. */

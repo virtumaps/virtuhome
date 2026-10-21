@@ -9,9 +9,6 @@ import type { Part, Role } from "./furniture-lib";
 
 export type CameraKind = "bullet" | "dome" | "doorbell" | "cube";
 
-export const CAMERA_NAMES: Record<CameraKind, string> = {
-  bullet: "a camera on a bracket on its wall", dome: "a dome on the ceiling", doorbell: "a doorbell on its wall", cube: "a camera on a stand",
-};
 
 export interface CameraRig {
   /** The device's id and entity. */

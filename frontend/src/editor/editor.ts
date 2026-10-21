@@ -19,7 +19,7 @@ import { bounds } from "../model/geom";
 import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, recordLinks, replaceEntity, type Proposal, type RegistryEntry } from "../model/links";
 import { domainOf, type Hass } from "../live/hass";
 import { roomTrackers, sourcesOf } from "../live/presence";
-import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORY_NAMES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
+import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
 import {
   faceBearing, fitPanels, floorRoofs, fromRoofFrame, itemFrame, planeHeight, polyArea, ROOF_ITEM_DEFAULTS, ROOF_SHAPE_ORDER, ROOF_SHAPES, sunniestFace,
@@ -29,7 +29,7 @@ import { suggestRoofs, type HouseKind, type RoofChoice } from "../auto/roof";
 import { controlsFor, defaultFinish, styleOf, stylesFor } from "../scene/joinery";
 import { pointInPolygon, segmentDistance } from "../model/geom";
 import { layoutWalls, openingPoint } from "../model/walls";
-import { CAMERA_NAMES, cameraRig } from "../scene/cameras";
+import { cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
 import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
 import { isRaised, outdoorTop } from "../scene/build";
@@ -2017,7 +2017,7 @@ export class Editor {
           upd((x) => (x.reach = v === "" ? null : Math.max(0.5, Math.min(30, Number(v)))));
         } }),
       ) : null,
-      rig ? h("p", { class: "ed-hint" }, `Shown as ${CAMERA_NAMES[rig.kind]}. Mount it on the ceiling for a dome, or on a table or the floor for a camera on a stand. Empty fields use the usual values.`) : null,
+      rig ? h("p", { class: "ed-hint" }, `Shown as ${t(`camera.${rig.kind}`)}. Mount it on the ceiling for a dome, or on a table or the floor for a camera on a stand. Empty fields use the usual values.`) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
         this.change((p) => (p.floors[fi].devices = p.floors[fi].devices.filter((x) => x.id !== d.id)));
         this.select(null);
@@ -2126,11 +2126,11 @@ export class Editor {
     return [
       h("div", { class: "ed-sub" }, "Balustrade"),
       h("div", { class: "ed-chips" }, ...Object.entries(BALUSTRADES).map(([k, name]) =>
-        chip(name, style === k, () => named(k === "none" ? "No balustrade on" : `${name} balustrade on`)((y) => (y.balustrade = k as BalustradeStyle))))),
+        chip(t(name), style === k, () => named(k === "none" ? "No balustrade on" : `${t(name)} balustrade on`)((y) => (y.balustrade = k as BalustradeStyle))))),
       style !== "none" ? h("div", { class: "ed-sub" }, style === "glass" ? "Handrail and posts" : "Material") : null,
       style !== "none" ? h("div", { class: "ed-chips" }, ...Object.entries(BALUSTRADE_MATERIALS).map(([k, m]) =>
-        h("button", { class: `ed-chip${material === k ? " on" : ""}`, onclick: () => material !== k && named(`${m.name} balustrade on`)((y) => (y.balustrade_material = k as BalustradeMaterial)) },
-          h("i", { style: `background:${hexOf(m.color)}` }), m.name))) : null,
+        h("button", { class: `ed-chip${material === k ? " on" : ""}`, onclick: () => material !== k && named(`${t(m.label)} balustrade on`)((y) => (y.balustrade_material = k as BalustradeMaterial)) },
+          h("i", { style: `background:${hexOf(m.color)}` }), t(m.label)))) : null,
       style !== "none" ? h("div", { class: "ed-row" }, h("label", {}, "Side going up"),
         ...sides.map(([k, label]) => chip(label, side === k, () => named("Move the balustrade of")((y) => (y.balustrade_side = k))))) : null,
     ];
@@ -2164,7 +2164,7 @@ export class Editor {
         })))),
       styles ? h("div", { class: "ed-sub" }, "Style") : null,
       styles ? h("div", { class: "ed-chips" }, ...Object.entries(styles).map(([k, name]) =>
-        chip(name, style === k, () => upd(`${name} ${what}`, (x) => (x.style = k as Opening["style"]))))) : null,
+        chip(t(name), style === k, () => upd(`${t(name)} ${what}`, (x) => (x.style = k as Opening["style"]))))) : null,
       styles ? h("div", { class: "ed-sub" }, o.kind === "window" ? "Frame" : "Finish") : null,
       styles ? this.finishChips(JOINERY_FINISHES, finish, (k) => upd(`${JOINERY_FINISHES[k as keyof typeof JOINERY_FINISHES].name} ${what}`, (x) => (x.finish = k as Opening["finish"]))) : null,
       styles && def.tintable
@@ -2261,16 +2261,16 @@ export class Editor {
 
   /** Search and categories over everything that can be placed (in a garden, the garden's things first). */
   private itemPicker(onAdd: (type: string) => void, garden = false): HTMLElement {
-    const cats = ["all", ...Object.keys(CATEGORY_NAMES)] as (Category | "all")[];
+    const cats: (Category | "all")[] = ["all", ...CATEGORIES];
     const results = h("div", { class: "ed-grid" });
     const cat = () => (garden ? this.pickCatGarden : this.pickCat);
     const draw = () => {
       const q = this.pickQuery.trim().toLowerCase();
       const list = Object.entries(FURNITURE)
-        .filter(([k, t]) => (cat() === "all" || t.category === cat()) && (!q || t.name.toLowerCase().includes(q) || k.includes(q.replace(/\s+/g, "_"))))
+        .filter(([k, def]) => (cat() === "all" || def.category === cat()) && (!q || def.name.toLowerCase().includes(q) || k.includes(q.replace(/\s+/g, "_"))))
         .sort((a, b) => a[1].name.localeCompare(b[1].name));
-      results.replaceChildren(...list.slice(0, 80).map(([k, t]) =>
-        h("button", { class: "ed-pick", title: `Add ${t.name}`, onclick: () => onAdd(k) }, h("span", { html: svg(mdiPlus) }), h("b", {}, t.name), h("small", {}, CATEGORY_NAMES[t.category]))));
+      results.replaceChildren(...list.slice(0, 80).map(([k, def]) =>
+        h("button", { class: "ed-pick", title: `Add ${def.name}`, onclick: () => onAdd(k) }, h("span", { html: svg(mdiPlus) }), h("b", {}, def.name), h("small", {}, t(`category.${def.category}`)))));
       if (!list.length) results.append(h("p", { class: "ed-hint" }, "Nothing matches."));
     };
     const search = h("input", { class: "ed-in", placeholder: "Search: plant, sofa, dumbbells…", value: this.pickQuery, oninput: (e: Event) => {
@@ -2282,7 +2282,7 @@ export class Editor {
       else this.pickCat = c;
       chips.querySelectorAll(".ed-chip").forEach((b) => b.classList.toggle("on", b === e.currentTarget));
       draw();
-    } }, c === "all" ? "All" : CATEGORY_NAMES[c])));
+    } }, c === "all" ? "All" : t(`category.${c}`))));
     draw();
     return h("div", {}, h("div", { class: "ed-search" }, h("span", { html: svg(mdiMagnify) }), search), chips, results);
   }
