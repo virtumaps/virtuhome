@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New
+- The user guide as a website at virtumaps.github.io/virtuhome: a page for each part, with its
+  sections at the top and the contents beside it, readable on a phone, in light or dark and without
+  JavaScript. It is rebuilt from docs/GUIDE.md with each release, and **How** in Getting started
+  opens it.
+
 ## 0.11.0
 
 ### New

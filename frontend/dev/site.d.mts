@@ -5,3 +5,4 @@ export function liveCode(files: { name: string; text: string }[], sources: strin
 export function bundle(entry?: string): Promise<{ files: { name: string; text: string }[]; preload: string[]; problems: string[] }>;
 export function demoPage(preload: string[]): string;
 export function buildSite(out: string): Promise<{ name: string; bytes: number }[]>;
+export function serveSite(out: string, port?: number): void;

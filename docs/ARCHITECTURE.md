@@ -10,7 +10,7 @@
 | `frontend/src/scene/` | The 3D engine: mesh building, CPU lighting, materials, markers, the `Viewer`. |
 | `frontend/src/live/` | Maps Home Assistant states onto the view; decides which refresh each state change needs. |
 | `frontend/src/ui/` | The shared view with its controls, the card and the panel. |
-| `frontend/dev/` | Dev harness, demo house, pretend Home Assistant. |
+| `frontend/dev/` | Dev harness, demo house, pretend Home Assistant, and the website (`site.mjs`: the online demo and the user guide). |
 
 ## The plan
 

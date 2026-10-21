@@ -43,6 +43,7 @@ import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import type { Check, Fix } from "../ui/checks";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
+import { guideLink } from "../ui/guide";
 import { EDITOR_CSS } from "./styles";
 import { HouseTypes } from "./house-types";
 import { Collider, settle } from "./collide";
@@ -1059,7 +1060,7 @@ export class Editor {
       devices: () => [btn("Place devices automatically", () => this.runAutoPlace())],
       north: () => [btn("Sun and weather", () => this.scrollToHeading("Sun and weather")), btn("It's right", () => tick(true))],
       card: () => [btn("Done", () => tick(true))],
-      tablet: () => [btn("How", () => window.open("https://github.com/virtumaps/virtuhome/blob/main/docs/GUIDE.md#wall-tablets", "_blank", "noopener")), btn("Done", () => tick(true))],
+      tablet: () => [btn("How", () => window.open(guideLink("wall-tablets"), "_blank", "noopener")), btn("Done", () => tick(true))],
     };
     const icon = h("span", { class: `ed-tick${it.done ? " on" : ""}`, html: svg(it.done ? mdiCheckCircle : mdiCheckboxBlankCircleOutline) });
     // a step ticked by hand can be unticked
