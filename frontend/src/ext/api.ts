@@ -19,6 +19,7 @@ import type { Plan } from "../model/plan";
 import type { RoofFaceInfo, SolarArrayInfo } from "../scene/roof-info";
 import type { Viewer } from "../scene/viewer";
 import type { EnergySection } from "../ui/energy";
+import { logError } from "../ui/errors";
 
 export const EXT_API_VERSION = 4;
 
@@ -196,7 +197,7 @@ export function registerView(handle: ViewHandle): () => void {
       try {
         c();
       } catch (err) {
-        console.warn("VirtuHome extension cleanup failed", err);
+        logError(err, "extension");
       }
     }
     views.delete(entry);
@@ -208,7 +209,7 @@ function runHook(entry: ViewEntry, hook: (v: ViewHandle) => void | (() => void))
     const cleanup = hook(entry.handle);
     if (typeof cleanup === "function") entry.cleanups.push(cleanup);
   } catch (err) {
-    console.error("VirtuHome extension failed on a view", err);
+    logError(err, "extension");
   }
 }
 
@@ -248,7 +249,7 @@ export function loadExtensions(hass: Hass, extra: string[] = []): Promise<void> 
         await m.setup(context);
         loaded.set(m.id, { ...ext, id: m.id, name: m.name });
       } catch (err) {
-        console.error(`VirtuHome extension ${ext.id} could not load:`, err);
+        logError(err, `extension ${ext.id}`);
         failed.push({ id: ext.id, name: ext.name, newer: /newer VirtuHome/.test(String(err)) });
       }
     }

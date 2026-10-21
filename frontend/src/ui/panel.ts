@@ -1,11 +1,14 @@
 // The sidebar panel: the live view filling the page, with Home Assistant's menu button on phones.
 import { mdiMenu } from "@mdi/js";
 import type { Hass } from "../live/hass";
+import { failedView } from "./errors";
 import { VhView } from "./view";
 
 export class PanelImpl {
-  private view: VhView;
+  /** Null when the view could not be made (the error box shows instead; the menu button stays). */
+  private view: VhView | null;
   private menu: HTMLButtonElement;
+  private failed: { hass: Hass | null } | null = null;
 
   constructor(private host: HTMLElement) {
     const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
@@ -29,24 +32,31 @@ export class PanelImpl {
     viewHost.style.cssText = "position:absolute;inset:0";
     page.append(viewHost, this.menu);
     shadow.appendChild(page);
-    this.view = new VhView(viewHost.attachShadow({ mode: "open" }), { editable: true, stats: new URLSearchParams(location.search).has("stats") });
+    const inner = viewHost.attachShadow({ mode: "open" });
+    try {
+      this.view = new VhView(inner, { editable: true, stats: new URLSearchParams(location.search).has("stats") });
+    } catch (err) {
+      this.view = null;
+      this.failed = failedView(inner, err, "panel");
+    }
   }
 
   setNarrow(narrow: boolean): void {
     this.host.shadowRoot?.querySelector(".page")?.classList.toggle("narrow", narrow);
-    this.view.root.style.setProperty("--vh-bar-left", narrow ? "56px" : "0px");
-    this.view.root.classList.toggle("narrow", narrow);
+    this.view?.root.style.setProperty("--vh-bar-left", narrow ? "56px" : "0px");
+    this.view?.root.classList.toggle("narrow", narrow);
   }
 
   set hass(h: Hass) {
-    this.view.hass = h;
+    if (this.view) this.view.hass = h;
+    else if (this.failed) this.failed.hass = h;
   }
 
   connect(): void {
-    this.view.connect();
+    this.view?.connect();
   }
 
   disconnect(): void {
-    this.view.disconnect();
+    this.view?.disconnect();
   }
 }

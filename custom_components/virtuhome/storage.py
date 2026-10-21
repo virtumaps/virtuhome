@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 
 from .backgrounds import referenced
+from .errors import ErrorLog
 from .const import HISTORY_KEY, HISTORY_LIMIT, STORAGE_KEY, STORAGE_VERSION
 from .schema import empty_plan
 
@@ -30,6 +31,8 @@ class PlanStore:
         self.backgrounds = None
         # what Check my setup last found (counts per check, from the frontend), for diagnostics
         self.checks: dict[str, Any] | None = None
+        # the frontend's last errors, stripped of names, for diagnostics
+        self.errors = ErrorLog()
 
     async def async_load(self) -> None:
         data = await self._store.async_load()

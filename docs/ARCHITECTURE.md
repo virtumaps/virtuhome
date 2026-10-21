@@ -11,7 +11,7 @@
 | `frontend/src/live/` | Maps Home Assistant states onto the view; decides which refresh each state change needs. |
 | `frontend/src/ui/` | The shared view with its controls, the card and the panel. |
 | `frontend/src/demo/` | The demo house, a pretend Home Assistant for it and a pretend day of history to replay. |
-| `frontend/dev/` | Dev harness and the online demo, both on the demo house. |
+| `frontend/dev/` | Dev harness, and the website (`site.mjs`: the online demo and the user guide). |
 
 ## The plan
 

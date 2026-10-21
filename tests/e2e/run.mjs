@@ -316,6 +316,15 @@ async function run() {
     return `${p.share}% of the view drawn`;
   });
 
+  await step("An error report from the frontend is kept, without names", async () => {
+    const { plan } = await ws.call({ type: "virtuhome/plan/get" });
+    // as an old or odd frontend might send it: with every name and entity of the plan, and an address
+    const names = planStrings(plan).join(", ");
+    const res = await ws.call({ type: "virtuhome/errors/report", where: "plan", message: `No room for ${names}`.slice(0, 1000),
+      stack: `at build (${url}/virtuhome_static/app/app.js?v=${manifest.version}:1:2)`, version: manifest.version, graphics: "Tablet", browser: "Chrome 131 on Linux" });
+    check(res.kept, "the report was not kept");
+  });
+
   await step("The diagnostics download works and holds no names from the plan", async () => {
     const res = await fetch(`${url}/api/diagnostics/config_entry/${info.entry_id}`, { headers: { Authorization: `Bearer ${token}` } });
     check(res.ok, `HTTP ${res.status}`);
@@ -326,6 +335,7 @@ async function run() {
     check(data.virtuhome_version === manifest.version && data.loaded && data.panel_registered, "the report does not describe VirtuHome");
     check(data.plan.floors.length === plan.floors.length, "the report has the wrong number of floors");
     check(data.dashboard_resource.mode === "storage" && data.dashboard_resource.current, `card resource: ${JSON.stringify(data.dashboard_resource)}`);
+    check(data.errors.some((e) => e.where === "plan" && e.stack === "at build (app.js:1:2)"), `errors: ${JSON.stringify(data.errors)}`);
     const strings = [];
     JSON.parse(text, (key, value) => (strings.push(key), typeof value === "string" && strings.push(value), value));
     const leaked = planStrings(plan).filter((s) => strings.some((x) => x === s || (s.length >= 6 && x.includes(s))));

@@ -112,3 +112,11 @@ def test_check_my_setup_counts_only():
     assert out["checks"] == {"reported": True, "time": 1792279060.9, "counts": {"links": 2, "rooms": 0}}
     assert "Kitchen" not in json.dumps(out["checks"]) and "light.kitchen" not in json.dumps(out)
     assert set(rep.CHECK_IDS) == {"links", "rooms", "areas", "card", "graphics", "extensions", "repairs"}
+
+
+def test_frontend_errors():
+    assert report()["errors"] == []
+    kept = [{"time": 1.0, "last": 2.0, "count": 2, "where": "render", "message": "TypeError: <name>", "stack": "at a (app.js:1:2)",
+             "version": "0.12.0", "graphics": "Tablet", "browser": "Silk 131 on Android"}]
+    store = SimpleNamespace(plan=PLAN, revision=7, snapshots=[], errors=SimpleNamespace(summary=lambda: kept))
+    assert report(store)["errors"] == kept
