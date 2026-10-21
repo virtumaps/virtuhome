@@ -42,7 +42,7 @@ import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import type { Check, Fix } from "../ui/checks";
-import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
+import { cardOnDashboard, DEMO_CHOICE, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { EDITOR_CSS } from "./styles";
 import { HouseTypes } from "./house-types";
 import { Collider, settle } from "./collide";
@@ -293,6 +293,8 @@ export class Editor {
    * piece, device, door or window (not while typing in a field; the 2D plan has its own keys).
    */
   private onKey = (e: KeyboardEvent): void => {
+    // the demo home covers the editor: keys are not for this plan then
+    if (this.host.view.demoShown) return;
     const target = e.composedPath()[0] as HTMLElement | undefined;
     if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
     if ((e.key === "Backspace" || e.key === "Delete") && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -829,6 +831,7 @@ export class Editor {
       this.houseTypes?.el,
       ...this.setupSection(() => fileIn.click()),
       ...this.checkSection(),
+      ...this.demoSection(),
       this.houseTypes ? null : h("h4", {}, "House type"),
       this.houseTypes ? null : h("p", { class: "ed-hint" }, "A ready-made home with its rooms, doors, windows, stairs and roof, fitted to your home's size."),
       this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, "Start from a house type…"),
@@ -878,6 +881,20 @@ export class Editor {
       }).catch(() => list.replaceChildren(h("p", { class: "ed-hint" }, "Not available here.")));
     }
     return box;
+  }
+
+  /** Look at the demo home (not in the online demo, which is one). */
+  private demoSection(): HTMLElement[] {
+    if (this.host.demo) return [];
+    return [
+      h("h4", {}, "Demo home"),
+      h("p", { class: "ed-hint" }, DEMO_CHOICE.text),
+      h("button", { class: "ed-btn ghost", onclick: () => {
+        // back to 3D first: the 2D plan's keys would still reach this plan under the demo
+        this.setPlanMode(false);
+        void this.host.view.openDemo();
+      } }, DEMO_CHOICE.title),
+    ];
   }
 
   /** The entity registry with registry ids; undefined while it loads (the Home tab is drawn again then). */

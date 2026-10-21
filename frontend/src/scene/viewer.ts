@@ -293,6 +293,8 @@ export class Viewer {
     if (!sameRenderer) {
       this.controls.disconnect();
       this.renderer.dispose();
+      // its WebGL context goes now, not when collected: a page may hold only so many
+      this.renderer.forceContextLoss();
       this.renderer.domElement.remove();
       this.renderer = this.createRenderer();
       this.controls.connect(this.renderer.domElement);
@@ -2029,6 +2031,7 @@ export class Viewer {
     this.halos.dispose();
     this.controls.dispose();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
   }
 }
