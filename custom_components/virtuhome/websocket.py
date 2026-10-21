@@ -6,6 +6,7 @@ import base64
 import binascii
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 import voluptuous as vol
 
@@ -191,6 +192,8 @@ async def ws_checks_fix_card(hass: HomeAssistant, connection: websocket_api.Acti
 def _names(hass: HomeAssistant, store: PlanStore) -> list[str]:
     """Everything that names the home, its people or its devices, to strip from reports."""
     names: list[Any] = [hass.config.location_name]
+    # the addresses Home Assistant is reached at turn up without their https:// too
+    names += [urlsplit(url).hostname for url in (hass.config.internal_url, hass.config.external_url) if url]
     for state in hass.states.async_all():
         names += [state.entity_id, state.name]
     for area in ar.async_get(hass).async_list_areas():

@@ -83,6 +83,8 @@ export function privateStrings(hass: Hass | null | undefined, plan: Plan | null 
     add(hass.user?.name);
     add((hass.config as { location_name?: unknown } | undefined)?.location_name);
   }
+  // the address Home Assistant is reached at turns up without its https:// too
+  if (typeof location !== "undefined") add(location.hostname);
   if (plan) walk(plan, "", add, 0);
   return [...out];
 }
