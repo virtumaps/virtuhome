@@ -1,5 +1,6 @@
 // Builds the static site GitHub Pages serves (.github/workflows/pages.yml):
 //   site/             the user guide, a page per part of docs/GUIDE.md (dev/guide-site.mjs)
+//   site/<minor>/     the guide of the minor release before it (0.10/ beside 0.11.0), from its tag
 //   site/demo/        the online demo: the demo house with pretend states (dev/demo.ts)
 // `npm run site` (or `node dev/site.mjs [out]`); `--serve` then shows it on
 // http://127.0.0.1:5180/virtuhome/, as Pages does. It fails if the harness's live mode, or anything
@@ -10,7 +11,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, dirname, extname, join, normalize, resolve } from "node:path";
-import { guideSite } from "./guide-site.mjs";
+import { currentVersion, guideSite, previousMinor, readRelease } from "./guide-site.mjs";
 
 const dev = new URL(".", import.meta.url).pathname;
 const frontend = join(dev, "..");
@@ -73,9 +74,23 @@ export async function buildSite(out) {
   const pages = [{ name: "demo/index.html", text: demoPage(preload) }];
   problems.push(...liveCode(pages, []));
   if (problems.length) throw new Error(`The site must not reach a Home Assistant:\n  ${problems.join("\n  ")}`);
-  const guide = guideSite();
+  const version = currentVersion();
+  const before = previousMinor(version);
+  const md = before && readRelease(before)("docs/GUIDE.md");
+  const minor = before?.replace(/\.\d+$/, "");
+  const guide = guideSite({ version, older: md ? [{ version: before, href: `${minor}/` }] : [] });
   if (guide.problems.length) throw new Error(`Links in docs/GUIDE.md lead nowhere:\n  ${guide.problems.join("\n  ")}`);
-  const all = [...guide.files, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text }))];
+  let older = [];
+  if (md) {
+    const newest = { version, href: "../", anchors: guide.anchors };
+    const old = guideSite({ md: md.toString("utf8"), version: before, read: readRelease(before), root: "../", newest });
+    // a released guide can't be changed any more: what it gets wrong is only reported
+    for (const p of old.problems) console.warn(`The ${before} guide: ${p}`);
+    older = old.files.map((f) => ({ ...f, name: `${minor}/${f.name}` }));
+  } else {
+    console.warn(`No guide of a release before ${version} to publish beside it (are the tags fetched?)`);
+  }
+  const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text }))];
   rmSync(out, { recursive: true, force: true });
   for (const f of all) {
     mkdirSync(dirname(join(out, f.name)), { recursive: true });
@@ -84,7 +99,10 @@ export async function buildSite(out) {
   return all.map((f) => ({ name: f.name, bytes: f.data?.length ?? Buffer.byteLength(f.text) }));
 }
 
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".jpg": "image/jpeg", ".png": "image/png" };
+const TYPES = {
+  ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
+  ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm",
+};
 
 /** Serves the built site under /virtuhome/, as GitHub Pages does, on this computer only. */
 export function serveSite(out, port = 5180) {

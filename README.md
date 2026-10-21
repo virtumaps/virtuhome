@@ -196,7 +196,7 @@ cd frontend
 npm install
 npm run dev        # rebuilds on change, dev harness on http://127.0.0.1:5173
 npm run build      # writes custom_components/virtuhome/frontend
-npm run site       # writes site/ for GitHub Pages: the user guide, and the online demo in site/demo
+npm run site       # writes site/ for GitHub Pages: the user guide (and the one before), and the online demo
 npm run site -- --serve   # and shows it on http://127.0.0.1:5180/virtuhome/
 npm test
 node ../tools/shot.mjs "floor=0&theme=night&quality=high" /tmp/shot.png   # screenshot with local Chrome

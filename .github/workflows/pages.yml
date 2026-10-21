@@ -1,7 +1,7 @@
 name: Pages
 # The site on GitHub Pages, built from each published release (or by hand, from the branch or tag
-# picked when running it): the user guide (docs/GUIDE.md, a page per part) at the root, and the
-# online demo in site/demo/.
+# picked when running it): the user guide (docs/GUIDE.md, a page per part) at the root, the guide of
+# the minor release before it in site/<minor>/ (read from its tag), and the online demo in site/demo/.
 # Needs Settings → Pages → Source set to "GitHub Actions".
 
 on:
@@ -25,6 +25,9 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          # every tag, for the previous release's guide
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22

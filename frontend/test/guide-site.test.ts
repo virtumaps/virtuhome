@@ -1,16 +1,17 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { anchors, guideSite, imageSize, parts, readGuide, SITE } from "../dev/guide-site.mjs";
+import { anchors, guideSite, imageSize, parts, previousMinor, readGuide, SITE } from "../dev/guide-site.mjs";
 import { parse, type Block } from "../dev/markdown.mjs";
 import { GUIDE_URL, guideLink } from "../src/ui/guide";
 
 const md = readGuide();
-const site = guideSite({ md, version: "1.2.3" });
+const site = guideSite({ md, version: "1.2.3", older: [{ version: "1.1.4", href: "1.1/" }] });
 const files = new Map(site.files.map((f) => [f.name, f]));
 const pages = site.files.filter((f) => f.name.endsWith(".html"));
 /** A small guide, with pretend files beside it. */
-const small = (text: string, have: string[] = []) =>
-  guideSite({ md: text, version: "1.0.0", read: (path) => (have.includes(path) ? new Uint8Array([1]) : null) });
+const small = (text: string, have: string[] = [], more = {}) =>
+  guideSite({ md: text, version: "1.0.0", read: (path) => (have.includes(path) ? new Uint8Array([1]) : null), ...more });
+const text = (s: ReturnType<typeof guideSite>, name: string) => s.files.find((f) => f.name === name)!.text!;
 
 function headings(blocks: Block[], found: string[] = []) {
   for (const b of blocks) {
@@ -32,7 +33,7 @@ describe("the guide's website", () => {
   it("has a page for each part of docs/GUIDE.md", () => {
     const count = md.split("\n").filter((l) => l.startsWith("## ")).length;
     expect(pages.map((p) => p.name)).toEqual(expect.arrayContaining(["index.html", "install.html", "get-your-home-in.html", "faq.html", "troubleshooting.html"]));
-    expect(pages.length).toBe(count + 1);
+    expect(pages.length).toBe(count + 2); // and the search page
     expect(site.problems).toEqual([]);
   });
 
@@ -53,8 +54,8 @@ describe("the guide's website", () => {
   it("leads every link in the guide somewhere", () => {
     for (const page of pages) {
       for (const [, attr, url] of page.text!.matchAll(/ (href|src)="([^"]*)"/g)) {
-        if (/^(https?:|data:)/.test(url) || url === "demo/" || url === "guide.css") continue;
-        if (attr === "src") expect(files.get(url)?.data?.length, `${page.name}: ${url}`).toBeGreaterThan(0);
+        if (/^(https?:|data:)/.test(url) || url === "demo/" || url === "1.1/") continue;
+        if (attr === "src") expect(files.get(url)?.data?.length ?? files.get(url)?.text?.length, `${page.name}: ${url}`).toBeGreaterThan(0);
         else expect(resolves(url, page.name), `${page.name}: ${url}`).toBe(true);
       }
     }
@@ -93,10 +94,11 @@ describe("the guide's website", () => {
     expect(page).toContain('<a rel="next" href="place-your-devices.html">');
     expect(page).toContain("Guide for 1.2.3");
     expect(page).toContain("https://github.com/virtumaps/virtuhome/blob/v1.2.3/docs/GUIDE.md");
-    // no trackers, fonts or scripts from elsewhere, and only the front page has a script
+    // no trackers, fonts or scripts from elsewhere; the site's own script, and the front page's anchors
     for (const p of pages) {
-      expect(p.text).not.toMatch(/<(script|link|img)[^>]+(src|href)="(https?:)?\/\//);
-      expect(p.text!.includes("<script")).toBe(p.name === "index.html");
+      expect(p.text).not.toMatch(/<(script|link|img|video)[^>]+(src|href)="(https?:)?\/\//);
+      expect(p.text).toContain('<script type="module" src="guide.js"></script>');
+      expect(p.text!.includes("<script>")).toBe(p.name === "index.html");
     }
   });
 
@@ -141,5 +143,71 @@ describe("help links in VirtuHome", () => {
     }
     expect(used).toContain("wall-tablets");
     for (const anchor of used) expect(site.anchors[anchor], `#${anchor} is not a heading in docs/GUIDE.md`).toBeDefined();
+  });
+});
+
+describe("searching the guide's website", () => {
+  const index: [string, string, string, string][] = JSON.parse(files.get("search.json")!.text!);
+
+  it("has every section, where it is, with its text", () => {
+    const storeys = index.find((e) => e[0] === "Storeys")!;
+    expect(storeys.slice(0, 3)).toEqual(["Storeys", "Get your home in", "get-your-home-in.html#storeys"]);
+    expect(storeys[3]).toMatch(/^Edit → Home → Floors lists each storey/);
+    expect(index.find((e) => e[0] === "Install")!.slice(1, 3)).toEqual(["Install", "install.html"]);
+    for (const [, , url] of index) expect(resolves(url, ""), url).toBe(true);
+    for (const id of Object.keys(site.anchors).filter((id) => id !== "virtuhome-guide")) expect(index.some((e) => e[2] === site.anchors[id]), id).toBe(true);
+    // a table's cells stay apart
+    expect(index.find((e) => e[0] === "The card and its options")![3]).toContain("Option Visual editor Values Default");
+  });
+
+  it("has a search page that lists every section without JavaScript, and a search box on the others", () => {
+    const search = files.get("search.html")!.text!;
+    expect(search).toContain('<form class="find" role="search" action="search.html">');
+    expect(search).toContain('<input id="q" type="search" name="q"');
+    expect(search).toContain('<a href="get-your-home-in.html#storeys">Storeys</a>');
+    for (const p of parts(md)) expect(search).toContain(`<a href="${p.file}">`);
+    expect(search).not.toContain('<form class="search"');
+    expect(files.get("faq.html")!.text).toContain('<form class="search" role="search" action="search.html"><input type="search" name="q"');
+  });
+});
+
+describe("the guide's versions", () => {
+  it("finds the newest release of the minor before", () => {
+    const tags = ["v0.9.0", "v0.10.0", "v0.10.2", "v0.10.10", "v0.11.0", "v0.11.1", "v1.0.0", "nightly", ""];
+    expect(previousMinor("0.11.1", tags)).toBe("0.10.10");
+    expect(previousMinor("0.11.0", tags)).toBe("0.10.10");
+    expect(previousMinor("1.0.0", tags)).toBe("0.11.1");
+    expect(previousMinor("0.9.0", tags)).toBeNull();
+    expect(previousMinor("0.11.0", [])).toBeNull();
+  });
+
+  it("links the newest guide to the older one", () => {
+    expect(files.get("faq.html")!.text).toContain('Guide for 1.2.3 · older: <a href="1.1/">1.1</a>');
+  });
+
+  it("marks an older guide, and leads to the same part of the newest", () => {
+    const newest = { version: "1.2.0", href: "../", anchors: { one: "one.html", two: "three.html#two" } };
+    const old = small("# G\n\n## One\n\n[demo](https://virtumaps.github.io/virtuhome/demo/)\n\n## Two\n", [], { root: "../", newest });
+    expect(old.problems).toEqual([]);
+    const one = text(old, "one.html");
+    expect(one).toContain('<p class="old">This guide is for VirtuHome 1.0.0. <a href="../one.html">The guide for 1.2.0</a></p>');
+    expect(one).toContain('Guide for 1.0.0 · newest: <a href="../">1.2.0</a>');
+    expect(one).toContain('<a href="../demo/">demo</a>');
+    expect(one).toContain('<a href="../demo/">Demo</a>');
+    expect(text(old, "two.html")).toContain('<a href="../three.html#two">The guide for 1.2.0</a>');
+  });
+});
+
+describe("clips in the guide", () => {
+  it("shows a paragraph that is only a link to a video as the video, with its picture", () => {
+    const clips = small("# G\n\n## One\n\n[Placing a *light*](clips/light.mp4)\n\nSee [the clip](clips/light.mp4).\n", ["docs/clips/light.mp4", "docs/clips/light.jpg"]);
+    expect(clips.problems).toEqual([]);
+    expect(text(clips, "one.html")).toContain(
+      '<figure class="clip">\n<video src="clips/light.mp4" poster="clips/light.jpg" controls muted playsinline preload="metadata"><a href="clips/light.mp4">Placing a <em>light</em></a></video>\n<figcaption>Placing a <em>light</em></figcaption>\n</figure>',
+    );
+    // a link to it in a sentence stays a link
+    expect(text(clips, "one.html")).toContain('<p>See <a href="https://github.com/virtumaps/virtuhome/blob/v1.0.0/docs/clips/light.mp4">the clip</a>.</p>');
+    expect(clips.files.map((f) => f.name)).toEqual(expect.arrayContaining(["clips/light.mp4", "clips/light.jpg"]));
+    expect(small("# G\n\n## One\n\n[Gone](clips/gone.webm)\n").problems).toEqual(["one.html: clips/gone.webm isn't in the repository"]);
   });
 });
