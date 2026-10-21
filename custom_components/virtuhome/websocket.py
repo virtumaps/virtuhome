@@ -214,7 +214,7 @@ def ws_errors_report(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     """An error from a card or the panel (any user: wall tablets rarely sign in as admins), for diagnostics."""
     if (store := _store(hass, connection, msg)) is None:
         return
-    connection.send_result(msg["id"], {"kept": store.errors.add(msg, _names(hass, store), time.time())})
+    connection.send_result(msg["id"], {"kept": store.errors.add(msg, lambda: _names(hass, store), time.time())})
 
 
 # ---------------------------------------------------------------------------- floor plan images

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 KEEP = 50
@@ -102,17 +102,17 @@ class ErrorLog:
         self._rate = rate
         self._times: deque[float] = deque()
 
-    def add(self, report: dict[str, Any], names: Iterable[str], now: float) -> bool:
-        """Keeps a report, stripped; False when too many came this minute."""
+    def add(self, report: dict[str, Any], names: Callable[[], Iterable[str]], now: float) -> bool:
+        """Keeps a report, stripped with `names()`; False when too many came this minute (names not asked for)."""
         while self._times and now - self._times[0] > 60:
             self._times.popleft()
         if len(self._times) >= self._rate:
             return False
         self._times.append(now)
-        names = list(names)
+        strings = list(names())
         # every field, though the frontend fills the version, graphics and browser itself; cut after
         # stripping, so no name is cut in half and left
-        entry = {field: strip_text(str(report.get(field) or "")[: limit * 4], names)[:limit] for field, limit in LIMITS.items()}
+        entry = {field: strip_text(str(report.get(field) or "")[: limit * 4], strings)[:limit] for field, limit in LIMITS.items()}
         same = next((e for e in self.entries if all(e[f] == entry[f] for f in ("where", "message", "stack"))), None)
         if same is not None:
             same["count"] += 1

@@ -68,7 +68,7 @@ def report(**fields):
 def test_keeps_the_last_50_stripped():
     log = errors.ErrorLog(rate=1000)
     for i in range(60):
-        assert log.add(report(message=f"No room for Kitchen near light.kitchen #{i}"), NAMES, 1000.0 + i)
+        assert log.add(report(message=f"No room for Kitchen near light.kitchen #{i}"), lambda: NAMES, 1000.0 + i)
     kept = log.summary()
     assert len(kept) == 50
     assert kept[0]["message"] == "No room for <name> near <entity> #10"
@@ -79,19 +79,27 @@ def test_keeps_the_last_50_stripped():
 
 def test_the_same_error_again_counts():
     log = errors.ErrorLog()
-    log.add(report(), [], 10.0)
-    log.add(report(where="plan"), [], 11.0)
-    log.add(report(), [], 12.0)
+    log.add(report(), list, 10.0)
+    log.add(report(where="plan"), list, 11.0)
+    log.add(report(), list, 12.0)
     kept = log.summary()
     assert [(e["where"], e["count"], e["time"], e["last"]) for e in kept] == [("plan", 1, 11.0, 11.0), ("render", 2, 10.0, 12.0)]
 
 
 def test_a_few_a_minute_and_fields_cut():
     log = errors.ErrorLog(rate=3)
-    assert [log.add(report(message=str(i)), [], 100.0 + i) for i in range(5)] == [True, True, True, False, False]
+    asked = []
+
+    def names():
+        asked.append(1)
+        return []
+
+    assert [log.add(report(message=str(i)), names, 100.0 + i) for i in range(5)] == [True, True, True, False, False]
+    # names are only worked out for reports that are kept
+    assert len(asked) == 3
     # a minute after the first, there is room again
-    assert log.add(report(message="later"), [], 161.0)
-    log.add(report(message="no room " * 500, stack="at a (app.js:1:2)\n" * 500, browser="Oak House " * 50), NAMES, 300.0)
+    assert log.add(report(message="later"), list, 161.0)
+    log.add(report(message="no room " * 500, stack="at a (app.js:1:2)\n" * 500, browser="Oak House " * 50), lambda: NAMES, 300.0)
     last = log.summary()[-1]
     assert len(last["message"]) == 300 and len(last["stack"]) == 2000 and len(last["browser"]) <= 80
     # every field is stripped, even those the frontend fills itself
