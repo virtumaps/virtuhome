@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- An extension that goes wrong no longer stops the house: its room colours, labels, roof colours,
+  buttons and listeners are left out and the rest keeps working.
+- When the browser drops the graphics (the graphics card resets, a tablet wakes from sleep), the
+  house is drawn again by itself, on a new canvas if the browser doesn't give the old one back.
+
 ## 0.11.0
 
 ### New

@@ -150,6 +150,11 @@ export class Viewer {
   overlayMarkers: MarkerSpec[] = [];
   /** Called once when moving the view stays slow (under ~22 frames per second). */
   onSlow: (() => void) | null = null;
+  /**
+   * Called when drawing goes wrong; `fatal` when the house can't be drawn any more (frames failed
+   * again and again, or the graphics could not be got back), and the viewer has stopped.
+   */
+  onError: ((err: unknown, fatal: boolean, where: string) => void) | null = null;
 
   private floors: FloorView[] = [];
   /** The door or window whose wall stays up (the editor's selection). */
@@ -194,6 +199,12 @@ export class Viewer {
   /** The weather wants frames (rain, snow, wind, lightning): when the next one is due. */
   private fxTimer = 0;
   private slowWatch = { frames: 0, time: 0, fired: false };
+  /** Frames that failed in a row, and whether drawing stopped for good. */
+  private fails = 0;
+  private halted = false;
+  /** While the graphics context is lost: the timer for a new canvas, if the browser doesn't give it back. */
+  private lostTimer = 0;
+  private renewals = 0;
   /** Measured once per label element (reading sizes every frame would force layouts). */
   private labelSize = new WeakMap<HTMLElement, number[]>();
 
@@ -259,8 +270,15 @@ export class Viewer {
     r.setPixelRatio(this.pixelRatio);
     r.domElement.style.display = "block";
     r.domElement.style.touchAction = "none";
-    r.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
-    r.domElement.addEventListener("webglcontextrestored", () => this.plan && this.setPlan(this.plan, true, false));
+    r.domElement.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      if (r !== this.renderer || this.disposed || this.halted) return;
+      this.onError?.(new Error("The browser dropped the WebGL context"), false, "graphics");
+      // the browser usually gives it back (restored, below); if it doesn't, a new canvas gets a new one
+      window.clearTimeout(this.lostTimer);
+      this.lostTimer = window.setTimeout(() => this.recover(true), 3000);
+    });
+    r.domElement.addEventListener("webglcontextrestored", () => r === this.renderer && this.recover(false));
     this.container.appendChild(r.domElement);
     return r;
   }
@@ -284,13 +302,18 @@ export class Viewer {
     const wantsLook = (tier === "high" || tier === "ultra") && !!this.realistic;
     const sameRenderer = tier === this.tier;
     if (sameRenderer && wantsLook === !!this.look) return;
+    this.remake(tier, !sameRenderer);
+  }
+
+  /** Everything made again from the plan: the look, the floors, and a new renderer (a new canvas) when asked. */
+  private remake(tier: Tier, newRenderer: boolean): void {
     for (const f of this.floors) this.disposeFloor(f);
     this.floors = [];
     this.look?.dispose();
     this.look = null;
     this.tier = tier;
     this.slowWatch = { frames: 0, time: 0, fired: false };
-    if (!sameRenderer) {
+    if (newRenderer) {
       this.controls.disconnect();
       this.renderer.dispose();
       this.renderer.domElement.remove();
@@ -302,6 +325,31 @@ export class Viewer {
     this.width = this.height = 0;
     this.resize();
     if (this.plan) this.setPlan(this.plan, true);
+  }
+
+  /**
+   * After the context was lost: the house is made again, on the same canvas when the browser gave the
+   * context back, else on a new one (a few times at most).
+   */
+  private recover(newCanvas: boolean): void {
+    window.clearTimeout(this.lostTimer);
+    this.lostTimer = 0;
+    if (this.disposed || this.halted) return;
+    try {
+      if (newCanvas && ++this.renewals > 3) throw new Error("The WebGL context was lost again and again");
+      this.remake(this.tier, newCanvas);
+    } catch (err) {
+      this.halt();
+      this.onError?.(err, true, "graphics");
+    }
+  }
+
+  /** Stops drawing for good (the view shows why instead). */
+  halt(): void {
+    this.halted = true;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    window.clearTimeout(this.lostTimer);
   }
 
   /** Where the sun is (degrees), for the realistic look's daylight and shadows (the sky's weather stays). */
@@ -1629,12 +1677,34 @@ export class Viewer {
 
   invalidate(): void {
     this.dirty = true;
-    if (!this.raf && !this.disposed) this.raf = requestAnimationFrame(this.tick);
+    if (!this.raf && !this.disposed && !this.halted) this.raf = requestAnimationFrame(this.tick);
   }
 
   private tick = (now: number): void => {
     this.raf = 0;
-    if (this.disposed) return;
+    // nothing to draw on while the context is lost
+    if (this.disposed || this.halted || this.lostTimer) return;
+    try {
+      this.step(now);
+      this.fails = 0;
+    } catch (err) {
+      this.frameFailed(err);
+    }
+  };
+
+  /** A frame threw: tried again shortly, and after a few failures in a row the view is told it can't draw. */
+  private frameFailed(err: unknown): void {
+    this.dirty = true;
+    if (++this.fails >= 3) {
+      this.halt();
+      this.onError?.(err, true, "render");
+      return;
+    }
+    this.onError?.(err, false, "render");
+    window.setTimeout(() => this.invalidate(), 250);
+  }
+
+  private step(now: number): void {
     const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0.016;
     this.lastFrame = now;
     let again = false;
@@ -1667,8 +1737,17 @@ export class Viewer {
         this.look.render();
       } else this.renderer.render(this.scene, this.camera);
       this.sceneChanged = false;
+      this.renewals = 0;
       this.positionLabels();
-      this.onFrame?.();
+      if (this.onFrame) {
+        // an extension's: one that throws is dropped, the house keeps drawing
+        try {
+          this.onFrame();
+        } catch (err) {
+          this.onFrame = null;
+          this.onError?.(err, false, "extension");
+        }
+      }
       this.dirty = false;
       const s = this.stats;
       s.frames++;
@@ -1701,7 +1780,7 @@ export class Viewer {
     } else {
       this.lastFrame = 0;
     }
-  };
+  }
 
   get fps(): number {
     return this.stats.fps;
@@ -2019,6 +2098,7 @@ export class Viewer {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     window.clearTimeout(this.fxTimer);
+    window.clearTimeout(this.lostTimer);
     this.fade?.remove();
     this.resizeObs.disconnect();
     this.interObs.disconnect();

@@ -688,6 +688,12 @@ pick the sensors in Edit → **Home** → **Energy**.
 
 **Extensions don't show after activating**: tap **Reload now**, or reload the page.
 
+**An extension goes wrong**: the house carries on without it. Its room colours, labels, buttons and
+the rest are left out.
+
+**The house went blank for a moment**: when the browser drops the graphics (the graphics card
+resets, or a tablet wakes from sleep), the house is drawn again by itself after a few seconds.
+
 **Still stuck?** Ask in [Discussions →
 Q&A](https://github.com/virtumaps/virtuhome/discussions/categories/q-a). To report something that
 doesn't work, a device to support, a scan that came in wrong or a slow device, open an
