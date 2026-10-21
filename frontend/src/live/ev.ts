@@ -118,7 +118,7 @@ function fromDevice(hass: Hass, dev: string | null, ids: string[]): EvCharger {
   const plug = of(["binary_sensor", "sensor"], (n, s) => s.attributes.device_class === "plug" || /plug|cable_connected|(car|vehicle|ev)_connected/.test(n));
   return {
     device: dev,
-    name: d?.name_by_user || d?.name || "Car charger",
+    name: d?.name_by_user || d?.name || t("ev.defaultName"),
     power,
     plug,
     status: of("sensor", (n, s, id) => id !== plug && /status|state/.test(n) && !s.attributes.unit_of_measurement && !/state_of_charge|soc|wifi|signal|rssi|firmware|update|lock|connection|error_code/.test(n)),
