@@ -20,7 +20,7 @@ import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, rec
 import { domainOf, type Hass } from "../live/hass";
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, furnitureName, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
-import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
+import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef, type Swatch } from "../scene/finishes";
 import {
   faceBearing, fitPanels, floorRoofs, fromRoofFrame, itemFrame, planeHeight, polyArea, ROOF_ITEM_DEFAULTS, ROOF_SHAPE_ORDER, ROOF_SHAPES, sunniestFace,
   type RoofFace, type RoofModel,
@@ -44,6 +44,7 @@ import type { VhView } from "../ui/view";
 import type { Check, Fix } from "../ui/checks";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { guideLink } from "../ui/guide";
+import type { PlainKey } from "../i18n";
 import { t } from "../i18n/editor";
 import { EDITOR_CSS } from "./styles";
 import { HouseTypes } from "./house-types";
@@ -849,7 +850,7 @@ export class Editor {
       h("div", { class: "ed-report" }),
       h("h4", {}, "Outside walls"),
       this.finishChips(EXTERIOR_FINISHES, this.plan.settings.exterior_finish ?? "render", (k) =>
-        this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, `Outside walls: ${(EXTERIOR_FINISHES as Record<string, FinishDef>)[k].name}`)),
+        this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, `Outside walls: ${t((EXTERIOR_FINISHES as Record<string, FinishDef>)[k].label)}`)),
       (EXTERIOR_FINISHES as Record<string, FinishDef>)[this.plan.settings.exterior_finish ?? "render"]?.tintable
         ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, "Outside wall colour"))
         : null,
@@ -1133,7 +1134,7 @@ export class Editor {
       return short || full;
     };
     const sensors = (ok: (id: string) => boolean): [string, string][] =>
-      Object.keys(hass.states).filter((id) => domainOf(id) === "sensor" && ok(id)).map((id) => [id, name(id)] as [string, string]).sort((a, b) => a[1].localeCompare(b[1]));
+      Object.keys(hass.states).filter((id) => domainOf(id) === "sensor" && ok(id)).map((id) => [id, name(id)] as Swatch).sort((a, b) => a[1].localeCompare(b[1]));
     const dc = (id: string) => hass.states[id].attributes.device_class;
     const power = sensors((id) => dc(id) === "power");
     const levels = sensors((id) => dc(id) === "battery");
@@ -1412,7 +1413,7 @@ export class Editor {
       ),
       h("div", { class: "ed-row" },
         h("label", {}, "Outside"),
-        this.dropdown(Object.entries(EXTERIOR_FINISHES).map(([k, d]) => [k, d.name]), f.exterior_finish ?? "", (v) =>
+        this.dropdown(Object.entries(EXTERIOR_FINISHES).map(([k, d]) => [k, t(d.label)]), f.exterior_finish ?? "", (v) =>
           this.change((p) => (p.floors[i].exterior_finish = (v || null) as Floor["exterior_finish"]), false, `${f.name} outside walls`), "Same as the house"),
       ),
     );
@@ -1503,12 +1504,12 @@ export class Editor {
       box.append(h("h4", {}, f.name));
       for (const fence of f.fences ?? []) {
         box.append(h("div", { class: `ed-card ${this.sel?.id === fence.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "fence", id: fence.id }) },
-          h("div", { class: "ed-row" }, h("b", {}, `${fenceStyle(fence.style).name} fence`), h("small", {}, ` · ${fenceLength(fence).toFixed(1)} m${fence.gates?.length ? `, ${fence.gates.length} gate${fence.gates.length > 1 ? "s" : ""}` : ""}`)),
+          h("div", { class: "ed-row" }, h("b", {}, `${t(fenceStyle(fence.style).label)} fence`), h("small", {}, ` · ${fenceLength(fence).toFixed(1)} m${fence.gates?.length ? `, ${fence.gates.length} gate${fence.gates.length > 1 ? "s" : ""}` : ""}`)),
         ));
       }
       for (const o of f.outdoor ?? []) {
         box.append(h("div", { class: `ed-card ${this.sel?.id === o.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "outdoor", id: o.id }) },
-          h("div", { class: "ed-row" }, h("b", {}, o.name), h("small", {}, ` · ${o.kind === "deck" ? `${DECK_BOARDS[deckLook(o).boards].name.toLowerCase()} deck` : isPaved(o) ? PAVING[areaPaving(o).material].name.toLowerCase() : KIND_NAMES[o.kind].toLowerCase()}`)),
+          h("div", { class: "ed-row" }, h("b", {}, o.name), h("small", {}, ` · ${o.kind === "deck" ? `${t(DECK_BOARDS[deckLook(o).boards].label).toLowerCase()} deck` : isPaved(o) ? t(PAVING[areaPaving(o).material].label).toLowerCase() : KIND_NAMES[o.kind].toLowerCase()}`)),
         ));
       }
       f.rooms.forEach((r, ri) => {
@@ -1526,7 +1527,7 @@ export class Editor {
           ),
           h("div", { class: "ed-row" },
             h("label", {}, "Floor"),
-            this.dropdown(Object.entries(FLOOR_FINISHES).map(([k, d]) => [k, d.name]), r.floor ?? "wood", (v) => this.change((p) => (p.floors[fi].rooms[ri].floor = v as FloorMaterial), false, `${r.name} floor`)),
+            this.dropdown(Object.entries(FLOOR_FINISHES).map(([k, d]) => [k, t(d.label)]), r.floor ?? "wood", (v) => this.change((p) => (p.floors[fi].rooms[ri].floor = v as FloorMaterial), false, `${r.name} floor`)),
           ),
         ));
       });
@@ -1720,20 +1721,20 @@ export class Editor {
     const border = o.border && BORDER_MATERIALS.includes(o.border as PavingMaterial) ? (o.border as PavingMaterial) : null;
     // a gravel area's stones only take a colour (gravel is a kind of ground of its own)
     if (o.kind === "gravel") {
-      return [h("div", { class: "ed-sub" }, "Stones"), this.colourPicker(def.colors.map(([name, c]) => [name, c] as [string, string]), o.color && o.color !== usual.color ? o.color : null, (c) => upd(`Stones of ${o.name}`, (x) => (x.color = c)), def.colors[0][0])];
+      return [h("div", { class: "ed-sub" }, "Stones"), this.colourPicker(def.colors.map(([name, c]) => [name, c] as Swatch), o.color && o.color !== usual.color ? o.color : null, (c) => upd(`Stones of ${o.name}`, (x) => (x.color = c)), t(def.colors[0][0]))];
     }
     return [
       h("div", { class: "ed-sub" }, "Laid with"),
-      h("div", { class: "ed-chips" }, ...PAVING_ORDER.filter((k) => k !== "gravel").map((k) => h("button", { class: `ed-chip${k === look.material ? " on" : ""}`, onclick: () => k !== look.material && upd(`${PAVING[k].name} for ${o.name}`, (x) => {
+      h("div", { class: "ed-chips" }, ...PAVING_ORDER.filter((k) => k !== "gravel").map((k) => h("button", { class: `ed-chip${k === look.material ? " on" : ""}`, onclick: () => k !== look.material && upd(`${t(PAVING[k].label)} for ${o.name}`, (x) => {
         x.paving = k;
         x.pattern = x.unit = x.color = x.joint = null;
         if (x.kind === "driveway") x.surface = null;
-      }) }, h("i", { style: `background:${PAVING[k].colors[0][1]}` }), PAVING[k].name))),
+      }) }, h("i", { style: `background:${PAVING[k].colors[0][1]}` }), t(PAVING[k].label)))),
       h("div", { class: "ed-sub" }, "Colour"),
-      this.colourPicker(def.colors.map(([name, c]) => [name, c] as [string, string]), o.color && o.color !== usual.color ? o.color : null, (c) => upd(`Colour of ${o.name}`, (x) => (x.color = c)),
-        def.colors.find(([, c]) => c === usual.color)?.[0] ?? "Usual"),
+      this.colourPicker(def.colors.map(([name, c]) => [name, c] as Swatch), o.color && o.color !== usual.color ? o.color : null, (c) => upd(`Colour of ${o.name}`, (x) => (x.color = c)),
+        ((k) => (k ? t(k) : "Usual"))(def.colors.find(([, c]) => c === usual.color)?.[0])),
       def.patterns.length > 1 ? h("div", { class: "ed-sub" }, "Pattern") : null,
-      def.patterns.length > 1 ? h("div", { class: "ed-chips" }, ...def.patterns.map((k) => chip(PATTERN_NAMES[k], look.pattern === k, () => upd(`${PATTERN_NAMES[k]} pattern for ${o.name}`, (x) => (x.pattern = k))))) : null,
+      def.patterns.length > 1 ? h("div", { class: "ed-chips" }, ...def.patterns.map((k) => chip(t(PATTERN_NAMES[k]), look.pattern === k, () => upd(`${t(PATTERN_NAMES[k])} pattern for ${o.name}`, (x) => (x.pattern = k))))) : null,
       sized && def.sizes.length > 1 ? h("div", { class: "ed-sub" }, "Size (mm)") : null,
       sized && def.sizes.length > 1 ? h("div", { class: "ed-chips" }, ...def.sizes.map((k) => chip(k.replace("x", " × "), unit === k, () => upd(`${k} units for ${o.name}`, (x) => (x.unit = k))))) : null,
       def.joint > 0 ? h("div", { class: "ed-sub" }, "Joints") : null,
@@ -1742,11 +1743,11 @@ export class Editor {
       look.material !== "gravel" ? h("div", { class: "ed-sub" }, "Border") : null,
       look.material !== "gravel" ? h("div", { class: "ed-chips" },
         chip("None", !border, () => upd(`No border round ${o.name}`, (x) => (x.border = null))),
-        ...BORDER_MATERIALS.map((k) => chip(PAVING[k].name, border === k, () => upd(`${PAVING[k].name} border round ${o.name}`, (x) => {
+        ...BORDER_MATERIALS.map((k) => chip(t(PAVING[k].label), border === k, () => upd(`${t(PAVING[k].label)} border round ${o.name}`, (x) => {
           x.border = k;
           x.border_color = null;
         })))) : null,
-      border ? this.colourPicker(PAVING[border].colors.map(([name, c]) => [name, c] as [string, string]), o.border_color, (c) => upd(`Border colour of ${o.name}`, (x) => (x.border_color = c)), PAVING[border].colors[0][0]) : null,
+      border ? this.colourPicker(PAVING[border].colors.map(([name, c]) => [name, c] as Swatch), o.border_color, (c) => upd(`Border colour of ${o.name}`, (x) => (x.border_color = c)), t(PAVING[border].colors[0][0])) : null,
     ];
   }
 
@@ -1768,12 +1769,12 @@ export class Editor {
     const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
     return [
       h("div", { class: "ed-sub" }, "Boards"),
-      h("div", { class: "ed-chips" }, ...DECK_ORDER.map((k) => h("button", { class: `ed-chip${k === look.boards ? " on" : ""}`, onclick: () => k !== look.boards && upd(`${DECK_BOARDS[k].name} boards on ${o.name}`, (x) => {
+      h("div", { class: "ed-chips" }, ...DECK_ORDER.map((k) => h("button", { class: `ed-chip${k === look.boards ? " on" : ""}`, onclick: () => k !== look.boards && upd(`${t(DECK_BOARDS[k].label)} boards on ${o.name}`, (x) => {
         x.boards = k;
         x.color = x.board_width = null;
-      }) }, h("i", { style: `background:${DECK_BOARDS[k].colors[0][1]}` }), DECK_BOARDS[k].name))),
+      }) }, h("i", { style: `background:${DECK_BOARDS[k].colors[0][1]}` }), t(DECK_BOARDS[k].label)))),
       h("div", { class: "ed-sub" }, "Colour"),
-      this.colourPicker(def.colors, o.color && o.color !== def.colors[0][1] ? o.color : null, (c) => upd(`Colour of ${o.name}`, (x) => (x.color = c)), def.colors[0][0]),
+      this.colourPicker(def.colors, o.color && o.color !== def.colors[0][1] ? o.color : null, (c) => upd(`Colour of ${o.name}`, (x) => (x.color = c)), t(def.colors[0][0])),
       h("div", { class: "ed-row" }, h("label", {}, "Boards mm"), ...def.widths.map((w) => chip(String(w), look.width === w, () => upd(`${w} mm boards on ${o.name}`, (x) => (x.board_width = w))))),
       this.directionRow(o, upd),
       h("label", { class: "ed-check" },
@@ -1807,8 +1808,8 @@ export class Editor {
     ];
     if (!raised) return rows;
     if (!deck) {
-      rows.push(h("div", { class: "ed-row" }, h("label", {}, "Sides"), ...Object.entries(RAISED_WALLS).map(([k, name]) =>
-        chip(name, (o.walls ?? "brick") === k, () => upd(`${name} sides on ${o.name}`, (x) => (x.walls = k as RaisedWall))))));
+      rows.push(h("div", { class: "ed-row" }, h("label", {}, "Sides"), ...Object.entries(RAISED_WALLS).map(([k, key]) =>
+        chip(t(key), (o.walls ?? "brick") === k, () => upd(`${t(key)} sides on ${o.name}`, (x) => (x.walls = k as RaisedWall))))));
     }
     rows.push(h("div", { class: "ed-sub" }, "Steps down"));
     o.points.forEach((_, i) => {
@@ -1833,7 +1834,7 @@ export class Editor {
     rows.push(
       h("div", { class: "ed-sub" }, "Railing"),
       h("div", { class: "ed-chips" }, chip("None", !o.railing, () => upd(`No railing round ${o.name}`, (x) => (x.railing = null))),
-        ...railings.map((k) => chip(FENCE_STYLES[k].name, o.railing === k, () => upd(`${FENCE_STYLES[k].name} railing round ${o.name}`, (x) => (x.railing = k))))),
+        ...railings.map((k) => chip(t(FENCE_STYLES[k].label), o.railing === k, () => upd(`${t(FENCE_STYLES[k].label)} railing round ${o.name}`, (x) => (x.railing = k))))),
     );
     return rows;
   }
@@ -1881,17 +1882,17 @@ export class Editor {
       return Math.round(Math.max(width / 2, Math.min(len - width / 2, best.at)) * 100) / 100;
     };
     return h("div", {},
-      h("h4", {}, `${def.name} fence`),
+      h("h4", {}, `${t(def.label)} fence`),
       h("p", { class: "ed-hint" }, `${len.toFixed(1)} m long. Drag its blue points to move them or a + to add a corner; drag the fence itself to move it. In the 2D plan, the fence tool draws new ones.`),
       h("div", { class: "ed-sub" }, "Style"),
-      h("div", { class: "ed-chips" }, ...FENCE_ORDER.map((k) => h("button", { class: `ed-chip${k === fence.style ? " on" : ""}`, onclick: () => k !== fence.style && upd(`Fence: ${FENCE_STYLES[k].name}`, (x) => {
+      h("div", { class: "ed-chips" }, ...FENCE_ORDER.map((k) => h("button", { class: `ed-chip${k === fence.style ? " on" : ""}`, onclick: () => k !== fence.style && upd(`Fence: ${t(FENCE_STYLES[k].label)}`, (x) => {
         // the new style's usual height, unless the height was picked
         if (Math.abs(x.height - def.height) < 0.001) x.height = FENCE_STYLES[k].height;
         if (x.color && x.color === def.color) x.color = null;
         x.style = k as FenceStyle;
         x.posts = null;
         x.spacing = null;
-      }) }, FENCE_STYLES[k].name))),
+      }) }, t(FENCE_STYLES[k].label)))),
       h("div", { class: "ed-row" },
         h("label", {}, "Height m"),
         num(fence.height, String(def.height), "0.05", (v) => upd("Fence height", (x) => (x.height = Math.max(0.3, Math.min(3, v ?? def.height))))),
@@ -2033,7 +2034,7 @@ export class Editor {
     const linkable = def?.category === "lights"
       ? this.entities((id) => ["light", "switch"].includes(domainOf(id)))
       : EV_TYPES.has(x.type)
-        ? chargers.map((c) => [c.status ?? c.power ?? c.level ?? "", c.name] as [string, string]).filter(([id]) => id)
+        ? chargers.map((c) => [c.status ?? c.power ?? c.level ?? "", c.name] as Swatch).filter(([id]) => id)
         : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
     // a change of size, height, turn or side keeps the piece out of walls and other pieces
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
@@ -2096,10 +2097,10 @@ export class Editor {
     const o = GARDEN_OPTIONS[x.type] ?? {};
     const c = gardenChoice(x.type, x);
     const def = FURNITURE[x.type];
-    const chips = <T extends string>(title: string, list: T[] | undefined, names: Record<T, string>, cur: T | null, label: string, set: (y: Furniture, v: T) => void) =>
+    const chips = <T extends string>(title: string, list: T[] | undefined, names: Record<T, PlainKey>, cur: T | null, label: string, set: (y: Furniture, v: T) => void) =>
       list && list.length > 1 ? [h("div", { class: "ed-sub" }, title), h("div", { class: "ed-chips" }, ...list.map((k) => h("button", {
         class: `ed-chip${cur === k ? " on" : ""}`, onclick: () => cur !== k && named(label)((y) => set(y, k)),
-      }, names[k])))] : [];
+      }, t(names[k] as PlainKey))))] : [];
     const [most] = o.windows ?? [0, 0];
     return [
       ...chips("Top", o.canopies, CANOPY_NAMES, c.canopy, "Top of", (y, v) => (y.canopy = v)),
@@ -2111,7 +2112,7 @@ export class Editor {
       def?.trim ? h("div", { class: "ed-sub" }, "Trim") : null,
       def?.trim ? this.colourPicker(FENCE_SWATCHES, x.trim, (t) => named("Trim colour of")((y) => (y.trim = t)), "Original") : null,
       ...chips("Made of", o.material ? (Object.keys(PLANTER_MATERIALS) as PlanterMaterial[]) : undefined,
-        Object.fromEntries(Object.entries(PLANTER_MATERIALS).map(([k, m]) => [k, m.name])) as Record<PlanterMaterial, string>, c.material, "Material of", (y, v) => (y.material = v)),
+        Object.fromEntries(Object.entries(PLANTER_MATERIALS).map(([k, m]) => [k, m.label])) as Record<PlanterMaterial, PlainKey>, c.material, "Material of", (y, v) => (y.material = v)),
       ...chips("Planting", o.plants ? (Object.keys(PLANTING_NAMES) as Planting[]) : undefined, PLANTING_NAMES, c.plants, "Planting in", (y, v) => (y.plants = v)),
     ];
   }
@@ -2166,7 +2167,7 @@ export class Editor {
       styles ? h("div", { class: "ed-chips" }, ...Object.entries(styles).map(([k, name]) =>
         chip(t(name), style === k, () => upd(`${t(name)} ${what}`, (x) => (x.style = k as Opening["style"]))))) : null,
       styles ? h("div", { class: "ed-sub" }, o.kind === "window" ? "Frame" : "Finish") : null,
-      styles ? this.finishChips(JOINERY_FINISHES, finish, (k) => upd(`${JOINERY_FINISHES[k as keyof typeof JOINERY_FINISHES].name} ${what}`, (x) => (x.finish = k as Opening["finish"]))) : null,
+      styles ? this.finishChips(JOINERY_FINISHES, finish, (k) => upd(`${t(JOINERY_FINISHES[k as keyof typeof JOINERY_FINISHES].label)} ${what}`, (x) => (x.finish = k as Opening["finish"]))) : null,
       styles && def.tintable
         ? this.colourPicker(JOINERY_SWATCHES, o.color, (c) => upd(`Colour of a ${what}`, (x) => (x.color = c)), finish === "aluminium" ? "Silver" : "White")
         : null,
@@ -2244,17 +2245,17 @@ export class Editor {
   private finishChips(defs: Record<string, FinishDef>, current: string, onPick: (k: string) => void): HTMLElement {
     return h("div", { class: "ed-chips" }, ...Object.entries(defs).map(([k, d]) =>
       h("button", { class: `ed-chip${k === current ? " on" : ""}`, onclick: () => k !== current && onPick(k) },
-        h("i", { style: `background:${hexOf(d.color)}` }), d.name)));
+        h("i", { style: `background:${hexOf(d.color)}` }), t(d.label))));
   }
 
   /** Colour swatches, any colour, or the default (null). */
-  private colourPicker(swatches: [string, string][], current: string | null | undefined, onPick: (c: string | null) => void, defaultLabel = "Default"): HTMLElement {
+  private colourPicker(swatches: Swatch[], current: string | null | undefined, onPick: (c: string | null) => void, defaultLabel = "Default"): HTMLElement {
     const cur = current?.toLowerCase() ?? null;
     const custom = h("input", { type: "color", value: cur ?? "#ffffff", onchange: (e: Event) => onPick((e.target as HTMLInputElement).value) });
     const isCustom = !!cur && !swatches.some(([, c]) => c === cur);
     return h("div", { class: "ed-swatches" },
       h("button", { class: `ed-sw none${!cur ? " on" : ""}`, title: defaultLabel, onclick: () => cur && onPick(null) }),
-      ...swatches.map(([name, c]) => h("button", { class: `ed-sw${cur === c ? " on" : ""}`, title: name, style: `--c:${c}`, onclick: () => cur !== c && onPick(c) })),
+      ...swatches.map(([name, c]) => h("button", { class: `ed-sw${cur === c ? " on" : ""}`, title: t(name), style: `--c:${c}`, onclick: () => cur !== c && onPick(c) })),
       h("label", { class: `ed-sw custom${isCustom ? " on" : ""}`, title: "Any colour", style: isCustom ? `--c:${cur}` : "" }, custom),
     );
   }
@@ -2337,7 +2338,7 @@ export class Editor {
           chip("Left", side === "left", () => set({ side: "left" })), chip("Right", side === "right", () => set({ side: "right" }))) : null,
         h("div", { class: "ed-sub" }, "Main roof"),
         h("div", { class: "ed-chips" }, ...(["hip", "gable", "half_hip", "dutch", "mansard", "gambrel", "pyramid", "m_shaped", "flat", "butterfly", "lean_to"] as RoofShape[]).map((k) =>
-          chip(ROOF_SHAPES[k].name, shape === k, () => set({ shape: k }), ROOF_SHAPES[k].hint))),
+          chip(t(ROOF_SHAPES[k].label), shape === k, () => set({ shape: k }), t(ROOF_SHAPES[k].hint)))),
         h("div", { class: "ed-sub" }, "Covering"),
         this.finishChips(ROOF_COVERINGS, c.covering ?? "concrete_tiles", (k) => set({ covering: k as RoofCovering })),
         h("button", { class: "ed-btn", onclick: () => this.addRoofs({ ...c, kind, side: kind === "semi" ? side : null, shape }) }, "Add the roof"),
@@ -2349,7 +2350,7 @@ export class Editor {
       const items = r.items ?? [];
       const panels = items.filter((it) => it.kind === "solar").reduce((n, it) => n + (it.cols ?? 1) * (it.rows ?? 1), 0);
       out.push(h("div", { class: `ed-card ${this.sel?.id === r.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "roof", id: r.id }) },
-        h("div", { class: "ed-row" }, h("b", {}, `${ROOF_SHAPES[r.shape]?.name ?? r.shape} roof`),
+        h("div", { class: "ed-row" }, h("b", {}, `${(ROOF_SHAPES[r.shape] ? t(ROOF_SHAPES[r.shape].label) : r.shape)} roof`),
           h("small", {}, ` · ${f.name} · ${r.w.toFixed(1)} × ${r.d.toFixed(1)} m${panels ? ` · ${panels} panels` : ""}${items.length - (panels ? items.filter((it) => it.kind === "solar").length : 0) ? ` · ${items.filter((it) => it.kind !== "solar").length} more` : ""}`)),
       ));
     }
@@ -2412,15 +2413,15 @@ export class Editor {
     const kinds: [RoofItem["kind"], string][] = [["solar", "Solar panels"], ["window", "Roof window"], ["chimney", "Chimney"], ...(pitched ? [["dormer", "Dormer"]] as [RoofItem["kind"], string][] : [["lantern", "Roof lantern"]] as [RoofItem["kind"], string][])];
     const items = roof.items ?? [];
     return h("div", {},
-      h("h4", {}, `${ROOF_SHAPES[roof.shape]?.name ?? roof.shape} roof · ${f?.name ?? ""}`),
+      h("h4", {}, `${(ROOF_SHAPES[roof.shape] ? t(ROOF_SHAPES[roof.shape].label) : roof.shape)} roof · ${f?.name ?? ""}`),
       h("p", { class: "ed-hint" }, "Drag the blue corners to size it, or the roof itself to move it. Lengths are along the middle of the walls under it, like the rooms'."),
       this.plan.floors.length > 1 ? h("div", { class: "ed-row" }, h("label", {}, "Sits on"),
         this.dropdown(this.plan.floors.map((x, i) => [String(i), x.name]), String(fi), (v) => this.moveRoof(fi, roof.id, Number(v)))) : null,
-      h("div", { class: "ed-chips" }, ...ROOF_SHAPE_ORDER.map((k) => chip(ROOF_SHAPES[k].name, roof.shape === k, () => upd(`${ROOF_SHAPES[k].name} roof`, (r) => {
+      h("div", { class: "ed-chips" }, ...ROOF_SHAPE_ORDER.map((k) => chip(t(ROOF_SHAPES[k].label), roof.shape === k, () => upd(`${t(ROOF_SHAPES[k].label)} roof`, (r) => {
         r.shape = k;
         if (k === "flat") r.pitch = 0;
         else if (!r.pitch || r.shape === "flat" || Math.abs(r.pitch - ROOF_SHAPES[roof.shape].pitch) < 0.01) r.pitch = ROOF_SHAPES[k].pitch;
-      }), ROOF_SHAPES[k].hint))),
+      }), t(ROOF_SHAPES[k].hint)))),
       pitched ? h("div", { class: "ed-row" },
         h("label", {}, "Pitch °"),
         num(roof.pitch, "35", "1", (v) => upd("Roof pitch", (r) => (r.pitch = Math.max(5, Math.min(70, v ?? 35))))),
@@ -2432,7 +2433,7 @@ export class Editor {
         ...parties.map(([k, label]) => chip(label, (roof.party ?? null) === k, () => upd(k ? "Party wall" : "No party wall", (r) => (r.party = k)),
           k ? "A semi-detached or terraced house: the roof carries on over the party wall there" : ""))),
       h("div", { class: "ed-sub" }, "Covering"),
-      this.finishChips(ROOF_COVERINGS, roof.covering, (k) => upd(`Roof: ${(ROOF_COVERINGS as Record<string, FinishDef>)[k].name}`, (r) => (r.covering = k as RoofCovering))),
+      this.finishChips(ROOF_COVERINGS, roof.covering, (k) => upd(`Roof: ${t((ROOF_COVERINGS as Record<string, FinishDef>)[k].label)}`, (r) => (r.covering = k as RoofCovering))),
       def.tintable ? this.colourPicker(ROOF_SWATCHES, roof.color, (c) => upd("Roof colour", (r) => (r.color = c)), "Usual") : null,
       roof.covering !== "glass" ? h("div", { class: "ed-sub" }, "Fascias and soffits") : null,
       this.colourPicker(TRIM_SWATCHES, roof.trim, (c) => upd("Fascia colour", (r) => (r.trim = c)), "White"),
@@ -2504,7 +2505,7 @@ export class Editor {
   private roofItemName(it: RoofItem): string {
     if (it.kind === "solar") return `${(it.cols ?? 1) * (it.rows ?? 1)} solar panels`;
     if (it.kind === "dormer") return `${it.style === "box" ? "Box" : it.style === "hipped" ? "Hipped" : "Gable"} dormer`;
-    return ROOF_ITEM_DEFAULTS[it.kind].name;
+    return t(ROOF_ITEM_DEFAULTS[it.kind].label);
   }
 
   /** Something new on a roof, where it usually goes: panels on the sunniest slope, a chimney on the ridge… */
@@ -2546,7 +2547,7 @@ export class Editor {
     this.change((p) => {
       const r = this.roofOf(p, roofId)?.roof;
       if (r) r.items = [...(r.items ?? []), item];
-    }, false, `Add ${def.name.toLowerCase()}`);
+    }, false, `Add ${t(def.label).toLowerCase()}`);
     this.select({ floor: fi, kind: "roofitem", id: item.id });
   }
 
@@ -3091,7 +3092,7 @@ export class Editor {
     const states = this.hass.states;
     return Object.keys(states)
       .filter((id) => filter(id, states[id]))
-      .map((id) => [id, String(states[id].attributes.friendly_name ?? id)] as [string, string])
+      .map((id) => [id, String(states[id].attributes.friendly_name ?? id)] as Swatch)
       .sort((a, b) => a[1].localeCompare(b[1]));
   }
 

@@ -4,6 +4,8 @@
 // small piece of simple solids built like furniture, so a garden's fences merge into the floor's
 // mesh and cost no extra draw calls.
 import type { Fence, FencePost, FenceStyle, Furniture, Vec2 } from "../model/plan";
+import type { PlainKey } from "../i18n";
+import type { Swatch } from "./finishes";
 import type { Part, Role } from "./furniture-lib";
 
 interface BayOpts {
@@ -14,7 +16,8 @@ interface BayOpts {
 }
 
 export interface FenceStyleDef {
-  name: string;
+  /** Its name, in the table (src/i18n). */
+  label: PlainKey;
   /** Usual height (m) and distance between posts. */
   height: number;
   spacing: number;
@@ -87,7 +90,7 @@ function lattice(w: number, h: number, low: boolean): Part[] {
 export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   closeboard: {
     // feather-edge boards nailed upright, each lapping the next, on arris rails behind, under a capping rail
-    name: "Closeboard", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: true, clear: 0.05,
+    label: "fence.closeboard", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: true, clear: 0.05,
     bay: (w, h, o) => {
       const out = rails(w, h - 0.03, -0.03, 0.04);
       if (o.low) out.push(box(0, 0, 0.006, w, h - 0.03, 0.022, T));
@@ -101,7 +104,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   lap: {
     // an overlap panel: waney boards across, each lapping the one below, framed and capped
-    name: "Lap panel", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: true, clear: 0.05,
+    label: "fence.lapPanel", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: true, clear: 0.05,
     bay: (w, h, o) => {
       const inner = w - 0.09, body = h - 0.04;
       const n = Math.max(2, Math.round(body / 0.13)), p = body / n;
@@ -112,17 +115,17 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   slatted: {
     // contemporary horizontal slats with gaps, on battens behind
-    name: "Slatted", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0.05,
+    label: "fence.slatted", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0.05,
     bay: (w, h) => [...slats(w, h, 0.09, 0.07, 0.01, 0.02), ...endBattens(w, h, [-0.0125], true)],
   },
   venetian: {
     // thin slats with narrow gaps: privacy with a little light through
-    name: "Venetian", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0.05,
+    label: "fence.venetian", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0.05,
     bay: (w, h, o) => [...slats(w, h, o.low ? 0.11 : 0.055, o.low ? 0.09 : 0.045, 0.008, 0.016), ...endBattens(w, h, [-0.0125], true)],
   },
   hit_miss: {
     // boards upright on both sides of the rails, the back ones covering the front ones' gaps
-    name: "Hit and miss", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: true, clear: 0.05,
+    label: "fence.hitAndMiss", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: true, clear: 0.05,
     bay: (w, h, o) => {
       const out = rails(w, h, 0, 0.045);
       const { xs, p } = across(w, o.low ? 0.4 : 0.2);
@@ -136,7 +139,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   louvre: {
     // blades sloping down to the outside: air through, no view through
-    name: "Louvre", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: true, clear: 0.05,
+    label: "fence.louvre", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: true, clear: 0.05,
     bay: (w, h, o) => {
       const f = 0.045, inner = w - 2 * f;
       const out: Part[] = [box(0, 0, 0, w, f, 0.09, T), box(0, h - f, 0, w, f, 0.09, T), box(-w / 2 + f / 2, f, 0, f, h - 2 * f, 0.09, T), box(w / 2 - f / 2, f, 0, f, h - 2 * f, 0.09, T)];
@@ -148,7 +151,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   composite: {
     // tongue and groove composite boards between aluminium posts, in channels top and bottom
-    name: "Composite", height: 1.8, spacing: 1.83, posts: "metal", color: "#55585c", paint: ["softwood"], timber: false, gravel: false, clear: 0.03,
+    label: "fence.composite", height: 1.8, spacing: 1.83, posts: "metal", color: "#55585c", paint: ["softwood"], timber: false, gravel: false, clear: 0.03,
     metal: { role: "dark", size: 0.09 },
     bay: (w, h, o) => {
       const body = h - 0.06, n = Math.max(1, Math.round(body / 0.15)), p = body / n;
@@ -160,12 +163,12 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
     },
   },
   trellis: {
-    name: "Trellis", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0.05,
+    label: "fence.trellis", height: 1.8, spacing: 1.83, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0.05,
     bay: (w, h, o) => lattice(w, h, o.low),
   },
   picket: {
     // pointed pickets with gaps on two rails: the cottage garden's low white fence
-    name: "Picket", height: 1.0, spacing: 1.8, posts: "timber", color: "#f1efe9", paint: [T], timber: true, gravel: false, clear: 0.05,
+    label: "fence.picket", height: 1.0, spacing: 1.8, posts: "timber", color: "#f1efe9", paint: [T], timber: true, gravel: false, clear: 0.05,
     bay: (w, h, o) => {
       const out = [box(0, 0.15, -0.03, w, 0.07, 0.035, T), box(0, Math.max(0.3, h - 0.3), -0.03, w, 0.07, 0.035, T)];
       const { xs } = across(w, o.low ? 0.24 : 0.12);
@@ -175,7 +178,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   post_rail: {
     // rails nailed across the posts' fronts: a field's or a rural garden's edge
-    name: "Post and rail", height: 1.1, spacing: 2.4, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0,
+    label: "fence.postAndRail", height: 1.1, spacing: 2.4, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0,
     bay: (w, h, o) => {
       const ys = h < 0.9 ? [0.3, h - 0.12] : [0.25, (0.25 + h - 0.12) / 2, h - 0.12];
       return ys.map((y) => box(0, y - 0.045, o.post / 2 + 0.0175, w + o.post, 0.09, 0.035, T));
@@ -183,7 +186,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   railings: {
     // upright bars between two rails, with spear tops
-    name: "Railings", height: 1.2, spacing: 2.0, posts: "metal", paint: [BM], timber: false, gravel: false, clear: 0,
+    label: "fence.railings", height: 1.2, spacing: 2.0, posts: "metal", paint: [BM], timber: false, gravel: false, clear: 0,
     metal: { role: BM, size: 0.05 },
     bay: (w, h, o) => {
       const out = [box(0, 0.08, 0, w, 0.04, 0.014, BM), box(0, h - 0.14, 0, w, 0.04, 0.014, BM)];
@@ -193,7 +196,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   estate: {
     // flat bars run across thin posts: the countryside's iron fence
-    name: "Estate", height: 1.2, spacing: 1.8, posts: "metal", paint: [BM], timber: false, gravel: false, clear: 0,
+    label: "fence.estate", height: 1.2, spacing: 1.8, posts: "metal", paint: [BM], timber: false, gravel: false, clear: 0,
     metal: { role: BM, size: 0.035 },
     bay: (w, h, o) => {
       const n = h > 1 ? 5 : 4;
@@ -202,7 +205,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   palisade: {
     // steel pales with triple points on rails behind: a security fence
-    name: "Palisade", height: 2.1, spacing: 2.75, posts: "metal", paint: ["metal"], timber: false, gravel: false, clear: 0.05,
+    label: "fence.palisade", height: 2.1, spacing: 2.75, posts: "metal", paint: ["metal"], timber: false, gravel: false, clear: 0.05,
     metal: { role: "metal", size: 0.1 },
     bay: (w, h, o) => {
       const out = [box(0, 0.3, -0.03, w + o.post, 0.05, 0.05, "metal"), box(0, h - 0.45, -0.03, w + o.post, 0.05, 0.05, "metal")];
@@ -215,7 +218,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   balustrade: {
     // square spindles between a base rail and a handrail: a deck's or a raised patio's edge
-    name: "Spindles", height: 1.0, spacing: 1.5, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0,
+    label: "fence.spindles", height: 1.0, spacing: 1.5, posts: "timber", paint: [T], timber: true, gravel: false, clear: 0,
     bay: (w, h, o) => {
       const out = [box(0, 0.05, 0, w + o.post, 0.07, 0.07, T), box(0, h - 0.07, 0, w + o.post, 0.07, 0.09, T)];
       for (const x of across(w, o.low ? 0.24 : 0.12).xs) out.push(box(x, 0.12, 0, 0.036, h - 0.19, 0.036, T));
@@ -224,7 +227,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   glass: {
     // frameless glass panes held by clamps: round a patio or deck without blocking the view
-    name: "Glass", height: 1.0, spacing: 1.2, posts: "metal", paint: [], timber: false, gravel: false, clear: 0,
+    label: "fence.glass", height: 1.0, spacing: 1.2, posts: "metal", paint: [], timber: false, gravel: false, clear: 0,
     metal: { role: "metal", size: 0.045 },
     bay: (w, h) => {
       const out = [box(0, 0.05, 0, w - 0.03, h - 0.05, 0.012, "glass")];
@@ -234,7 +237,7 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
   },
   brick_wall: {
     // a garden wall of one brick's thickness under a concrete coping, between piers
-    name: "Brick wall", height: 0.9, spacing: 2.6, posts: "pier", paint: [], timber: false, gravel: false, clear: 0,
+    label: "fence.brickWall", height: 0.9, spacing: 2.6, posts: "pier", paint: [], timber: false, gravel: false, clear: 0,
     bay: (w, h) => [box(0, 0, 0, w, h - 0.06, 0.215, "brick"), box(0, h - 0.06, 0, w, 0.06, 0.3, "concrete")],
   },
 };
@@ -243,10 +246,10 @@ export const FENCE_STYLES: Record<FenceStyle, FenceStyleDef> = {
 export const FENCE_ORDER = Object.keys(FENCE_STYLES) as FenceStyle[];
 
 /** Colour swatches for fences: [name, colour]. */
-export const FENCE_SWATCHES: [string, string][] = [
-  ["Golden brown", "#c9965d"], ["Red cedar", "#8b5a3c"], ["Dark oak", "#5a4030"], ["Green treated", "#7a7444"],
-  ["Forest green", "#3b5a46"], ["Sage", "#8f9a84"], ["Stone", "#c9c3b4"], ["White", "#f1efe9"],
-  ["Anthracite", "#4a4d52"], ["Black", "#2b2c2e"],
+export const FENCE_SWATCHES: Swatch[] = [
+  ["colour.goldenBrown", "#c9965d"], ["colour.redCedar", "#8b5a3c"], ["colour.darkOak", "#5a4030"], ["colour.greenTreated", "#7a7444"],
+  ["colour.forestGreen", "#3b5a46"], ["colour.sage", "#8f9a84"], ["colour.stone", "#c9c3b4"], ["colour.white", "#f1efe9"],
+  ["colour.anthracite", "#4a4d52"], ["colour.black", "#2b2c2e"],
 ];
 
 export function fenceStyle(style: string | null | undefined): FenceStyleDef {

@@ -175,6 +175,7 @@ describe("loading", () => {
 const SCANNED = [
   "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/demo.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
   "editor/house-types.ts",
+  "scene/fences.ts", "scene/finishes.ts", "scene/garden.ts", "scene/paving.ts", "scene/roofs.ts",
 ];
 
 /** Strings in them that look like text but aren't shown to users. */

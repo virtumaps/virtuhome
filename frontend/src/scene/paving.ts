@@ -4,6 +4,8 @@
 // (softwood, cedar, hardwood, composite). The model look draws each area in its colour; the
 // realistic look draws its texture (scene/paving-tex.ts), keyed by everything that shows.
 import type { OutdoorArea, Vec2 } from "../model/plan";
+import type { PlainKey } from "../i18n";
+import type { Swatch } from "./finishes";
 
 export type PavingMaterial =
   | "sandstone" | "porcelain" | "concrete" | "slate" | "granite" | "limestone" | "travertine"
@@ -20,13 +22,14 @@ export type PavingPattern = "random" | "grid" | "stretcher" | "third" | "herring
 export type PavingSurface = "riven" | "smooth" | "textured" | "flamed" | "honed" | "tumbled" | "cleft" | "block" | "clay" | "sett" | "aggregate" | "tarmac" | "gravel";
 
 export interface PavingDef {
-  name: string;
+  /** Its name, in the table (src/i18n). */
+  label: PlainKey;
   /** Patterns it is laid in, its usual first. */
   patterns: PavingPattern[];
   /** Unit sizes in mm (length x width), its usual first; none for seamless and crazy paving. */
   sizes: string[];
   /** Named colours, its usual first: [name, colour, how much the units' hues vary (0..1)]. */
-  colors: [string, string, number][];
+  colors: [PlainKey, string, number][];
   surface: PavingSurface;
   /** Joint width (mm) and the usual joint colour. */
   joint: number;
@@ -44,73 +47,73 @@ const JOINT = { light: "#cdc7bb", grey: "#8a8781", charcoal: "#4a4a4b", buff: "#
 
 export const PAVING: Record<PavingMaterial, PavingDef> = {
   sandstone: {
-    name: "Indian sandstone", patterns: ["random", "stretcher", "grid"], sizes: ["600x600", "900x600", "600x290"], surface: "riven",
-    colors: [["Kandla grey", "#8f8b85", 0.3], ["Raj green", "#8e8c70", 0.85], ["Autumn brown", "#a27d5c", 1], ["Rippon buff", "#c6aa82", 0.6], ["Camel dust", "#c4ae8d", 0.4], ["Fossil mint", "#c3b6a0", 0.55]],
+    label: "paving.indianSandstone", patterns: ["random", "stretcher", "grid"], sizes: ["600x600", "900x600", "600x290"], surface: "riven",
+    colors: [["colour.kandlaGrey", "#8f8b85", 0.3], ["colour.rajGreen", "#8e8c70", 0.85], ["colour.autumnBrown", "#a27d5c", 1], ["colour.ripponBuff", "#c6aa82", 0.6], ["colour.camelDust", "#c4ae8d", 0.4], ["colour.fossilMint", "#c3b6a0", 0.55]],
     joint: 12, jointColor: JOINT.grey, module: 300, vary: 0.16, roughness: 0.85, relief: 0.9,
   },
   porcelain: {
-    name: "Porcelain", patterns: ["grid", "stretcher", "third", "random"], sizes: ["600x600", "900x600", "1200x600", "800x800", "1200x300"], surface: "smooth",
-    colors: [["Light grey", "#bdbcb7", 0], ["Mid grey", "#8f8e8a", 0], ["Anthracite", "#4c4d4f", 0], ["Ivory", "#dad3c4", 0], ["Sand", "#c3b59c", 0], ["Silver", "#a9aaa7", 0], ["Black", "#2f3032", 0]],
+    label: "paving.porcelain", patterns: ["grid", "stretcher", "third", "random"], sizes: ["600x600", "900x600", "1200x600", "800x800", "1200x300"], surface: "smooth",
+    colors: [["colour.lightGrey", "#bdbcb7", 0], ["colour.midGrey", "#8f8e8a", 0], ["colour.anthracite", "#4c4d4f", 0], ["colour.ivory", "#dad3c4", 0], ["colour.sand", "#c3b59c", 0], ["colour.silver", "#a9aaa7", 0], ["colour.black", "#2f3032", 0]],
     joint: 4, jointColor: JOINT.grey, module: 300, vary: 0.04, roughness: 0.55, relief: 0.15,
   },
   concrete: {
-    name: "Concrete slabs", patterns: ["grid", "stretcher", "random"], sizes: ["600x600", "450x450", "600x300"], surface: "textured",
-    colors: [["Natural", "#b4b0a7", 0], ["Buff", "#c9b590", 0.2], ["Charcoal", "#5d5d5d", 0], ["Silver", "#bab9b4", 0], ["Red", "#9c6253", 0.1]],
+    label: "paving.concreteSlabs", patterns: ["grid", "stretcher", "random"], sizes: ["600x600", "450x450", "600x300"], surface: "textured",
+    colors: [["colour.natural", "#b4b0a7", 0], ["colour.buff", "#c9b590", 0.2], ["colour.charcoal", "#5d5d5d", 0], ["colour.silver", "#bab9b4", 0], ["colour.red", "#9c6253", 0.1]],
     joint: 8, jointColor: JOINT.grey, module: 300, vary: 0.06, roughness: 0.9, relief: 0.35,
   },
   slate: {
-    name: "Slate", patterns: ["random", "grid", "stretcher"], sizes: ["600x600", "900x600", "600x300"], surface: "cleft",
-    colors: [["Black", "#33363a", 0.1], ["Blue black", "#3a4048", 0.15], ["Grey", "#5e6369", 0.2], ["Rustic", "#5a5450", 0.9]],
+    label: "paving.slate", patterns: ["random", "grid", "stretcher"], sizes: ["600x600", "900x600", "600x300"], surface: "cleft",
+    colors: [["colour.black", "#33363a", 0.1], ["colour.blueBlack", "#3a4048", 0.15], ["colour.grey", "#5e6369", 0.2], ["colour.rustic", "#5a5450", 0.9]],
     joint: 6, jointColor: JOINT.charcoal, module: 300, vary: 0.1, roughness: 0.6, relief: 0.7,
   },
   granite: {
-    name: "Granite", patterns: ["grid", "stretcher", "random"], sizes: ["600x600", "900x600", "600x300"], surface: "flamed",
-    colors: [["Silver grey", "#a5a5a3", 0], ["Dark grey", "#6c6d6f", 0], ["Black", "#2c2d2f", 0], ["Golden", "#c2a67b", 0.3]],
+    label: "paving.granite", patterns: ["grid", "stretcher", "random"], sizes: ["600x600", "900x600", "600x300"], surface: "flamed",
+    colors: [["colour.silverGrey", "#a5a5a3", 0], ["colour.darkGrey", "#6c6d6f", 0], ["colour.black", "#2c2d2f", 0], ["colour.golden", "#c2a67b", 0.3]],
     joint: 6, jointColor: JOINT.grey, module: 300, vary: 0.05, roughness: 0.75, relief: 0.4,
   },
   limestone: {
-    name: "Limestone", patterns: ["random", "grid", "stretcher"], sizes: ["600x600", "900x600"], surface: "honed",
-    colors: [["Kota blue", "#5f6b70", 0.25], ["Kota brown", "#7d6b59", 0.3], ["Black", "#323436", 0.1], ["Jura beige", "#cfc4ae", 0.2]],
+    label: "paving.limestone", patterns: ["random", "grid", "stretcher"], sizes: ["600x600", "900x600"], surface: "honed",
+    colors: [["colour.kotaBlue", "#5f6b70", 0.25], ["colour.kotaBrown", "#7d6b59", 0.3], ["colour.black", "#323436", 0.1], ["colour.juraBeige", "#cfc4ae", 0.2]],
     joint: 8, jointColor: JOINT.grey, module: 300, vary: 0.1, roughness: 0.6, relief: 0.3,
   },
   travertine: {
-    name: "Travertine", patterns: ["random", "grid", "stretcher"], sizes: ["600x400", "600x600"], surface: "tumbled",
-    colors: [["Classic", "#d5c3a3", 0.35], ["Ivory", "#e2d8c4", 0.25], ["Silver", "#c3beb5", 0.2], ["Noce", "#a98b6b", 0.45]],
+    label: "paving.travertine", patterns: ["random", "grid", "stretcher"], sizes: ["600x400", "600x600"], surface: "tumbled",
+    colors: [["colour.classic", "#d5c3a3", 0.35], ["colour.ivory", "#e2d8c4", 0.25], ["colour.silver", "#c3beb5", 0.2], ["colour.noce", "#a98b6b", 0.45]],
     joint: 3, jointColor: JOINT.light, module: 200, vary: 0.1, roughness: 0.7, relief: 0.45,
   },
   block: {
-    name: "Block paving", patterns: ["herringbone", "stretcher", "basketweave", "grid"], sizes: ["200x100"], surface: "block",
-    colors: [["Brindle", "#8d624f", 0.9], ["Charcoal", "#525254", 0.1], ["Natural", "#9f9d98", 0.1], ["Red", "#9b4c3e", 0.2], ["Buff", "#c3a374", 0.3], ["Burnt ochre", "#a9764c", 0.5]],
+    label: "paving.blockPaving", patterns: ["herringbone", "stretcher", "basketweave", "grid"], sizes: ["200x100"], surface: "block",
+    colors: [["colour.brindle", "#8d624f", 0.9], ["colour.charcoal", "#525254", 0.1], ["colour.natural", "#9f9d98", 0.1], ["colour.red", "#9b4c3e", 0.2], ["colour.buff", "#c3a374", 0.3], ["colour.burntOchre", "#a9764c", 0.5]],
     joint: 3, jointColor: JOINT.sand, vary: 0.12, roughness: 0.85, relief: 0.7,
   },
   brick: {
-    name: "Clay pavers", patterns: ["herringbone", "basketweave", "stretcher"], sizes: ["200x100"], surface: "clay",
-    colors: [["Red", "#a3553f", 0.3], ["Multi", "#8f5b46", 0.9], ["Staffordshire blue", "#3f4046", 0.2], ["Buff", "#caa97a", 0.35]],
+    label: "paving.clayPavers", patterns: ["herringbone", "basketweave", "stretcher"], sizes: ["200x100"], surface: "clay",
+    colors: [["colour.red", "#a3553f", 0.3], ["colour.multi", "#8f5b46", 0.9], ["colour.staffordshireBlue", "#3f4046", 0.2], ["colour.buff", "#caa97a", 0.35]],
     joint: 4, jointColor: JOINT.sand, vary: 0.14, roughness: 0.85, relief: 0.75,
   },
   setts: {
-    name: "Granite setts", patterns: ["stretcher", "grid"], sizes: ["100x100", "200x100"], surface: "sett",
-    colors: [["Silver grey", "#9e9e9c", 0.1], ["Dark grey", "#606164", 0.1], ["Mixed", "#a9a08c", 0.8], ["Black", "#3b3c3e", 0.05]],
+    label: "paving.graniteSetts", patterns: ["stretcher", "grid"], sizes: ["100x100", "200x100"], surface: "sett",
+    colors: [["colour.silverGrey", "#9e9e9c", 0.1], ["colour.darkGrey", "#606164", 0.1], ["colour.mixed", "#a9a08c", 0.8], ["colour.black", "#3b3c3e", 0.05]],
     joint: 10, jointColor: JOINT.grey, vary: 0.12, roughness: 0.85, relief: 1,
   },
   crazy: {
-    name: "Crazy paving", patterns: ["crazy"], sizes: [], surface: "riven",
-    colors: [["Buff", "#c4a983", 0.6], ["Grey", "#9a9690", 0.3], ["Multi", "#a38c71", 1], ["York stone", "#b3a58b", 0.4]],
+    label: "paving.crazyPaving", patterns: ["crazy"], sizes: [], surface: "riven",
+    colors: [["colour.buff", "#c4a983", 0.6], ["colour.grey", "#9a9690", 0.3], ["colour.multi", "#a38c71", 1], ["colour.yorkStone", "#b3a58b", 0.4]],
     joint: 16, jointColor: JOINT.grey, vary: 0.16, roughness: 0.85, relief: 0.9,
   },
   resin: {
-    name: "Resin bound", patterns: ["plain"], sizes: [], surface: "aggregate",
-    colors: [["Golden", "#c3a167", 0], ["Barley", "#cab68b", 0], ["Silver grey", "#a9a8a4", 0], ["Bronze", "#90704d", 0], ["Charcoal", "#4e4e50", 0], ["Cream", "#d9ceb5", 0]],
+    label: "paving.resinBound", patterns: ["plain"], sizes: [], surface: "aggregate",
+    colors: [["colour.golden", "#c3a167", 0], ["colour.barley", "#cab68b", 0], ["colour.silverGrey", "#a9a8a4", 0], ["colour.bronze", "#90704d", 0], ["colour.charcoal", "#4e4e50", 0], ["colour.cream", "#d9ceb5", 0]],
     joint: 0, jointColor: JOINT.grey, vary: 0, roughness: 0.6, relief: 0.6,
   },
   tarmac: {
-    name: "Tarmac", patterns: ["plain"], sizes: [], surface: "tarmac",
-    colors: [["Black", "#45474b", 0], ["Red", "#7e4239", 0]],
+    label: "paving.tarmac", patterns: ["plain"], sizes: [], surface: "tarmac",
+    colors: [["colour.black", "#45474b", 0], ["colour.red", "#7e4239", 0]],
     joint: 0, jointColor: JOINT.grey, vary: 0, roughness: 0.85, relief: 0.35,
   },
   gravel: {
-    name: "Gravel", patterns: ["plain"], sizes: [], surface: "gravel",
-    colors: [["Cotswold", "#cbb58e", 0], ["Pea shingle", "#b4a284", 0], ["Golden flint", "#b8925e", 0], ["Slate chippings", "#525961", 0], ["White", "#e6e4df", 0], ["Grey granite", "#9b9b99", 0]],
+    label: "paving.gravel", patterns: ["plain"], sizes: [], surface: "gravel",
+    colors: [["colour.cotswold", "#cbb58e", 0], ["colour.peaShingle", "#b4a284", 0], ["colour.goldenFlint", "#b8925e", 0], ["colour.slateChippings", "#525961", 0], ["colour.white", "#e6e4df", 0], ["colour.greyGranite", "#9b9b99", 0]],
     joint: 0, jointColor: JOINT.grey, vary: 0, roughness: 0.9, relief: 0.9,
   },
 };
@@ -118,13 +121,13 @@ export const PAVING: Record<PavingMaterial, PavingDef> = {
 /** The materials in the order the editor shows them. */
 export const PAVING_ORDER = Object.keys(PAVING) as PavingMaterial[];
 
-export const PATTERN_NAMES: Record<PavingPattern, string> = {
-  random: "Random", grid: "Grid", stretcher: "Staggered", third: "Third offset", herringbone: "Herringbone",
-  basketweave: "Basketweave", crazy: "Crazy", plain: "Seamless",
+export const PATTERN_NAMES: Record<PavingPattern, PlainKey> = {
+  random: "pattern.random", grid: "pattern.grid", stretcher: "pattern.stretcher", third: "pattern.third", herringbone: "pattern.herringbone",
+  basketweave: "pattern.basketweave", crazy: "pattern.crazy", plain: "pattern.plain",
 };
 
 /** Joint colours offered: [name, colour]. */
-export const JOINT_SWATCHES: [string, string][] = [["Light", JOINT.light], ["Grey", JOINT.grey], ["Charcoal", JOINT.charcoal], ["Buff", JOINT.buff], ["Sand", JOINT.sand]];
+export const JOINT_SWATCHES: Swatch[] = [["colour.light", JOINT.light], ["colour.grey", JOINT.grey], ["colour.charcoal", JOINT.charcoal], ["colour.buff", JOINT.buff], ["colour.sand", JOINT.sand]];
 
 /** Units that can edge a patio, a course wide. */
 export const BORDER_MATERIALS: PavingMaterial[] = ["setts", "block", "brick", "porcelain", "sandstone"];
@@ -213,8 +216,9 @@ export function parsePavingKey(name: string): PavingLook | null {
 export type DeckBoard = "softwood" | "cedar" | "hardwood" | "composite";
 
 export interface DeckBoardDef {
-  name: string;
-  colors: [string, string][];
+  /** Its name, in the table (src/i18n). */
+  label: PlainKey;
+  colors: Swatch[];
   /** Board widths (mm), the usual first. */
   widths: number[];
   roughness: number;
@@ -222,14 +226,14 @@ export interface DeckBoardDef {
 
 export const DECK_BOARDS: Record<DeckBoard, DeckBoardDef> = {
   softwood: {
-    name: "Softwood", widths: [120, 145, 95], roughness: 0.75,
-    colors: [["Brown treated", "#9c7752"], ["Golden", "#c49b64"], ["Green treated", "#9f9768"], ["Weathered", "#9c968b"], ["Dark oak stain", "#5f4632"], ["Grey stain", "#8e8b86"], ["Black stain", "#38363a"]],
+    label: "deck.softwood", widths: [120, 145, 95], roughness: 0.75,
+    colors: [["colour.brownTreated", "#9c7752"], ["colour.golden", "#c49b64"], ["colour.greenTreated", "#9f9768"], ["colour.weathered", "#9c968b"], ["colour.darkOakStain", "#5f4632"], ["colour.greyStain", "#8e8b86"], ["colour.blackStain", "#38363a"]],
   },
-  cedar: { name: "Cedar", widths: [140, 95], roughness: 0.7, colors: [["Natural", "#b5764e"], ["Weathered", "#a59b8e"]] },
-  hardwood: { name: "Hardwood", widths: [145, 90], roughness: 0.55, colors: [["Ipe", "#7a5238"], ["Iroko", "#9c6c40"], ["Balau", "#8a5e3f"]] },
+  cedar: { label: "deck.cedar", widths: [140, 95], roughness: 0.7, colors: [["colour.natural", "#b5764e"], ["colour.weathered", "#a59b8e"]] },
+  hardwood: { label: "deck.hardwood", widths: [145, 90], roughness: 0.55, colors: [["colour.ipe", "#7a5238"], ["colour.iroko", "#9c6c40"], ["colour.balau", "#8a5e3f"]] },
   composite: {
-    name: "Composite", widths: [145, 140], roughness: 0.6,
-    colors: [["Grey", "#8e8b87"], ["Charcoal", "#4c4b4a"], ["Walnut", "#6b5141"], ["Oak", "#a17e5b"], ["Teak", "#9b6f48"], ["Silver", "#b4b1ab"], ["Black", "#303031"]],
+    label: "deck.composite", widths: [145, 140], roughness: 0.6,
+    colors: [["colour.grey", "#8e8b87"], ["colour.charcoal", "#4c4b4a"], ["colour.walnut", "#6b5141"], ["colour.oak", "#a17e5b"], ["colour.teak", "#9b6f48"], ["colour.silver", "#b4b1ab"], ["colour.black", "#303031"]],
   },
 };
 
@@ -262,7 +266,7 @@ export function parseDeckKey(name: string): DeckLook | null {
 // -------------------------------------------------------------------------------- laying out
 
 /** What a raised patio's sides are built of. */
-export const RAISED_WALLS = { brick: "Brick", stone: "Stone", render: "Render", sleepers: "Sleepers" } as const;
+export const RAISED_WALLS = { brick: "raisedWall.brick", stone: "raisedWall.stone", render: "raisedWall.render", sleepers: "raisedWall.sleepers" } as const satisfies Record<string, PlainKey>;
 export type RaisedWall = keyof typeof RAISED_WALLS;
 
 /**
