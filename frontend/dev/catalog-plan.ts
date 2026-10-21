@@ -1,6 +1,6 @@
 // ?plan=catalog: every built-in item in its own little labelled room, by category, to check how
 // each one looks in both looks.
-import { CATEGORIES, FURNITURE } from "../src/scene/furniture-lib";
+import { CATEGORIES, FURNITURE, furnitureName } from "../src/scene/furniture-lib";
 import { normalizePlan, type Furniture, type Plan, type Room } from "../src/model/plan";
 
 export function catalogPlan(only?: string | null): Plan {
@@ -16,7 +16,7 @@ export function catalogPlan(only?: string | null): Plan {
     types.forEach(([key, t], i) => {
       const x0 = (i % perRow) * cell;
       const z0 = (row + Math.floor(i / perRow)) * cell;
-      rooms.push({ id: `c_${key}`, name: t.name, area_id: null, floor: "wood", points: [[x0, z0], [x0 + cell, z0], [x0 + cell, z0 + cell], [x0, z0 + cell]] });
+      rooms.push({ id: `c_${key}`, name: furnitureName(key) ?? key, area_id: null, floor: "wood", points: [[x0, z0], [x0 + cell, z0], [x0 + cell, z0 + cell], [x0, z0 + cell]] });
       const [w, d, h] = t.size;
       // big things are shrunk to fit their cell
       const k = Math.min(1, (cell - 0.4) / Math.max(w, d));

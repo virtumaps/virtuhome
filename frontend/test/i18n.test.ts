@@ -4,6 +4,7 @@ import { EN } from "../src/i18n/en";
 import { EN_EDITOR } from "../src/i18n/en-editor";
 import { format, language, LANGUAGES, pickLanguage, t, th, useLanguage, type Text } from "../src/i18n";
 import { t as te } from "../src/i18n/editor";
+import { FURNITURE } from "../src/scene/furniture-lib";
 
 const SRC = new URL("../src/", import.meta.url).pathname;
 const sources = readdirSync(SRC, { recursive: true }).filter((f) => f.endsWith(".ts")).sort();
@@ -95,6 +96,10 @@ describe("the English table", () => {
   const all = { ...EN, ...EN_EDITOR } as Record<string, Text>;
   const forms = (text: Text) => (typeof text === "string" ? [text] : Object.values(text));
   const names = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+
+  it("names each catalogue's entries after their ids", () => {
+    for (const [type, def] of Object.entries(FURNITURE)) expect(def.label).toBe(`furniture.${type}`);
+  });
 
   it("has each key once, in the view's table or the editor's", () => {
     expect(Object.keys(EN).filter((k) => k in EN_EDITOR)).toEqual([]);

@@ -22,6 +22,7 @@ import type { FindResult } from "./roomfind";
 import { foundToPlan, startTicks } from "./roomfind-apply";
 import { findRoomsAside } from "./roomfind-client";
 import { Collider, settle } from "./collide";
+import { t } from "../i18n/editor";
 
 export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
 
@@ -464,8 +465,9 @@ export class Plan2D {
       g.setAttribute("transform", `rotate(${x.rotation} ${cx} ${cy})${x.mirror ? ` translate(${cx * 2} 0) scale(-1 1)` : ""}`);
       // a name only where it fits inside the piece (or when it is selected)
       const isSel = sel?.kind === "furniture" && sel.id === x.id;
-      if (isSel || Math.max(x.w, x.d) * this.s > def.name.length * 5.6 + 8) {
-        layers.labels.append(el("text", { x: cx, y: cy + 3, class: `p2-item-label${isSel ? " sel" : ""}`, "text-anchor": "middle" }, def.name));
+      const name = t(def.label);
+      if (isSel || Math.max(x.w, x.d) * this.s > name.length * 5.6 + 8) {
+        layers.labels.append(el("text", { x: cx, y: cy + 3, class: `p2-item-label${isSel ? " sel" : ""}`, "text-anchor": "middle" }, name));
       }
       layers.items.append(g);
     }
@@ -1383,7 +1385,7 @@ export class Plan2D {
       // furniture keeps out of walls and other pieces: it slides along what it meets
       const collider = kind === "furniture" ? new Collider(this.host.plan(), fi, id) : null;
       this.drag = {
-        kind, label: kind === "furniture" ? `Move ${furnitureType((thing as { type: string }).type).name}` : "Move a device", moved: false,
+        kind, label: kind === "furniture" ? `Move ${t(furnitureType((thing as { type: string }).type).label)}` : "Move a device", moved: false,
         apply: (x, z, ev) => {
           const live = this.host.plan().floors[fi];
           const t = kind === "furniture" ? live.furniture.find((y) => y.id === id) : live.devices.find((d) => d.id === id);

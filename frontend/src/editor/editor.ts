@@ -19,7 +19,7 @@ import { bounds } from "../model/geom";
 import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, recordLinks, replaceEntity, type Proposal, type RegistryEntry } from "../model/links";
 import { domainOf, type Hass } from "../live/hass";
 import { roomTrackers, sourcesOf } from "../live/presence";
-import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
+import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, furnitureName, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
 import {
   faceBearing, fitPanels, floorRoofs, fromRoofFrame, itemFrame, planeHeight, polyArea, ROOF_ITEM_DEFAULTS, ROOF_SHAPE_ORDER, ROOF_SHAPES, sunniestFace,
@@ -316,7 +316,7 @@ export class Editor {
     const sel = this.sel;
     if (!sel || (sel.kind !== "furniture" && sel.kind !== "device" && sel.kind !== "opening" && sel.kind !== "fence" && sel.kind !== "roof" && sel.kind !== "roofitem")) return false;
     const f = this.plan.floors[sel.floor];
-    const name = sel.kind === "furniture" ? FURNITURE[f?.furniture.find((x) => x.id === sel.id)?.type ?? ""]?.name ?? "furniture"
+    const name = sel.kind === "furniture" ? furnitureName(f?.furniture.find((x) => x.id === sel.id)?.type ?? "") ?? "furniture"
       : sel.kind === "device" ? "a device" : sel.kind === "fence" ? "a fence" : sel.kind === "roof" ? "a roof"
       : sel.kind === "roofitem" ? this.roofItemName(this.roofItemOf(this.plan, sel.id)?.item ?? ({ kind: "window" } as RoofItem)).toLowerCase() : "an opening";
     this.change((p) => {
@@ -739,7 +739,7 @@ export class Editor {
       if (moved) {
         const what = item.kind === "corner" ? "a corner" : item.kind === "opening" ? `a ${f.openings.find((o) => o.id === item.id)?.kind ?? "door"}` : item.kind === "device"
           ? String(this.hass.states[f.devices.find((d) => d.id === item.id)?.entity ?? ""]?.attributes.friendly_name ?? "a device")
-          : FURNITURE[f.furniture.find((x) => x.id === item.id)?.type ?? ""]?.name ?? "furniture";
+          : furnitureName(f.furniture.find((x) => x.id === item.id)?.type ?? "") ?? "furniture";
         this.undo.push({ plan: this.dragStart, label: item.kind === "edge" ? "Add a corner" : `Move ${what}` });
         this.redo = [];
         this.changed();
@@ -1621,7 +1621,7 @@ export class Editor {
       this.itemPicker((type) => this.addFurniture(fi, room, type)),
       h("h4", {}, `In this room (${inRoom.length})`),
       h("div", { class: "ed-chips" }, ...inRoom.map((x) => h("button", { class: "ed-chip", onclick: () => this.select({ floor: fi, kind: "furniture", id: x.id }) },
-        FURNITURE[x.type]?.name ?? x.type))),
+        furnitureName(x.type) ?? x.type))),
       h("h4", {}, `Doors and windows (${openings.length})`),
       ...openings.map((o) => h("div", { class: "ed-card" },
         h("div", { class: "ed-row" }, h("b", {}, o.kind), h("small", {}, `${o.width.toFixed(2)} m wide`),
@@ -2039,7 +2039,7 @@ export class Editor {
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
       fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
       settle(p, fi, x.id);
-    }, false, `${label} ${def?.name ?? "item"}`);
+    }, false, `${label} ${def ? t(def.label) : "item"}`);
     const num = (label: string, key: "w" | "d" | "h" | "y") =>
       [h("label", {}, label), h("input", {
         class: "ed-in num", type: "number", step: "0.05",
@@ -2056,12 +2056,12 @@ export class Editor {
     const styles = styleOptions(x.type);
     const garden = x.type in GARDEN_OPTIONS || x.type === "metal_shed" || x.type === "greenhouse";
     const finish = x.finish ?? def?.finish ?? "fabric";
-    const named = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!), false, `${label} ${def?.name ?? "item"}`);
+    const named = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!), false, `${label} ${def ? t(def.label) : "item"}`);
     return h("div", {},
-      h("h4", {}, def?.name ?? x.type),
+      h("h4", {}, def ? t(def.label) : x.type),
       styles.length > 1 ? h("div", { class: "ed-sub" }, "Style") : null,
       styles.length > 1 ? h("div", { class: "ed-chips" }, ...styles.map((k) =>
-        h("button", { class: `ed-chip${k === x.type ? " on" : ""}`, onclick: () => k !== x.type && this.swapType(fi, x, k) }, FURNITURE[k].name))) : null,
+        h("button", { class: `ed-chip${k === x.type ? " on" : ""}`, onclick: () => k !== x.type && this.swapType(fi, x, k) }, t(FURNITURE[k].label)))) : null,
       h("div", { class: "ed-sub" }, "Colour"),
       this.colourPicker(garden ? FENCE_SWATCHES : FURNITURE_SWATCHES, x.color, (c) => named("Recolour")((y) => (y.color = c)), "Original"),
       isUpholstered(x.type) ? h("div", { class: "ed-sub" }, "Upholstery") : null,
@@ -2081,7 +2081,7 @@ export class Editor {
           this.change((p) => {
             p.floors[fi].furniture.push({ ...structuredClone(x), id, x: x.x + 0.3, z: x.z + 0.3 });
             settle(p, fi, id);
-          }, false, `Duplicate ${def?.name ?? "item"}`);
+          }, false, `Duplicate ${def ? t(def.label) : "item"}`);
         } }, "Duplicate"),
         h("button", { class: "ed-btn danger", onclick: () => {
           this.change((p) => (p.floors[fi].furniture = p.floors[fi].furniture.filter((y) => y.id !== x.id)));
@@ -2237,7 +2237,7 @@ export class Editor {
       else delete y.y;
       if (def.finish && !y.finish) y.finish = def.finish;
       settle(p, fi, y.id);
-    }, false, `Change to ${def.name}`);
+    }, false, `Change to ${t(def.label)}`);
   }
 
   /** Named finishes as chips with their colour. */
@@ -2267,10 +2267,10 @@ export class Editor {
     const draw = () => {
       const q = this.pickQuery.trim().toLowerCase();
       const list = Object.entries(FURNITURE)
-        .filter(([k, def]) => (cat() === "all" || def.category === cat()) && (!q || def.name.toLowerCase().includes(q) || k.includes(q.replace(/\s+/g, "_"))))
-        .sort((a, b) => a[1].name.localeCompare(b[1].name));
+        .filter(([k, def]) => (cat() === "all" || def.category === cat()) && (!q || t(def.label).toLowerCase().includes(q) || k.includes(q.replace(/\s+/g, "_"))))
+        .sort((a, b) => t(a[1].label).localeCompare(t(b[1].label)));
       results.replaceChildren(...list.slice(0, 80).map(([k, def]) =>
-        h("button", { class: "ed-pick", title: `Add ${def.name}`, onclick: () => onAdd(k) }, h("span", { html: svg(mdiPlus) }), h("b", {}, def.name), h("small", {}, t(`category.${def.category}`)))));
+        h("button", { class: "ed-pick", title: `Add ${t(def.label)}`, onclick: () => onAdd(k) }, h("span", { html: svg(mdiPlus) }), h("b", {}, t(def.label)), h("small", {}, t(`category.${def.category}`)))));
       if (!list.length) results.append(h("p", { class: "ed-hint" }, "Nothing matches."));
     };
     const search = h("input", { class: "ed-in", placeholder: "Search: plant, sofa, dumbbells…", value: this.pickQuery, oninput: (e: Event) => {
@@ -3064,7 +3064,7 @@ export class Editor {
     this.change((p) => {
       p.floors[fi].furniture.push(item);
       settle(p, fi, item.id);
-    }, false, `Add ${def.name}`);
+    }, false, `Add ${t(def.label)}`);
     this.select({ floor: fi, kind: "furniture", id: item.id });
   }
 

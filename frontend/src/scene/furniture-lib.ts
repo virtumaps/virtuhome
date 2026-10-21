@@ -7,7 +7,7 @@
 // same family can be swapped for each other in the editor (a sofa for a corner sofa).
 import type { Furniture } from "../model/plan";
 import type { Upholstery } from "./finishes";
-import type { Key } from "../i18n";
+import { t, type Key, type PlainKey } from "../i18n";
 import { GARDEN_FURNITURE } from "./garden";
 
 export type Role =
@@ -73,7 +73,8 @@ export const CATEGORIES: Category[] = [
 ];
 
 export interface FurnitureType {
-  name: string;
+  /** Its name: furniture.<type> in the table. */
+  label: PlainKey;
   category: Category;
   /** Interchangeable types share a family ("sofa": straight, corner, chesterfield...). */
   family?: string;
@@ -401,10 +402,10 @@ function pot(w: number, h: number, d: number, role: Role = "pot"): Part[] {
 
 export const FURNITURE: Record<string, FurnitureType> = {
   // ---------------------------------------------------------------- sofas & seats
-  sofa: { name: "Sofa", category: "living", family: "sofa", size: [2.0, 0.9, 0.8], build: (w, d, h) => sofa(w, d, h) },
-  sofa_2: { name: "Two-seat sofa", category: "living", family: "sofa", size: [1.6, 0.88, 0.8], build: (w, d, h) => sofa(w, d, h) },
+  sofa: { label: "furniture.sofa", category: "living", family: "sofa", size: [2.0, 0.9, 0.8], build: (w, d, h) => sofa(w, d, h) },
+  sofa_2: { label: "furniture.sofa_2", category: "living", family: "sofa", size: [1.6, 0.88, 0.8], build: (w, d, h) => sofa(w, d, h) },
   sofa_l: {
-    name: "Corner sofa", category: "living", family: "sofa", size: [2.6, 1.8, 0.8],
+    label: "furniture.sofa_l", category: "living", family: "sofa", size: [2.6, 1.8, 0.8],
     build: (w, d, h) => {
       const depth = Math.min(0.95, d / 2);
       // the main sofa along the back, without its right arm; the return comes forward on the right
@@ -415,7 +416,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   sofa_chaise: {
-    name: "Sofa with chaise", category: "living", family: "sofa", size: [2.4, 1.6, 0.8],
+    label: "furniture.sofa_chaise", category: "living", family: "sofa", size: [2.4, 1.6, 0.8],
     build: (w, d, h) => {
       const depth = Math.min(0.95, d * 0.6);
       const cw = Math.min(0.85, w * 0.38);
@@ -425,7 +426,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   sofa_chesterfield: {
-    name: "Chesterfield", category: "living", family: "sofa", size: [2.1, 0.95, 0.76], finish: "leather",
+    label: "furniture.sofa_chesterfield", category: "living", family: "sofa", size: [2.1, 0.95, 0.76], finish: "leather",
     build: (w, d, h) => {
       const arm = 0.2;
       const seatH = 0.44;
@@ -446,7 +447,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   sofa_modular: {
-    name: "Modular sofa", category: "living", family: "sofa", size: [2.6, 1.05, 0.7], finish: "boucle",
+    label: "furniture.sofa_modular", category: "living", family: "sofa", size: [2.6, 1.05, 0.7], finish: "boucle",
     build: (w, d, h) => {
       const n = Math.max(2, Math.round(w / 0.9));
       const sw = w / n;
@@ -459,10 +460,10 @@ export const FURNITURE: Record<string, FurnitureType> = {
       return parts;
     },
   },
-  sofa_section: { name: "Sofa section", category: "living", family: "sofa", size: [0.8, 0.95, 0.45], build: (w, d) => seatBlock(w, d) },
-  armchair: { name: "Armchair", category: "living", family: "armchair", size: [0.85, 0.85, 0.85], build: (w, d, h) => sofa(w, d, h) },
+  sofa_section: { label: "furniture.sofa_section", category: "living", family: "sofa", size: [0.8, 0.95, 0.45], build: (w, d) => seatBlock(w, d) },
+  armchair: { label: "furniture.armchair", category: "living", family: "armchair", size: [0.85, 0.85, 0.85], build: (w, d, h) => sofa(w, d, h) },
   armchair_wing: {
-    name: "Wingback chair", category: "living", family: "armchair", size: [0.8, 0.85, 1.1],
+    label: "furniture.armchair_wing", category: "living", family: "armchair", size: [0.8, 0.85, 1.1],
     build: (w, d, h) => [
       box(0, 0.12, 0.03, w - 0.16, 0.3, d - 0.08, "fabricDark"),
       box(0, 0.42, 0.06, w - 0.18, 0.1, d - 0.2, "cushion"),
@@ -475,7 +476,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     ],
   },
   tub_chair: {
-    name: "Tub chair", category: "living", family: "armchair", size: [0.75, 0.75, 0.75], finish: "velvet",
+    label: "furniture.tub_chair", category: "living", family: "armchair", size: [0.75, 0.75, 0.75], finish: "velvet",
     build: (w, d, h) => [
       cyl(0, 0.08, 0, w, 0.32, d, "fabricDark", undefined, 16),
       cyl(0, 0.4, 0.04, w * 0.78, 0.08, d * 0.78, "cushion", undefined, 16),
@@ -484,32 +485,32 @@ export const FURNITURE: Record<string, FurnitureType> = {
     ],
   },
   recliner: {
-    name: "Recliner", category: "living", family: "armchair", size: [0.9, 0.95, 1.0],
+    label: "furniture.recliner", category: "living", family: "armchair", size: [0.9, 0.95, 1.0],
     build: (w, d, h) => [...sofa(w, d, h), box(0, 0.06, d / 2 + 0.05, w * 0.6, 0.3, 0.12, "fabricDark")],
   },
-  pouf: { name: "Pouf", category: "living", family: "pouf", size: [0.5, 0.5, 0.42], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "fabric", undefined, 16)] },
-  footstool: { name: "Footstool", category: "living", family: "pouf", size: [0.7, 0.5, 0.42], build: (w, d, h) => [box(0, 0.1, 0, w, h - 0.1, d, "fabric"), ...roundLegs(w, d, 0.1, 0.05, 0.05)] },
-  bean_bag: { name: "Bean bag", category: "living", family: "pouf", size: [0.85, 0.85, 0.6], build: (w, d, h) => [ball(0, 0, 0, w, h, d, "fabric", 12)] },
+  pouf: { label: "furniture.pouf", category: "living", family: "pouf", size: [0.5, 0.5, 0.42], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "fabric", undefined, 16)] },
+  footstool: { label: "furniture.footstool", category: "living", family: "pouf", size: [0.7, 0.5, 0.42], build: (w, d, h) => [box(0, 0.1, 0, w, h - 0.1, d, "fabric"), ...roundLegs(w, d, 0.1, 0.05, 0.05)] },
+  bean_bag: { label: "furniture.bean_bag", category: "living", family: "pouf", size: [0.85, 0.85, 0.6], build: (w, d, h) => [ball(0, 0, 0, w, h, d, "fabric", 12)] },
 
   // ---------------------------------------------------------------- living
   coffee_table: {
-    name: "Coffee table", category: "living", family: "coffee", size: [1.1, 0.6, 0.42],
+    label: "furniture.coffee_table", category: "living", family: "coffee", size: [1.1, 0.6, 0.42],
     build: (w, d, h) => [box(0, h - 0.04, 0, w, 0.04, d, "wood"), ...legs(w, d, h - 0.04, 0.04, 0.04)],
   },
   coffee_round: {
-    name: "Round coffee table", category: "living", family: "coffee", size: [0.85, 0.85, 0.4],
+    label: "furniture.coffee_round", category: "living", family: "coffee", size: [0.85, 0.85, 0.4],
     build: (w, d, h) => [cyl(0, h - 0.04, 0, w, 0.04, d, "wood", undefined, 20), cyl(0, 0, 0, w * 0.4, h - 0.04, d * 0.4, "woodDark", undefined, 14, 0.8)],
   },
   coffee_marble: {
-    name: "Marble coffee table", category: "living", family: "coffee", size: [1.2, 0.65, 0.38], paint: ["dark"],
+    label: "furniture.coffee_marble", category: "living", family: "coffee", size: [1.2, 0.65, 0.38], paint: ["dark"],
     build: (w, d, h) => [box(0, h - 0.035, 0, w, 0.035, d, "ceramic"), box(-w / 2 + 0.08, 0, 0, 0.03, h - 0.035, d - 0.1, "dark"), box(w / 2 - 0.08, 0, 0, 0.03, h - 0.035, d - 0.1, "dark")],
   },
   side_table: {
-    name: "Side table", category: "living", family: "coffee", size: [0.45, 0.45, 0.55],
+    label: "furniture.side_table", category: "living", family: "coffee", size: [0.45, 0.45, 0.55],
     build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "wood", undefined, 14), ...roundTopLegs(w, d, h - 0.03, 0.6, 0.9, 0.035)],
   },
   tv_board: {
-    name: "TV on a board", category: "living", family: "tv", size: [1.6, 0.45, 1.25],
+    label: "furniture.tv_board", category: "living", family: "tv", size: [1.6, 0.45, 1.25],
     build: (w, d, h) => {
       const board = Math.min(0.5, h * 0.4);
       const tvW = Math.min(w * 0.95, 1.7);
@@ -524,16 +525,16 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   tv_wall: {
-    name: "Wall TV", category: "living", family: "tv", size: [1.45, 0.06, 0.84], y: 0.9,
+    label: "furniture.tv_wall", category: "living", family: "tv", size: [1.45, 0.06, 0.84], y: 0.9,
     build: (w, d, h) => [box(0, 0, 0, w, h, Math.max(0.03, d - 0.01), "dark"), box(0, 0.02, d / 2 - 0.004, w - 0.04, h - 0.04, 0.006, "screen", "screen")],
   },
-  sideboard: { name: "Sideboard", category: "living", family: "storage_low", size: [1.6, 0.45, 0.8], build: (w, d, h) => cabinet(w, d, h, "woodDark", "wood") },
+  sideboard: { label: "furniture.sideboard", category: "living", family: "storage_low", size: [1.6, 0.45, 0.8], build: (w, d, h) => cabinet(w, d, h, "woodDark", "wood") },
   console_table: {
-    name: "Console table", category: "living", family: "storage_low", size: [1.1, 0.35, 0.8],
+    label: "furniture.console_table", category: "living", family: "storage_low", size: [1.1, 0.35, 0.8],
     build: (w, d, h) => [box(0, h - 0.03, 0, w, 0.03, d, "wood"), box(0, 0.12, 0, w - 0.06, 0.02, d - 0.04, "wood"), ...legs(w, d, h - 0.03, 0.03, 0.02, "metal")],
   },
   shelf: {
-    name: "Shelf", category: "living", family: "storage_tall", size: [0.8, 0.35, 1.8],
+    label: "furniture.shelf", category: "living", family: "storage_tall", size: [0.8, 0.35, 1.8],
     build: (w, d, h) => {
       const n = Math.max(2, Math.round(h / 0.38));
       const parts = [box(-w / 2 + 0.01, 0, 0, 0.02, h, d, "wood"), box(w / 2 - 0.01, 0, 0, 0.02, h, d, "wood"), box(0, 0, -d / 2 + 0.005, w, h, 0.01, "woodDark")];
@@ -543,7 +544,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   bookcase: {
-    name: "Bookcase", category: "living", family: "storage_tall", size: [0.9, 0.32, 2.0], paint: ["white"],
+    label: "furniture.bookcase", category: "living", family: "storage_tall", size: [0.9, 0.32, 2.0], paint: ["white"],
     build: (w, d, h) => {
       const n = Math.max(3, Math.round(h / 0.36));
       const parts = [box(-w / 2 + 0.01, 0, 0, 0.02, h, d, "white"), box(w / 2 - 0.01, 0, 0, 0.02, h, d, "white"), box(0, 0, -d / 2 + 0.005, w, h, 0.01, "white")];
@@ -553,7 +554,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   display_cabinet: {
-    name: "Display cabinet", category: "living", family: "storage_tall", size: [0.9, 0.42, 1.9],
+    label: "furniture.display_cabinet", category: "living", family: "storage_tall", size: [0.9, 0.42, 1.9],
     build: (w, d, h) => [
       box(0, 0, 0, w, 0.12, d, "woodDark"), box(0, h - 0.05, 0, w, 0.05, d, "woodDark"),
       box(-w / 2 + 0.02, 0.12, 0, 0.04, h - 0.17, d, "woodDark"), box(w / 2 - 0.02, 0.12, 0, 0.04, h - 0.17, d, "woodDark"),
@@ -562,54 +563,54 @@ export const FURNITURE: Record<string, FurnitureType> = {
       ...[0.5, 0.9].map((y, i) => box(-w * 0.15 + i * 0.2, (y / 1.9) * h, 0, 0.12, 0.18, 0.12, i ? "ceramic" : "accent")),
     ],
   },
-  tall_cabinet: { name: "Cupboard", category: "living", family: "storage_tall", size: [0.8, 0.4, 2.0], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, 0.3, d / 2, 0.01, h - 0.6, 0.01, "metal")] },
-  rug: { name: "Rug", category: "living", family: "rug", size: [2.0, 1.4, 0.01], build: (w, d) => [box(0, 0, 0, w, 0.008, d, "rug")] },
-  rug_round: { name: "Round rug", category: "living", family: "rug", size: [1.6, 1.6, 0.01], build: (w, d) => [cyl(0, 0, 0, w, 0.008, d, "rug", undefined, 28)] },
-  rug_runner: { name: "Runner", category: "living", family: "rug", size: [0.8, 2.6, 0.01], build: (w, d) => [box(0, 0, 0, w, 0.008, d, "rug")] },
+  tall_cabinet: { label: "furniture.tall_cabinet", category: "living", family: "storage_tall", size: [0.8, 0.4, 2.0], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, 0.3, d / 2, 0.01, h - 0.6, 0.01, "metal")] },
+  rug: { label: "furniture.rug", category: "living", family: "rug", size: [2.0, 1.4, 0.01], build: (w, d) => [box(0, 0, 0, w, 0.008, d, "rug")] },
+  rug_round: { label: "furniture.rug_round", category: "living", family: "rug", size: [1.6, 1.6, 0.01], build: (w, d) => [cyl(0, 0, 0, w, 0.008, d, "rug", undefined, 28)] },
+  rug_runner: { label: "furniture.rug_runner", category: "living", family: "rug", size: [0.8, 2.6, 0.01], build: (w, d) => [box(0, 0, 0, w, 0.008, d, "rug")] },
   fireplace: {
-    name: "Fireplace", category: "living", family: "fireplace", size: [1.2, 0.35, 1.1],
+    label: "furniture.fireplace", category: "living", family: "fireplace", size: [1.2, 0.35, 1.1],
     build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, 0.1, d / 2 - 0.01, w * 0.5, h * 0.5, 0.03, "dark"), box(0, h - 0.06, 0.02, w + 0.1, 0.06, d + 0.06, "wood")],
   },
   stove_wood: {
-    name: "Wood burner", category: "living", family: "fireplace", size: [0.5, 0.42, 1.6], paint: ["dark"],
+    label: "furniture.stove_wood", category: "living", family: "fireplace", size: [0.5, 0.42, 1.6], paint: ["dark"],
     build: (w, d, h) => [box(0, 0, 0, w + 0.3, 0.04, d + 0.3, "ceramic"), box(0, 0.12, 0, w, 0.62, d, "dark"), box(0, 0.22, d / 2, w * 0.7, 0.36, 0.01, "accent"), ...legs(w, d, 0.12, 0.04, 0.02, "dark"), cyl(0, 0.74, -0.05, 0.13, h - 0.74, 0.13, "dark", undefined, 8)],
   },
   piano: {
-    name: "Piano", category: "living", family: "piano", size: [1.5, 0.6, 1.25], paint: ["dark"],
+    label: "furniture.piano", category: "living", family: "piano", size: [1.5, 0.6, 1.25], paint: ["dark"],
     build: (w, d, h) => [box(0, 0, -d / 2 + 0.17, w, h, 0.34, "dark"), box(0, 0.68, 0.06, w, 0.06, d - 0.3, "dark"), box(0, 0.74, 0.08, w - 0.12, 0.012, 0.15, "white"), box(-w / 2 + 0.04, 0, 0.05, 0.08, 0.68, 0.08, "dark"), box(w / 2 - 0.04, 0, 0.05, 0.08, 0.68, 0.08, "dark")],
   },
   speaker: {
-    name: "Floor speaker", category: "living", family: "speaker", size: [0.22, 0.3, 1.0], paint: ["dark"],
+    label: "furniture.speaker", category: "living", family: "speaker", size: [0.22, 0.3, 1.0], paint: ["dark"],
     build: (w, d, h) => [box(0, 0.03, 0, w, h - 0.03, d, "dark"), rod("z", 0, h * 0.2, d / 2, 0.16, 0.16, 0.012, "rubber", 12), rod("z", 0, h * 0.45, d / 2, 0.16, 0.16, 0.012, "rubber", 12), rod("z", 0, h * 0.78, d / 2, 0.06, 0.06, 0.012, "rubber", 12), ...legs(w, d, 0.03, 0.02, 0.01, "metal")],
   },
 
   // ---------------------------------------------------------------- dining
   table: {
-    name: "Table", category: "dining", family: "table", size: [1.6, 0.9, 0.75],
+    label: "furniture.table", category: "dining", family: "table", size: [1.6, 0.9, 0.75],
     build: (w, d, h) => [box(0, h - 0.04, 0, w, 0.04, d, "wood"), ...legs(w, d, h - 0.04, 0.06, 0.06)],
   },
   table_round: {
-    name: "Round table", category: "dining", family: "table", size: [1.1, 1.1, 0.75],
+    label: "furniture.table_round", category: "dining", family: "table", size: [1.1, 1.1, 0.75],
     build: (w, d, h) => [cyl(0, h - 0.04, 0, w, 0.04, d, "wood", undefined, 20), cyl(0, 0.04, 0, 0.12, h - 0.08, 0.12, "woodDark", undefined, 10, 0.7), cyl(0, 0, 0, w * 0.45, 0.04, d * 0.45, "woodDark", undefined, 14)],
   },
   table_oval: {
-    name: "Oval table", category: "dining", family: "table", size: [1.9, 1.0, 0.75],
+    label: "furniture.table_oval", category: "dining", family: "table", size: [1.9, 1.0, 0.75],
     build: (w, d, h) => [cyl(0, h - 0.04, 0, w, 0.04, d, "wood", undefined, 24), box(0, 0.04, 0, w * 0.45, h - 0.08, 0.1, "woodDark"), box(0, 0, 0, w * 0.55, 0.04, d * 0.5, "woodDark")],
   },
   table_trestle: {
-    name: "Farmhouse table", category: "dining", family: "table", size: [2.0, 0.95, 0.76],
+    label: "furniture.table_trestle", category: "dining", family: "table", size: [2.0, 0.95, 0.76],
     build: (w, d, h) => [box(0, h - 0.06, 0, w, 0.06, d, "wood"), ...[-1, 1].flatMap((s) => [box(s * (w / 2 - 0.25), 0, 0, 0.08, h - 0.06, d * 0.7, "woodDark"), box(s * (w / 2 - 0.25), 0, 0, 0.1, 0.06, d * 0.8, "woodDark")]), box(0, 0.25, 0, w - 0.5, 0.06, 0.06, "woodDark")],
   },
   chair: {
-    name: "Chair", category: "dining", family: "chair", size: [0.45, 0.5, 0.9],
+    label: "furniture.chair", category: "dining", family: "chair", size: [0.45, 0.5, 0.9],
     build: (w, d, h) => [box(0, 0.44, 0.02, w, 0.04, d - 0.04, "wood"), box(0, 0.44, -d / 2 + 0.02, w, h - 0.44, 0.04, "wood"), ...legs(w, d, 0.44, 0.035, 0.02)],
   },
   chair_upholstered: {
-    name: "Upholstered chair", category: "dining", family: "chair", size: [0.5, 0.56, 0.88],
+    label: "furniture.chair_upholstered", category: "dining", family: "chair", size: [0.5, 0.56, 0.88],
     build: (w, d, h) => [box(0, 0.4, 0.02, w, 0.08, d - 0.04, "fabric"), box(0, 0.4, -d / 2 + 0.04, w * 0.95, h - 0.4, 0.08, "fabric"), ...roundLegs(w, d, 0.4, 0.04, 0.04, "dark")],
   },
   stool_bar: {
-    name: "Bar stool", category: "dining", family: "chair", size: [0.42, 0.42, 0.95],
+    label: "furniture.stool_bar", category: "dining", family: "chair", size: [0.42, 0.42, 0.95],
     build: (w, d, h) => {
       const legH = h - 0.2;
       const [tx, tz] = onRound(w, d, 0.65), [fx, fz] = onRound(w, d, 1.1);
@@ -623,37 +624,37 @@ export const FURNITURE: Record<string, FurnitureType> = {
       ];
     },
   },
-  stool: { name: "Stool", category: "dining", family: "chair", size: [0.38, 0.38, 0.46], build: (w, d, h) => [cyl(0, h - 0.04, 0, w, 0.04, d, "wood", undefined, 14), ...roundTopLegs(w, d, h - 0.04, 0.7, 1.05)] },
-  bench: { name: "Bench", category: "dining", family: "chair", size: [1.4, 0.4, 0.45], build: (w, d, h) => [box(0, h - 0.05, 0, w, 0.05, d, "wood"), ...legs(w, d, h - 0.05, 0.05, 0.04)] },
+  stool: { label: "furniture.stool", category: "dining", family: "chair", size: [0.38, 0.38, 0.46], build: (w, d, h) => [cyl(0, h - 0.04, 0, w, 0.04, d, "wood", undefined, 14), ...roundTopLegs(w, d, h - 0.04, 0.7, 1.05)] },
+  bench: { label: "furniture.bench", category: "dining", family: "chair", size: [1.4, 0.4, 0.45], build: (w, d, h) => [box(0, h - 0.05, 0, w, 0.05, d, "wood"), ...legs(w, d, h - 0.05, 0.05, 0.04)] },
 
   // ---------------------------------------------------------------- kitchen
-  kitchen: { name: "Kitchen base unit", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 0.9], build: (w, d, h) => [...cabinet(w, d, h, "white", "woodDark"), box(0, h * 0.7, d / 2, w * 0.3, 0.015, 0.015, "metal")] },
-  kitchen_wall: { name: "Wall cupboard", category: "kitchen", family: "kitchen", size: [0.6, 0.35, 0.7], y: 1.45, build: (w, d, h) => [box(0, 0, 0, w, h, d, "white")] },
-  kitchen_tall: { name: "Tall unit / oven", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 2.1], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, h * 0.4, d / 2, w - 0.08, h * 0.22, 0.01, "dark")] },
-  island: { name: "Kitchen island", category: "kitchen", family: "kitchen", size: [1.8, 0.9, 0.92], build: (w, d, h) => cabinet(w, d, h, "woodDark", "white") },
+  kitchen: { label: "furniture.kitchen", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 0.9], build: (w, d, h) => [...cabinet(w, d, h, "white", "woodDark"), box(0, h * 0.7, d / 2, w * 0.3, 0.015, 0.015, "metal")] },
+  kitchen_wall: { label: "furniture.kitchen_wall", category: "kitchen", family: "kitchen", size: [0.6, 0.35, 0.7], y: 1.45, build: (w, d, h) => [box(0, 0, 0, w, h, d, "white")] },
+  kitchen_tall: { label: "furniture.kitchen_tall", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 2.1], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, h * 0.4, d / 2, w - 0.08, h * 0.22, 0.01, "dark")] },
+  island: { label: "furniture.island", category: "kitchen", family: "kitchen", size: [1.8, 0.9, 0.92], build: (w, d, h) => cabinet(w, d, h, "woodDark", "white") },
   sink: {
-    name: "Sink unit", category: "kitchen", family: "kitchen", size: [0.8, 0.6, 0.9],
+    label: "furniture.sink", category: "kitchen", family: "kitchen", size: [0.8, 0.6, 0.9],
     build: (w, d, h) => [...cabinet(w, d, h, "white", "woodDark"), box(0, h - 0.035, 0, w * 0.6, 0.03, d * 0.6, "metal"), cyl(0, h, -d / 2 + 0.08, 0.04, 0.25, 0.04, "metal")],
   },
   stove: {
-    name: "Hob / stove", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 0.9],
+    label: "furniture.stove", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 0.9],
     build: (w, d, h) => {
       const parts = [...cabinet(w, d, h, "white", "dark"), box(0, h * 0.2, d / 2, w - 0.06, h * 0.45, 0.01, "dark")];
       for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) parts.push(cyl(x * w * 0.22, h, z * d * 0.22, w * 0.25, 0.006, w * 0.25, "metal"));
       return parts;
     },
   },
-  fridge: { name: "Fridge", category: "kitchen", family: "fridge", size: [0.6, 0.65, 1.8], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(w / 2 - 0.06, h * 0.45, d / 2 + 0.01, 0.02, h * 0.35, 0.03, "metal"), box(0, h * 0.38, d / 2, w, 0.008, 0.008, "metal")] },
-  fridge_american: { name: "American fridge", category: "kitchen", family: "fridge", size: [0.92, 0.72, 1.8], paint: ["metal"], build: (w, d, h) => [box(0, 0, 0, w, h, d, "metal"), box(0, 0.02, d / 2, 0.006, h - 0.04, 0.006, "dark"), box(-0.05, h * 0.35, d / 2 + 0.015, 0.02, h * 0.4, 0.03, "dark"), box(0.05, h * 0.35, d / 2 + 0.015, 0.02, h * 0.4, 0.03, "dark")] },
-  dishwasher: { name: "Dishwasher", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 0.85], build: (w, d, h) => [...cabinet(w, d, h, "metal", "woodDark"), box(0, h * 0.85, d / 2, w * 0.7, 0.02, 0.02, "dark")] },
+  fridge: { label: "furniture.fridge", category: "kitchen", family: "fridge", size: [0.6, 0.65, 1.8], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(w / 2 - 0.06, h * 0.45, d / 2 + 0.01, 0.02, h * 0.35, 0.03, "metal"), box(0, h * 0.38, d / 2, w, 0.008, 0.008, "metal")] },
+  fridge_american: { label: "furniture.fridge_american", category: "kitchen", family: "fridge", size: [0.92, 0.72, 1.8], paint: ["metal"], build: (w, d, h) => [box(0, 0, 0, w, h, d, "metal"), box(0, 0.02, d / 2, 0.006, h - 0.04, 0.006, "dark"), box(-0.05, h * 0.35, d / 2 + 0.015, 0.02, h * 0.4, 0.03, "dark"), box(0.05, h * 0.35, d / 2 + 0.015, 0.02, h * 0.4, 0.03, "dark")] },
+  dishwasher: { label: "furniture.dishwasher", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 0.85], build: (w, d, h) => [...cabinet(w, d, h, "metal", "woodDark"), box(0, h * 0.85, d / 2, w * 0.7, 0.02, 0.02, "dark")] },
 
   // ---------------------------------------------------------------- bedroom
-  bed: { name: "Double bed", category: "bedroom", family: "bed", size: [1.4, 2.0, 0.55], build: (w, d, h) => bed(w, d, h) },
-  bed_king: { name: "King bed", category: "bedroom", family: "bed", size: [1.6, 2.05, 0.55], build: (w, d, h) => bed(w, d, h) },
-  bed_single: { name: "Single bed", category: "bedroom", family: "bed", size: [0.9, 2.0, 0.55], build: (w, d, h) => bed(w, d, h) },
-  bed_upholstered: { name: "Upholstered bed", category: "bedroom", family: "bed", size: [1.6, 2.1, 0.55], build: (w, d, h) => bed(w, d, h, true) },
+  bed: { label: "furniture.bed", category: "bedroom", family: "bed", size: [1.4, 2.0, 0.55], build: (w, d, h) => bed(w, d, h) },
+  bed_king: { label: "furniture.bed_king", category: "bedroom", family: "bed", size: [1.6, 2.05, 0.55], build: (w, d, h) => bed(w, d, h) },
+  bed_single: { label: "furniture.bed_single", category: "bedroom", family: "bed", size: [0.9, 2.0, 0.55], build: (w, d, h) => bed(w, d, h) },
+  bed_upholstered: { label: "furniture.bed_upholstered", category: "bedroom", family: "bed", size: [1.6, 2.1, 0.55], build: (w, d, h) => bed(w, d, h, true) },
   bunk_bed: {
-    name: "Bunk bed", category: "bedroom", family: "bed", size: [1.0, 2.05, 1.6],
+    label: "furniture.bunk_bed", category: "bedroom", family: "bed", size: [1.0, 2.05, 1.6],
     build: (w, d, h) => [
       box(0, 0.25, 0, w - 0.08, 0.15, d - 0.08, "mattress"),
       box(0, h * 0.6, 0, w - 0.08, 0.15, d - 0.08, "mattress"),
@@ -661,10 +662,10 @@ export const FURNITURE: Record<string, FurnitureType> = {
       box(w / 2 - 0.03, h * 0.6 + 0.15, 0, 0.04, 0.2, d - 0.1, "wood"),
     ],
   },
-  nightstand: { name: "Bedside table", category: "bedroom", family: "bedside", size: [0.45, 0.4, 0.5], build: (w, d, h) => [box(0, 0.06, 0, w, h - 0.06, d, "wood"), ...legs(w, d, 0.06, 0.04, 0.02, "dark")] },
-  nightstand_round: { name: "Round bedside table", category: "bedroom", family: "bedside", size: [0.42, 0.42, 0.52], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "wood", undefined, 14), legShelf(w, d, h - 0.03, 0.7, 0.85, 0.2, 0.02, "wood"), ...roundTopLegs(w, d, h - 0.03, 0.7, 0.85, 0.035)] },
+  nightstand: { label: "furniture.nightstand", category: "bedroom", family: "bedside", size: [0.45, 0.4, 0.5], build: (w, d, h) => [box(0, 0.06, 0, w, h - 0.06, d, "wood"), ...legs(w, d, 0.06, 0.04, 0.02, "dark")] },
+  nightstand_round: { label: "furniture.nightstand_round", category: "bedroom", family: "bedside", size: [0.42, 0.42, 0.52], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "wood", undefined, 14), legShelf(w, d, h - 0.03, 0.7, 0.85, 0.2, 0.02, "wood"), ...roundTopLegs(w, d, h - 0.03, 0.7, 0.85, 0.035)] },
   wardrobe: {
-    name: "Wardrobe", category: "bedroom", family: "storage_tall", size: [1.5, 0.6, 2.1],
+    label: "furniture.wardrobe", category: "bedroom", family: "storage_tall", size: [1.5, 0.6, 2.1],
     build: (w, d, h) => {
       const doors = Math.max(1, Math.round(w / 0.5));
       const parts = [box(0, 0, 0, w, h, d, "white")];
@@ -672,15 +673,15 @@ export const FURNITURE: Record<string, FurnitureType> = {
       return parts;
     },
   },
-  dresser: { name: "Chest of drawers", category: "bedroom", family: "storage_low", size: [1.0, 0.45, 0.85], build: (w, d, h) => [box(0, 0.06, 0, w, h - 0.06, d, "white"), ...[0.3, 0.55, 0.8].map((f) => box(0, h * f, d / 2, w - 0.06, 0.006, 0.006, "dark"))] },
+  dresser: { label: "furniture.dresser", category: "bedroom", family: "storage_low", size: [1.0, 0.45, 0.85], build: (w, d, h) => [box(0, 0.06, 0, w, h - 0.06, d, "white"), ...[0.3, 0.55, 0.8].map((f) => box(0, h * f, d / 2, w - 0.06, 0.006, 0.006, "dark"))] },
   dressing_table: {
-    name: "Dressing table", category: "bedroom", family: "desk", size: [1.0, 0.45, 0.76], paint: ["white"],
+    label: "furniture.dressing_table", category: "bedroom", family: "desk", size: [1.0, 0.45, 0.76], paint: ["white"],
     build: (w, d, h) => [box(0, h - 0.04, 0, w, 0.04, d, "white"), box(w / 2 - 0.2, h - 0.2, 0, 0.38, 0.16, d - 0.02, "white"), ...roundLegs(w, d, h - 0.04, 0.045, 0.04, "white"), box(0, h + 0.05, -d / 2 + 0.03, w * 0.5, 0.7, 0.02, "mirror")],
   },
 
   // ---------------------------------------------------------------- bathroom
   bathtub: {
-    name: "Bath", category: "bath", family: "bath", size: [1.7, 0.75, 0.55],
+    label: "furniture.bathtub", category: "bath", family: "bath", size: [1.7, 0.75, 0.55],
     build: (w, d, h) => {
       // a rim around the water, which sits a few centimetres below it
       const r = 0.07;
@@ -694,20 +695,20 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   bath_freestanding: {
-    name: "Freestanding bath", category: "bath", family: "bath", size: [1.65, 0.78, 0.6],
+    label: "furniture.bath_freestanding", category: "bath", family: "bath", size: [1.65, 0.78, 0.6],
     build: (w, d, h) => [cyl(0, 0.05, 0, w * 0.93, h - 0.05, d * 0.93, "ceramic", undefined, 20, 1.08), cyl(0, h - 0.04, 0, w - 0.12, 0.02, d - 0.12, "water", undefined, 20), ...roundLegs(w * 0.7, d * 0.6, 0.05, 0.07, 0.02, "metal")],
   },
   shower: {
-    name: "Shower", category: "bath", family: "shower", size: [0.9, 0.9, 2.0],
+    label: "furniture.shower", category: "bath", family: "shower", size: [0.9, 0.9, 2.0],
     build: (w, d, h) => [box(0, 0, 0, w, 0.06, d, "ceramic"), box(0, 0.055, d / 2 - 0.01, w, h - 0.055, 0.01, "glass"), box(-w / 2 + 0.01, 0.055, 0, 0.01, h - 0.055, d, "glass"), cyl(w / 2 - 0.15, h - 0.12, -d / 2 + 0.15, 0.22, 0.02, 0.22, "metal", undefined, 12)],
   },
   wc: {
-    name: "Toilet", category: "bath", family: "wc", size: [0.4, 0.65, 0.8],
+    label: "furniture.wc", category: "bath", family: "wc", size: [0.4, 0.65, 0.8],
     build: (w, d) => [box(0, 0, -d / 2 + 0.09, w, 0.8, 0.18, "ceramic"), cyl(0, 0, 0.06, w * 0.85, 0.42, d * 0.7, "ceramic", undefined, 14)],
   },
-  washbasin: { name: "Washbasin", category: "bath", family: "basin", size: [0.6, 0.45, 0.85], build: (w, d, h) => [box(0, h * 0.35, -0.02, w * 0.9, h * 0.5, d * 0.85, "woodDark"), box(0, h - 0.12, 0, w, 0.12, d, "ceramic")] },
+  washbasin: { label: "furniture.washbasin", category: "bath", family: "basin", size: [0.6, 0.45, 0.85], build: (w, d, h) => [box(0, h * 0.35, -0.02, w * 0.9, h * 0.5, d * 0.85, "woodDark"), box(0, h - 0.12, 0, w, 0.12, d, "ceramic")] },
   towel_rail: {
-    name: "Towel radiator", category: "bath", family: "radiator", size: [0.5, 0.08, 1.2], y: 0.15, paint: ["fabric"],
+    label: "furniture.towel_rail", category: "bath", family: "radiator", size: [0.5, 0.08, 1.2], y: 0.15, paint: ["fabric"],
     build: (w, _d, h) => {
       const n = Math.max(3, Math.round(h / 0.12));
       const bars = Array.from({ length: n }, (_, i) => rod("x", 0, (h / n) * i + 0.03, 0, w, 0.022, 0.022, "metal", 6));
@@ -716,9 +717,9 @@ export const FURNITURE: Record<string, FurnitureType> = {
   },
 
   // ---------------------------------------------------------------- office
-  desk: { name: "Desk", category: "office", family: "desk", size: [1.4, 0.7, 0.75], build: (w, d, h) => [box(0, h - 0.03, 0, w, 0.03, d, "white"), ...legs(w, d, h - 0.03, 0.04, 0.03, "metal")] },
+  desk: { label: "furniture.desk", category: "office", family: "desk", size: [1.4, 0.7, 0.75], build: (w, d, h) => [box(0, h - 0.03, 0, w, 0.03, d, "white"), ...legs(w, d, h - 0.03, 0.04, 0.03, "metal")] },
   desk_l: {
-    name: "Corner desk", category: "office", family: "desk", size: [1.6, 1.4, 0.75],
+    label: "furniture.desk_l", category: "office", family: "desk", size: [1.6, 1.4, 0.75],
     build: (w, d, h) => {
       const dd = Math.min(0.7, d / 2);
       return [
@@ -729,62 +730,62 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   desk_standing: {
-    name: "Standing desk", category: "office", family: "desk", size: [1.6, 0.8, 0.75],
+    label: "furniture.desk_standing", category: "office", family: "desk", size: [1.6, 0.8, 0.75],
     build: (w, d, h) => [box(0, h - 0.03, 0, w, 0.03, d, "wood"), ...[-1, 1].flatMap((s) => [box(s * (w / 2 - 0.15), 0, 0, 0.07, h - 0.03, 0.07, "dark"), box(s * (w / 2 - 0.15), 0, 0, 0.07, 0.03, d * 0.85, "dark")]), box(0, h - 0.1, 0, w - 0.3, 0.05, 0.05, "dark")],
   },
   office_chair: {
-    name: "Office chair", category: "office", family: "office_chair", size: [0.6, 0.6, 1.1],
+    label: "furniture.office_chair", category: "office", family: "office_chair", size: [0.6, 0.6, 1.1],
     build: (w, d, h) => [cyl(0, 0, 0, w, 0.05, d, "dark", undefined, 5), cyl(0, 0.05, 0, 0.05, 0.4, 0.05, "metal"), box(0, 0.45, 0.02, w * 0.8, 0.08, d * 0.75, "fabricDark"), box(0, 0.53, -d * 0.36, w * 0.75, h - 0.55, 0.06, "fabricDark")],
   },
   gaming_chair: {
-    name: "Gaming chair", category: "office", family: "office_chair", size: [0.65, 0.65, 1.3],
+    label: "furniture.gaming_chair", category: "office", family: "office_chair", size: [0.65, 0.65, 1.3],
     build: (w, d, h) => [cyl(0, 0, 0, w, 0.05, d, "dark", undefined, 5), cyl(0, 0.05, 0, 0.06, 0.38, 0.06, "metal"), box(0, 0.43, 0.02, w * 0.8, 0.1, d * 0.75, "fabricDark"), box(0, 0.53, -d * 0.36, w * 0.72, h - 0.53, 0.1, "fabricDark"), box(0, 0.6, -d * 0.36 + 0.055, w * 0.3, h - 0.7, 0.012, "red"), ...[-1, 1].map((s) => box(s * w * 0.42, 0.53, 0, 0.06, 0.2, d * 0.5, "dark"))],
   },
-  monitor: { name: "Monitor", category: "office", family: "monitor", size: [0.6, 0.2, 0.45], y: 0.75, build: (w, d, h) => [box(0, 0, 0, 0.2, 0.02, d, "dark"), box(0, 0.02, -0.02, 0.04, h * 0.3, 0.04, "dark"), box(0, h * 0.25, 0, w, h * 0.75, 0.03, "dark"), box(0, h * 0.27, 0.016, w - 0.03, h * 0.71, 0.004, "screen", "screen")] },
-  laptop: { name: "Laptop", category: "office", family: "monitor", size: [0.34, 0.24, 0.22], y: 0.75, paint: ["metal"], build: (w, d, h) => [box(0, 0, 0.01, w, 0.015, d - 0.02, "metal"), box(0, 0.015, -d / 2 + 0.015, w, h - 0.015, 0.008, "metal"), box(0, 0.03, -d / 2 + 0.02, w - 0.02, h - 0.04, 0.002, "screen", "screen")] },
+  monitor: { label: "furniture.monitor", category: "office", family: "monitor", size: [0.6, 0.2, 0.45], y: 0.75, build: (w, d, h) => [box(0, 0, 0, 0.2, 0.02, d, "dark"), box(0, 0.02, -0.02, 0.04, h * 0.3, 0.04, "dark"), box(0, h * 0.25, 0, w, h * 0.75, 0.03, "dark"), box(0, h * 0.27, 0.016, w - 0.03, h * 0.71, 0.004, "screen", "screen")] },
+  laptop: { label: "furniture.laptop", category: "office", family: "monitor", size: [0.34, 0.24, 0.22], y: 0.75, paint: ["metal"], build: (w, d, h) => [box(0, 0, 0.01, w, 0.015, d - 0.02, "metal"), box(0, 0.015, -d / 2 + 0.015, w, h - 0.015, 0.008, "metal"), box(0, 0.03, -d / 2 + 0.02, w - 0.02, h - 0.04, 0.002, "screen", "screen")] },
 
   // ---------------------------------------------------------------- decor
   picture: {
-    name: "Picture", category: "decor", family: "picture", size: [0.6, 0.03, 0.45], y: 1.35, paint: ["woodDark"],
+    label: "furniture.picture", category: "decor", family: "picture", size: [0.6, 0.03, 0.45], y: 1.35, paint: ["woodDark"],
     build: (w, d, h) => [box(0, 0, 0, w, h, d, "woodDark"), box(0, 0.035, d / 2, w - 0.07, h - 0.07, 0.004, "canvas")],
   },
   picture_large: {
-    name: "Large artwork", category: "decor", family: "picture", size: [1.2, 0.04, 0.8], y: 1.15, paint: ["canvas"],
+    label: "furniture.picture_large", category: "decor", family: "picture", size: [1.2, 0.04, 0.8], y: 1.15, paint: ["canvas"],
     build: (w, d, h) => [box(0, 0, 0, w, h, d, "canvas")],
   },
   picture_trio: {
-    name: "Three frames", category: "decor", family: "picture", size: [1.3, 0.03, 0.4], y: 1.4, paint: ["dark"],
+    label: "furniture.picture_trio", category: "decor", family: "picture", size: [1.3, 0.03, 0.4], y: 1.4, paint: ["dark"],
     build: (w, d, h) => [-1, 0, 1].flatMap((i) => [box((i * w) / 3, 0, 0, w / 3 - 0.06, h, d, "dark"), box((i * w) / 3, 0.03, d / 2, w / 3 - 0.12, h - 0.06, 0.004, i === 0 ? "canvas" : i === 1 ? "paper" : "accent")]),
   },
-  mirror: { name: "Mirror", category: "decor", family: "mirror", size: [0.6, 0.03, 0.9], y: 1.1, paint: ["dark"], build: (w, d, h) => [box(0, 0, 0, w, h, d, "dark"), box(0, 0.025, d / 2, w - 0.05, h - 0.05, 0.004, "mirror")] },
-  mirror_round: { name: "Round mirror", category: "decor", family: "mirror", size: [0.7, 0.03, 0.7], y: 1.2, paint: ["metal"], build: (w, d, h) => [rod("z", 0, 0, 0, w, h, d, "metal", 24), rod("z", 0, 0.02, d / 2, w - 0.04, h - 0.04, 0.004, "mirror", 24)] },
-  mirror_floor: { name: "Floor mirror", category: "decor", family: "mirror", size: [0.6, 0.06, 1.7], paint: ["woodDark"], build: (w, d, h) => [box(0, 0, 0, w, h, d * 0.5, "woodDark"), box(0, 0.03, d * 0.25, w - 0.06, h - 0.06, 0.004, "mirror")] },
-  clock: { name: "Wall clock", category: "decor", family: "clock", size: [0.35, 0.04, 0.35], y: 1.8, paint: ["dark"], build: (w, d, h) => [rod("z", 0, 0, 0, w, h, d, "dark", 20), rod("z", 0, 0.015, d / 2, w - 0.03, h - 0.03, 0.004, "paper", 20), box(0, h / 2 - 0.004, d / 2 + 0.004, 0.008, h * 0.35, 0.002, "dark")] },
-  vase: { name: "Vase", category: "decor", family: "vase", size: [0.18, 0.18, 0.35], y: 0.75, paint: ["ceramic"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.7, h * 0.55, d * 0.7, "ceramic", undefined, 12, 1.4), cyl(0, h * 0.55, 0, w, h * 0.3, d, "ceramic", undefined, 12, 0.45), cyl(0, h * 0.85, 0, w * 0.45, h * 0.15, d * 0.45, "ceramic", undefined, 12, 1.2)] },
+  mirror: { label: "furniture.mirror", category: "decor", family: "mirror", size: [0.6, 0.03, 0.9], y: 1.1, paint: ["dark"], build: (w, d, h) => [box(0, 0, 0, w, h, d, "dark"), box(0, 0.025, d / 2, w - 0.05, h - 0.05, 0.004, "mirror")] },
+  mirror_round: { label: "furniture.mirror_round", category: "decor", family: "mirror", size: [0.7, 0.03, 0.7], y: 1.2, paint: ["metal"], build: (w, d, h) => [rod("z", 0, 0, 0, w, h, d, "metal", 24), rod("z", 0, 0.02, d / 2, w - 0.04, h - 0.04, 0.004, "mirror", 24)] },
+  mirror_floor: { label: "furniture.mirror_floor", category: "decor", family: "mirror", size: [0.6, 0.06, 1.7], paint: ["woodDark"], build: (w, d, h) => [box(0, 0, 0, w, h, d * 0.5, "woodDark"), box(0, 0.03, d * 0.25, w - 0.06, h - 0.06, 0.004, "mirror")] },
+  clock: { label: "furniture.clock", category: "decor", family: "clock", size: [0.35, 0.04, 0.35], y: 1.8, paint: ["dark"], build: (w, d, h) => [rod("z", 0, 0, 0, w, h, d, "dark", 20), rod("z", 0, 0.015, d / 2, w - 0.03, h - 0.03, 0.004, "paper", 20), box(0, h / 2 - 0.004, d / 2 + 0.004, 0.008, h * 0.35, 0.002, "dark")] },
+  vase: { label: "furniture.vase", category: "decor", family: "vase", size: [0.18, 0.18, 0.35], y: 0.75, paint: ["ceramic"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.7, h * 0.55, d * 0.7, "ceramic", undefined, 12, 1.4), cyl(0, h * 0.55, 0, w, h * 0.3, d, "ceramic", undefined, 12, 0.45), cyl(0, h * 0.85, 0, w * 0.45, h * 0.15, d * 0.45, "ceramic", undefined, 12, 1.2)] },
   flowers: {
-    name: "Flowers", category: "decor", family: "vase", size: [0.3, 0.3, 0.55], y: 0.75, paint: ["glass"],
+    label: "furniture.flowers", category: "decor", family: "vase", size: [0.3, 0.3, 0.55], y: 0.75, paint: ["glass"],
     build: (w, d, h) => [cyl(0, 0, 0, w * 0.45, h * 0.45, d * 0.45, "glass", undefined, 10), ball(0, h * 0.4, 0, w * 0.85, h * 0.35, d * 0.85, "leaf", 8), ball(-w * 0.15, h * 0.55, 0.03, w * 0.3, h * 0.25, d * 0.3, "red", 6), ball(w * 0.18, h * 0.6, -0.02, w * 0.28, h * 0.25, d * 0.28, "white", 6), ball(0, h * 0.68, -w * 0.12, w * 0.3, h * 0.3, d * 0.3, "accent", 6)],
   },
-  books: { name: "Stack of books", category: "decor", family: "books", size: [0.3, 0.22, 0.12], y: 0.42, build: (w, d, h) => [box(0, 0, 0, w, h * 0.3, d, "blue"), box(0.01, h * 0.3, -0.005, w * 0.92, h * 0.25, d * 0.95, "paper"), box(-0.01, h * 0.55, 0, w * 0.85, h * 0.45, d * 0.9, "red")] },
-  candles: { name: "Candles", category: "decor", family: "books", size: [0.2, 0.1, 0.25], y: 0.75, paint: ["paper"], build: (w, _d, h) => [cyl(-w * 0.3, 0, 0, 0.06, h, 0.06, "paper", undefined, 8), cyl(0, 0, 0, 0.06, h * 0.75, 0.06, "paper", undefined, 8), cyl(w * 0.3, 0, 0, 0.06, h * 0.5, 0.06, "paper", undefined, 8)] },
-  bowl: { name: "Fruit bowl", category: "decor", family: "vase", size: [0.32, 0.32, 0.1], y: 0.75, paint: ["ceramic"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.5, h, d * 0.5, "ceramic", undefined, 14, 2.0), ball(0, h * 0.5, 0, w * 0.22, h * 0.8, d * 0.22, "accent", 6), ball(w * 0.15, h * 0.45, 0.04, w * 0.22, h * 0.8, d * 0.22, "red", 6)] },
-  basket: { name: "Basket", category: "decor", family: "basket", size: [0.45, 0.35, 0.35], paint: ["wood"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.85, h, d * 0.85, "wood", undefined, 14, 1.15)] },
-  bin: { name: "Bin", category: "decor", family: "basket", size: [0.3, 0.3, 0.6], paint: ["metal"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "metal", undefined, 14), cyl(0, h, 0, w * 1.02, 0.03, d * 1.02, "dark", undefined, 14)] },
+  books: { label: "furniture.books", category: "decor", family: "books", size: [0.3, 0.22, 0.12], y: 0.42, build: (w, d, h) => [box(0, 0, 0, w, h * 0.3, d, "blue"), box(0.01, h * 0.3, -0.005, w * 0.92, h * 0.25, d * 0.95, "paper"), box(-0.01, h * 0.55, 0, w * 0.85, h * 0.45, d * 0.9, "red")] },
+  candles: { label: "furniture.candles", category: "decor", family: "books", size: [0.2, 0.1, 0.25], y: 0.75, paint: ["paper"], build: (w, _d, h) => [cyl(-w * 0.3, 0, 0, 0.06, h, 0.06, "paper", undefined, 8), cyl(0, 0, 0, 0.06, h * 0.75, 0.06, "paper", undefined, 8), cyl(w * 0.3, 0, 0, 0.06, h * 0.5, 0.06, "paper", undefined, 8)] },
+  bowl: { label: "furniture.bowl", category: "decor", family: "vase", size: [0.32, 0.32, 0.1], y: 0.75, paint: ["ceramic"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.5, h, d * 0.5, "ceramic", undefined, 14, 2.0), ball(0, h * 0.5, 0, w * 0.22, h * 0.8, d * 0.22, "accent", 6), ball(w * 0.15, h * 0.45, 0.04, w * 0.22, h * 0.8, d * 0.22, "red", 6)] },
+  basket: { label: "furniture.basket", category: "decor", family: "basket", size: [0.45, 0.35, 0.35], paint: ["wood"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.85, h, d * 0.85, "wood", undefined, 14, 1.15)] },
+  bin: { label: "furniture.bin", category: "decor", family: "basket", size: [0.3, 0.3, 0.6], paint: ["metal"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "metal", undefined, 14), cyl(0, h, 0, w * 1.02, 0.03, d * 1.02, "dark", undefined, 14)] },
   aquarium: {
-    name: "Aquarium", category: "decor", family: "aquarium", size: [1.0, 0.4, 1.35], paint: ["dark"],
+    label: "furniture.aquarium", category: "decor", family: "aquarium", size: [1.0, 0.4, 1.35], paint: ["dark"],
     build: (w, d, h) => [...cabinet(w, d, 0.75, "dark", "dark"), box(0, 0.75, 0, w, 0.5, d, "water"), box(0, 0.75, 0, w - 0.02, 0.04, d - 0.02, "soil"), box(0, 1.25, 0, w + 0.01, h - 1.25, d + 0.01, "dark"), ball(-w * 0.25, 0.79, 0, 0.18, 0.2, 0.14, "plant", 6)],
   },
   guitar: {
-    name: "Guitar", category: "decor", family: "instrument", size: [0.38, 0.12, 1.0], paint: ["wood"],
+    label: "furniture.guitar", category: "decor", family: "instrument", size: [0.38, 0.12, 1.0], paint: ["wood"],
     build: (w, d, h) => [box(0, 0, -0.04, 0.3, 0.06, 0.25, "dark"), ball(0, 0.04, 0, w, h * 0.3, d, "wood", 12), ball(0, h * 0.27, 0, w * 0.8, h * 0.22, d, "wood", 12), box(0, h * 0.45, 0, 0.05, h * 0.47, d * 0.4, "woodDark"), box(0, h * 0.92, 0, 0.08, h * 0.08, d * 0.4, "woodDark"), rod("z", 0, h * 0.28, d / 2 - 0.005, 0.09, 0.09, 0.01, "dark", 12)],
   },
-  pet_bed: { name: "Pet bed", category: "decor", family: "pet", size: [0.7, 0.55, 0.2], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "fabric", undefined, 16), cyl(0, h * 0.3, 0, w * 0.75, h * 0.72, d * 0.7, "cushion", undefined, 16)] },
+  pet_bed: { label: "furniture.pet_bed", category: "decor", family: "pet", size: [0.7, 0.55, 0.2], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "fabric", undefined, 16), cyl(0, h * 0.3, 0, w * 0.75, h * 0.72, d * 0.7, "cushion", undefined, 16)] },
   cat_tree: {
-    name: "Cat tree", category: "decor", family: "pet", size: [0.55, 0.55, 1.4], paint: ["rug"],
+    label: "furniture.cat_tree", category: "decor", family: "pet", size: [0.55, 0.55, 1.4], paint: ["rug"],
     build: (w, d, h) => [box(0, 0, 0, w, 0.04, d, "rug"), cyl(-w * 0.2, 0.04, 0, 0.1, h * 0.55, 0.1, "wood", undefined, 8), cyl(w * 0.2, 0.04, w * 0.1, 0.1, h - 0.1, 0.1, "wood", undefined, 8), box(-w * 0.1, h * 0.55, 0, w * 0.6, 0.04, d * 0.7, "rug"), box(w * 0.15, h - 0.06, 0.05, w * 0.55, 0.12, d * 0.6, "rug"), cyl(-w * 0.15, h * 0.3, -w * 0.05, w * 0.45, h * 0.22, d * 0.45, "rug", undefined, 10)],
   },
   christmas_tree: {
-    name: "Christmas tree", category: "decor", family: "plant", size: [1.1, 1.1, 2.0],
+    label: "furniture.christmas_tree", category: "decor", family: "plant", size: [1.1, 1.1, 2.0],
     build: (w, d, h) => [
       cyl(0, 0, 0, 0.32, 0.25, 0.32, "red", undefined, 10), cyl(0, 0.2, 0, 0.08, 0.2, 0.08, "woodDark", undefined, 6),
       cyl(0, 0.35, 0, w, h * 0.38, d, "leaf", undefined, 10, 0.45), cyl(0, 0.35 + h * 0.3, 0, w * 0.75, h * 0.33, d * 0.75, "leaf", undefined, 10, 0.35),
@@ -792,20 +793,20 @@ export const FURNITURE: Record<string, FurnitureType> = {
       ...[0.15, -0.2, 0.25, -0.1, 0.05].map((s, i) => ball(s * w, 0.5 + i * h * 0.12, ((i % 3) - 1) * d * 0.22, 0.07, 0.07, 0.07, i % 2 ? "red" : "accent", 6)),
     ],
   },
-  coat_rack: { name: "Coat rack", category: "decor", family: "coat", size: [0.5, 0.5, 1.8], build: (w, d, h) => [cyl(0, 0, 0, w * 0.7, 0.03, d * 0.7, "dark", undefined, 12), cyl(0, 0.03, 0, 0.04, h - 0.03, 0.04, "woodDark", undefined, 8), ...[0, 1, 2, 3].map((i) => box(Math.cos(i * 1.57) * 0.1, h - 0.15, Math.sin(i * 1.57) * 0.1, 0.05, 0.03, 0.05, "woodDark")), box(0.12, h - 0.75, 0, 0.12, 0.6, 0.35, "fabricDark")] },
-  shoe_rack: { name: "Shoe rack", category: "decor", family: "storage_low", size: [0.8, 0.3, 0.5], build: (w, d, h) => [box(-w / 2 + 0.01, 0, 0, 0.02, h, d, "wood"), box(w / 2 - 0.01, 0, 0, 0.02, h, d, "wood"), ...[0.04, h / 2, h - 0.02].map((y) => box(0, y, 0, w - 0.04, 0.02, d, "wood")), ...[-0.25, 0, 0.25].map((x, i) => box(x * w, 0.06, 0.02, 0.1, 0.09, 0.25, i % 2 ? "dark" : "white"))] },
+  coat_rack: { label: "furniture.coat_rack", category: "decor", family: "coat", size: [0.5, 0.5, 1.8], build: (w, d, h) => [cyl(0, 0, 0, w * 0.7, 0.03, d * 0.7, "dark", undefined, 12), cyl(0, 0.03, 0, 0.04, h - 0.03, 0.04, "woodDark", undefined, 8), ...[0, 1, 2, 3].map((i) => box(Math.cos(i * 1.57) * 0.1, h - 0.15, Math.sin(i * 1.57) * 0.1, 0.05, 0.03, 0.05, "woodDark")), box(0.12, h - 0.75, 0, 0.12, 0.6, 0.35, "fabricDark")] },
+  shoe_rack: { label: "furniture.shoe_rack", category: "decor", family: "storage_low", size: [0.8, 0.3, 0.5], build: (w, d, h) => [box(-w / 2 + 0.01, 0, 0, 0.02, h, d, "wood"), box(w / 2 - 0.01, 0, 0, 0.02, h, d, "wood"), ...[0.04, h / 2, h - 0.02].map((y) => box(0, y, 0, w - 0.04, 0.02, d, "wood")), ...[-0.25, 0, 0.25].map((x, i) => box(x * w, 0.06, 0.02, 0.1, 0.09, 0.25, i % 2 ? "dark" : "white"))] },
 
   // ---------------------------------------------------------------- plants
   plant: {
-    name: "Plant", category: "plants", family: "plant", size: [0.5, 0.5, 1.0], paint: ["pot"],
+    label: "furniture.plant", category: "plants", family: "plant", size: [0.5, 0.5, 1.0], paint: ["pot"],
     build: (w, d, h) => [...pot(w * 0.65, h * 0.3, d * 0.65), ball(0, h * 0.28, 0, w, h * 0.5, d, "plant", 10), ball(w * 0.1, h * 0.52, -d * 0.06, w * 0.7, h * 0.48, d * 0.7, "leaf", 8)],
   },
   plant_tall: {
-    name: "Tall plant", category: "plants", family: "plant", size: [0.6, 0.6, 1.7], paint: ["pot"],
+    label: "furniture.plant_tall", category: "plants", family: "plant", size: [0.6, 0.6, 1.7], paint: ["pot"],
     build: (w, d, h) => [...pot(w * 0.6, h * 0.22, d * 0.6), cyl(0, h * 0.22, 0, 0.04, h * 0.55, 0.04, "woodDark", undefined, 5), ball(-w * 0.12, h * 0.45, 0.04, w * 0.6, h * 0.25, d * 0.6, "leaf", 8), ball(w * 0.12, h * 0.6, -0.05, w * 0.7, h * 0.25, d * 0.7, "plant", 8), ball(0, h * 0.74, 0, w * 0.8, h * 0.26, d * 0.8, "leaf", 8)],
   },
   plant_palm: {
-    name: "Palm", category: "plants", family: "plant", size: [0.9, 0.9, 1.6], paint: ["pot"],
+    label: "furniture.plant_palm", category: "plants", family: "plant", size: [0.9, 0.9, 1.6], paint: ["pot"],
     build: (w, d, h) => {
       // fronds: long flat leaves drooping out from the top of the stem
       const top = h * 0.62;
@@ -819,21 +820,21 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   plant_small: {
-    name: "Small plant", category: "plants", family: "plant", size: [0.2, 0.2, 0.3], y: 0.75, paint: ["pot"],
+    label: "furniture.plant_small", category: "plants", family: "plant", size: [0.2, 0.2, 0.3], y: 0.75, paint: ["pot"],
     build: (w, d, h) => [...pot(w * 0.8, h * 0.4, d * 0.8), ball(0, h * 0.35, 0, w, h * 0.65, d, "plant", 8)],
   },
   plant_trailing: {
-    name: "Trailing plant", category: "plants", family: "plant", size: [0.3, 0.3, 0.6], y: 1.6, paint: ["pot"],
+    label: "furniture.plant_trailing", category: "plants", family: "plant", size: [0.3, 0.3, 0.6], y: 1.6, paint: ["pot"],
     build: (w, d, h) => [cyl(0, h * 0.5, 0, w * 0.75, h * 0.3, d * 0.75, "pot", undefined, 10, 1.2), cyl(0, 0, 0, w * 0.5, h * 0.55, d * 0.5, "leaf", undefined, 8, 2.2), ball(0, h * 0.7, 0, w, h * 0.3, d, "plant", 8)],
   },
   cactus: {
-    name: "Cactus", category: "plants", family: "plant", size: [0.35, 0.35, 0.9], paint: ["pot"],
+    label: "furniture.cactus", category: "plants", family: "plant", size: [0.35, 0.35, 0.9], paint: ["pot"],
     build: (w, d, h) => [...pot(w * 0.7, h * 0.25, d * 0.7), cyl(0, h * 0.25, 0, w * 0.35, h * 0.75, d * 0.35, "plant", undefined, 8, 0.85), cyl(w * 0.25, h * 0.45, 0, w * 0.18, h * 0.3, d * 0.18, "plant", undefined, 6, 0.8), cyl(-w * 0.22, h * 0.55, 0, w * 0.16, h * 0.25, d * 0.16, "plant", undefined, 6, 0.8)],
   },
 
   // ---------------------------------------------------------------- fitness
   dumbbells: {
-    name: "Dumbbells", category: "fitness", family: "weights", size: [0.36, 0.3, 0.12], paint: ["rubber"],
+    label: "furniture.dumbbells", category: "fitness", family: "weights", size: [0.36, 0.3, 0.12], paint: ["rubber"],
     build: (w, d, h) => [-1, 1].flatMap((s) => [
       rod("x", 0, h * 0.375, (s * d) / 4, w * 0.6, h * 0.25, h * 0.25, "metal", 8),
       rod("x", -w / 2 + w * 0.11, 0, (s * d) / 4, w * 0.22, h, h, "rubber", 10),
@@ -841,7 +842,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     ]),
   },
   dumbbell_rack: {
-    name: "Dumbbell rack", category: "fitness", family: "weights", size: [1.1, 0.5, 0.8], paint: ["rubber"],
+    label: "furniture.dumbbell_rack", category: "fitness", family: "weights", size: [1.1, 0.5, 0.8], paint: ["rubber"],
     build: (w, d, h) => {
       const parts: Part[] = [...legs(w, d, h, 0.05, 0.02, "dark"), box(0, h * 0.45, 0, w, 0.03, d * 0.9, "dark"), box(0, h - 0.03, 0, w, 0.03, d * 0.9, "dark")];
       for (const y of [h * 0.48, h]) for (let i = 0; i < 4; i++) {
@@ -852,30 +853,30 @@ export const FURNITURE: Record<string, FurnitureType> = {
       return parts;
     },
   },
-  kettlebell: { name: "Kettlebell", category: "fitness", family: "weights", size: [0.22, 0.22, 0.28], paint: ["rubber"], build: (w, d, h) => [ball(0, 0, 0, w, h * 0.72, d, "rubber", 10), rod("x", 0, h * 0.75, 0, w * 0.6, h * 0.25, 0.04, "rubber", 8)] },
+  kettlebell: { label: "furniture.kettlebell", category: "fitness", family: "weights", size: [0.22, 0.22, 0.28], paint: ["rubber"], build: (w, d, h) => [ball(0, 0, 0, w, h * 0.72, d, "rubber", 10), rod("x", 0, h * 0.75, 0, w * 0.6, h * 0.25, 0.04, "rubber", 8)] },
   weight_bench: {
-    name: "Weight bench", category: "fitness", family: "bench_gym", size: [0.5, 1.25, 0.48],
+    label: "furniture.weight_bench", category: "fitness", family: "bench_gym", size: [0.5, 1.25, 0.48],
     build: (w, d, h) => [box(0, h - 0.07, 0.1, w * 0.6, 0.07, d * 0.55, "fabricDark"), box(0, h - 0.07, -d * 0.28, w * 0.6, 0.07, d * 0.4, "fabricDark"), box(0, 0, 0, 0.08, h - 0.07, d * 0.9, "dark"), box(0, 0, -d / 2 + 0.05, w, 0.05, 0.08, "dark"), box(0, 0, d / 2 - 0.05, w, 0.05, 0.08, "dark")],
   },
   treadmill: {
-    name: "Treadmill", category: "fitness", family: "cardio", size: [0.8, 1.8, 1.4], paint: ["dark"],
+    label: "furniture.treadmill", category: "fitness", family: "cardio", size: [0.8, 1.8, 1.4], paint: ["dark"],
     build: (w, d, h) => [box(0, 0, 0.1, w, 0.18, d - 0.2, "dark"), box(0, 0.18, 0.1, w - 0.16, 0.01, d - 0.3, "rubber"), ...[-1, 1].map((s) => box(s * (w / 2 - 0.04), 0.18, -d / 2 + 0.2, 0.06, h - 0.3, 0.06, "dark")), box(0, h - 0.15, -d / 2 + 0.2, w, 0.12, 0.3, "dark"), box(0, h - 0.03, -d / 2 + 0.2, w * 0.5, 0.01, 0.2, "screen", "screen")],
   },
   exercise_bike: {
-    name: "Exercise bike", category: "fitness", family: "cardio", size: [0.55, 1.1, 1.2], paint: ["dark"],
+    label: "furniture.exercise_bike", category: "fitness", family: "cardio", size: [0.55, 1.1, 1.2], paint: ["dark"],
     build: (w, d, h) => [box(0, 0, -d / 2 + 0.05, w, 0.05, 0.1, "dark"), box(0, 0, d / 2 - 0.05, w, 0.05, 0.1, "dark"), box(0, 0.05, 0, 0.08, 0.08, d - 0.1, "dark"), rod("x", 0, 0.12, -d / 2 + 0.3, 0.06, 0.45, 0.45, "metal", 14), box(0, 0.1, 0.18, 0.07, 0.7, 0.07, "dark"), box(0, 0.8, 0.22, 0.24, 0.07, 0.3, "fabricDark"), box(0, 0.1, -d / 2 + 0.22, 0.07, h - 0.2, 0.07, "dark"), box(0, h - 0.1, -d / 2 + 0.25, w * 0.8, 0.04, 0.1, "dark")],
   },
   rowing_machine: {
-    name: "Rowing machine", category: "fitness", family: "cardio", size: [0.55, 2.2, 0.55], paint: ["dark"],
+    label: "furniture.rowing_machine", category: "fitness", family: "cardio", size: [0.55, 2.2, 0.55], paint: ["dark"],
     build: (w, d, h) => [box(0, 0.15, 0.15, 0.1, 0.06, d - 0.5, "metal"), box(0, 0, d / 2 - 0.05, w, 0.15, 0.1, "dark"), rod("x", 0, 0, -d / 2 + 0.25, 0.18, h, 0.5, "dark", 16), box(0, 0.21, 0.2, 0.3, 0.06, 0.3, "fabricDark"), box(0, 0.12, -d / 2 + 0.6, w, 0.03, 0.15, "dark")],
   },
-  yoga_mat: { name: "Yoga mat", category: "fitness", family: "mat", size: [0.61, 1.83, 0.006], paint: ["blue"], build: (w, d) => [box(0, 0, 0, w, 0.006, d, "blue")] },
-  yoga_mat_rolled: { name: "Rolled mat", category: "fitness", family: "mat", size: [0.61, 0.13, 0.13], paint: ["blue"], build: (w, d, h) => [rod("x", 0, 0, 0, w, h, d, "blue", 12)] },
-  punching_bag: { name: "Punching bag", category: "fitness", family: "bag", size: [0.36, 0.36, 1.2], y: 0.55, paint: ["red"], build: (w, d, h) => [cyl(0, 0, 0, w, h - 0.15, d, "red", undefined, 14), cyl(0, h - 0.15, 0, 0.02, 0.15, 0.02, "metal", undefined, 4)] },
+  yoga_mat: { label: "furniture.yoga_mat", category: "fitness", family: "mat", size: [0.61, 1.83, 0.006], paint: ["blue"], build: (w, d) => [box(0, 0, 0, w, 0.006, d, "blue")] },
+  yoga_mat_rolled: { label: "furniture.yoga_mat_rolled", category: "fitness", family: "mat", size: [0.61, 0.13, 0.13], paint: ["blue"], build: (w, d, h) => [rod("x", 0, 0, 0, w, h, d, "blue", 12)] },
+  punching_bag: { label: "furniture.punching_bag", category: "fitness", family: "bag", size: [0.36, 0.36, 1.2], y: 0.55, paint: ["red"], build: (w, d, h) => [cyl(0, 0, 0, w, h - 0.15, d, "red", undefined, 14), cyl(0, h - 0.15, 0, 0.02, 0.15, 0.02, "metal", undefined, 4)] },
 
   // ---------------------------------------------------------------- kids
   cot: {
-    name: "Cot", category: "kids", family: "bed", size: [0.66, 1.26, 0.9], paint: ["white"],
+    label: "furniture.cot", category: "kids", family: "bed", size: [0.66, 1.26, 0.9], paint: ["white"],
     build: (w, d, h) => {
       const parts: Part[] = [box(0, 0.3, 0, w - 0.06, 0.1, d - 0.06, "mattress"), ...legs(w, d, h, 0.05, 0, "white")];
       for (const side of [-1, 1]) {
@@ -885,10 +886,10 @@ export const FURNITURE: Record<string, FurnitureType> = {
       return parts;
     },
   },
-  toy_box: { name: "Toy box", category: "kids", family: "storage_low", size: [0.7, 0.4, 0.45], paint: ["blue"], build: (w, d, h) => [box(0, 0, 0, w, h - 0.03, d, "blue"), box(0, h - 0.03, 0, w + 0.02, 0.03, d + 0.02, "white"), ball(-w * 0.2, h, 0, 0.14, 0.14, 0.14, "red", 6), box(w * 0.18, h, 0.02, 0.12, 0.12, 0.12, "accent")] },
-  play_tent: { name: "Play tent", category: "kids", family: "tent", size: [1.1, 1.1, 1.5], paint: ["canvas"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "canvas", undefined, 6, 0), cyl(0, 0, 0, w * 0.8, 0.012, d * 0.8, "rug", undefined, 12)] },
+  toy_box: { label: "furniture.toy_box", category: "kids", family: "storage_low", size: [0.7, 0.4, 0.45], paint: ["blue"], build: (w, d, h) => [box(0, 0, 0, w, h - 0.03, d, "blue"), box(0, h - 0.03, 0, w + 0.02, 0.03, d + 0.02, "white"), ball(-w * 0.2, h, 0, 0.14, 0.14, 0.14, "red", 6), box(w * 0.18, h, 0.02, 0.12, 0.12, 0.12, "accent")] },
+  play_tent: { label: "furniture.play_tent", category: "kids", family: "tent", size: [1.1, 1.1, 1.5], paint: ["canvas"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "canvas", undefined, 6, 0), cyl(0, 0, 0, w * 0.8, 0.012, d * 0.8, "rug", undefined, 12)] },
   high_chair: {
-    name: "High chair", category: "kids", family: "chair", size: [0.55, 0.6, 1.0], paint: ["white"],
+    label: "furniture.high_chair", category: "kids", family: "chair", size: [0.55, 0.6, 1.0], paint: ["white"],
     build: (w, d, h) => {
       // a seat with a back and sides, a tray resting on the sides, and legs splaying out to the corners
       const sy = h * 0.56, sw = w * 0.62, arm = sy + Math.min(0.25, (h - sy) * 0.55);
@@ -906,34 +907,34 @@ export const FURNITURE: Record<string, FurnitureType> = {
 
   // ---------------------------------------------------------------- utility
   washer: {
-    name: "Washing machine", category: "utility", family: "washer", size: [0.6, 0.6, 0.85],
+    label: "furniture.washer", category: "utility", family: "washer", size: [0.6, 0.6, 0.85],
     build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "dark", 16)],
   },
-  dryer: { name: "Dryer", category: "utility", family: "washer", size: [0.6, 0.6, 0.85], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "metal", 16)] },
+  dryer: { label: "furniture.dryer", category: "utility", family: "washer", size: [0.6, 0.6, 0.85], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "metal", 16)] },
   radiator: {
-    name: "Radiator", category: "utility", family: "radiator", size: [1.0, 0.1, 0.6], y: 0.12,
+    label: "furniture.radiator", category: "utility", family: "radiator", size: [1.0, 0.1, 0.6], y: 0.12,
     build: (w, d, h) => {
       const n = Math.max(3, Math.round(w / 0.08));
       return [box(0, 0, 0, w, h, d, "white"), ...Array.from({ length: n }, (_, i) => box(-w / 2 + (w / n) * (i + 0.5), 0.02, d / 2, 0.012, h - 0.04, 0.006, "ceramic"))];
     },
   },
-  boiler: { name: "Boiler", category: "utility", family: "boiler", size: [0.45, 0.35, 0.7], y: 1.2, build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, h * 0.15, d / 2, w * 0.4, h * 0.08, 0.01, "dark")] },
-  laundry_basket: { name: "Laundry basket", category: "utility", family: "basket", size: [0.4, 0.4, 0.55], paint: ["wood"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "wood", undefined, 12, 1.1), ball(0, h - 0.1, 0, w * 0.8, 0.2, d * 0.8, "fabric", 8)] },
-  printer_3d: { name: "3D printer", category: "utility", family: "printer", size: [0.4, 0.4, 0.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "dark"), box(0, 0.05, d / 2 - 0.004, w * 0.85, h * 0.8, 0.008, "glass", "screen")] },
+  boiler: { label: "furniture.boiler", category: "utility", family: "boiler", size: [0.45, 0.35, 0.7], y: 1.2, build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, h * 0.15, d / 2, w * 0.4, h * 0.08, 0.01, "dark")] },
+  laundry_basket: { label: "furniture.laundry_basket", category: "utility", family: "basket", size: [0.4, 0.4, 0.55], paint: ["wood"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "wood", undefined, 12, 1.1), ball(0, h - 0.1, 0, w * 0.8, 0.2, d * 0.8, "fabric", 8)] },
+  printer_3d: { label: "furniture.printer_3d", category: "utility", family: "printer", size: [0.4, 0.4, 0.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "dark"), box(0, 0.05, d / 2 - 0.004, w * 0.85, h * 0.8, 0.008, "glass", "screen")] },
 
   // ---------------------------------------------------------------- garden
   // pergolas, sheds and planters: scene/garden.ts
   ...GARDEN_FURNITURE,
-  garden_table: { name: "Garden table", category: "outdoor", family: "garden_table", size: [1.2, 1.2, 0.72], paint: ["metal"], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "metal", undefined, 18), ...roundTopLegs(w, d, h - 0.03, 0.55, 0.8, 0.04, "dark")] },
-  garden_chair: { name: "Garden chair", category: "outdoor", family: "garden_chair", size: [0.55, 0.6, 0.85], build: (w, d, h) => [box(0, 0.42, 0.02, w, 0.04, d - 0.06, "wood"), box(0, 0.46, -d / 2 + 0.04, w, h - 0.46, 0.04, "wood"), ...legs(w, d, 0.42, 0.04, 0.03, "metal"), box(-w / 2 + 0.02, 0.6, 0, 0.04, 0.03, d - 0.1, "metal"), box(w / 2 - 0.02, 0.6, 0, 0.04, 0.03, d - 0.1, "metal")] },
-  sun_lounger: { name: "Sun lounger", category: "outdoor", family: "garden_chair", size: [0.7, 1.95, 0.5], paint: ["fabric"], build: (w, d, h) => [box(0, 0.25, 0.25, w, 0.06, d - 0.5, "fabric"), box(0, 0.25, -d / 2 + 0.3, w, h, 0.12, "fabric"), ...legs(w, d, 0.25, 0.04, 0.05, "metal")] },
-  garden_sofa: { name: "Garden sofa", category: "outdoor", family: "garden_chair", size: [1.8, 0.8, 0.75], build: (w, d, h) => [...sofa(w, d, h).map((p) => (p.role === "fabric" ? { ...p, role: "woodDark" as Role } : p))] },
-  parasol: { name: "Parasol", category: "outdoor", family: "parasol", size: [2.5, 2.5, 2.4], paint: ["canvas"], build: (w, d, h) => [cyl(0, 0, 0, 0.45, 0.06, 0.45, "dark", undefined, 10), cyl(0, 0.06, 0, 0.04, h - 0.06, 0.04, "metal", undefined, 6), cyl(0, h - 0.45, 0, w, 0.4, d, "canvas", undefined, 8, 0.05)] },
-  bbq: { name: "Barbecue", category: "outdoor", family: "bbq", size: [0.6, 0.6, 1.0], paint: ["dark"], build: (w, d, h) => [ball(0, h * 0.45, 0, w, h * 0.55, d, "dark", 12), ...roundTopLegs(w, d, h * 0.62, 0.55, 0.85, 0.04, "metal"), legShelf(w, d, h * 0.62, 0.55, 0.85, h * 0.25, 0.02, "metal", 12)] },
-  fire_pit: { name: "Fire pit", category: "outdoor", family: "bbq", size: [0.9, 0.9, 0.4], paint: ["dark"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.8, h, d * 0.8, "dark", undefined, 16, 1.25), cyl(0, h - 0.04, 0, w * 0.85, 0.02, d * 0.85, "accent", undefined, 16)] },
+  garden_table: { label: "furniture.garden_table", category: "outdoor", family: "garden_table", size: [1.2, 1.2, 0.72], paint: ["metal"], build: (w, d, h) => [cyl(0, h - 0.03, 0, w, 0.03, d, "metal", undefined, 18), ...roundTopLegs(w, d, h - 0.03, 0.55, 0.8, 0.04, "dark")] },
+  garden_chair: { label: "furniture.garden_chair", category: "outdoor", family: "garden_chair", size: [0.55, 0.6, 0.85], build: (w, d, h) => [box(0, 0.42, 0.02, w, 0.04, d - 0.06, "wood"), box(0, 0.46, -d / 2 + 0.04, w, h - 0.46, 0.04, "wood"), ...legs(w, d, 0.42, 0.04, 0.03, "metal"), box(-w / 2 + 0.02, 0.6, 0, 0.04, 0.03, d - 0.1, "metal"), box(w / 2 - 0.02, 0.6, 0, 0.04, 0.03, d - 0.1, "metal")] },
+  sun_lounger: { label: "furniture.sun_lounger", category: "outdoor", family: "garden_chair", size: [0.7, 1.95, 0.5], paint: ["fabric"], build: (w, d, h) => [box(0, 0.25, 0.25, w, 0.06, d - 0.5, "fabric"), box(0, 0.25, -d / 2 + 0.3, w, h, 0.12, "fabric"), ...legs(w, d, 0.25, 0.04, 0.05, "metal")] },
+  garden_sofa: { label: "furniture.garden_sofa", category: "outdoor", family: "garden_chair", size: [1.8, 0.8, 0.75], build: (w, d, h) => [...sofa(w, d, h).map((p) => (p.role === "fabric" ? { ...p, role: "woodDark" as Role } : p))] },
+  parasol: { label: "furniture.parasol", category: "outdoor", family: "parasol", size: [2.5, 2.5, 2.4], paint: ["canvas"], build: (w, d, h) => [cyl(0, 0, 0, 0.45, 0.06, 0.45, "dark", undefined, 10), cyl(0, 0.06, 0, 0.04, h - 0.06, 0.04, "metal", undefined, 6), cyl(0, h - 0.45, 0, w, 0.4, d, "canvas", undefined, 8, 0.05)] },
+  bbq: { label: "furniture.bbq", category: "outdoor", family: "bbq", size: [0.6, 0.6, 1.0], paint: ["dark"], build: (w, d, h) => [ball(0, h * 0.45, 0, w, h * 0.55, d, "dark", 12), ...roundTopLegs(w, d, h * 0.62, 0.55, 0.85, 0.04, "metal"), legShelf(w, d, h * 0.62, 0.55, 0.85, h * 0.25, 0.02, "metal", 12)] },
+  fire_pit: { label: "furniture.fire_pit", category: "outdoor", family: "bbq", size: [0.9, 0.9, 0.4], paint: ["dark"], build: (w, d, h) => [cyl(0, 0, 0, w * 0.8, h, d * 0.8, "dark", undefined, 16, 1.25), cyl(0, h - 0.04, 0, w * 0.85, 0.02, d * 0.85, "accent", undefined, 16)] },
   solar_panels: {
     // panels upright side by side, tilted to the front; their cells shine with what the house's solar makes
-    name: "Solar panels", category: "outdoor", family: "solar", size: [4.2, 1.5, 1.1],
+    label: "furniture.solar_panels", category: "outdoor", family: "solar", size: [4.2, 1.5, 1.1],
     build: (w, d, h) => {
       const n = Math.max(1, Math.round(w / 1.05));
       const gap = 0.02, pw = (w - gap * (n - 1)) / n;
@@ -957,7 +958,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
   },
   ev_charger: {
     // a wall box with a tethered cable coiled under it; its light shows what it is doing
-    name: "EV charger", category: "outdoor", family: "ev_charger", size: [0.24, 0.13, 0.36], y: 0.95, paint: ["white"],
+    label: "furniture.ev_charger", category: "outdoor", family: "ev_charger", size: [0.24, 0.13, 0.36], y: 0.95, paint: ["white"],
     build: (w, d, h) => [
       box(0, 0, 0, w, h, d, "white"),
       box(0, h * 0.1, d / 2 + 0.002, w * 0.78, h * 0.8, 0.008, "dark"),
@@ -967,7 +968,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
     ],
   },
   ev_charger_post: {
-    name: "Charging post", category: "outdoor", family: "ev_charger", size: [0.26, 0.2, 1.3], paint: ["white"],
+    label: "furniture.ev_charger_post", category: "outdoor", family: "ev_charger", size: [0.26, 0.2, 1.3], paint: ["white"],
     build: (w, d, h) => {
       const head = 0.4;
       return [
@@ -981,69 +982,69 @@ export const FURNITURE: Record<string, FurnitureType> = {
     },
   },
   trampoline: {
-    name: "Trampoline", category: "outdoor", family: "play", size: [3.0, 3.0, 0.9], paint: ["blue"],
+    label: "furniture.trampoline", category: "outdoor", family: "play", size: [3.0, 3.0, 0.9], paint: ["blue"],
     build: (w, d, h) => [cyl(0, h - 0.06, 0, w, 0.06, d, "blue", undefined, 24), cyl(0, h - 0.055, 0, w * 0.86, 0.008, d * 0.86, "rubber", undefined, 24), ...[0, 1, 2, 3, 4, 5].map((i) => cyl(Math.cos(i * 1.047) * w * 0.47, 0, Math.sin(i * 1.047) * d * 0.47, 0.05, h - 0.06, 0.05, "metal", undefined, 5))],
   },
-  swing: { name: "Swing", category: "outdoor", family: "play", size: [2.2, 1.6, 2.1], build: (w, d, h) => [box(0, h - 0.08, 0, w, 0.08, 0.08, "woodDark"), ...[-1, 1].flatMap((s) => [box(s * (w / 2 - 0.04), 0, -d / 4, 0.08, h - 0.08, 0.08, "woodDark"), box(s * (w / 2 - 0.04), 0, d / 4, 0.08, h - 0.08, 0.08, "woodDark")]), box(-0.3, 0.45, 0, 0.45, 0.04, 0.18, "red"), box(0.3, 0.45, 0, 0.45, 0.04, 0.18, "blue")] },
+  swing: { label: "furniture.swing", category: "outdoor", family: "play", size: [2.2, 1.6, 2.1], build: (w, d, h) => [box(0, h - 0.08, 0, w, 0.08, 0.08, "woodDark"), ...[-1, 1].flatMap((s) => [box(s * (w / 2 - 0.04), 0, -d / 4, 0.08, h - 0.08, 0.08, "woodDark"), box(s * (w / 2 - 0.04), 0, d / 4, 0.08, h - 0.08, 0.08, "woodDark")]), box(-0.3, 0.45, 0, 0.45, 0.04, 0.18, "red"), box(0.3, 0.45, 0, 0.45, 0.04, 0.18, "blue")] },
   hedge: {
-    name: "Hedge", category: "outdoor", family: "tree", size: [2.0, 0.6, 1.4],
+    label: "furniture.hedge", category: "outdoor", family: "tree", size: [2.0, 0.6, 1.4],
     build: (w, d, h) => {
       const n = Math.max(2, Math.round(w / 0.5));
       return [box(0, 0, 0, w, h * 0.85, d, "leaf"), ...Array.from({ length: n }, (_, i) => ball(-w / 2 + (w / n) * (i + 0.5), h * 0.62, 0, w / n + 0.1, h * 0.38, d * 1.05, "plant", 8))];
     },
   },
-  shrub: { name: "Shrub", category: "outdoor", family: "tree", size: [0.9, 0.9, 0.8], build: (w, d, h) => [ball(0, 0, 0, w, h, d, "plant", 10), ball(w * 0.15, h * 0.3, 0.05, w * 0.6, h * 0.7, d * 0.6, "leaf", 8)] },
-  tree: { name: "Tree", category: "outdoor", family: "tree", size: [3.0, 3.0, 5.0], build: (w, d, h) => [cyl(0, 0, 0, 0.3, h * 0.5, 0.3, "woodDark", undefined, 8, 0.7), ball(0, h * 0.35, 0, w, h * 0.55, d, "plant", 12), ball(w * 0.15, h * 0.6, -d * 0.1, w * 0.7, h * 0.4, d * 0.7, "leaf", 10)] },
-  tree_conifer: { name: "Conifer", category: "outdoor", family: "tree", size: [2.0, 2.0, 5.0], build: (w, d, h) => [cyl(0, 0, 0, 0.25, h * 0.2, 0.25, "woodDark", undefined, 8), cyl(0, h * 0.15, 0, w, h * 0.45, d, "leaf", undefined, 10, 0.4), cyl(0, h * 0.45, 0, w * 0.75, h * 0.35, d * 0.75, "leaf", undefined, 10, 0.3), cyl(0, h * 0.7, 0, w * 0.5, h * 0.3, d * 0.5, "leaf", undefined, 10, 0)] },
-  hot_tub: { name: "Hot tub", category: "outdoor", family: "hot_tub", size: [2.0, 2.0, 0.9], paint: ["woodDark"], build: (w, d, h) => [box(0, 0, 0, w, h - 0.02, d, "woodDark"), box(0, h - 0.1, 0, w - 0.2, 0.1, d - 0.2, "water")] },
-  car: { name: "Hatchback", category: "outdoor", family: "car", size: [1.77, 4.25, 1.52], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.hatchback) },
-  car_saloon: { name: "Saloon", category: "outdoor", family: "car", size: [1.85, 4.7, 1.44], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.saloon) },
-  car_suv: { name: "SUV", category: "outdoor", family: "car", size: [1.88, 4.6, 1.65], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.suv) },
-  car_estate: { name: "Estate", category: "outdoor", family: "car", size: [1.82, 4.7, 1.5], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.estate) },
+  shrub: { label: "furniture.shrub", category: "outdoor", family: "tree", size: [0.9, 0.9, 0.8], build: (w, d, h) => [ball(0, 0, 0, w, h, d, "plant", 10), ball(w * 0.15, h * 0.3, 0.05, w * 0.6, h * 0.7, d * 0.6, "leaf", 8)] },
+  tree: { label: "furniture.tree", category: "outdoor", family: "tree", size: [3.0, 3.0, 5.0], build: (w, d, h) => [cyl(0, 0, 0, 0.3, h * 0.5, 0.3, "woodDark", undefined, 8, 0.7), ball(0, h * 0.35, 0, w, h * 0.55, d, "plant", 12), ball(w * 0.15, h * 0.6, -d * 0.1, w * 0.7, h * 0.4, d * 0.7, "leaf", 10)] },
+  tree_conifer: { label: "furniture.tree_conifer", category: "outdoor", family: "tree", size: [2.0, 2.0, 5.0], build: (w, d, h) => [cyl(0, 0, 0, 0.25, h * 0.2, 0.25, "woodDark", undefined, 8), cyl(0, h * 0.15, 0, w, h * 0.45, d, "leaf", undefined, 10, 0.4), cyl(0, h * 0.45, 0, w * 0.75, h * 0.35, d * 0.75, "leaf", undefined, 10, 0.3), cyl(0, h * 0.7, 0, w * 0.5, h * 0.3, d * 0.5, "leaf", undefined, 10, 0)] },
+  hot_tub: { label: "furniture.hot_tub", category: "outdoor", family: "hot_tub", size: [2.0, 2.0, 0.9], paint: ["woodDark"], build: (w, d, h) => [box(0, 0, 0, w, h - 0.02, d, "woodDark"), box(0, h - 0.1, 0, w - 0.2, 0.1, d - 0.2, "water")] },
+  car: { label: "furniture.car", category: "outdoor", family: "car", size: [1.77, 4.25, 1.52], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.hatchback) },
+  car_saloon: { label: "furniture.car_saloon", category: "outdoor", family: "car", size: [1.85, 4.7, 1.44], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.saloon) },
+  car_suv: { label: "furniture.car_suv", category: "outdoor", family: "car", size: [1.88, 4.6, 1.65], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.suv) },
+  car_estate: { label: "furniture.car_estate", category: "outdoor", family: "car", size: [1.82, 4.7, 1.5], paint: ["accent"], build: (w, d, h) => carParts(w, d, h, CAR_STYLES.estate) },
   bicycle: {
-    name: "Bicycle", category: "outdoor", family: "vehicle", size: [0.55, 1.75, 1.05], paint: ["blue"],
+    label: "furniture.bicycle", category: "outdoor", family: "vehicle", size: [0.55, 1.75, 1.05], paint: ["blue"],
     build: (w, d, h) => [rod("x", 0, 0, -d / 2 + 0.35, 0.04, 0.68, 0.68, "rubber", 16), rod("x", 0, 0, d / 2 - 0.35, 0.04, 0.68, 0.68, "rubber", 16), box(0, 0.34, 0, 0.04, 0.04, d - 0.7, "blue"), box(0, 0.38, -0.12, 0.04, 0.45, 0.04, "blue"), box(0, 0.83, -0.12, 0.12, 0.05, 0.24, "dark"), box(0, 0.38, d / 2 - 0.4, 0.04, h - 0.45, 0.04, "blue"), box(0, h - 0.06, d / 2 - 0.4, w, 0.03, 0.03, "dark")],
   },
 
   // ---------------------------------------------------------------- lights (glow with their light entity)
-  lamp_ceiling: { name: "Ceiling light", category: "lights", family: "lamp_ceiling", size: [0.4, 0.4, 0.1], build: (w, d, h) => [cyl(0, -h, 0, w, h, d, "bulb", "lamp", 16)] },
+  lamp_ceiling: { label: "furniture.lamp_ceiling", category: "lights", family: "lamp_ceiling", size: [0.4, 0.4, 0.1], build: (w, d, h) => [cyl(0, -h, 0, w, h, d, "bulb", "lamp", 16)] },
   lamp_pendant: {
-    name: "Pendant light", category: "lights", family: "lamp_ceiling", size: [0.35, 0.35, 0.8],
+    label: "furniture.lamp_pendant", category: "lights", family: "lamp_ceiling", size: [0.35, 0.35, 0.8],
     build: (w, d, h) => [cyl(0, -h, 0, w, 0.22, d, "bulb", "lamp", 14, 0.35), cyl(0, -h + 0.22, 0, 0.012, h - 0.22, 0.012, "dark", undefined, 4)],
   },
   lamp_globe: {
-    name: "Globe pendant", category: "lights", family: "lamp_ceiling", size: [0.3, 0.3, 0.7],
+    label: "furniture.lamp_globe", category: "lights", family: "lamp_ceiling", size: [0.3, 0.3, 0.7],
     build: (w, d, h) => [ball(0, -h, 0, w, w, d, "bulb", 12, "lamp"), cyl(0, -h + w, 0, 0.012, h - w, 0.012, "dark", undefined, 4)],
   },
   lamp_chandelier: {
-    name: "Chandelier", category: "lights", family: "lamp_ceiling", size: [0.7, 0.7, 0.7],
+    label: "furniture.lamp_chandelier", category: "lights", family: "lamp_ceiling", size: [0.7, 0.7, 0.7],
     build: (w, d, h) => [
       cyl(0, -h * 0.25, 0, 0.012, h * 0.25, 0.012, "metal", undefined, 4), cyl(0, -h * 0.55, 0, w * 0.15, h * 0.3, d * 0.15, "metal", undefined, 8),
       ...[0, 1, 2, 3, 4].map((i) => cyl(Math.cos(i * 1.2566) * w * 0.4, -h, Math.sin(i * 1.2566) * d * 0.4, 0.1, 0.16, 0.1, "bulb", "lamp", 8, 0.6)),
     ],
   },
-  lamp_downlight: { name: "Downlight", category: "lights", family: "lamp_ceiling", size: [0.1, 0.1, 0.02], build: (w, d, h) => [cyl(0, -h, 0, w, h, d, "bulb", "lamp", 10)] },
-  lamp_spots: { name: "Spotlight bar", category: "lights", family: "lamp_ceiling", size: [0.8, 0.08, 0.15], build: (w, d, h) => [box(0, -0.03, 0, w, 0.03, d, "dark"), ...[-1, 0, 1].map((i) => cyl((i * w) / 3, -h, 0, 0.07, h - 0.03, 0.07, "bulb", "lamp", 8, 1.2))] },
+  lamp_downlight: { label: "furniture.lamp_downlight", category: "lights", family: "lamp_ceiling", size: [0.1, 0.1, 0.02], build: (w, d, h) => [cyl(0, -h, 0, w, h, d, "bulb", "lamp", 10)] },
+  lamp_spots: { label: "furniture.lamp_spots", category: "lights", family: "lamp_ceiling", size: [0.8, 0.08, 0.15], build: (w, d, h) => [box(0, -0.03, 0, w, 0.03, d, "dark"), ...[-1, 0, 1].map((i) => cyl((i * w) / 3, -h, 0, 0.07, h - 0.03, 0.07, "bulb", "lamp", 8, 1.2))] },
   lamp_floor: {
-    name: "Floor lamp", category: "lights", family: "lamp_floor", size: [0.4, 0.4, 1.6],
+    label: "furniture.lamp_floor", category: "lights", family: "lamp_floor", size: [0.4, 0.4, 1.6],
     build: (w, d, h) => [cyl(0, 0, 0, w * 0.6, 0.03, d * 0.6, "dark"), cyl(0, 0.03, 0, 0.025, h - 0.35, 0.025, "metal", undefined, 6), cyl(0, h - 0.32, 0, w, 0.3, d, "bulb", "lamp", 14, 0.75)],
   },
   lamp_arc: {
-    name: "Arc lamp", category: "lights", family: "lamp_floor", size: [0.4, 1.6, 2.0],
+    label: "furniture.lamp_arc", category: "lights", family: "lamp_floor", size: [0.4, 1.6, 2.0],
     build: (_w, d, h) => [box(0, 0, -d / 2 + 0.2, 0.35, 0.06, 0.35, "ceramic"), box(0, 0.06, -d / 2 + 0.2, 0.03, h - 0.1, 0.03, "metal"), box(0, h - 0.04, -d / 2 + 0.2 + (d - 0.45) / 2, 0.03, 0.03, d - 0.45, "metal"), ball(0, h - 0.35, d / 2 - 0.2, 0.4, 0.3, 0.4, "bulb", 12, "lamp")],
   },
   lamp_table: {
-    name: "Table lamp", category: "lights", family: "lamp_table", size: [0.25, 0.25, 0.45], y: 0.5,
+    label: "furniture.lamp_table", category: "lights", family: "lamp_table", size: [0.25, 0.25, 0.45], y: 0.5,
     build: (w, d, h) => [ball(0, 0, 0, w * 0.55, h * 0.5, d * 0.55, "ceramic", 10), cyl(0, h * 0.5, 0, w, h * 0.5, d, "bulb", "lamp", 12, 0.7)],
   },
-  lamp_wall: { name: "Wall light", category: "lights", family: "lamp_wall", size: [0.25, 0.12, 0.2], y: 1.8, build: (w, d, h) => [box(0, 0, -d / 2 + 0.01, w * 0.4, h * 0.6, 0.02, "dark"), box(0, 0, 0, w, h, d * 0.8, "bulb", "lamp")] },
-  led_strip: { name: "LED strip", category: "lights", family: "led_strip", size: [1.5, 0.02, 0.012], build: (w, d, h) => [box(0, 0, 0, w, h, d, "bulb", "lamp")] },
-  lamp_garden: { name: "Garden light", category: "lights", family: "lamp_garden", size: [0.15, 0.15, 0.6], build: (w, d, h) => [cyl(0, 0, 0, w * 0.4, h - 0.15, d * 0.4, "dark", undefined, 6), cyl(0, h - 0.15, 0, w, 0.15, d, "bulb", "lamp", 10)] },
-  lamp_post: { name: "Lamp post", category: "lights", family: "lamp_garden", size: [0.3, 0.3, 2.2], build: (w, d, h) => [cyl(0, 0, 0, w * 0.6, 0.1, d * 0.6, "dark", undefined, 8), cyl(0, 0.1, 0, 0.07, h - 0.45, 0.07, "dark", undefined, 8), cyl(0, h - 0.35, 0, w, 0.3, d, "bulb", "lamp", 8, 0.6), cyl(0, h - 0.06, 0, w * 0.75, 0.06, d * 0.75, "dark", undefined, 8, 0.3)] },
+  lamp_wall: { label: "furniture.lamp_wall", category: "lights", family: "lamp_wall", size: [0.25, 0.12, 0.2], y: 1.8, build: (w, d, h) => [box(0, 0, -d / 2 + 0.01, w * 0.4, h * 0.6, 0.02, "dark"), box(0, 0, 0, w, h, d * 0.8, "bulb", "lamp")] },
+  led_strip: { label: "furniture.led_strip", category: "lights", family: "led_strip", size: [1.5, 0.02, 0.012], build: (w, d, h) => [box(0, 0, 0, w, h, d, "bulb", "lamp")] },
+  lamp_garden: { label: "furniture.lamp_garden", category: "lights", family: "lamp_garden", size: [0.15, 0.15, 0.6], build: (w, d, h) => [cyl(0, 0, 0, w * 0.4, h - 0.15, d * 0.4, "dark", undefined, 6), cyl(0, h - 0.15, 0, w, 0.15, d, "bulb", "lamp", 10)] },
+  lamp_post: { label: "furniture.lamp_post", category: "lights", family: "lamp_garden", size: [0.3, 0.3, 2.2], build: (w, d, h) => [cyl(0, 0, 0, w * 0.6, 0.1, d * 0.6, "dark", undefined, 8), cyl(0, 0.1, 0, 0.07, h - 0.45, 0.07, "dark", undefined, 8), cyl(0, h - 0.35, 0, w, 0.3, d, "bulb", "lamp", 8, 0.6), cyl(0, h - 0.06, 0, w * 0.75, 0.06, d * 0.75, "dark", undefined, 8, 0.3)] },
 
   // ---------------------------------------------------------------- structure
-  stairs: { name: "Stairs", category: "structure", family: "stairs", size: [0.9, 3.0, 2.6], build: steps },
-  column: { name: "Column", category: "structure", family: "column", size: [0.3, 0.3, 2.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white")] },
+  stairs: { label: "furniture.stairs", category: "structure", family: "stairs", size: [0.9, 3.0, 2.6], build: steps },
+  column: { label: "furniture.column", category: "structure", family: "column", size: [0.3, 0.3, 2.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white")] },
 };
 
 /** Cars, in their styles. */
@@ -1092,6 +1093,9 @@ export const LAMP_TYPES = Object.keys(FURNITURE).filter((k) => FURNITURE[k].cate
 
 /** Fixtures that hang from the ceiling (placed at the ceiling, light below). */
 export const CEILING_LAMPS = new Set(["lamp_ceiling", "lamp_pendant", "lamp_globe", "lamp_chandelier", "lamp_downlight", "lamp_spots"]);
+
+/** A type's name in the user's language; undefined for a type there isn't. */
+export const furnitureName = (type: string): string | undefined => (FURNITURE[type] ? t(FURNITURE[type].label) : undefined);
 
 export function furnitureType(type: string): FurnitureType {
   return FURNITURE[type] ?? FURNITURE.tall_cabinet;
