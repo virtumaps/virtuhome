@@ -40,6 +40,8 @@ abstract class LazyElement extends HTMLElement {
     this.loading = true;
     try {
       const mod = await loadApp();
+      // the texts in the user's language before anything is drawn
+      await mod.useLanguage(this._hass);
       this.impl = this.mount(mod);
       this.impl.hass = this._hass;
     } catch (err) {

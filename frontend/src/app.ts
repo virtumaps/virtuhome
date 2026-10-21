@@ -14,3 +14,4 @@ export function mountPanel(host: HTMLElement): PanelImpl {
 export { VhView } from "./ui/view";
 export { createCardEditor } from "./ui/card-editor";
 export { normalizePlan } from "./model/plan";
+export { useLanguage } from "./i18n";

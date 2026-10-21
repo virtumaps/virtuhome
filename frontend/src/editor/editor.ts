@@ -42,8 +42,9 @@ import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import type { Check, Fix } from "../ui/checks";
-import { cardOnDashboard, DEMO_CHOICE, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
+import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { guideLink } from "../ui/guide";
+import { t } from "../i18n/editor";
 import { EDITOR_CSS } from "./styles";
 import { HouseTypes } from "./house-types";
 import { Collider, settle } from "./collide";
@@ -889,12 +890,12 @@ export class Editor {
     if (this.host.demo) return [];
     return [
       h("h4", {}, "Demo home"),
-      h("p", { class: "ed-hint" }, DEMO_CHOICE.text),
+      h("p", { class: "ed-hint" }, t("start.demo.text")),
       h("button", { class: "ed-btn ghost", onclick: () => {
         // back to 3D first: the 2D plan's keys would still reach this plan under the demo
         this.setPlanMode(false);
         void this.host.view.openDemo();
-      } }, DEMO_CHOICE.title),
+      } }, t("start.demo.title")),
     ];
   }
 

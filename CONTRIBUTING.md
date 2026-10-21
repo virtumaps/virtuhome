@@ -41,6 +41,9 @@ Issues, labels, branches, the definition of done and the release steps are in
   pull request.
 - Run `npm run build` in `frontend/` and commit the result in `custom_components/virtuhome/frontend`:
   HACS installs straight from the repository.
+- Text users see goes into the English table in `frontend/src/i18n/` and is shown with `t()`, never
+  written straight into the code; [Text and translations](docs/DEVELOPMENT.md#text-and-translations)
+  says how, and how a new language is added.
 - Code style: follow the surrounding code; comments explain why, not what.
 - Commits: one topic each, an imperative subject line, the reasoning in the body.
 
