@@ -633,7 +633,8 @@ should, with a fix where there is a safe one. Nothing changes until you press a 
   named and linked like the area, beside the house, to move where it belongs.
 - **Dashboard card**: the card missing from your dashboards' resources, or an old version there
   (**Add it again**), or this page still running an older VirtuHome than the one installed
-  (**Reload**).
+  (**Reload**). Just after Home Assistant restarts it says **Checking…** until Home Assistant has
+  finished starting.
 - **Graphics on this device**: Automatic stepped down because turning the view was slow (**Try
   again**), or the browser draws without the graphics card.
 - **Extensions and licence**: an extension that needs a newer VirtuHome, or a licence that has

@@ -27,8 +27,11 @@ export interface Check {
 /** What the integration says about itself (virtuhome/checks). */
 export interface ServerChecks {
   version: string;
-  /** How dashboards get the card (card_resource.async_state). */
-  dashboard: { mode: string; urls?: string[]; current?: boolean };
+  /**
+   * How dashboards get the card (card_resource.async_state). pending: Home Assistant is still
+   * starting and hasn't had the card's resource put right yet.
+   */
+  dashboard: { mode: string; urls?: string[]; current?: boolean; pending?: boolean };
   licence: { status: string; error: string | null; extensions: { id: string; name: string }[] } | null;
 }
 
@@ -89,11 +92,14 @@ export function checkCard(server: ServerChecks | null | undefined, version: stri
   const old = server.version !== version;
   if (old) found.push(["problem", `This page runs VirtuHome ${version}, but ${server.version} is installed: reload the page (on a tablet, clear the browser's cache).`]);
   const d = server.dashboard;
-  if (d.mode === "storage" && !d.urls?.length) found.push(["problem", "The card isn't in your dashboards' resources, so VirtuHome cards can't show."]);
-  else if (d.mode === "storage" && !d.current) found.push(["problem", "Your dashboards load an older version of the card."]);
-  else if (d.mode === "yaml") found.push(["note", "Your dashboards' resources are kept in YAML: add /virtuhome_static/virtuhome-loader.js there as a module resource."]);
-  const resource = d.mode === "storage" && (!d.urls?.length || !d.current);
-  return check("card", "Dashboard card", found, `VirtuHome ${version}, and the card is in your dashboards' resources.`, [old && "reload", resource && "resource"]);
+  // just after a restart the resources can still name the version before an update: not known yet
+  const known = !d.pending;
+  if (known && d.mode === "storage" && !d.urls?.length) found.push(["problem", "The card isn't in your dashboards' resources, so VirtuHome cards can't show."]);
+  else if (known && d.mode === "storage" && !d.current) found.push(["problem", "Your dashboards load an older version of the card."]);
+  else if (known && d.mode === "yaml") found.push(["note", "Your dashboards' resources are kept in YAML: add /virtuhome_static/virtuhome-loader.js there as a module resource."]);
+  const resource = known && d.mode === "storage" && (!d.urls?.length || !d.current);
+  const ok = known ? `VirtuHome ${version}, and the card is in your dashboards' resources.` : "Checking… Home Assistant is still starting.";
+  return check("card", "Dashboard card", found, ok, [old && "reload", resource && "resource"]);
 }
 
 export function checkGraphics(g: CheckInput["graphics"]): Check {
