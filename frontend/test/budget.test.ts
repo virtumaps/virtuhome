@@ -87,4 +87,11 @@ describe("bundle size", () => {
     expect(first.length).toBeGreaterThan(1);
     expect(first.length).toBeLessThan(files.length);
   });
+
+  it("fetches the demo home only when someone opens it", () => {
+    // the demo house and its pretend states are in a chunk of their own, not in what shows the house
+    const demo = files.filter((f) => readFileSync(app + f, "utf8").includes("Demo house"));
+    expect(demo.length).toBe(1);
+    expect(firstLoad(app)).not.toContain(demo[0]);
+  });
 });

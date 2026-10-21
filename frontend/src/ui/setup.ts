@@ -12,6 +12,12 @@ export const START_CHOICES: { kind: StartKind; title: string; text: string }[] =
   { kind: "draw", title: "Draw it myself", text: "Drag out the rooms in the 2D plan and type their sizes." },
 ];
 
+/** Look at the demo home: in the first-run choices and in Edit → Home. */
+export const DEMO_CHOICE = {
+  title: "Look at the demo home",
+  text: "A finished home with pretend devices, to see what VirtuHome can do.",
+};
+
 export type SetupId = "home" | "areas" | "devices" | "north" | "card" | "tablet";
 
 export interface SetupItem {

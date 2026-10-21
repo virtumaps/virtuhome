@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### New
+- **Look at the demo home**, under Let's get your home in and in Edit → Home, opens the demo house
+  in the sidebar with pretend devices that change by themselves: tap the lights, doors and blinds and
+  try the temperature map. A banner says it's a demo, with **Start my own home** and **Close**. It
+  never saves, switches nothing in Home Assistant and leaves your plan as it was. Its code is only
+  downloaded when it is opened. In the online demo, too, the devices now change by themselves.
 - The user guide as a website at virtumaps.github.io/virtuhome: a page for each part, with its
   sections at the top and the contents beside it, and search. It reads well on a phone, in light or
   dark and without JavaScript. It is rebuilt from docs/GUIDE.md with each release, keeps the guide

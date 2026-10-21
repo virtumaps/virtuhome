@@ -11,7 +11,7 @@ import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } f
 import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveTier, setDeviceTier, TIER_HINTS, TIER_NAMES, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
-import { isNewHome, START_CHOICES, type StartKind } from "./setup";
+import { DEMO_CHOICE, isNewHome, START_CHOICES, type StartKind } from "./setup";
 import { VIEW_CSS } from "./styles";
 import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
@@ -44,11 +44,16 @@ export interface ViewConfig {
   [option: string]: unknown;
   /** Saves somewhere else than the integration (dev harness). */
   save?: (plan: Plan) => Promise<number>;
-  /** The online demo: the editor works but can't save. */
+  /** The online demo, and the demo home in Home Assistant: the editor works but can't save, no extensions, no dialogs. */
   demo?: boolean;
 }
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+
+/** Why the plan can't be saved now, or null: a demo never saves, and nothing saves while the demo home shows. */
+export function saveRefused(config: ViewConfig, demoShown: boolean): string | null {
+  return config.demo ? "The demo can't save" : demoShown ? "Close the demo first" : null;
+}
 
 /** The walls button shows its mode: a whole brick wall, one stepped down where it is cut away, or a low one. */
 const WALL_ICONS: Record<WallMode, string> = {
@@ -166,6 +171,8 @@ export class VhView {
   /** The house can't be drawn: the error box shows instead. */
   private failed = false;
   private unreport: () => void;
+  /** The demo home shown over this view (Look at the demo home). */
+  private demo: { close(): void } | null = null;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
@@ -213,14 +220,14 @@ export class VhView {
     }
     this.alertEl.onclick = () => {
       const first = this.live.alerts()[0];
-      if (first) moreInfo(this.root, first.id);
+      if (first) this.dialog(first.id);
     };
     this.statusEl.addEventListener("click", (e) => {
       const b = (e.target as HTMLElement).closest<HTMLElement>("[data-status]");
       if (!b) return;
       if (b.dataset.status === "lights") this.lightsOff();
       else if (b.dataset.status === "energy") this.openEnergy();
-      else if (b.dataset.status) moreInfo(this.root, b.dataset.status);
+      else if (b.dataset.status) this.dialog(b.dataset.status);
     });
 
     const { tier, auto } = resolveTier(parseTierSetting(config.quality));
@@ -247,7 +254,7 @@ export class VhView {
       const opens = (e.target as HTMLElement).closest<HTMLElement>("[data-entity]")?.dataset.entity;
       if (el.dataset.room === undefined) this.showFloor(floor);
       // the room's heating opens its thermostat; the rest of the label opens the room
-      else if (opens && !this.replayed && !this.editor) moreInfo(this.root, opens);
+      else if (opens && !this.replayed && !this.editor) this.dialog(opens);
       else if (this.replayed) this.replayed.options.onHit?.({ floor, room: Number(el.dataset.room), entity: null }, "tap");
       else this.openRoom(floor, Number(el.dataset.room));
     });
@@ -349,7 +356,8 @@ export class VhView {
     if (!this.replayed) this.draw(h);
     if (energyChanged) this.onEnergy();
     else this.checkParked();
-    if (!this.unregister) {
+    // the demos load no extensions: they could reach Home Assistant past the pretend states
+    if (!this.unregister && !this.config.demo) {
       this.unregister = registerView(this.handle());
       // an extension that can't load shows in Check my setup
       loadExtensions(h, this.config.dev_extensions ?? []).then(() => this.updateChecks());
@@ -494,7 +502,7 @@ export class VhView {
         card.hass = this._hass;
         return card;
       },
-      moreInfo: (id) => moreInfo(this.root, id),
+      moreInfo: (id) => this.dialog(id),
       addTool: (tool) => this.addTool(tool),
       setRoomTint: (fn) => {
         this.extTint = fn && isolate(fn, null);
@@ -750,7 +758,7 @@ export class VhView {
     open: (i) => {
       const c = this.energy.sources.ev[i];
       const id = c?.status ?? c?.power ?? c?.level;
-      if (id) moreInfo(this.root, id);
+      if (id) this.dialog(id);
     },
   };
 
@@ -972,6 +980,8 @@ export class VhView {
     const u = this.unsub;
     this.unsub = null;
     u?.().catch(() => undefined);
+    // leaving the page closes the demo home: its pretend devices stop, its graphics are let go
+    this.closeDemo(false);
   }
 
   destroy(): void {
@@ -1147,7 +1157,8 @@ export class VhView {
     const on = !this.viewer.roofOn;
     this.viewer.setRoof(on);
     try {
-      localStorage.setItem(ROOF_KEY, on ? "1" : "0");
+      // the demo doesn't change the device's choice for the user's own home
+      if (!this.config.demo) localStorage.setItem(ROOF_KEY, on ? "1" : "0");
     } catch {
       // private windows: the choice lasts until the page closes
     }
@@ -1222,7 +1233,7 @@ export class VhView {
       armed_vacation: "Armed vacation", armed_custom_bypass: "Armed", arming: "Arming…", pending: "Entry delay", triggered: "Alarm!",
     };
     b.querySelector("span")!.textContent = label[s.state] ?? s.state;
-    b.onclick = () => moreInfo(this.root, id);
+    b.onclick = () => this.dialog(id);
     this.chips.append(b);
   }
 
@@ -1243,7 +1254,8 @@ export class VhView {
       savedJson: this.unsavedFrom ?? undefined,
       followed: this.followed,
       save: async (plan, base) => {
-        if (this.config.demo) throw new Error("The demo can't save");
+        const refused = saveRefused(this.config, !!this.demo);
+        if (refused) throw new Error(refused);
         const saved = (revision: number) => {
           this.baseJson = JSON.stringify(plan);
           this.unsavedFrom = null;
@@ -1275,6 +1287,54 @@ export class VhView {
     this.root.classList.add("editing");
     this.root.append(editor.el);
     this.renderChips();
+  }
+
+  /** Home Assistant's dialog for an entity. The demos have none: their devices are pretend. */
+  private dialog(entityId: string): void {
+    if (this.config.demo) this.toast("The demo has no device dialogs");
+    else moreInfo(this.root, entityId);
+  }
+
+  /** Whether the demo home shows over this view. */
+  get demoShown(): boolean {
+    return !!this.demo;
+  }
+
+  /**
+   * Look at the demo home: the demo house in a view of its own over this one, with its own pretend
+   * states. This view, its plan, the editor and Home Assistant's states carry on underneath, hidden.
+   */
+  async openDemo(): Promise<void> {
+    if (this.demo || this.config.demo) return;
+    const { openDemo } = await import("./demo");
+    if (this.demo) return;
+    this.closeSheet();
+    this.menu.hidden = true;
+    if (this.skyPanel.open) this.skyPanel.close();
+    const c = this._hass?.config;
+    const place = typeof c?.latitude === "number" && typeof c.longitude === "number" ? { latitude: c.latitude, longitude: c.longitude, time_zone: c.time_zone } : undefined;
+    this.demo = openDemo(VhView, this.root, this.config, place, (start) => this.closeDemo(start));
+    this.root.classList.add("vh-demo-on");
+  }
+
+  /** Back to the user's home: Start my own home goes on to the editor. */
+  private closeDemo(start: boolean): void {
+    const demo = this.demo;
+    if (!demo) return;
+    this.demo = null;
+    demo.close();
+    this.root.classList.remove("vh-demo-on");
+    // a graphics level picked in the demo is this device's, so this view takes it too
+    const { tier, auto } = resolveTier(parseTierSetting(this.config.quality));
+    this.tierAuto = auto;
+    if (tier !== this.viewer.tier) {
+      this.viewer.setTier(tier);
+      this.ensureLook();
+    }
+    // the realistic look's weather and lamp light are shared by the views: this one's again
+    const sky = this.viewer.currentSky;
+    if (sky) this.viewer.setSky(sky);
+    if (start && !this.editor) void this.openEditor();
   }
 
   showHouse(): void {
@@ -1334,10 +1394,10 @@ export class VhView {
       return;
     }
     if (hit.entity && (hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "entity")) {
-      if (gesture === "long") return moreInfo(this.root, hit.entity);
+      if (gesture === "long") return this.dialog(hit.entity);
       if (gesture === "double") return;
       const done = await toggleEntity(hass, hit.entity).catch(() => false);
-      if (!done) moreInfo(this.root, hit.entity);
+      if (!done) this.dialog(hit.entity);
       else this.toast(this.nameOf(hit.entity));
       return;
     }
@@ -1414,6 +1474,14 @@ export class VhView {
       b.onclick = () => void this.openEditor().then(() => this.editor?.startSetup(c.kind));
       box.append(b);
     }
+    if (!this.config.demo) {
+      const demo = document.createElement("button");
+      demo.className = "vh-start-demo";
+      demo.textContent = DEMO_CHOICE.title;
+      demo.title = DEMO_CHOICE.text;
+      demo.onclick = () => void this.openDemo();
+      box.append(demo);
+    }
     this.empty.replaceChildren(box);
   }
 
@@ -1464,7 +1532,8 @@ export class VhView {
       actions.appendChild(b);
     }
     const grid = this.sheet.querySelector(".vh-tiles")!;
-    const helpers = (window as unknown as { loadCardHelpers?: () => Promise<never> }).loadCardHelpers;
+    // the demo's devices are pretend: Home Assistant's tiles would open its own dialogs for them
+    const helpers = this.config.demo ? undefined : (window as unknown as { loadCardHelpers?: () => Promise<never> }).loadCardHelpers;
     if (helpers) {
       this.tileHelpers ??= helpers();
       this.tileHelpers.then((h) => {
@@ -1484,7 +1553,7 @@ export class VhView {
         row.innerHTML = `<span class="n"></span><span class="state"></span>`;
         row.querySelector(".n")!.textContent = this.nameOf(id);
         row.onclick = async () => {
-          if (!(await toggleEntity(hass, id).catch(() => false))) moreInfo(this.root, id);
+          if (!(await toggleEntity(hass, id).catch(() => false))) this.dialog(id);
         };
         grid.appendChild(row);
       }

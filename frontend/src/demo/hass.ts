@@ -3,6 +3,7 @@
 // It never reaches a real Home Assistant.
 import type { Plan } from "../model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../live/hass";
+import { sunPosition } from "../live/sun";
 import { demoHistory, storyState } from "./history";
 
 /**
@@ -17,18 +18,27 @@ export const demoEdits = {
 
 /** How the pretend house starts (the harness takes these from its address). */
 export interface DemoOptions {
-  /** Night: more lights on, the sun down (default). */
+  /** Night: more lights on, the sun down. Left out: as the sun is at `place` now. */
   night?: boolean;
+  /** Where the house is (London if left out): the sun in the sky is where it is there now. */
+  place?: { latitude: number; longitude: number; time_zone?: string };
   /** The weather's state (rainy, snowy, pouring, fog, lightning-rainy...; "none" leaves it out). */
   weather?: string;
   /** The area Alex is in. */
   where?: string;
   /** The kitchen's leak sensor is on, to show the alert banner. */
   leak?: boolean;
+  /** Things happen by themselves every few seconds: people walk about, lights and blinds are switched. */
+  lively?: boolean;
 }
 
-export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOptions = {}): Hass {
-  const night = opts.night ?? true;
+/** The pretend Home Assistant; stop() ends what happens by itself. */
+export type DemoHass = Hass & { stop(): void };
+
+export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOptions = {}): DemoHass {
+  const place = opts.place ?? { latitude: 51.5072, longitude: -0.1276, time_zone: "Europe/London" };
+  const sun = sunPosition(Date.now(), place.latitude, place.longitude);
+  const night = opts.night ?? sun.elevation < -0.833;
   const states: Record<string, HassEntity> = {};
   const entities: Record<string, HassEntityReg> = {};
   const areas: NonNullable<Hass["areas"]> = {};
@@ -92,7 +102,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       }
     }
   }
-  put("sun.sun", night ? "below_horizon" : "above_horizon", { azimuth: night ? 320 : 200, elevation: night ? -20 : 38 });
+  put("sun.sun", night ? "below_horizon" : "above_horizon", opts.night === undefined ? { ...sun } : { azimuth: night ? 320 : 200, elevation: night ? -20 : 38 });
   // the weather
   const weather = opts.weather ?? "partlycloudy";
   if (weather !== "none") {
@@ -142,6 +152,8 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
   put("binary_sensor.kitchen_leak", opts.leak ? "on" : "off", { device_class: "moisture", friendly_name: "Kitchen leak" });
   entities["binary_sensor.kitchen_leak"] = { entity_id: "binary_sensor.kitchen_leak", area_id: kitchenArea };
 
+  /** When the user last switched an entity: what happens by itself leaves it alone for a minute. */
+  const touched = new Map<string, number>();
   const hass: Hass = {
     states,
     entities,
@@ -149,11 +161,12 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     areas,
     floors: {},
     user: { id: "demo", name: "Demo", is_admin: true },
-    // a house in London: the sun is where it is there now
-    config: { latitude: 51.5072, longitude: -0.1276, time_zone: "Europe/London" },
+    // the sky over the house is as it is at its place now
+    config: { latitude: place.latitude, longitude: place.longitude, time_zone: place.time_zone },
     async callService(domain, service, _data, target) {
       const ids = ([] as string[]).concat((target?.entity_id as string | string[]) ?? []);
       for (const id of ids) {
+        touched.set(id, Date.now());
         const s = states[id];
         if (!s) continue;
         let next = s.state;
@@ -222,7 +235,86 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     entities[id] = { entity_id: id, area_id: reg.area ?? null, device_id: reg.device ?? null };
     publish();
   };
-  return hass;
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const later = (ms: number, fn: () => void) => {
+    const t = setTimeout(() => {
+      timers.delete(t);
+      fn();
+    }, ms);
+    timers.add(t);
+  };
+  if (opts.lively) later(2500, () => liven(states, areas, touched, later, () => {
+    Object.assign(hass, { states: { ...states } });
+    onChange({ ...hass, states: { ...states } });
+  }));
+  return Object.assign(hass, {
+    stop() {
+      for (const t of timers) clearTimeout(t);
+      timers.clear();
+    },
+  });
+}
+
+/**
+ * The house going about its day, one thing every few seconds: someone walks through a room, a light,
+ * blind or the heating is switched, a door opens for a bit, the rooms warm and cool, Alex moves room.
+ */
+function liven(
+  states: Record<string, HassEntity>, areas: NonNullable<Hass["areas"]>, touched: Map<string, number>,
+  later: (ms: number, fn: () => void) => void, show: () => void,
+): void {
+  const recent = (id: string) => Date.now() - (touched.get(id) ?? 0) < 60_000;
+  const free = (re: RegExp) => Object.keys(states).filter((id) => re.test(id) && !recent(id));
+  const pick = <T>(list: T[]): T | undefined => list[Math.floor(Math.random() * list.length)];
+  const set = (id: string, state: string, attrs: HassEntity["attributes"] = {}) => {
+    const s = states[id];
+    const t = new Date().toISOString();
+    states[id] = { ...s, state, attributes: { ...s.attributes, ...attrs }, last_changed: s.state === state ? s.last_changed : t, last_updated: t };
+  };
+  /** On for a while, then off again (unless the user switched it meanwhile). */
+  const pulse = (id: string | undefined, ms: number, on = "on", off = "off") => {
+    if (!id) return;
+    set(id, on);
+    later(ms, () => {
+      if (states[id]?.state !== on || recent(id)) return;
+      set(id, off);
+      show();
+    });
+  };
+  const happenings = [
+    () => pulse(pick(free(/^binary_sensor\..*(motion|presence)/)), 15_000 + Math.random() * 25_000),
+    () => pulse(pick(free(/^binary_sensor\.(?!doorbell).*(door|window)/)), 6_000 + Math.random() * 14_000),
+    () => {
+      // lights go on and off, about half of them on at most
+      const lights = free(/^light\./);
+      const on = lights.filter((id) => states[id].state === "on");
+      const id = on.length > lights.length / 2 || Math.random() < 0.4 ? pick(on) : pick(lights.filter((x) => !on.includes(x)));
+      if (id) set(id, states[id].state === "on" ? "off" : "on", { brightness: 200, color_temp_kelvin: 2800 });
+    },
+    () => {
+      const id = pick(free(/^cover\./));
+      const open = id && states[id].state !== "open";
+      if (id) set(id, open ? "open" : "closed", { current_position: open ? 100 : 0 });
+    },
+    () => {
+      for (const id of free(/^sensor\..*_temperature$/)) {
+        set(id, Math.min(23.5, Math.max(17.5, Number(states[id].state) + (Math.random() - 0.5) * 0.8)).toFixed(1));
+      }
+      const id = pick(free(/^climate\./));
+      if (id) set(id, "heat", { hvac_action: states[id].attributes.hvac_action === "heating" ? "idle" : "heating" });
+    },
+    () => {
+      const id = "sensor.alexs_phone_area";
+      const area = pick(Object.values(areas));
+      if (states[id] && area && !recent(id)) set(id, area.name, { area_id: area.area_id, area_name: area.name });
+    },
+  ];
+  const tick = () => {
+    pick(happenings)!();
+    show();
+    later(4000 + Math.random() * 5000, tick);
+  };
+  tick();
 }
 
 /** Floor plan pictures "stored" by the demo: file name -> a blob: URL of this page. */
