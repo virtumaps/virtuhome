@@ -62,6 +62,7 @@ export const EN = {
   "demo.close": "Close",
   "demo.closeFirst": "Close the demo first",
   "demo.noDialogs": "The demo has no device dialogs",
+  "demo.notInDemo": "Not in the demo",
 
   // ---------------------------------------------------------------- the alarm chip
   "alarm.disarmed": "Disarmed",
@@ -458,6 +459,7 @@ export const EN = {
   "ev.paused": "Paused",
   "ev.finished": "Charged",
   "ev.fault": "Fault",
+  "ev.defaultName": "Car charger",
 
   // ---------------------------------------------------------------- the sun and weather panel
   "sky.title": "Sun and weather",

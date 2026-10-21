@@ -17,6 +17,18 @@ export const EN_EDITOR = {
   "editor.houses.fitHint": "Your home's outside width and depth, as an estate agent's listing gives them. Doors, windows and stairs keep their size.",
   "editor.houses.width": "Width",
   "editor.houses.depth": "Depth",
+  "editor.houses.terrace.name": "Two-bed mid-terrace",
+  "editor.houses.terrace.text": "Two up, two down, with a kitchen and bathroom in an extension at the back.",
+  "editor.houses.semi.name": "Three-bed semi-detached",
+  "editor.houses.semi.text": "Living and dining rooms, a kitchen at the back, three bedrooms upstairs.",
+  "editor.houses.detached.name": "Four-bed detached",
+  "editor.houses.detached.text": "A kitchen to eat in, living room, study, utility and WC; four bedrooms, one en suite.",
+  "editor.houses.bungalow.name": "Two-bed bungalow",
+  "editor.houses.bungalow.text": "All on one floor: hall, living room, kitchen, bathroom and two bedrooms.",
+  "editor.houses.flat.name": "Two-bed flat",
+  "editor.houses.flat.text": "One floor of a block, with a balcony and no roof of its own.",
+  "editor.houses.open.name": "Open-plan single storey",
+  "editor.houses.open.text": "One big room to live, cook and eat in, three bedrooms, and a flat roof.",
 
   // ---------------------------------------------------------------- the editor
   "editor.nothingToSave": "Nothing to save",
@@ -898,4 +910,20 @@ export const EN_EDITOR = {
   "editor.import.room.diningRoom": "Dining Room",
   "editor.import.decorNotLinedUp": { one: "{n} decor item could not be lined up exactly: check where they stand.", other: "{n} decor items could not be lined up exactly: check where they stand." },
   "editor.import.unwalled": { one: "{n} room side without a wall (VirtuHome draws one)", other: "{n} room sides without a wall (VirtuHome draws one)" },
+
+  // ---------------------------------------------------------------- the editor
+  "editor.hallway": "Hallway",
+  "editor.bedroom1": "Bedroom 1",
+  "editor.bedroom2": "Bedroom 2",
+  "editor.landing": "Landing",
+  "editor.bedroom3": "Bedroom 3",
+  "editor.utility": "Utility",
+
+  // ---------------------------------------------------------------- the editor: houses
+  "editor.houses.study": "Study",
+  "editor.houses.frontGarden": "Front Garden",
+  "editor.houses.enSuite": "En Suite",
+  "editor.houses.bedroom4": "Bedroom 4",
+  "editor.houses.balcony": "Balcony",
+  "editor.houses.wc": "WC",
 } as const;

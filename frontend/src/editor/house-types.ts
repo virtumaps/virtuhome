@@ -45,7 +45,7 @@ export class HouseTypes {
     const grid = el("div", "ed-houses-grid");
     const fit = el("div", "ed-houses-fit");
     for (const s of m.STARTERS) {
-      const card = el("button", "ed-house", el("span", ""), el("b", "", s.name), el("small", "", s.text));
+      const card = el("button", "ed-house", el("span", ""), el("b", "", t(s.name)), el("small", "", t(s.text)));
       card.querySelector("span")!.innerHTML = thumbnail(s.plan());
       card.onclick = () => {
         grid.querySelectorAll(".ed-house").forEach((c) => c.classList.toggle("on", c === card));
@@ -104,7 +104,7 @@ export class HouseTypes {
     const use = el("button", "ed-btn", t("editor.houses.use"));
     use.onclick = () => {
       const { width, depth, mirror } = this.size;
-      this.host.use(m.starterPlan(s.id, { width, depth, mirror }), s.name);
+      this.host.use(m.starterPlan(s.id, { width, depth, mirror }), t(s.name));
     };
     box.replaceChildren(
       el("h4", "", t("editor.houses.fit")),
