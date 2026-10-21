@@ -2109,6 +2109,9 @@ export class Viewer {
     this.halos.dispose();
     this.controls.dispose();
     this.renderer.dispose();
+    // its WebGL context goes now, not when collected: a page may hold only so many (the demo home
+    // opens and closes a view of its own)
+    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
   }
 }

@@ -168,7 +168,7 @@ describe("loading", () => {
 
 /** The files whose text has moved into the table: text written straight into them is caught here. */
 const SCANNED = [
-  "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
+  "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/demo.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
   "editor/house-types.ts",
 ];
 

@@ -54,6 +54,15 @@ export const EN = {
   "view.noHome.user": "An admin of this Home Assistant can set VirtuHome up, from VirtuHome in the sidebar.",
   "view.demoCantSave": "The demo can't save",
 
+  // ---------------------------------------------------------------- the demo home (Look at the demo home)
+  "demo.title": "This is a demo home.",
+  "demo.short": "Demo home",
+  "demo.more": "Its devices are pretend: tap them to try. Nothing here is saved.",
+  "demo.start": "Start my own home",
+  "demo.close": "Close",
+  "demo.closeFirst": "Close the demo first",
+  "demo.noDialogs": "The demo has no device dialogs",
+
   // ---------------------------------------------------------------- the alarm chip
   "alarm.disarmed": "Disarmed",
   "alarm.armed_home": "Armed home",
@@ -200,6 +209,9 @@ export const EN = {
   "start.scan.text": "A scan from the House Scan app, or a plan from Sweet Home 3D or another program.",
   "start.draw.title": "Draw it myself",
   "start.draw.text": "Drag out the rooms in the 2D plan and type their sizes.",
+  // in the first-run choices and in Edit → Home
+  "start.demo.title": "Look at the demo home",
+  "start.demo.text": "A finished home with pretend devices, to see what VirtuHome can do.",
 
   // ---------------------------------------------------------------- getting started (the editor's checklist)
   "setup.home.title": "Get your home in",

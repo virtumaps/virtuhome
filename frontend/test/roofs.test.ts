@@ -213,7 +213,7 @@ describe("roofs on a plan", { timeout: 30_000 }, () => {
 });
 
 describe("roofs worked out from the plan", async () => {
-  const { DEMO_PLAN } = await import("../dev/demo-plan");
+  const { DEMO_PLAN } = await import("../src/demo/plan");
   const { suggestRoofs, rectangles } = await import("../src/auto/roof");
   const bare = (): Plan => normalizePlan({ ...structuredClone(DEMO_PLAN), floors: DEMO_PLAN.floors.map((f) => ({ ...structuredClone(f), roofs: [] })) });
 
@@ -255,7 +255,7 @@ describe("roofs worked out from the plan", async () => {
 });
 
 describe("roofs for extensions", async () => {
-  const { DEMO_PLAN } = await import("../dev/demo-plan");
+  const { DEMO_PLAN } = await import("../src/demo/plan");
   const { roofFaces, solarArrays, shadeGeometry } = await import("../src/scene/roof-info");
   const plan = normalizePlan(structuredClone(DEMO_PLAN));
 
