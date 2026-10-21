@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### New
+- Bins and post boxes for the garden: wheelie bins (140, 240 and 360 l), a communal bin, a food
+  caddy and a recycling box, each with the **Waste** it holds and a **Lid** colour, starting in the
+  colours bins for that waste have in your home's country. A post box (on a wall or a post) or a
+  parcel box can have a **Post sensor**, and its window glows while it holds post.
 - **Look at the demo home**, under Let's get your home in and in Edit → Home, opens the demo house
   in the sidebar with pretend devices that change by themselves: tap the lights, doors and blinds and
   try the temperature map. A banner says it's a demo, with **Start my own home** and **Close**. It

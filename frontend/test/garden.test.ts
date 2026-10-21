@@ -63,7 +63,7 @@ describe("garden buildings and planters", () => {
     expect(gardenChoice("shed", {}).windows).toBe(1);
     expect(gardenChoice("raised_bed", { material: "rattan" }).material).toBe("rattan");
     expect(gardenChoice("raised_bed", { plants: "cacti" as never }).plants).toBe("vegetables");
-    expect(gardenChoice("sofa", {})).toEqual({ canopy: null, roofing: null, door: null, windows: 0, material: null, plants: null });
+    expect(gardenChoice("sofa", {})).toEqual({ canopy: null, roofing: null, door: null, windows: 0, material: null, plants: null, waste: null });
   });
 
   it("swaps within pergolas, sheds and planters", () => {

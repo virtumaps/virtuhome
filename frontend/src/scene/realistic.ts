@@ -87,6 +87,8 @@ const ROLE_SPECS: Record<string, SurfaceSpec> = {
   bloom: { tex: "foliage", scale: 0.25, rough: 0.7, relief: 0.6 },
   lavender: { tex: "foliage", scale: 0.25, rough: 0.7, relief: 0.6 },
   straw: { tex: "foliage", scale: 0.3, rough: 0.75, relief: 0.6 },
+  plastic: { rough: 0.6 },
+  lid: { rough: 0.5 },
 };
 
 const OTHER_SPECS: Record<string, SurfaceSpec> = {

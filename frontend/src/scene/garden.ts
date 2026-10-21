@@ -4,7 +4,9 @@
 // corten, stone... with what grows in them. Each is a furniture type made of simple solids, so a
 // garden of them merges into the floor's mesh like any other piece, and each piece's options
 // (a pergola's top, a shed's roof, door and windows, a planter's material and plants) are its own.
+// Bins and post boxes (scene/bins.ts) are garden pieces too.
 import type { Furniture } from "../model/plan";
+import { BIN_FURNITURE, BIN_WASTES, POST_TYPES, wasteKind, type WasteKind } from "./bins";
 import type { FurnitureType, Part, Role } from "./furniture-lib";
 
 /** What a pergola is covered with. */
@@ -51,6 +53,8 @@ export interface GardenOptions {
   /** A planter: its usual material and planting. */
   material?: PlanterMaterial;
   plants?: Planting;
+  /** A bin: the waste it can hold, the first unless picked. */
+  wastes?: WasteKind[];
 }
 
 const box = (x: number, y: number, z: number, w: number, h: number, d: number, role: Role, extra: Partial<Part> = {}): Part => ({ shape: "box", x, y, z, w, h, d, role, ...extra });
@@ -693,6 +697,8 @@ export const GARDEN_OPTIONS: Record<string, GardenOptions> = {
   planter_round: { material: "terracotta", plants: "shrubs" },
   planter_tall: { material: "fibreclay", plants: "grasses" },
   planter_tiered: { material: "timber", plants: "herbs" },
+  ...Object.fromEntries(Object.entries(BIN_WASTES).map(([type, wastes]) => [type, { wastes }])),
+  ...Object.fromEntries([...POST_TYPES].map((type) => [type, {}])),
 };
 
 /** A shed's spec from its item's choices (or its type's usual ones). */
@@ -702,8 +708,9 @@ function shedSpec(type: string, item: Furniture | undefined, base: Omit<ShedSpec
 }
 
 /** A garden piece's choices: its own where it has them, else its type's usual. */
-export function gardenChoice(type: string, item?: Pick<Furniture, "canopy" | "roofing" | "door" | "windows" | "material" | "plants">): {
+export function gardenChoice(type: string, item?: Pick<Furniture, "canopy" | "roofing" | "door" | "windows" | "material" | "plants" | "waste">): {
   canopy: Canopy | null; roofing: GardenRoofing | null; door: ShedDoor | null; windows: number; material: PlanterMaterial | null; plants: Planting | null;
+  waste: WasteKind | null;
 } {
   const o = GARDEN_OPTIONS[type] ?? {};
   const first = <T extends string>(v: string | null | undefined, list?: T[]) => (list?.length ? pick(v, list, list[0]) : null);
@@ -715,6 +722,7 @@ export function gardenChoice(type: string, item?: Pick<Furniture, "canopy" | "ro
     windows: Math.max(0, Math.min(most, Math.round(item?.windows ?? usual))),
     material: o.material ? pick(item?.material, Object.keys(PLANTER_MATERIALS) as PlanterMaterial[], o.material) : null,
     plants: o.plants ? pick(item?.plants, Object.keys(PLANTING_NAMES) as Planting[], o.plants) : null,
+    waste: wasteKind({ type, waste: item?.waste }),
   };
 }
 
@@ -822,4 +830,6 @@ export const GARDEN_FURNITURE: Record<string, FurnitureType> = {
       return out;
     },
   },
+  // ---------------------------------------------------------------- bins and post boxes
+  ...BIN_FURNITURE,
 };

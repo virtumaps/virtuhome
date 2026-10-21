@@ -13,6 +13,7 @@ import { CEILING_LAMPS, FURNITURE, type BalustradeMaterial, type BalustradeStyle
 import type { SkySettings } from "../live/sky";
 import type { DeckBoard, PavingMaterial, PavingPattern, RaisedWall } from "../scene/paving";
 import type { Canopy, GardenRoofing, PlanterMaterial, Planting, ShedDoor } from "../scene/garden";
+import type { WasteKind } from "../scene/bins";
 
 export type FloorMaterial = FloorFinish;
 export type { DoorStyle, ExteriorFinish, FloorFinish, GarageStyle, JoineryFinish, RoofCovering, Upholstery, WallFinish, WindowStyle };
@@ -106,6 +107,8 @@ export interface Furniture {
   /** Planters: what they are made of, and what grows in them. */
   material?: PlanterMaterial | null;
   plants?: Planting | null;
+  /** Bins (scene/bins.ts): the waste they hold; their lid's colour is `trim`. */
+  waste?: WasteKind | null;
 }
 
 export interface Device {

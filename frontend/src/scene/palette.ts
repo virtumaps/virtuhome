@@ -77,6 +77,8 @@ const DAY_ROLES: Record<Role, number> = {
   bloom: 0xd9779b,
   lavender: 0x8e7cc3,
   straw: 0xc9b47c,
+  plastic: 0x3c4045,
+  lid: 0x34383c,
 };
 
 export const DAY: Palette = {

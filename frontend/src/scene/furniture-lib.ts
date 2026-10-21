@@ -20,7 +20,9 @@ export type Role =
   | "concrete" | "brick"
   // garden buildings: cladding, roofs, planters and what grows in them
   | "shiplap" | "logs" | "corrugated" | "felt" | "shingle" | "epdm" | "sedum" | "corten" | "galvanised" | "sleeper" | "stone"
-  | "rattan" | "bloom" | "lavender" | "straw";
+  | "rattan" | "bloom" | "lavender" | "straw"
+  // bins: their body and lid
+  | "plastic" | "lid";
 
 /** Parts that light up with their entity: a TV screen, a lamp shade. */
 export type Glow = "screen" | "lamp";
