@@ -656,6 +656,8 @@ it can't draw it.
   and the error. Names of rooms, areas, devices and people, entity ids and web addresses are taken
   out. Paste it into an [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) if it
   keeps happening.
+- The cards and the panel also send their last errors to your Home Assistant, stripped the same
+  way, for the diagnostics file (see **Still stuck?** below). They go nowhere else.
 
 **"VirtuHome is not set up"**: add the integration under Settings → Devices & services.
 
@@ -709,6 +711,8 @@ doesn't work, a device to support, a scan that came in wrong or a slow device, o
 [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) with its form, and attach the
 diagnostics file: Settings → Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds
 the versions, the plan's size and what each floor counts, how the card reaches your dashboards and
-which extensions are loaded, and how many things each check of **Check my setup** found when an
-administrator last opened VirtuHome. It has no room, device or entity names, and no licence key or
-token.
+which extensions are loaded, how many things each check of **Check my setup** found when an
+administrator last opened VirtuHome, and the last 50 errors the cards and the panel ran into (where,
+the error, the version, the graphics level and the browser). It has no room, area, device, people or
+entity names, no web addresses, and no licence key or token. Errors are kept until Home Assistant or
+VirtuHome restarts.
