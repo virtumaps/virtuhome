@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { jsonClone } from "../src/compat";
 import { normalizePlan } from "../src/model/plan";
-import { DEMO_PLAN } from "../dev/demo-plan";
+import { DEMO_PLAN } from "../src/demo/plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const floor = JSON.parse(readFileSync(root + "browsers.json", "utf8")) as { chrome: number; safari: number; esbuild: string[] };

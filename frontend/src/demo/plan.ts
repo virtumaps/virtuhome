@@ -1,8 +1,8 @@
 // A two-storey semi-detached house drawn by hand from typical UK measurements: for the dev
 // harness, screenshots and the online demo. Entity ids are made up; the pretend Home Assistant
-// (demo-hass.ts) creates states for them. To try your own home, put a plan file in dev/plans/
+// (hass.ts) creates states for them. To try your own home, put a plan file in dev/plans/
 // (git-ignored) and open ?plan=<name>&hass=live.
-import { solarSize, type Device, type Floor, type Furniture, type Opening, type Plan, type Roof, type RoofItem, type Room, type Vec2 } from "../src/model/plan";
+import { solarSize, type Device, type Floor, type Furniture, type Opening, type Plan, type Roof, type RoofItem, type Room, type Vec2 } from "../model/plan";
 
 const rect = (x0: number, z0: number, x1: number, z1: number): Vec2[] => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
 
