@@ -7,6 +7,9 @@
   sections at the top and the contents beside it, and search. It reads well on a phone, in light or
   dark and without JavaScript. It is rebuilt from docs/GUIDE.md with each release, keeps the guide
   for the version before, and **How** in Getting started opens it.
+- When the house can't be drawn, the card or panel says "Something went wrong drawing the house"
+  with **Copy details** and **Reload** instead of staying blank. Copy details leaves out the names
+  of rooms, areas, devices and people, entity ids and web addresses.
 
 ### Fixed
 - Check my setup no longer calls the dashboard card a problem just after Home Assistant restarts

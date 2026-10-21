@@ -17,7 +17,7 @@ import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky"
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
 import { SkyPanel, SKY_CSS, type SkyPick } from "./sky";
 import { checkCounts, runChecks, type Check, type ServerChecks } from "./checks";
-import { callEach, isolate, logError } from "./errors";
+import { callEach, errorBox, errorDetails, isolate, logError } from "./errors";
 
 export interface ViewConfig {
   /** Floor to open on (id, name or index); otherwise the whole house. */
@@ -163,6 +163,8 @@ export class VhView {
   /** A date, time or weather picked in the sun and weather panel, instead of now. */
   private skyPick: SkyPick | null = null;
   private skyPanel: SkyPanel;
+  /** The house can't be drawn: the error box shows instead. */
+  private failed = false;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
@@ -224,7 +226,7 @@ export class VhView {
     this.tierAuto = auto;
     this.viewer = new Viewer(canvas, overlay, { tier, theme: "night", realistic: realisticModule });
     this.viewer.onSlow = () => this.onSlow();
-    this.viewer.onError = (err, _fatal, where) => logError(err, where);
+    this.viewer.onError = (err, fatal, where) => (fatal ? this.fail(err, where) : logError(err, where));
     this.ensureLook();
     this.viewer.walls = config.walls ?? "smart";
     this.viewer.roofOn = roofSetting() ?? config.roof ?? true;
@@ -287,13 +289,53 @@ export class VhView {
     this.skyTimer = window.setInterval(() => this.updateSky(), 60_000);
     if (fixedPlan) {
       this.baseJson = JSON.stringify(fixedPlan);
-      this.applyPlan(fixedPlan);
+      this.showPlan(fixedPlan);
+    }
+  }
+
+  // ------------------------------------------------------------------ errors
+
+  /** The house can't be drawn: a box says so, with Copy details and Reload, instead of a blank view. */
+  private fail(err: unknown, where: string): void {
+    logError(err, where);
+    if (this.failed) return;
+    this.failed = true;
+    this.viewer.halt();
+    this.root.classList.add("vh-failed");
+    this.root.append(errorBox(() => errorDetails(err, { where, graphics: TIER_NAMES[this.viewer.tier], hass: this._hass, plan: this.plan })));
+  }
+
+  /** Before the house is drawn, an error would leave the view blank; afterwards the view carries on. */
+  private caught(err: unknown, where: string): void {
+    if (this.started) logError(err, where);
+    else this.fail(err, where);
+  }
+
+  /** Draws a plan; one that can't be drawn shows the error box. */
+  private showPlan(plan: Plan): void {
+    try {
+      this.applyPlan(plan);
+    } catch (err) {
+      this.fail(err, "plan");
     }
   }
 
   // ------------------------------------------------------------------ hass and plan
 
   set hass(h: Hass) {
+    if (this.failed) {
+      // kept for Copy details, which strips the names it knows
+      this._hass = h;
+      return;
+    }
+    try {
+      this.setHass(h);
+    } catch (err) {
+      this.caught(err, "view");
+    }
+  }
+
+  private setHass(h: Hass): void {
     this._hass = h;
     this.subscribe();
     // who may edit is known once the user is: the first run shows its choices or who can set it up
@@ -744,15 +786,21 @@ export class VhView {
     try {
       this.unsub = await this._hass.connection.subscribeMessage<{ plan: unknown; revision: number }>(
         (msg) => {
-          this.revision = msg.revision;
-          this.repairs = [];
-          this.savedPlan = normalizePlan(msg.plan, this.repairs);
-          this.baseJson = JSON.stringify(this.savedPlan);
-          this.unsavedFrom = null;
-          this.followed = [];
-          if (!this.editor) {
-            this.applyPlan(this.savedPlan);
-            this.followRenames();
+          if (this.failed) return;
+          try {
+            this.revision = msg.revision;
+            this.repairs = [];
+            this.savedPlan = normalizePlan(msg.plan, this.repairs);
+            this.baseJson = JSON.stringify(this.savedPlan);
+            this.unsavedFrom = null;
+            this.followed = [];
+            if (!this.editor) {
+              this.applyPlan(this.savedPlan);
+              this.followRenames();
+            }
+          } catch (err) {
+            // a plan that can't be loaded or drawn
+            this.fail(err, "plan");
           }
         },
         { type: "virtuhome/plan/subscribe" },
@@ -782,7 +830,7 @@ export class VhView {
     this.unsavedFrom ??= this.baseJson;
     this.followed.push(...moved);
     if (this.savedPlan === plan) this.savedPlan = next;
-    this.applyPlan(next);
+    this.showPlan(next);
   }
 
   /** Check my setup for a plan (the editor's, or the one shown). */
