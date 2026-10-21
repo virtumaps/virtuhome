@@ -20,3 +20,6 @@ export function t<K extends EditorKey>(key: K, ...args: Args<Both[K]>): string {
 export function th<K extends EditorKey>(key: K, ...args: Args<Both[K]>): string {
   return esc(translate(key, english(key), args[0]));
 }
+
+/** A key whose text takes nothing (the editor's or the view's): what the editor's lists name themselves with. */
+export type EditorPlainKey = { [K in EditorKey]: Args<Both[K]> extends [] ? K : never }[EditorKey];
