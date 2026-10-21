@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### New
+- The user guide as a website at virtumaps.github.io/virtuhome: a page for each part, with its
+  sections at the top and the contents beside it, readable on a phone, in light or dark and without
+  JavaScript. It is rebuilt from docs/GUIDE.md with each release, and **How** in Getting started
+  opens it.
+
 ### Fixed
 - Check my setup no longer calls the dashboard card a problem just after Home Assistant restarts
   (after an update it still named the version before). It says it's checking until Home Assistant

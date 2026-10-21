@@ -66,7 +66,11 @@ questions on it, label it `needs info`, and remove `in progress`.
 - **The user guide stays true.** Anything a user sees or does differently (a new feature, a renamed
   button, a changed option or default, something removed) updates [docs/GUIDE.md](GUIDE.md) in the
   same pull request, naming buttons and options exactly as the source does. The pull request says
-  which sections changed, or why none needed to.
+  which sections changed, or why none needed to. The guide's website is built from it, a page per
+  `##` part, with GitHub's heading anchors: renaming a heading changes its address there. Help
+  links in VirtuHome go through `guideLink("<anchor>")` (`frontend/src/ui/guide.ts`), and `npm test`
+  fails if one of them, or a link in the guide, leads nowhere. `npm run site -- --serve` shows the
+  website on http://127.0.0.1:5180/virtuhome/.
 - Text shown to users is short and plain.
 
 ## End-to-end tests
@@ -122,7 +126,8 @@ Maintainers only:
    panel and a wall tablet, and check an old plan still loads.
 5. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
 6. Publishing the release runs the Pages workflow, which rebuilds the
-   [online demo](https://virtumaps.github.io/virtuhome/demo/) from the tag. Check that it opens.
+   [user guide's website](https://virtumaps.github.io/virtuhome/) and the
+   [online demo](https://virtumaps.github.io/virtuhome/demo/) from the tag. Check that both open.
 
 ## Roadmap
 

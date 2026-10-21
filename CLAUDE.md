@@ -16,6 +16,10 @@ fix that changes how something is used.
 - Extension changes (made in the private extensions repository) go into the guide's Extensions
   section, without prices.
 - The pull request says which guide sections changed, or why none needed to.
+- The guide is also a website (virtumaps.github.io/virtuhome, built by `frontend/dev/guide-site.mjs`),
+  a page per `##` part, its addresses made from the headings. Help links in the app use
+  `guideLink("<anchor>")` from `frontend/src/ui/guide.ts`; `npm test` checks that they and the
+  guide's own links lead somewhere.
 
 A change worth a line under `## Unreleased` in CHANGELOG.md is nearly always worth a guide change.
 
