@@ -3,6 +3,7 @@
 import type { OpeningKind, Vec2 } from "../model/plan";
 import { DOOR_STYLES, GARAGE_STYLES, WINDOW_STYLES } from "../scene/joinery";
 import type { Draft, DraftFloor, DraftOpening } from "./draft";
+import { t } from "../i18n/editor";
 
 /** Our own format id, and one other programs write for files of the same layout. */
 export const SIMPLE_FORMATS = ["virtuhome-import", "neonplan-import"];
@@ -22,11 +23,11 @@ export function isSimplePlan(data: unknown): boolean {
 }
 
 export function importSimple(data: unknown): Draft {
-  if (!isObj(data)) throw new Error("The file is not a plan.");
+  if (!isObj(data)) throw new Error(t("editor.import.theFileIsNotAPlan"));
   const units: Record<string, number> = { m: 1, cm: 0.01, mm: 0.001 };
   const key = String(data.units ?? "m").toLowerCase();
   const unit = own(units, key) ? units[key] : 0;
-  if (!unit) throw new Error(`Unknown units "${String(data.units)}": use m, cm or mm.`);
+  if (!unit) throw new Error(t("editor.import.unknownUnitsUnitsUse", { units: String(data.units) }));
   const num = (v: unknown, d: number): number => (typeof v === "number" && Number.isFinite(v) ? v * unit : d);
   const pt = (v: unknown): Vec2 | null => (isPoint(v) ? [(v as number[])[0] * unit, (v as number[])[1] * unit] : null);
   const list = (v: unknown): Obj[] => (Array.isArray(v) ? v.filter(isObj) : []);
@@ -35,7 +36,7 @@ export function importSimple(data: unknown): Draft {
 
   // a file with just rooms is one floor
   const rawFloors = Array.isArray(data.floors) ? list(data.floors) : [data];
-  if (!rawFloors.length) throw new Error("The file has no floors.");
+  if (!rawFloors.length) throw new Error(t("editor.import.theFileHasNoFloors"));
   let level = 0;
   const floors = rawFloors.map((f): DraftFloor => {
     const height = num(f.height, 2.5);
@@ -44,7 +45,7 @@ export function importSimple(data: unknown): Draft {
     const opening = (o: Obj, kind: OpeningKind, d: [number, number, number]): DraftOpening | null => {
       const at = pt(o.at);
       if (!at) {
-        left.push(`A ${kind === "window" ? "window" : "door"} without "at"`);
+        left.push(t("editor.import.aXWithoutAt", { x: kind === "window" ? "window" : "door" }));
         return null;
       }
       const name = text(o.kind) ?? text(o.type);
@@ -72,7 +73,7 @@ export function importSimple(data: unknown): Draft {
       furniture: list(f.furniture).flatMap((x) => {
         const at = pt(x.at);
         if (!at) {
-          left.push(`${text(x.name) ?? text(x.type) ?? "A piece"} without "at"`);
+          left.push(t("editor.import.xWithoutAt", { x: text(x.name) ?? text(x.type) ?? t("editor.import.aPiece") }));
           return [];
         }
         const len = (v: unknown) => (typeof v === "number" && v > 0 ? v * unit : null);

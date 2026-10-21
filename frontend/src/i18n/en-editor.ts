@@ -758,4 +758,144 @@ export const EN_EDITOR = {
   "editor.import.aScan": "a scan",
   "editor.import.aSweetHome3dHome": "a Sweet Home 3D home",
   "editor.import.aPlan": "a plan",
+
+  // ---------------------------------------------------------------- the editor
+  "editor.sendingThePictureX": "Sending the picture… {x}%",
+  "editor.lookingForTheRooms": "Looking for the rooms in the picture…",
+  "editor.moveACorner": "Move a corner",
+  "editor.turnFurniture": "Turn furniture",
+
+  // ---------------------------------------------------------------- the editor: plan
+  "editor.plan.selectAndMove": "Select and move",
+  "editor.plan.newRoomDragA": "New room: drag a rectangle",
+  "editor.plan.newRoomClickIts": "New room: click its corners, then the first one again",
+  "editor.plan.doorClickOnA": "Door: click on a wall",
+  "editor.plan.windowClickOnA": "Window: click on a wall",
+  "editor.plan.cornerClickOnAn": "Corner: click on an edge where it goes, drag to place it",
+  "editor.plan.fenceClickItsCorners": "Fence: click its corners, then the last one again",
+  "editor.plan.floorPlanImageTrace": "Floor plan image: trace the rooms over an estate agent's plan",
+  "editor.plan.fitToView": "Fit to view",
+  "editor.plan.dragOutARectangle": "Drag out a rectangle for the new {kind}.",
+  "editor.plan.clickTheCornersOf": "Click the corners of the new {kind}; click the first corner again to finish (Esc cancels).",
+  "editor.plan.chooseAFloorPlan": "Choose a floor plan picture to trace the rooms over.",
+  "editor.plan.dragOutARectangleFor": "Drag out a rectangle for the new room.",
+  "editor.plan.clickTheCornersOfThe": "Click the corners of the new room; click the first corner again to finish (Esc cancels).",
+  "editor.plan.clickOnAWall": "Click on a wall to put a door there.",
+  "editor.plan.clickOnAWallTo": "Click on a wall to put a window there.",
+  "editor.plan.clickOnTheEdge": "Click on the edge of a room or garden area where the new corner goes, and drag it into place (Esc when done).",
+  "editor.plan.clickWhereTheFence": "Click where the fence starts and at each corner; click the last point again (or press Enter) to finish. Esc cancels.",
+  "editor.plan.noFloorsYetDraw": "No floors yet: draw a room, trace a floor plan picture, or start from a house type, a scan or a plan file (Home tab).",
+  "editor.plan.floorPlanPicture": "Floor plan picture",
+  "editor.plan.putAnEstateAgents": "Put an estate agent's plan (or a photo of a sketch) under this floor, set its scale, then draw the rooms over it. JPEG or PNG, up to 8 MB; a screenshot of a PDF works. Only the 2D plan shows it.",
+  "editor.plan.chooseAPicture": "Choose a picture…",
+  "editor.plan.thePictureCantBe": "The picture can't be loaded (it may have been removed). Choose it again.",
+  "editor.plan.clickBothEndsOf": "Click both ends of a wall you know the length of: an outside wall, or a room's width from the plan's labels.",
+  "editor.plan.typeTheRealLength": "Type the real length and press Enter.",
+  "editor.plan.addTheseRooms": "Add these rooms",
+  "editor.plan.findTheRooms": "Find the rooms",
+  "editor.plan.setTheScaleFirst": "Set the scale first",
+  "editor.plan.setTheScale": "Set the scale",
+  "editor.plan.clickBothEndsOfA": "Click both ends of a wall you know the length of.",
+  "editor.plan.fadeTheFloorPlan": "Fade the floor plan picture",
+  "editor.plan.turnTheFloorPlan": "Turn the floor plan picture",
+  "editor.plan.turnAQuarterLeft": "Turn a quarter left",
+  "editor.plan.turnAQuarterRight": "Turn a quarter right",
+  "editor.plan.anotherPicture": "Another picture…",
+  "editor.plan.removeTheFloorPlan": "Remove the floor plan picture",
+  "editor.plan.pictureRemovedHomeAssistant": "Picture removed. Home Assistant deletes it when you save.",
+  "editor.plan.replaceTheFloorPlan": "Replace the floor plan picture",
+  "editor.plan.addAFloorPlan": "Add a floor plan picture",
+  "editor.plan.nowSetItsScale": "Now set its scale: click both ends of a wall you know the length of.",
+  "editor.plan.tickTheRoomsTo": "Tick the rooms to keep (those over rooms you have already drawn start unticked), then Add these rooms.",
+  "editor.plan.noRoomsFoundCheck": "No rooms found. Check the scale, or draw the rooms with the room tools.",
+  "editor.plan.addARoomFrom": "Add a room from the picture",
+  "editor.plan.addTheRoomsFrom": "Add the rooms from the picture",
+  "editor.plan.howLongIsIt": "How long is it really? Type it (3.45, 345 cm or 11'4\") and press Enter.",
+  "editor.plan.scaleTheFloorPlan": "Scale the floor plan picture",
+  "editor.plan.scaledThatWallIs": "Scaled: that wall is now {len}. Draw the rooms over the plan with the room tools.",
+  "editor.plan.thatIsntALength": "That isn't a length. Set the scale again and type it like 3.45 or 11'4\".",
+  "editor.plan.northTheTopOf": "North: the top of the plan faces {north}°. Drag the arrow to where north is.",
+  "editor.plan.moveAWall": "Move a wall",
+  "editor.plan.moveADevice": "Move a device",
+  "editor.plan.moveAKind": "Move a {kind}",
+  "editor.plan.moveTheFloorPlan": "Move the floor plan picture",
+  "editor.plan.clickOnTheEdgeOf": "Click on the edge of a room or garden area.",
+  "editor.plan.clickOnAWallOf": "Click on a wall of a room.",
+  "editor.plan.addADoor": "Add a door",
+  "editor.plan.addAWindow": "Add a window",
+  "editor.plan.drawAKind": "Draw a {kind}",
+  "editor.plan.roomN": "Room {n}",
+  "editor.plan.drawARoom": "Draw a room",
+  "editor.plan.setAWallTo": "Set a wall to {len}",
+  "editor.plan.nudge": "Nudge",
+
+  // ---------------------------------------------------------------- the editor: picture
+  "editor.picture.thatFileIsntA": "That file isn't a picture this browser can open. Use a JPEG or PNG.",
+  "editor.picture.thePictureIsToo": "The picture is too large. Try a smaller one.",
+  "editor.picture.homeAssistantDidntStore": "Home Assistant didn't store the picture.",
+  "editor.picture.thePictureCantBe": "The picture can't be loaded.",
+
+  // ---------------------------------------------------------------- the editor: findRooms
+  "editor.findRooms.thisBrowserCantLook": "This browser can't look for rooms.",
+  "editor.findRooms.lookingForRoomsWent": "Looking for rooms went wrong.",
+
+  // ---------------------------------------------------------------- the editor: sky
+  "editor.sky.openstreetmapAnsweredStatus": "OpenStreetMap answered {status}",
+  "editor.sky.noAnswerInTime": "no answer in time",
+
+  // ---------------------------------------------------------------- the editor: findRooms
+  "editor.findRooms.roomX": "Room {x}",
+
+  // ---------------------------------------------------------------- the editor: import
+  "editor.import.theFileHasNo": "The file has no walls: is it a RoomPlan JSON?",
+  "editor.import.theManifestNamesN": "The manifest names {n} rooms, the scan has {n2}.",
+  "editor.import.roomXHasNo": "Room {x} has no floor outline (scanned before iOS 17?) and was left out.",
+  "editor.import.aXAtList": "A {x} at {list} lies on no room edge and was left out.",
+  "editor.import.detectionsJsonIsFrom": "detections.json is from an unfinished scan: decor may sit in the wrong place.",
+
+  // ---------------------------------------------------------------- the editor: import
+  "editor.import.roomRoomno": "Room {roomNo}",
+  "editor.import.nameTooFewCorners": "{name}: too few corners",
+  "editor.import.aWindow": "A window",
+  "editor.import.aDoor": "A door",
+  "editor.import.whatAtAtIs": "{what} at {at} is on no room edge",
+  "editor.import.aPiece": "A piece",
+
+  // ---------------------------------------------------------------- the editor: import
+  "editor.import.theFileIsNot": "The file is not a Sweet Home 3D file.",
+  "editor.import.theFileHasNoHome": "The file has no Home.xml in it: open it in Sweet Home 3D 5.3 or later and save it again.",
+  "editor.import.theFileIsNotA": "The file is not a Sweet Home 3D home.",
+  "editor.import.labelsDimensionLinesAnd": "labels, dimension lines and drawn lines",
+
+  // ---------------------------------------------------------------- the editor: import
+  "editor.import.theFileIsNotAZip": "The file is not a zip archive.",
+  "editor.import.theZipArchiveIs": "The zip archive is damaged.",
+  "editor.import.theZipArchiveIsPacked": "The zip archive is packed in a way that can't be read here.",
+  "editor.import.thisBrowserCantUnpack": "This browser can't unpack zip archives: try another browser.",
+
+  // ---------------------------------------------------------------- the editor: import
+  "editor.import.theFileIsNotAPlan": "The file is not a plan.",
+  "editor.import.unknownUnitsUnitsUse": "Unknown units \"{units}\": use m, cm or mm.",
+  "editor.import.theFileHasNoFloors": "The file has no floors.",
+  "editor.import.aXWithoutAt": "A {x} without \"at\"",
+
+  // ---------------------------------------------------------------- the editor: import
+  "editor.import.xWithoutAt": "{x} without \"at\"",
+
+  // ---------------------------------------------------------------- the editor: import
+  "editor.import.theXmlIsDamaged": "The XML is damaged near </{x}>.",
+  "editor.import.theFileHasNoXml": "The file has no XML in it.",
+
+  // ---------------------------------------------------------------- the editor: the 2D plan's picture, and importing
+  "editor.plan.imageHint": "Drag the picture to move it. Set its scale from a wall you know the length of, then find the rooms or draw them over it.",
+  "editor.plan.found": "Found {rooms}{doors}. Tick the rooms to keep; nothing is added until you add them.",
+  "editor.plan.andDoors": { one: "and {n} door", other: "and {n} doors" },
+  "editor.plan.added": "Added {rooms}. Rename them and link them to areas in the editor; Undo takes them all away again.",
+  "editor.import.room.livingRoom": "Living Room",
+  "editor.import.room.bedroom": "Bedroom",
+  "editor.import.room.bathroom": "Bathroom",
+  "editor.import.room.kitchen": "Kitchen",
+  "editor.import.room.diningRoom": "Dining Room",
+  "editor.import.decorNotLinedUp": { one: "{n} decor item could not be lined up exactly: check where they stand.", other: "{n} decor items could not be lined up exactly: check where they stand." },
+  "editor.import.unwalled": { one: "{n} room side without a wall (VirtuHome draws one)", other: "{n} room sides without a wall (VirtuHome draws one)" },
 } as const;

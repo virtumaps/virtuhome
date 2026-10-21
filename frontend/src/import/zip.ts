@@ -1,3 +1,4 @@
+import { t } from "../i18n/editor";
 // Just enough of the zip format to take one file out of an archive: the central directory says
 // where each entry is; entries are stored or deflated (the browser's DecompressionStream inflates).
 
@@ -15,7 +16,7 @@ export async function unzipEntry(bytes: Uint8Array, name: string): Promise<Uint8
       break;
     }
   }
-  if (end < 0) throw new Error("The file is not a zip archive.");
+  if (end < 0) throw new Error(t("editor.import.theFileIsNotAZip"));
   const count = v.getUint16(end + 10, true);
   let p = v.getUint32(end + 16, true);
   const want = new TextEncoder().encode(name);
@@ -31,17 +32,17 @@ export async function unzipEntry(bytes: Uint8Array, name: string): Promise<Uint8
     p += 46 + nameLen + extraLen + commentLen;
     if (entry.length !== want.length || entry.some((c, i) => c !== want[i])) continue;
     // the data follows the local header, whose name and extra field can differ from the directory's
-    if (v.getUint32(local, true) !== 0x04034b50) throw new Error("The zip archive is damaged.");
+    if (v.getUint32(local, true) !== 0x04034b50) throw new Error(t("editor.import.theZipArchiveIs"));
     const start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
     const data = bytes.subarray(start, start + size);
     if (method === 0) return data;
-    if (method !== 8) throw new Error("The zip archive is packed in a way that can't be read here.");
+    if (method !== 8) throw new Error(t("editor.import.theZipArchiveIsPacked"));
     // "deflate-raw" came with Chrome 103 and Safari 16.4: older browsers have no stream, or refuse the format
     let inflate: DecompressionStream;
     try {
       inflate = new DecompressionStream("deflate-raw");
     } catch {
-      throw new Error("This browser can't unpack zip archives: try another browser.");
+      throw new Error(t("editor.import.thisBrowserCantUnpack"));
     }
     const stream = new Blob([data.slice()]).stream().pipeThrough(inflate);
     return new Uint8Array(await new Response(stream).arrayBuffer());

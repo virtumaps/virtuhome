@@ -56,7 +56,7 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const fmt = (m: number) => `${m.toFixed(2)} m`;
 const same = (a: Vec2, b: Vec2) => Math.abs(a[0] - b[0]) < 0.015 && Math.abs(a[1] - b[1]) < 0.015;
 /** Where a picture sits and how big it is: rooms found in it fit only while this stays the same. */
-const IMAGE_HINT = "Drag the picture to move it. Set its scale from a wall you know the length of, then find the rooms or draw them over it.";
+const IMAGE_HINT = "editor.plan.imageHint";
 const placement = (bg: FloorBackground) => [bg.file, bg.x, bg.z, bg.rotation, bg.scale].join("|");
 
 const DOMAIN_COLOURS: Record<string, string> = {
@@ -72,7 +72,7 @@ function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, 
 }
 
 /** The storey a plan without floors gets when something is first put on it. */
-const firstFloor = (id = "floor_0"): Floor => ({ id, name: "Ground Floor", elevation: 0, height: 2.6, rooms: [], openings: [], furniture: [], devices: [], walls: [], outdoor: [] });
+const firstFloor = (id = "floor_0"): Floor => ({ id, name: t("editor.floor.groundFloor"), elevation: 0, height: 2.6, rooms: [], openings: [], furniture: [], devices: [], walls: [], outdoor: [] });
 
 /** A shape with corners: a room or a garden area. */
 interface Shape {
@@ -232,14 +232,14 @@ export class Plan2D {
   private renderBar(): void {
     this.barFloors = this.host.plan().floors.map((x) => x.name).join("\n");
     const tools: [Tool, string, string][] = [
-      ["select", mdiCursorDefault, "Select and move"],
-      ["rect", mdiRectangleOutline, "New room: drag a rectangle"],
-      ["draw", mdiPencilOutline, "New room: click its corners, then the first one again"],
-      ["door", mdiDoor, "Door: click on a wall"],
-      ["window", mdiWindowClosedVariant, "Window: click on a wall"],
-      ["corner", mdiVectorPolylinePlus, "Corner: click on an edge where it goes, drag to place it"],
-      ["fence", mdiFence, "Fence: click its corners, then the last one again"],
-      ["image", mdiImageOutline, "Floor plan image: trace the rooms over an estate agent's plan"],
+      ["select", mdiCursorDefault, t("editor.plan.selectAndMove")],
+      ["rect", mdiRectangleOutline, t("editor.plan.newRoomDragA")],
+      ["draw", mdiPencilOutline, t("editor.plan.newRoomClickIts")],
+      ["door", mdiDoor, t("editor.plan.doorClickOnA")],
+      ["window", mdiWindowClosedVariant, t("editor.plan.windowClickOnA")],
+      ["corner", mdiVectorPolylinePlus, t("editor.plan.cornerClickOnAn")],
+      ["fence", mdiFence, t("editor.plan.fenceClickItsCorners")],
+      ["image", mdiImageOutline, t("editor.plan.floorPlanImageTrace")],
     ];
     const floors = this.host.plan().floors;
     this.bar.innerHTML = "";
@@ -255,7 +255,7 @@ export class Plan2D {
     }
     const fit = document.createElement("button");
     fit.className = "p2-tool";
-    fit.title = "Fit to view";
+    fit.title = t("editor.plan.fitToView");
     fit.innerHTML = svgIcon(mdiFitToPageOutline);
     fit.onclick = () => this.fit();
     group.append(fit);
@@ -292,12 +292,12 @@ export class Plan2D {
   drawArea(kind: NewAreaKind, shape: "rect" | "draw"): void {
     this.setTool(shape);
     this.areaKind = kind;
-    this.host.status(shape === "rect" ? `Drag out a rectangle for the new ${kind}.` : `Click the corners of the new ${kind}; click the first corner again to finish (Esc cancels).`);
+    this.host.status(shape === "rect" ? t("editor.plan.dragOutARectangle", { kind }) : t("editor.plan.clickTheCornersOf", { kind }));
   }
 
-  private setTool(t: Tool): void {
-    if (t !== "image") this.dropFound();
-    this.tool = t;
+  private setTool(tool: Tool): void {
+    if (tool !== "image") this.dropFound();
+    this.tool = tool;
     this.areaKind = null;
     this.drawing = [];
     this.rubber = null;
@@ -305,21 +305,21 @@ export class Plan2D {
     this.imageError = "";
     this.renderBar();
     this.render();
-    if (t === "image") {
+    if (tool === "image") {
       this.host.status(this.floor?.background
-        ? IMAGE_HINT
-        : "Choose a floor plan picture to trace the rooms over.");
+        ? t(IMAGE_HINT)
+        : t("editor.plan.chooseAFloorPlan"));
       return;
     }
     this.host.status({
-      select: "Select something, then drag it: furniture, devices, doors, windows, a room's corners and walls. Click a measurement to type it.",
-      rect: "Drag out a rectangle for the new room.",
-      draw: "Click the corners of the new room; click the first corner again to finish (Esc cancels).",
-      door: "Click on a wall to put a door there.",
-      window: "Click on a wall to put a window there.",
-      corner: "Click on the edge of a room or garden area where the new corner goes, and drag it into place (Esc when done).",
-      fence: "Click where the fence starts and at each corner; click the last point again (or press Enter) to finish. Esc cancels.",
-    }[t]);
+      select: t("editor.main.selectSomethingThenDrag"),
+      rect: t("editor.plan.dragOutARectangleFor"),
+      draw: t("editor.plan.clickTheCornersOfThe"),
+      door: t("editor.plan.clickOnAWall"),
+      window: t("editor.plan.clickOnAWallTo"),
+      corner: t("editor.plan.clickOnTheEdge"),
+      fence: t("editor.plan.clickWhereTheFence"),
+    }[tool]);
   }
 
   // ------------------------------------------------------------------ drawing
@@ -342,7 +342,7 @@ export class Plan2D {
     this.drawBackground(f?.background ?? null, layers.guides);
     this.syncPanel();
     if (!f) {
-      layers.labels.append(el("text", { x: this.w / 2, y: this.h / 2, class: "p2-empty", "text-anchor": "middle" }, "No floors yet: draw a room, trace a floor plan picture, or start from a house type, a scan or a plan file (Home tab)."));
+      layers.labels.append(el("text", { x: this.w / 2, y: this.h / 2, class: "p2-empty", "text-anchor": "middle" }, t("editor.plan.noFloorsYetDraw")));
       return;
     }
     // the floor below, faintly, to line things up with
@@ -691,47 +691,47 @@ export class Plan2D {
       input.onchange = () => input.files?.[0] && void this.chooseImage(input.files[0]);
       input.click();
     });
-    panel.append(node("b", "", "Floor plan picture"));
+    panel.append(node("b", "", t("editor.plan.floorPlanPicture")));
     if (this.uploading !== null) {
-      this.sliders.progress = node("p", "", `Sending the picture… ${Math.round(this.uploading * 100)}%`);
+      this.sliders.progress = node("p", "", t("editor.sendingThePictureX", { x: Math.round(this.uploading * 100) }));
       panel.append(this.sliders.progress);
     } else if (!bg) {
       panel.append(
-        node("p", "", "Put an estate agent's plan (or a photo of a sketch) under this floor, set its scale, then draw the rooms over it. JPEG or PNG, up to 8 MB; a screenshot of a PDF works. Only the 2D plan shows it."),
-        choose("Choose a picture…", "ed-btn"),
+        node("p", "", t("editor.plan.putAnEstateAgents")),
+        choose(t("editor.plan.chooseAPicture"), "ed-btn"),
       );
     } else {
-      if (this.bgMissing) panel.append(node("p", "err", "The picture can't be loaded (it may have been removed). Choose it again."));
+      if (this.bgMissing) panel.append(node("p", "err", t("editor.plan.thePictureCantBe")));
       if (this.measure) {
         panel.append(
-          node("p", "", this.measure.length < 2 ? "Click both ends of a wall you know the length of: an outside wall, or a room's width from the plan's labels." : "Type the real length and press Enter."),
-          row(button("Cancel", "ed-btn ghost small", () => {
+          node("p", "", this.measure.length < 2 ? t("editor.plan.clickBothEndsOf") : t("editor.plan.typeTheRealLength")),
+          row(button(t("editor.main.cancel"), "ed-btn ghost small", () => {
             this.measure = null;
             this.input.hidden = true;
             this.render();
           })),
         );
       } else if (this.finding) {
-        panel.append(node("p", "", "Looking for the rooms in the picture…"), row(button("Cancel", "ed-btn ghost small", () => this.dropFound())));
+        panel.append(node("p", "", t("editor.lookingForTheRooms")), row(button(t("editor.main.cancel"), "ed-btn ghost small", () => this.dropFound())));
       } else if (this.liveFound()) {
         const { res, keep } = this.liveFound()!;
         const doors = res.gaps.filter((g) => g.kind !== "window" && keep[g.room]).length;
         const kept = keep.filter(Boolean).length;
-        const add = button("Add these rooms", "ed-btn small", () => this.addFound());
+        const add = button(t("editor.plan.addTheseRooms"), "ed-btn small", () => this.addFound());
         add.disabled = !kept;
         panel.append(
-          node("p", "", `Found ${res.rooms.length === 1 ? "1 room" : `${res.rooms.length} rooms`}${doors ? ` and ${doors === 1 ? "1 door" : `${doors} doors`}` : ""}. Tick the rooms to keep; nothing is added until you add them.`),
-          row(add, button("Cancel", "ed-btn ghost small", () => this.dropFound())),
+          node("p", "", t("editor.plan.found", { rooms: t("editor.import.rooms", { n: res.rooms.length }), doors: doors ? ` ${t("editor.plan.andDoors", { n: doors })}` : "" })),
+          row(add, button(t("editor.main.cancel"), "ed-btn ghost small", () => this.dropFound())),
         );
       } else {
-        const find = button("Find the rooms", "ed-btn ghost small", () => void this.findRooms());
+        const find = button(t("editor.plan.findTheRooms"), "ed-btn ghost small", () => void this.findRooms());
         if (bg.scaled === false) {
           find.disabled = true;
-          find.title = "Set the scale first";
+          find.title = t("editor.plan.setTheScaleFirst");
         }
-        panel.append(row(button("Set the scale", "ed-btn small", () => {
+        panel.append(row(button(t("editor.plan.setTheScale"), "ed-btn small", () => {
           this.measure = [];
-          this.host.status("Click both ends of a wall you know the length of.");
+          this.host.status(t("editor.plan.clickBothEndsOfA"));
           this.render();
         }, mdiRuler), find));
       }
@@ -740,7 +740,7 @@ export class Plan2D {
       opacity.min = "0";
       opacity.max = "100";
       opacity.value = String(Math.round(bg.opacity * 100));
-      this.slide(opacity, "Fade the floor plan picture", (b, v) => (b.opacity = v / 100));
+      this.slide(opacity, t("editor.plan.fadeTheFloorPlan"), (b, v) => (b.opacity = v / 100));
       const turn = node("input");
       turn.type = "range";
       turn.min = "-180";
@@ -748,25 +748,25 @@ export class Plan2D {
       turn.step = "0.5";
       turn.value = String(bg.rotation);
       const turnText = node("span", "val", `${bg.rotation}°`);
-      this.slide(turn, "Turn the floor plan picture", (b, v) => {
+      this.slide(turn, t("editor.plan.turnTheFloorPlan"), (b, v) => {
         b.rotation = v;
         turnText.textContent = `${v}°`;
       });
       const quarter = (d: number) => () => this.host.change((p) => {
         const b = p.floors[fi]?.background;
         if (b) b.rotation = ((((b.rotation + d + 180) % 360) + 360) % 360) - 180;
-      }, "Turn the floor plan picture");
+      }, t("editor.plan.turnTheFloorPlan"));
       this.sliders = { opacity, turn, turnText };
       panel.append(
-        row(node("label", "", "Show"), opacity),
-        row(node("label", "", "Turn"), turn, turnText,
-          button("", "ib", quarter(-90), mdiRotateLeft, "Turn a quarter left"), button("", "ib", quarter(90), mdiRotateRight, "Turn a quarter right")),
-        row(choose("Another picture…", "ed-btn ghost small"), button("Remove", "ed-btn ghost small", () => {
+        row(node("label", "", t("editor.rooms.show")), opacity),
+        row(node("label", "", t("editor.turn")), turn, turnText,
+          button("", "ib", quarter(-90), mdiRotateLeft, t("editor.plan.turnAQuarterLeft")), button("", "ib", quarter(90), mdiRotateRight, t("editor.plan.turnAQuarterRight"))),
+        row(choose(t("editor.plan.anotherPicture"), "ed-btn ghost small"), button(t("editor.remove"), "ed-btn ghost small", () => {
           this.host.change((p) => {
             const f = p.floors[fi];
             if (f) f.background = null;
-          }, "Remove the floor plan picture");
-          this.host.status("Picture removed. Home Assistant deletes it when you save.");
+          }, t("editor.plan.removeTheFloorPlan"));
+          this.host.status(t("editor.plan.pictureRemovedHomeAssistant"));
         })),
       );
     }
@@ -802,7 +802,7 @@ export class Plan2D {
       const img = await prepareImage(file);
       const name = await this.host.images.upload(floorId, img.blob, (done) => {
         this.uploading = done;
-        if (this.sliders.progress) this.sliders.progress.textContent = `Sending the picture… ${Math.round(done * 100)}%`;
+        if (this.sliders.progress) this.sliders.progress.textContent = t("editor.sendingThePictureX", { x: Math.round(done * 100) });
       });
       // another picture keeps the old one's place and size; a first one fills most of the view
       const old = this.floor?.background;
@@ -813,10 +813,10 @@ export class Plan2D {
       this.host.change((p) => {
         if (!p.floors.length) p.floors.push(firstFloor(floorId));
         p.floors[Math.min(fi, p.floors.length - 1)].background = bg;
-      }, old ? "Replace the floor plan picture" : "Add a floor plan picture");
+      }, old ? t("editor.plan.replaceTheFloorPlan") : t("editor.plan.addAFloorPlan"));
       if (fresh) this.fit();
       this.measure = [];
-      this.host.status("Now set its scale: click both ends of a wall you know the length of.");
+      this.host.status(t("editor.plan.nowSetItsScale"));
     } catch (err) {
       this.imageError = String((err as { message?: string })?.message ?? err);
     } finally {
@@ -850,7 +850,7 @@ export class Plan2D {
     this.finding = stop;
     this.found = null;
     this.imageError = "";
-    this.host.status("Looking for the rooms in the picture…");
+    this.host.status(t("editor.lookingForTheRooms"));
     this.render();
     try {
       const px = await greyPixels(await this.host.images.url(bg.file), 2000);
@@ -858,12 +858,12 @@ export class Plan2D {
       if (this.finding !== stop) return;
       this.found = { res, keep: startTicks(this.host.plan().floors[fi], res), floor: fi, at: placement(bg) };
       this.host.status(res.rooms.length
-        ? "Tick the rooms to keep (those over rooms you have already drawn start unticked), then Add these rooms."
-        : "No rooms found. Check the scale, or draw the rooms with the room tools.");
+        ? t("editor.plan.tickTheRoomsTo")
+        : t("editor.plan.noRoomsFoundCheck"));
     } catch (err) {
       if (this.finding !== stop) return;
       this.imageError = String((err as { message?: string })?.message ?? err);
-      this.host.status(IMAGE_HINT);
+      this.host.status(t(IMAGE_HINT));
     } finally {
       if (this.finding === stop) this.finding = null;
       this.render();
@@ -874,7 +874,7 @@ export class Plan2D {
   private dropFound(): void {
     this.finding?.abort();
     this.finding = null;
-    if (this.found && this.tool === "image") this.host.status(IMAGE_HINT);
+    if (this.found && this.tool === "image") this.host.status(t(IMAGE_HINT));
     this.found = null;
     this.render();
   }
@@ -890,8 +890,8 @@ export class Plan2D {
       this.host.change((p) => {
         p.floors[fi].rooms.push(...rooms);
         p.floors[fi].openings.push(...openings);
-      }, rooms.length === 1 ? "Add a room from the picture" : "Add the rooms from the picture");
-      this.host.status(`Added ${rooms.length === 1 ? "1 room" : `${rooms.length} rooms`}. Rename them and link them to areas in the editor; Undo takes them all away again.`);
+      }, rooms.length === 1 ? t("editor.plan.addARoomFrom") : t("editor.plan.addTheRoomsFrom"));
+      this.host.status(t("editor.plan.added", { rooms: t("editor.import.rooms", { n: rooms.length }) }));
     }
     this.render();
   }
@@ -935,7 +935,7 @@ export class Plan2D {
     input.style.left = `${mx - 40}px`;
     input.style.top = `${my + 12}px`;
     input.focus();
-    this.host.status("How long is it really? Type it (3.45, 345 cm or 11'4\") and press Enter.");
+    this.host.status(t("editor.plan.howLongIsIt"));
     const done = (apply: boolean) => {
       input.onkeydown = null;
       input.onblur = null;
@@ -950,11 +950,11 @@ export class Plan2D {
         this.host.change((p) => {
           const f = p.floors[fi];
           if (f) f.background = next;
-        }, "Scale the floor plan picture");
-        this.host.status(`Scaled: that wall is now ${fmt(len!)}. Draw the rooms over the plan with the room tools.`);
+        }, t("editor.plan.scaleTheFloorPlan"));
+        this.host.status(t("editor.plan.scaledThatWallIs", { len: fmt(len!) }));
         if (!this.floor?.rooms.length) this.fit();
       } else if (apply && input.value.trim()) {
-        this.host.status("That isn't a length. Set the scale again and type it like 3.45 or 11'4\".");
+        this.host.status(t("editor.plan.thatIsntALength"));
       }
       this.render();
     };
@@ -975,7 +975,7 @@ export class Plan2D {
   private compass(north: number): SVGGElement {
     const [cx, cy] = this.compassAt();
     const g = el("g", { class: "p2-north", "data-kind": "north", "data-id": "north", transform: `translate(${cx} ${cy})` });
-    g.append(el("title", {}, `North: the top of the plan faces ${Math.round(north)}°. Drag the arrow to where north is.`));
+    g.append(el("title", {}, t("editor.plan.northTheTopOf", { north: Math.round(north) })));
     g.append(el("circle", { r: 26 }));
     const rose = el("g", { transform: `rotate(${-north})` });
     rose.append(el("path", { d: "M0 -20 L6 1 L0 -3 L-6 1 Z", class: "n" }), el("path", { d: "M0 20 L6 -1 L0 3 L-6 -1 Z", class: "s" }));
@@ -1281,7 +1281,7 @@ export class Plan2D {
     if (kind === "north") {
       this.host.dragStart();
       this.drag = {
-        kind, label: "North", moved: false,
+        kind, label: t("editor.north"), moved: false,
         apply: (x, z, ev) => {
           const [sx, sy] = this.toScreen([x, z]);
           const [cx, cy] = this.compassAt();
@@ -1317,7 +1317,7 @@ export class Plan2D {
       const [sx, sy] = this.toScreen(p);
       let made = false;
       this.drag = {
-        kind, label: kind === "fencepoint" ? "Move a fence point" : "Add a fence corner", moved: false,
+        kind, label: kind === "fencepoint" ? t("editor.drag.moveAFencePoint") : t("editor.addAFenceCorner"), moved: false,
         apply: (x, z, ev) => {
           const live = this.host.plan().floors[fi].fences?.find((y) => y.id === id);
           if (!live) return;
@@ -1342,7 +1342,7 @@ export class Plan2D {
       const exclude = new Set(group.map((c) => `${c.sh.id}:${c.i}`));
       this.host.dragStart();
       this.drag = {
-        kind, label: "Move a corner", moved: false,
+        kind, label: t("editor.moveACorner"), moved: false,
         apply: (x, z, ev) => {
           const q = this.snap([x, z], exclude, ev.altKey);
           for (const c of this.livePoints(group)) c.pts[c.i] = q;
@@ -1363,7 +1363,7 @@ export class Plan2D {
       const start = p;
       this.host.dragStart();
       this.drag = {
-        kind, label: "Move a wall", moved: false,
+        kind, label: t("editor.plan.moveAWall"), moved: false,
         apply: (x, z, ev) => {
           let off = (x - start[0]) * n[0] + (z - start[1]) * n[1];
           // snap the wall's new line onto another corner's line, or to the grid
@@ -1385,7 +1385,7 @@ export class Plan2D {
       // furniture keeps out of walls and other pieces: it slides along what it meets
       const collider = kind === "furniture" ? new Collider(this.host.plan(), fi, id) : null;
       this.drag = {
-        kind, label: kind === "furniture" ? `Move ${t(furnitureType((thing as { type: string }).type).label)}` : "Move a device", moved: false,
+        kind, label: kind === "furniture" ? t("editor.drag.moveName", { name: t(furnitureType((thing as { type: string }).type).label) }) : t("editor.plan.moveADevice"), moved: false,
         apply: (x, z, ev) => {
           const live = this.host.plan().floors[fi];
           const t = kind === "furniture" ? live.furniture.find((y) => y.id === id) : live.devices.find((d) => d.id === id);
@@ -1400,7 +1400,7 @@ export class Plan2D {
     if (kind === "rotate") {
       this.host.dragStart();
       this.drag = {
-        kind, label: "Turn furniture", moved: false,
+        kind, label: t("editor.turnFurniture"), moved: false,
         apply: (x, z, ev) => {
           const t = this.host.plan().floors[fi].furniture.find((y) => y.id === id);
           if (!t) return;
@@ -1421,7 +1421,7 @@ export class Plan2D {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       this.host.dragStart();
       this.drag = {
-        kind, label: `Move a ${o.kind}`, moved: false,
+        kind, label: t("editor.plan.moveAKind", { kind: o.kind }), moved: false,
         apply: (x, z, ev) => {
           const live = this.host.plan().floors[fi].openings.find((y) => y.id === id);
           if (!live) return;
@@ -1473,7 +1473,7 @@ export class Plan2D {
       const from: Vec2 = [bg.x, bg.z];
       this.host.dragStart();
       this.drag = {
-        kind: "image", label: "Move the floor plan picture", moved: false,
+        kind: "image", label: t("editor.plan.moveTheFloorPlan"), moved: false,
         apply: (x, z) => {
           const live = this.host.plan().floors[fi]?.background;
           if (!live) return;
@@ -1512,7 +1512,7 @@ export class Plan2D {
     if (this.tool === "corner") {
       const hit = this.shapeEdgeAt(p, e.altKey);
       if (!hit) {
-        this.host.status("Click on the edge of a room or garden area.");
+        this.host.status(t("editor.plan.clickOnTheEdgeOf"));
         return;
       }
       const { sh } = hit;
@@ -1525,7 +1525,7 @@ export class Plan2D {
       const [sx, sy] = this.toScreen(p);
       let away = false;
       this.drag = {
-        kind: "corner", label: hit.corner >= 0 ? "Move a corner" : "Add a corner", moved: false, made: hit.corner < 0,
+        kind: "corner", label: hit.corner >= 0 ? t("editor.moveACorner") : t("editor.addACorner"), moved: false, made: hit.corner < 0,
         apply: (x, z, ev) => {
           // a click's wobble leaves the new corner on its edge
           const [px, py] = this.toScreen([x, z]);
@@ -1541,7 +1541,7 @@ export class Plan2D {
     if (this.tool === "door" || this.tool === "window") {
       const hit = this.edgeAt(p);
       if (!hit) {
-        this.host.status("Click on a wall of a room.");
+        this.host.status(t("editor.plan.clickOnAWallOf"));
         return;
       }
       const door = this.tool === "door";
@@ -1553,7 +1553,7 @@ export class Plan2D {
         width: r2(width), height: door ? 2.0 : 1.2, sill: door ? 0 : 0.9, kind: door ? "door" : "window",
         hinge: "left", swing: "in",
       };
-      this.host.change((pl) => pl.floors[fi].openings.push(op), door ? "Add a door" : "Add a window");
+      this.host.change((pl) => pl.floors[fi].openings.push(op), door ? t("editor.plan.addADoor") : t("editor.plan.addAWindow"));
       this.host.select({ floor: fi, kind: "opening", id: op.id });
       this.setTool("select");
     }
@@ -1596,7 +1596,7 @@ export class Plan2D {
     this.host.change((p) => {
       const fl = p.floors[fi];
       fl.outdoor = [...(fl.outdoor ?? []), o];
-    }, `Draw a ${kind}`);
+    }, t("editor.plan.drawAKind", { kind }));
     this.host.select({ floor: fi, kind: "outdoor", id: o.id });
     this.setTool("select");
   }
@@ -1618,7 +1618,7 @@ export class Plan2D {
     this.host.change((p) => {
       const f = p.floors[fi];
       f.fences = [...(f.fences ?? []), fence];
-    }, "Draw a fence");
+    }, t("editor.rooms.drawAFence"));
     this.host.select({ floor: fi, kind: "fence", id: fence.id });
     this.setTool("select");
   }
@@ -1655,11 +1655,11 @@ export class Plan2D {
   private addRoom(points: Vec2[]): void {
     const fi = this.floorIndex;
     const n = (this.floor?.rooms.length ?? 0) + 1;
-    const room: Room = { id: newId("room"), name: `Room ${n}`, area_id: null, floor: "wood", wall_finish: "paint", points: points.map(([x, z]) => [r2(x), r2(z)]) };
+    const room: Room = { id: newId("room"), name: t("editor.plan.roomN", { n }), area_id: null, floor: "wood", wall_finish: "paint", points: points.map(([x, z]) => [r2(x), r2(z)]) };
     this.host.change((p) => {
       if (!p.floors.length) p.floors.push(firstFloor());
       p.floors[fi].rooms.push(room);
-    }, "Draw a room");
+    }, t("editor.plan.drawARoom"));
     this.host.select({ floor: fi, kind: "room", id: room.id });
     this.setTool("select");
   }
@@ -1725,7 +1725,7 @@ export class Plan2D {
         const q = s?.points[c.i];
         if (s && q) s.points[c.i] = [r2(q[0] + dir[0] * delta), r2(q[1] + dir[1] * delta)];
       }
-    }, `Set a wall to ${fmt(len)}`);
+    }, t("editor.plan.setAWallTo", { len: fmt(len) }));
   }
 
   private onKey = (e: KeyboardEvent): void => {
@@ -1760,7 +1760,7 @@ export class Plan2D {
         if (sel.kind === "device") f.devices = f.devices.filter((x) => x.id !== sel.id);
         if (sel.kind === "opening") f.openings = f.openings.filter((x) => x.id !== sel.id);
         if (sel.kind === "fence") f.fences = (f.fences ?? []).filter((x) => x.id !== sel.id);
-      }, sel.kind === "fence" ? "Remove a fence" : "Remove");
+      }, sel.kind === "fence" ? t("editor.fence.removeAFence") : t("editor.remove"));
       this.host.select(null);
       return;
     }
@@ -1775,7 +1775,7 @@ export class Plan2D {
         if (!t) return;
         const to: Vec2 = [r2(t.x + m[0]), r2(t.z + m[1])];
         [t.x, t.z] = sel.kind === "furniture" ? new Collider(p, fi, sel.id).place([t.x, t.z], to) : to;
-      }, "Nudge");
+      }, t("editor.plan.nudge"));
     }
     if ((e.key === "r" || e.key === "R") && sel.kind === "furniture") {
       this.host.change((p) => {
@@ -1783,7 +1783,7 @@ export class Plan2D {
         if (!t) return;
         t.rotation = (t.rotation + (e.shiftKey ? 270 : 90)) % 360;
         settle(p, fi, sel.id);
-      }, "Turn furniture");
+      }, t("editor.turnFurniture"));
     }
   };
 }
