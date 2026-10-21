@@ -32,6 +32,7 @@ import { layoutWalls, openingPoint } from "../model/walls";
 import { cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
 import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
+import { binColours, POST_TYPES, WASTE_NAMES, wasteKind } from "../scene/bins";
 import { isRaised, outdoorTop } from "../scene/build";
 import { circlePoints, edgeOf, newArea, openEdges, rectSides, resizeRect, roundness, turnOf, type NewAreaKind } from "../scene/areas";
 import {
@@ -2038,8 +2039,10 @@ export class Editor {
     const linkable = def?.category === "lights"
       ? this.entities((id) => ["light", "switch"].includes(domainOf(id)))
       : EV_TYPES.has(x.type)
-        ? chargers.map((c) => [c.status ?? c.power ?? c.level ?? "", c.name] as Swatch).filter(([id]) => id)
-        : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
+        ? chargers.map((c) => [c.status ?? c.power ?? c.level ?? "", c.name] as [string, string]).filter(([id]) => id)
+        : POST_TYPES.has(x.type)
+          ? this.entities((id) => ["binary_sensor", "sensor", "input_boolean"].includes(domainOf(id)))
+          : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
     // a change of size, height, turn or side keeps the piece out of walls and other pieces
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
       fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
@@ -2073,7 +2076,7 @@ export class Editor {
       isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named(t("editor.furniture.reupholster"))((y) => (y.finish = k as Furniture["finish"]))) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
       ...(garden ? this.gardenRows(x, named) : []),
-      garden ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : t("editor.furniture.linkedTo")),
+      garden && !POST_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : POST_TYPES.has(x.type) ? t("editor.furniture.postSensor") : t("editor.furniture.linkedTo")),
         this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? t("editor.furniture.theHousesCharger") : t("editor.furniture.noneFound")) : t("editor.furniture.nothing"))),
       ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
       h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), "w"), ...num(t("editor.houses.depth"), "d")),
@@ -2113,7 +2116,12 @@ export class Editor {
       most ? h("div", { class: "ed-row" }, h("label", {}, t("editor.garden.windows")), ...Array.from({ length: most + 1 }, (_, n) => h("button", {
         class: `ed-chip${c.windows === n ? " on" : ""}`, onclick: () => c.windows !== n && named(t("editor.garden.windowsOf"))((y) => (y.windows = n)),
       }, n ? String(n) : t("editor.none")))) : null,
-      def?.trim ? h("div", { class: "ed-sub" }, t("editor.garden.trim")) : null,
+      ...chips(t("editor.garden.waste"), o.wastes, WASTE_NAMES, c.waste, t("editor.garden.wasteIn"), (y, v) => {
+        // the bin takes the colours that waste's bins have here
+        y.waste = v;
+        [y.color, y.trim] = binColours(this.country(), v);
+      }),
+      def?.trim ? h("div", { class: "ed-sub" }, o.wastes ? t("editor.garden.lid") : t("editor.garden.trim")) : null,
       def?.trim ? this.colourPicker(FENCE_SWATCHES, x.trim, (c) => named(t("editor.garden.trimColourOf"))((y) => (y.trim = c)), t("editor.original")) : null,
       ...chips(t("editor.garden.madeOf"), o.material ? (Object.keys(PLANTER_MATERIALS) as PlanterMaterial[]) : undefined,
         Object.fromEntries(Object.entries(PLANTER_MATERIALS).map(([k, m]) => [k, m.label])) as Record<PlanterMaterial, PlainKey>, c.material, t("editor.garden.materialOf"), (y, v) => (y.material = v)),
@@ -3060,12 +3068,20 @@ export class Editor {
     }));
   }
 
+  /** The home's country in Home Assistant (ISO 3166), for the usual colours of its bins. */
+  private country(): string | null {
+    return (this.hass.config as { country?: string | null } | undefined)?.country ?? null;
+  }
+
   private addFurniture(fi: number, space: { points: Vec2[] }, type: string): void {
     const def = FURNITURE[type];
     if (!def) return;
     const at = labelPoint(space.points);
     const item: Furniture = { id: newId("f"), type, x: at[0], z: at[1], rotation: 0, w: def.size[0], d: def.size[1], h: def.size[2] };
     if (def.y) item.y = def.y;
+    // a bin starts in the colours its waste's bins have in this country
+    const waste = wasteKind(item);
+    if (waste) [item.color, item.trim] = binColours(this.country(), waste);
     this.change((p) => {
       p.floors[fi].furniture.push(item);
       settle(p, fi, item.id);

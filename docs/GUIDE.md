@@ -448,6 +448,14 @@ its **Style** for another of its kind, and set its **Colour**, size and **Turn**
   planter): **Made of** (Timber, Sleepers, Painted wood, Corten steel, Galvanised steel, Fibreclay,
   Terracotta, Brick, Stone or Rattan) and **Planting** (Flowers, Shrubs, Grasses, Lavender, Herbs,
   Vegetables, Topiary ball, Small tree or Just soil).
+- **Bins** (Wheelie bin 140 l, Wheelie bin 240 l, Wheelie bin 360 l, Communal bin, Food caddy,
+  Recycling box): **Waste** (General waste, Recycling, Garden waste, Food waste or Glass, as the bin
+  has them) and the **Lid** colour. A new bin, and one whose waste you change, takes the colours that
+  bins for that waste usually have in your home's country (the country in Home Assistant's
+  settings); change them with **Colour** and **Lid**.
+- **Post boxes** (Post box, Post box on a post, Parcel box): pick a **Post sensor** (a binary
+  sensor, a sensor that counts post, or a toggle helper) and the post box's window glows while it
+  holds post. Tap the post box to open the sensor.
 
 ### Fences and garden walls
 

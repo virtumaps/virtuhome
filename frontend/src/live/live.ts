@@ -8,6 +8,7 @@ import { lin } from "../scene/build";
 import type { V3 } from "../scene/geo";
 import { kelvinToRgb, type LampState } from "../scene/lighting";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
+import { holdsPost, POST_TYPES } from "../scene/bins";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
 import type { EnergyLive } from "./energy";
@@ -406,6 +407,8 @@ export class HassLive implements LiveSource {
     if (g.type === "solar_panels" && !g.entity) return solarGlow(this.energy, null, this.day);
     const s = this.state(g.entity);
     if (!s || isUnavailable(s)) return null;
+    // a post box's window glows warm while its sensor says there is post
+    if (g.type && POST_TYPES.has(g.type)) return holdsPost(s.state) ? [1.0, 0.68, 0.28] : null;
     if (g.kind === "lamp") {
       const l = this.lamp({ entity: g.entity } as LampInfo);
       if (!l?.on) return null;

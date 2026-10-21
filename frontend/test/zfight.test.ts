@@ -59,6 +59,7 @@ describe("flicker-free furniture", () => {
       for (const door of o.doors ?? [null]) for (let windows = 0; windows <= (o.windows?.[0] ?? 0); windows++) variants.push({ door, windows });
       if (o.material) for (const material of Object.keys(PLANTER_MATERIALS)) variants.push({ material });
       if (o.plants) for (const plants of Object.keys(PLANTING_NAMES)) variants.push({ plants });
+      for (const waste of o.wastes ?? []) variants.push({ waste });
       for (const v of variants) {
         const item = { id: "t", type, x: 0, z: 0, rotation: 0, w, d, h, ...v };
         for (const f of fights(separateFaces(def.build(w, d, h, item)))) bad.push(`${type} ${JSON.stringify(v)}: ${f}`);
