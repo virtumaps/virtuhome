@@ -68,8 +68,9 @@ and shadows, and the weather.
   house: doors, motion, cameras, the doorbell and the alarm on a timeline, and what happened while
   everyone was out) are available to VirtuMaps installation clients.
 
-**[Read the user guide](docs/GUIDE.md)**: installing, getting your home in with or without a
-scanner, devices, wall tablets, FAQ and troubleshooting.
+**[Read the user guide](https://virtumaps.github.io/virtuhome/)**: installing, getting your home in
+with or without a scanner, devices, wall tablets, FAQ and troubleshooting. It is also here as
+[docs/GUIDE.md](docs/GUIDE.md).
 
 | Realistic, by day | Live: alerts, people, temperature map |
 |---|---|
@@ -185,8 +186,9 @@ can vote for them. [SUPPORT.md](SUPPORT.md) says where everything else goes.
 To report a problem, open an [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) (there
 are forms for bugs, device support, imports and slow devices) and attach the diagnostics file: Settings →
 Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds the versions, the plan's size and
-what each floor counts, how the card reaches your dashboards and which extensions are loaded. It has no
-room, device or entity names, and no licence key or token.
+what each floor counts, how the card reaches your dashboards, which extensions are loaded and the last
+errors the cards and the panel ran into. It has no room, device or entity names, no web addresses, and no
+licence key or token.
 
 ## Development
 
@@ -195,7 +197,8 @@ cd frontend
 npm install
 npm run dev        # rebuilds on change, dev harness on http://127.0.0.1:5173
 npm run build      # writes custom_components/virtuhome/frontend
-npm run site       # writes site/: the online demo in site/demo, for GitHub Pages
+npm run site       # writes site/ for GitHub Pages: the user guide (and the one before), and the online demo
+npm run site -- --serve   # and shows it on http://127.0.0.1:5180/virtuhome/
 npm test
 node ../tools/shot.mjs "floor=0&theme=night&quality=high" /tmp/shot.png   # screenshot with local Chrome
 ```
@@ -205,7 +208,8 @@ with `HA_URL` and `HA_TOKEN` in the dev server's environment; they are never wri
 `?plan=catalog` shows every built-in item, labelled.
 The online demo (`frontend/dev/demo.ts`) is the demo house without the live mode or saving; the
 Pages workflow builds it from each release, and the build fails if live-mode code or any Home
-Assistant URL or token handling ends up in it.
+Assistant URL or token handling ends up in it. The same workflow publishes the user guide as a
+website, a page per part of `docs/GUIDE.md` (`frontend/dev/guide-site.mjs`).
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md) and
 [CONTRIBUTING.md](CONTRIBUTING.md).

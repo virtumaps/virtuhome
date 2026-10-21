@@ -66,7 +66,11 @@ questions on it, label it `needs info`, and remove `in progress`.
 - **The user guide stays true.** Anything a user sees or does differently (a new feature, a renamed
   button, a changed option or default, something removed) updates [docs/GUIDE.md](GUIDE.md) in the
   same pull request, naming buttons and options exactly as the source does. The pull request says
-  which sections changed, or why none needed to.
+  which sections changed, or why none needed to. The guide's website is built from it, a page per
+  `##` part, with GitHub's heading anchors: renaming a heading changes its address there. Help
+  links in VirtuHome go through `guideLink("<anchor>")` (`frontend/src/ui/guide.ts`), and `npm test`
+  fails if one of them, or a link in the guide, leads nowhere (see
+  [The guide's website](#the-guides-website)).
 - Text shown to users is short and plain.
 
 ## End-to-end tests
@@ -91,6 +95,16 @@ It listens on 127.0.0.1:8131 (`--port` for another, never that of a Home Assista
 drives Google Chrome (`--chrome <path>`, or Playwright's Chromium after
 `npx playwright-core install chromium` in `frontend/`). Screenshots, Home Assistant's log and the
 diagnostics are left in the folder it names at the end (`--dir` picks it).
+
+## The guide's website
+
+`npm run site` builds [the website](https://virtumaps.github.io/virtuhome/) from `docs/GUIDE.md`
+(`frontend/dev/guide-site.mjs`), beside the online demo: a page per `##` part, a search page, and
+the guide of the previous minor release in `/<minor>/`, read from its tag. Pictures go in
+`docs/screenshots/`. A short clip (an MP4 of a few seconds, no sound) goes in `docs/clips/` and on a
+line of its own as a link, `[What it shows](clips/name.mp4)`; a picture with the same name
+(`clips/name.jpg`) shows until it plays. Comments aside, the site shows HTML in the guide as text,
+so the guide is Markdown only. `npm run site -- --serve` shows it on http://127.0.0.1:5180/virtuhome/.
 
 ## Rules
 
@@ -122,7 +136,8 @@ Maintainers only:
    panel and a wall tablet, and check an old plan still loads.
 5. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
 6. Publishing the release runs the Pages workflow, which rebuilds the
-   [online demo](https://virtumaps.github.io/virtuhome/demo/) from the tag. Check that it opens.
+   [user guide's website](https://virtumaps.github.io/virtuhome/) and the
+   [online demo](https://virtumaps.github.io/virtuhome/demo/) from the tag. Check that both open.
 
 ## Roadmap
 

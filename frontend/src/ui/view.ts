@@ -17,6 +17,7 @@ import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky"
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
 import { SkyPanel, SKY_CSS, type SkyPick } from "./sky";
 import { checkCounts, runChecks, type Check, type ServerChecks } from "./checks";
+import { callEach, errorBox, errorDetails, isolate, logError, reportFrom, sendHeld } from "./errors";
 
 export interface ViewConfig {
   /** Floor to open on (id, name or index); otherwise the whole house. */
@@ -162,6 +163,9 @@ export class VhView {
   /** A date, time or weather picked in the sun and weather panel, instead of now. */
   private skyPick: SkyPick | null = null;
   private skyPanel: SkyPanel;
+  /** The house can't be drawn: the error box shows instead. */
+  private failed = false;
+  private unreport: () => void;
   /** The demo home shown over this view (Look at the demo home). */
   private demo: { close(): void } | null = null;
 
@@ -225,6 +229,9 @@ export class VhView {
     this.tierAuto = auto;
     this.viewer = new Viewer(canvas, overlay, { tier, theme: "night", realistic: realisticModule });
     this.viewer.onSlow = () => this.onSlow();
+    this.viewer.onError = (err, fatal, where) => (fatal ? this.fail(err, where) : logError(err, where));
+    // errors go to the integration stripped of what this view knows
+    this.unreport = reportFrom(() => ({ hass: this._hass, plan: this.plan, graphics: TIER_NAMES[this.viewer.tier] }));
     this.ensureLook();
     this.viewer.walls = config.walls ?? "smart";
     this.viewer.roofOn = roofSetting() ?? config.roof ?? true;
@@ -233,7 +240,7 @@ export class VhView {
     this.live.energy = this.energy;
     this.energy.onSources = () => this.onEnergy();
     this.viewer.onHit = (hit, gesture) => this.onHit(hit, gesture);
-    this.root.addEventListener("pointerdown", () => this.touchListeners.forEach((cb) => cb()), { passive: true });
+    this.root.addEventListener("pointerdown", () => callEach(this.touchListeners, undefined), { passive: true });
 
     overlay.addEventListener("click", (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>(".vh-label");
@@ -287,13 +294,54 @@ export class VhView {
     this.skyTimer = window.setInterval(() => this.updateSky(), 60_000);
     if (fixedPlan) {
       this.baseJson = JSON.stringify(fixedPlan);
-      this.applyPlan(fixedPlan);
+      this.showPlan(fixedPlan);
+    }
+  }
+
+  // ------------------------------------------------------------------ errors
+
+  /** The house can't be drawn: a box says so, with Copy details and Reload, instead of a blank view. */
+  private fail(err: unknown, where: string): void {
+    logError(err, where);
+    if (this.failed) return;
+    this.failed = true;
+    this.viewer.halt();
+    this.root.classList.add("vh-failed");
+    this.root.append(errorBox(() => errorDetails(err, { where, graphics: TIER_NAMES[this.viewer.tier], hass: this._hass, plan: this.plan })));
+  }
+
+  /** Before the house is drawn, an error would leave the view blank; afterwards the view carries on. */
+  private caught(err: unknown, where: string): void {
+    if (this.started) logError(err, where);
+    else this.fail(err, where);
+  }
+
+  /** Draws a plan; one that can't be drawn shows the error box. */
+  private showPlan(plan: Plan): void {
+    try {
+      this.applyPlan(plan);
+    } catch (err) {
+      this.fail(err, "plan");
     }
   }
 
   // ------------------------------------------------------------------ hass and plan
 
   set hass(h: Hass) {
+    if (!this._hass) queueMicrotask(sendHeld);
+    if (this.failed) {
+      // kept for Copy details, which strips the names it knows
+      this._hass = h;
+      return;
+    }
+    try {
+      this.setHass(h);
+    } catch (err) {
+      this.caught(err, "view");
+    }
+  }
+
+  private setHass(h: Hass): void {
     this._hass = h;
     this.subscribe();
     // who may edit is known once the user is: the first run shows its choices or who can set it up
@@ -317,13 +365,7 @@ export class VhView {
       this.checksSeen = [h.entities, h.areas, h.devices];
       this.updateChecks();
     }
-    for (const cb of this.hassListeners) {
-      try {
-        cb(h);
-      } catch (err) {
-        console.error("VirtuHome extension error", err);
-      }
-    }
+    callEach(this.hassListeners, h);
   }
 
   /** Draws a set of states: the live ones, or a replay's (plus parts to redraw anyway). */
@@ -343,7 +385,14 @@ export class VhView {
 
   // ------------------------------------------------------------------ replays of the past
 
-  private startReplay(options: ReplayOptions): ReplaySession {
+  private startReplay(given: ReplayOptions): ReplaySession {
+    // the extension's tints, texts and taps, kept from stopping the view when they throw
+    const options: ReplayOptions = {
+      ...given,
+      tint: given.tint && isolate(given.tint, null),
+      text: given.text && isolate(given.text, null),
+      onHit: given.onHit && isolate(given.onHit, undefined, "extension", false),
+    };
     this.endReplay();
     if (this.editor || !this._hass) {
       // nothing to replay into: the session ends at once
@@ -401,11 +450,7 @@ export class VhView {
       this.draw(this._hass, ["lighting", "tints", "labels", "status"]);
       this.checkParked();
     }
-    try {
-      r.options.onEnd?.();
-    } catch (err) {
-      console.error("VirtuHome extension error", err);
-    }
+    if (r.options.onEnd) callEach([r.options.onEnd], undefined);
   }
 
   /** Where an entity is in the plan, with the names of its floor and room. */
@@ -455,12 +500,12 @@ export class VhView {
       moreInfo: (id) => this.dialog(id),
       addTool: (tool) => this.addTool(tool),
       setRoomTint: (fn) => {
-        this.extTint = fn;
-        if (!this.replayed) this.live.roomTint = fn;
+        this.extTint = fn && isolate(fn, null);
+        if (!this.replayed) this.live.roomTint = this.extTint;
       },
       setRoomText: (fn) => {
-        this.extText = fn;
-        if (!this.replayed) this.live.roomExtraText = fn;
+        this.extText = fn && isolate(fn, null);
+        if (!this.replayed) this.live.roomExtraText = this.extText;
       },
       refreshRooms: () => {
         this.viewer.refreshTints();
@@ -512,7 +557,7 @@ export class VhView {
         const loc = skyLocation(this._hass);
         return loc ? { north: this.plan?.settings.north ?? 0, lat: loc.lat, lon: loc.lon } : null;
       },
-      paintRoofs: (fn, spacing) => this.viewer.setRoofPaint(fn, spacing),
+      paintRoofs: (fn, spacing) => this.viewer.setRoofPaint(fn && isolate(fn, null), spacing),
       showRoofs: (on) => this.viewer.forceRoof(on),
       onPlan: (cb) => {
         self.planListeners.add(cb);
@@ -526,7 +571,7 @@ export class VhView {
     b.className = "vh-icon";
     b.title = tool.title;
     b.innerHTML = svg(tool.icon);
-    b.onclick = () => tool.onClick();
+    b.onclick = () => callEach([() => tool.onClick()], undefined);
     this.root.querySelector(".vh-tools")!.prepend(b);
     return { el: b, setOn: (on) => b.classList.toggle("on", on), remove: () => b.remove() };
   }
@@ -644,15 +689,7 @@ export class VhView {
     this.renderStatus();
     if (this.sheetEnergy) this.renderEnergy();
     const now = this.energy.now;
-    if (now) {
-      for (const cb of this.energyListeners) {
-        try {
-          cb(now);
-        } catch (err) {
-          console.error("VirtuHome extension error", err);
-        }
-      }
-    }
+    if (now) callEach(this.energyListeners, now);
     let relight = false;
     if (this.hasPanels && this.started) {
       const step = solarStep(this.energy.solarLevel());
@@ -756,15 +793,21 @@ export class VhView {
     try {
       this.unsub = await this._hass.connection.subscribeMessage<{ plan: unknown; revision: number }>(
         (msg) => {
-          this.revision = msg.revision;
-          this.repairs = [];
-          this.savedPlan = normalizePlan(msg.plan, this.repairs);
-          this.baseJson = JSON.stringify(this.savedPlan);
-          this.unsavedFrom = null;
-          this.followed = [];
-          if (!this.editor) {
-            this.applyPlan(this.savedPlan);
-            this.followRenames();
+          if (this.failed) return;
+          try {
+            this.revision = msg.revision;
+            this.repairs = [];
+            this.savedPlan = normalizePlan(msg.plan, this.repairs);
+            this.baseJson = JSON.stringify(this.savedPlan);
+            this.unsavedFrom = null;
+            this.followed = [];
+            if (!this.editor) {
+              this.applyPlan(this.savedPlan);
+              this.followRenames();
+            }
+          } catch (err) {
+            // a plan that can't be loaded or drawn
+            this.fail(err, "plan");
           }
         },
         { type: "virtuhome/plan/subscribe" },
@@ -794,7 +837,7 @@ export class VhView {
     this.unsavedFrom ??= this.baseJson;
     this.followed.push(...moved);
     if (this.savedPlan === plan) this.savedPlan = next;
-    this.applyPlan(next);
+    this.showPlan(next);
   }
 
   /** Check my setup for a plan (the editor's, or the one shown). */
@@ -900,13 +943,7 @@ export class VhView {
     this.updateSky();
     this.renderChips();
     this.updateChecks();
-    for (const cb of this.planListeners) {
-      try {
-        cb(plan);
-      } catch (err) {
-        console.error("VirtuHome extension error", err);
-      }
-    }
+    callEach(this.planListeners, plan);
   }
 
   private startFloor(plan: Plan): number {
@@ -949,6 +986,7 @@ export class VhView {
     this.disconnect();
     this.unregister?.();
     this.unregister = null;
+    this.unreport();
     window.clearInterval(this.statsTimer);
     window.clearInterval(this.todayTimer);
     this.barWatch?.disconnect();

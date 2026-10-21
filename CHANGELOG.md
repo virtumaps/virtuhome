@@ -2,10 +2,26 @@
 
 ## Unreleased
 
+### New
+- The user guide as a website at virtumaps.github.io/virtuhome: a page for each part, with its
+  sections at the top and the contents beside it, and search. It reads well on a phone, in light or
+  dark and without JavaScript. It is rebuilt from docs/GUIDE.md with each release, keeps the guide
+  for the version before, and **How** in Getting started opens it.
+- When the house can't be drawn, the card or panel says "Something went wrong drawing the house"
+  with **Copy details** and **Reload** instead of staying blank. Copy details leaves out the names
+  of rooms, areas, devices and people, entity ids and web addresses.
+- The diagnostics file holds the last 50 errors the cards and the panel ran into (where, the error,
+  the version, the graphics level and the browser), with names, entity ids and web addresses
+  taken out.
+
 ### Fixed
 - Check my setup no longer calls the dashboard card a problem just after Home Assistant restarts
   (after an update it still named the version before). It says it's checking until Home Assistant
   has finished starting, and looks again by itself.
+- An extension that goes wrong no longer stops the house: its room colours, labels, roof colours,
+  buttons and listeners are left out and the rest keeps working.
+- When the browser drops the graphics (the graphics card resets, a tablet wakes from sleep), the
+  house is drawn again by itself, on a new canvas if the browser doesn't give the old one back.
 
 ## 0.11.0
 

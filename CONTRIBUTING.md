@@ -16,6 +16,7 @@ npm install
 npm run dev -- --fast     # dev harness on http://127.0.0.1:5173 with the demo house and pretend states
 npm test                  # unit tests (vitest)
 npm run typecheck
+npm run site -- --serve   # the user guide's website and the online demo on http://127.0.0.1:5180/virtuhome/
 ```
 
 To see your own home in the dev harness, start it with your Home Assistant in the environment

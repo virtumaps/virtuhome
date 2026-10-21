@@ -649,6 +649,16 @@ should, with a fix where there is a safe one. Nothing changes until you press a 
   `module` resource yourself. In storage mode VirtuHome adds it.
 - After an update, reload the page, or clear the browser's cache on a tablet.
 
+**"Something went wrong drawing the house"**: the card or panel shows this instead of the house when
+it can't draw it.
+- **Reload** loads the page again.
+- **Copy details** copies what went wrong: the VirtuHome version, the graphics level, the browser
+  and the error. Names of rooms, areas, devices and people, entity ids and web addresses are taken
+  out. Paste it into an [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) if it
+  keeps happening.
+- The cards and the panel also send their last errors to your Home Assistant, stripped the same
+  way, for the diagnostics file (see **Still stuck?** below). They go nowhere else.
+
 **"VirtuHome is not set up"**: add the integration under Settings → Devices & services.
 
 **"No home yet"**: an administrator opens **VirtuHome** in the sidebar and picks how to [get the
@@ -689,12 +699,20 @@ pick the sensors in Edit → **Home** → **Energy**.
 
 **Extensions don't show after activating**: tap **Reload now**, or reload the page.
 
+**An extension goes wrong**: the house carries on without it. Its room colours, labels, buttons and
+the rest are left out.
+
+**The house went blank for a moment**: when the browser drops the graphics (the graphics card
+resets, or a tablet wakes from sleep), the house is drawn again by itself after a few seconds.
+
 **Still stuck?** Ask in [Discussions →
 Q&A](https://github.com/virtumaps/virtuhome/discussions/categories/q-a). To report something that
 doesn't work, a device to support, a scan that came in wrong or a slow device, open an
 [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) with its form, and attach the
 diagnostics file: Settings → Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds
 the versions, the plan's size and what each floor counts, how the card reaches your dashboards and
-which extensions are loaded, and how many things each check of **Check my setup** found when an
-administrator last opened VirtuHome. It has no room, device or entity names, and no licence key or
-token.
+which extensions are loaded, how many things each check of **Check my setup** found when an
+administrator last opened VirtuHome, and the last 50 errors the cards and the panel ran into (where,
+the error, the version, the graphics level and the browser). It has no room, area, device, people or
+entity names, no web addresses, and no licence key or token. Errors are kept until Home Assistant or
+VirtuHome restarts.
