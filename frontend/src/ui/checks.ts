@@ -6,7 +6,7 @@ import type { Hass } from "../live/hass";
 import { missingLinks } from "../model/links";
 import { t } from "../i18n";
 import type { Plan, Repair } from "../model/plan";
-import { TIER_NAMES, TIERS, type Tier } from "../scene/tier";
+import { tierName, TIERS, type Tier } from "../scene/tier";
 
 export type CheckId = "links" | "rooms" | "areas" | "card" | "graphics" | "extensions" | "repairs";
 /** Safe fixes; nothing changes until one is pressed. */
@@ -106,10 +106,10 @@ export function checkGraphics(g: CheckInput["graphics"]): Check {
   const found: [Check["level"], string][] = [];
   const capped = g.auto && !!g.cap && TIERS.indexOf(g.cap) < TIERS.indexOf(g.detected);
   if (capped && g.cap) {
-    found.push(["note", t("checks.graphics.capped", { tier: TIER_NAMES[g.cap] })]);
+    found.push(["note", t("checks.graphics.capped", { tier: tierName(g.cap) })]);
   }
   if (g.auto && g.software) found.push(["note", t("checks.graphics.software")]);
-  const ok = t(g.auto ? "checks.graphics.auto" : "checks.graphics.picked", { tier: TIER_NAMES[g.tier] });
+  const ok = t(g.auto ? "checks.graphics.auto" : "checks.graphics.picked", { tier: tierName(g.tier) });
   return check("graphics", t("checks.graphics.title"), found, ok, [capped && "graphics"]);
 }
 

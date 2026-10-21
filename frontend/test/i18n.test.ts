@@ -126,9 +126,9 @@ describe("the English table", () => {
     const patterns: RegExp[] = [];
     for (const f of sources.filter((x) => !x.startsWith("i18n/en"))) {
       const code = read(f);
-      // every quoted string, and those inside a template's ${} on their own
+      // every quoted string, and the keys inside a template's ${} on their own
       for (const m of code.matchAll(/"((?:\\.|[^"\\\n])*)"|'((?:\\.|[^'\\\n])*)'|`((?:\\.|[^`\\])*)`/g)) literal.add(m[1] ?? m[2] ?? m[3]);
-      for (const m of code.matchAll(/"((?:\\.|[^"\\\n])*)"/g)) literal.add(m[1]);
+      for (const m of code.matchAll(/["'`]([a-z][\w-]*(?:\.[\w-]+)+)["'`]/g)) literal.add(m[1]);
       // a key put together in the code: `checks.repairs.${r}`
       for (const m of code.matchAll(/`([a-z][\w.]*\$\{[^`]*)`/g)) {
         const re = m[1].split(/\$\{[^}]*\}/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\w-]+");
@@ -167,17 +167,23 @@ describe("loading", () => {
 });
 
 /** The files whose text has moved into the table: text written straight into them is caught here. */
-const SCANNED = ["ui/checks.ts", "ui/setup.ts", "editor/house-types.ts"];
+const SCANNED = [
+  "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
+  "editor/house-types.ts",
+];
 
 /** Strings in them that look like text but aren't shown to users. */
-const NOT_TEXT: Record<string, string[]> = {};
+const NOT_TEXT: Record<string, string[]> = {
+  // what Copy details copies and the error reports say: read by whoever fixes the bug, in English
+  "ui/errors.ts": ["(\\d+)", "const SYSTEMS", "Another browser", "graphics, ${browserName(ua)}", "`In: ${info.where}`", "the details could not be worked out"],
+};
 
 /** What text for users looks like in code: a title or label, a capitalised word or phrase, a few words, a text node. */
 const LOOKS_LIKE_TEXT = [
   /\b(?:title|aria-label|alt|placeholder)\s*[=:]\s*["'`][A-Za-z]{2,}/,
   /(?:^|[^\w$.])["'`][A-Z][A-Za-z’']+(?:[ ,.:;!?…][^"'`]*)?["'`]/,
   /["'`][^"'`<>]*?\b[a-z]{2,} [a-z]{2,} [a-z]{2,}\b[^"'`<>]*["'`]/,
-  />\s*[A-Z][a-z]+[^<>"'`]*</,
+  /(?<!=)>\s*[A-Z][a-z]+[^<>"'`]*<\//,
 ];
 
 describe("no text for users written into the code", () => {

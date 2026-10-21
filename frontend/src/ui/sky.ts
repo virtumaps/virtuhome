@@ -5,6 +5,7 @@ import type { Hass } from "../live/hass";
 import { location, WEATHER_PICKS, type Sky, type WeatherPick } from "../live/sky";
 import { compassName, sunEvents } from "../live/sun";
 import { zonedParts, zonedTime } from "./clock";
+import { esc, t, th } from "../i18n";
 
 export interface SkyPick {
   /** A moment to show instead of now. */
@@ -23,15 +24,11 @@ export interface SkyPanelHost {
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
 
-const WEATHER_NAMES: Record<WeatherPick | "live", string> = {
-  live: "Live", clear: "Clear", cloudy: "Cloudy", rain: "Rain", storm: "Storm", snow: "Snow", fog: "Fog",
-};
-
-const CONDITION_NAMES: Record<string, string> = {
-  "clear-night": "clear", sunny: "sunny", partlycloudy: "partly cloudy", cloudy: "cloudy", windy: "windy", "windy-variant": "windy, cloudy",
-  fog: "fog", rainy: "rain", pouring: "heavy rain", hail: "hail", lightning: "thunder", "lightning-rainy": "thunderstorm",
-  snowy: "snow", "snowy-rainy": "sleet", exceptional: "unusual weather",
-};
+/** Home Assistant's weather conditions the panel puts into words (others show as they are). */
+const CONDITIONS = [
+  "clear-night", "sunny", "partlycloudy", "cloudy", "windy", "windy-variant", "fog", "rainy", "pouring", "hail", "lightning",
+  "lightning-rainy", "snowy", "snowy-rainy", "exceptional",
+] as const;
 
 export const SKY_CSS = /* css */ `
 .vh-sky {
@@ -182,16 +179,16 @@ export class SkyPanel {
     }
     const yearDay = (month: number, day: number) => Math.round((Date.UTC(now.year, month, day) - Date.UTC(now.year, 0, 1)) / 86_400_000);
     const chip = (a: string, v: string, label: string, on: boolean) =>
-      `<button class="vh-chip${on ? " on" : ""}" data-a="${a}" data-v="${v}">${label}</button>`;
-    const days: [string, number][] = [["Midwinter", yearDay(11, 21)], ["Spring", yearDay(2, 20)], ["Midsummer", yearDay(5, 21)], ["Autumn", yearDay(8, 22)]];
-    const times: [string, number | null][] = events ? [["Sunrise", events.rise], ["Noon", events.noon], ["Sunset", events.set]] : [];
+      `<button class="vh-chip${on ? " on" : ""}" data-a="${a}" data-v="${v}">${esc(label)}</button>`;
+    const days: [string, number][] = [[t("sky.midwinter"), yearDay(11, 21)], [t("sky.spring"), yearDay(2, 20)], [t("sky.midsummer"), yearDay(5, 21)], [t("sky.autumn"), yearDay(8, 22)]];
+    const times: [string, number | null][] = events ? [[t("sky.sunrise"), events.rise], [t("sky.noon"), events.noon], [t("sky.sunset"), events.set]] : [];
     const weatherNow = this.weather ?? (this.time() !== null ? "clear" : null);
     if (!this.el.firstChild) {
       this.el.innerHTML = `
-        <h3>Sun and weather<button class="vh-icon" data-a="close" title="Back to live">${svg(mdiClose)}</button></h3>
-        <div class="vh-sky-row"><label>Date</label><input type="range" min="0" max="365" step="1" data-k="date"><b data-l="date"></b></div>
+        <h3>${th("sky.title")}<button class="vh-icon" data-a="close" title="${th("sky.back")}">${svg(mdiClose)}</button></h3>
+        <div class="vh-sky-row"><label>${th("sky.date")}</label><input type="range" min="0" max="365" step="1" data-k="date"><b data-l="date"></b></div>
         <div class="vh-sky-chips" data-c="date"></div>
-        <div class="vh-sky-row"><label>Time</label><input type="range" min="0" max="1435" step="5" data-k="time"><b data-l="time"></b></div>
+        <div class="vh-sky-row"><label>${th("sky.time")}</label><input type="range" min="0" max="1435" step="5" data-k="time"><b data-l="time"></b></div>
         <div class="vh-sky-chips" data-c="time"></div>
         <div class="vh-sky-chips weather" data-c="weather"></div>
         <div class="vh-sky-info"></div>`;
@@ -209,27 +206,29 @@ export class SkyPanel {
       const e = q(sel);
       if (e.innerHTML !== h) e.innerHTML = h;
     };
-    html('[data-c="date"]', chip("date", "today", "Today", this.yday === null) + days.map(([n, d]) => chip("date", String(d), n, this.yday === d)).join(""));
-    html('[data-c="time"]', chip("time", "now", "Now", this.minutes === null && !this.playTimer)
+    html('[data-c="date"]', chip("date", "today", t("sky.today"), this.yday === null) + days.map(([n, d]) => chip("date", String(d), n, this.yday === d)).join(""));
+    html('[data-c="time"]', chip("time", "now", t("sky.now"), this.minutes === null && !this.playTimer)
       + times.filter(([, m]) => m !== null).map(([n, m]) => chip("time", String(m), n, this.minutes === m && !this.playTimer)).join("")
-      + `<button class="vh-chip vh-play" data-a="play" title="${this.playTimer ? "Pause" : "Play the day"}">${svg(this.playTimer ? mdiPause : mdiPlay)}</button>`);
-    html('[data-c="weather"]', (["live", ...WEATHER_PICKS] as const).map((w) => chip("weather", w, WEATHER_NAMES[w], (weatherNow ?? "live") === w)).join(""));
+      + `<button class="vh-chip vh-play" data-a="play" title="${th(this.playTimer ? "sky.pause" : "sky.play")}">${svg(this.playTimer ? mdiPause : mdiPlay)}</button>`);
+    html('[data-c="weather"]', (["live", ...WEATHER_PICKS] as const).map((w) => chip("weather", w, t(`sky.weather.${w}`), (weatherNow ?? "live") === w)).join(""));
     const sky = this.host.sky();
     const lines: string[] = [];
-    if (!loc) lines.push("Set the home's location in Home Assistant (Settings → System → General) to place the sun.");
+    if (!loc) lines.push(th("sky.noLocation"));
     else if (sky?.sun) {
       const s = sky.sun;
-      lines.push(s.elevation > -0.833
-        ? `Sun ${Math.round(s.elevation)}° up in the ${compassName(s.azimuth)} (${Math.round(s.azimuth)}°)`
-        : `Sun down, ${Math.round(-s.elevation)}° below the horizon${sky.moon && sky.moon.elevation > 0 ? ` · moon ${Math.round(sky.moon.lit * 100)}% lit in the ${compassName(sky.moon.azimuth)}` : ""}`);
+      const moon = sky.moon && sky.moon.elevation > 0 ? t("sky.moon", { lit: Math.round(sky.moon.lit * 100), direction: compassName(sky.moon.azimuth) }) : "";
+      lines.push(esc(s.elevation > -0.833
+        ? t("sky.sunUp", { elevation: Math.round(s.elevation), direction: compassName(s.azimuth), azimuth: Math.round(s.azimuth) })
+        : [t("sky.sunDown", { below: Math.round(-s.elevation) }), moon].filter(Boolean).join(" · ")));
     }
     if (sky && sky.source === "live" && sky.condition) {
-      const parts = [CONDITION_NAMES[sky.condition] ?? sky.condition, `cloud ${Math.round(sky.cloud * 100)}%`];
-      if (sky.wind >= 1) parts.push(`wind ${Math.round(sky.wind * 3.6)} km/h from the ${compassName(sky.windFrom)}`);
-      if (sky.wet > 0.2 && sky.rain === 0) parts.push("ground wet");
-      lines.push(`Weather now: ${parts.join(", ")}`);
-    } else if (sky?.source === "none" && !this.weather && this.time() === null) lines.push("No weather entity: add Met.no (Settings → Devices &amp; services) for clouds, rain and snow.");
-    if (!this.host.realistic()) lines.push(`Shadows, clouds and rain show with Realistic graphics. <button data-a="realistic">Switch on this device</button>`);
+      const condition = CONDITIONS.find((c) => c === sky.condition);
+      const parts = [condition ? t(`sky.condition.${condition}`) : sky.condition, t("sky.cloud", { cloud: Math.round(sky.cloud * 100) })];
+      if (sky.wind >= 1) parts.push(t("sky.wind", { speed: Math.round(sky.wind * 3.6), direction: compassName(sky.windFrom) }));
+      if (sky.wet > 0.2 && sky.rain === 0) parts.push(t("sky.wet"));
+      lines.push(th("sky.weatherNow", { weather: parts.join(", ") }));
+    } else if (sky?.source === "none" && !this.weather && this.time() === null) lines.push(th("sky.noWeather"));
+    if (!this.host.realistic()) lines.push(`${th("sky.realistic")} <button data-a="realistic">${th("sky.useRealistic")}</button>`);
     html(".vh-sky-info", lines.join("<br>"));
   }
 

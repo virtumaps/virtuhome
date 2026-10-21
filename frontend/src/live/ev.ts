@@ -4,6 +4,7 @@
 // the charger's power sensor and the car's battery by hand.
 import type { EnergySettings } from "../model/plan";
 import { domainOf, isPower, kw, type Hass, type HassEntity } from "./hass";
+import { t } from "../i18n";
 
 /** One charger's entities (any of them may be missing). */
 export interface EvCharger {
@@ -34,10 +35,8 @@ export interface EvCharger {
 
 export type EvState = "unplugged" | "plugged" | "charging" | "approval" | "paused" | "finished" | "fault" | "unknown";
 
-export const EV_STATE_TEXT: Record<EvState, string> = {
-  unplugged: "Unplugged", plugged: "Plugged in", charging: "Charging", approval: "Waiting for approval",
-  paused: "Paused", finished: "Charged", fault: "Fault", unknown: "",
-};
+/** What a charger is doing, in words ("" when it isn't known). */
+export const evStateText = (state: EvState): string => (state === "unknown" ? "" : t(`ev.${state}`));
 
 /** What a charger and its car are doing now. */
 export interface EvNow {

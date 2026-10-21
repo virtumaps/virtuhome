@@ -3,24 +3,19 @@
 //   medium   the model look, antialiased, sharp on high-density screens
 //   high     the realistic look: textures, sun and soft shadows, tone mapping
 //   ultra    high plus ambient occlusion, bloom, bigger textures and shadow maps
+import { t } from "../i18n";
+import { EN } from "../i18n/en";
+
 export type Tier = "low" | "medium" | "high" | "ultra";
 export type TierSetting = Tier | "auto";
 
 export const TIERS: Tier[] = ["low", "medium", "high", "ultra"];
 
-export const TIER_NAMES: Record<Tier, string> = {
-  low: "Tablet",
-  medium: "Standard",
-  high: "Realistic",
-  ultra: "Ultra",
-};
-
-export const TIER_HINTS: Record<Tier, string> = {
-  low: "Fastest, for wall tablets",
-  medium: "Clean model look",
-  high: "Textures, sunlight and shadows",
-  ultra: "Adds soft shading and glow; needs a strong GPU",
-};
+/** A level's name (Tablet, Standard…) and what it is for. */
+export const tierName = (tier: Tier): string => t(`tier.${tier}`);
+export const tierHint = (tier: Tier): string => t(`tier.${tier}.hint`);
+/** A level's English name, for error reports: whoever fixes the bug reads them. */
+export const tierNameEn = (tier: Tier): string => EN[`tier.${tier}`];
 
 /** Weak devices: Fire tablets, old Android, little memory or few cores. */
 export function detectLowEnd(): boolean {
