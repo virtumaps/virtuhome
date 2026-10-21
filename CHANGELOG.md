@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0
 
 ### New
 - **Look at the demo home**, under Let's get your home in and in Edit → Home, opens the demo house
