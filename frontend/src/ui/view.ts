@@ -12,6 +12,7 @@ import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveT
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { isNewHome, START_CHOICES, type StartKind } from "./setup";
+import { t, th } from "../i18n";
 import { VIEW_CSS } from "./styles";
 import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
@@ -1404,14 +1405,14 @@ export class VhView {
     this.empty.hidden = false;
     const box = document.createElement("div");
     box.className = "vh-start";
-    box.innerHTML = `<h2>Let's get your home in</h2><p>Pick a way to start. Everything can be changed afterwards.</p>`;
-    for (const c of START_CHOICES) {
+    box.innerHTML = `<h2>${th("start.title")}</h2><p>${th("start.text")}</p>`;
+    for (const kind of START_CHOICES) {
       const b = document.createElement("button");
       b.className = "vh-start-choice";
       b.innerHTML = `<b></b><span></span>`;
-      b.querySelector("b")!.textContent = c.title;
-      b.querySelector("span")!.textContent = c.text;
-      b.onclick = () => void this.openEditor().then(() => this.editor?.startSetup(c.kind));
+      b.querySelector("b")!.textContent = t(`start.${kind}.title`);
+      b.querySelector("span")!.textContent = t(`start.${kind}.text`);
+      b.onclick = () => void this.openEditor().then(() => this.editor?.startSetup(kind));
       box.append(b);
     }
     this.empty.replaceChildren(box);

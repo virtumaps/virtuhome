@@ -71,7 +71,8 @@ questions on it, label it `needs info`, and remove `in progress`.
   links in VirtuHome go through `guideLink("<anchor>")` (`frontend/src/ui/guide.ts`), and `npm test`
   fails if one of them, or a link in the guide, leads nowhere (see
   [The guide's website](#the-guides-website)).
-- Text shown to users is short and plain.
+- Text shown to users is short and plain, and comes from the English table (see
+  [Text and translations](#text-and-translations)).
 
 ## End-to-end tests
 
@@ -105,6 +106,53 @@ the guide of the previous minor release in `/<minor>/`, read from its tag. Pictu
 line of its own as a link, `[What it shows](clips/name.mp4)`; a picture with the same name
 (`clips/name.jpg`) shows until it plays. Comments aside, the site shows HTML in the guide as text,
 so the guide is Markdown only. `npm run site -- --serve` shows it on http://127.0.0.1:5180/virtuhome/.
+
+## Text and translations
+
+Every text a user sees or hears in the frontend (labels, buttons, titles and `aria-label`s, toasts,
+errors, names of furniture and finishes) is in one English table, which other languages translate.
+It is kept in two files, so that a wall tablet never downloads the editor's text:
+
+- `frontend/src/i18n/en.ts`: what the view shows (the card, the panel, the first run, Check my
+  setup) and the 3D scene's names; loaded up front.
+- `frontend/src/i18n/en-editor.ts`: what only the editor shows, loaded with the editor. A key is in
+  one of the two, never both.
+
+To add a text:
+
+1. Add a key and its English to the table of the code that shows it: `en-editor.ts` for the
+   editor's own modules (`src/editor/`, the house types, the importers), else `en.ts`. Keys are
+   `area.thing` (`checks.links.title`); the text is short, plain British English.
+2. Show it with `t()` from `src/i18n`, or from `src/i18n/editor` in the editor's modules:
+   `t("checks.areas.found", { n: ids.length, names })`. Placeholders are named, `{names}`. A text
+   that changes with a count is `{ one: "{n} room", other: "{n} rooms" }` and takes the count as
+   `n`. TypeScript fails on a key that doesn't exist and on a placeholder left out.
+3. Text that goes into `innerHTML` uses `th()`, which escapes the text and what fills it in: Home
+   Assistant's names are never trusted. `textContent` and the editor's `h(…)` take `t()`.
+4. Never call `t()` at the top of a module (in a constant): that runs before the user's language is
+   loaded. Keep the keys in the constant and call `t()` when drawing.
+
+`npm test` (`test/i18n.test.ts`) checks that every text is used and every text with counts has both
+forms, that the editor's English stays out of what the view loads up front, and looks for text
+written straight into the UI's code. A string there that looks like text but no user sees goes into
+its `NOT_TEXT` list.
+
+Not in the table: log messages, the details Copy details copies (read by whoever fixes the bug),
+the dev harness, the loader (it runs on every Home Assistant page and stays tiny), and the
+integration, whose texts are in `custom_components/virtuhome/strings.json` and `translations/` as
+Home Assistant keeps them. Extensions bring their own texts.
+
+### Adding a language
+
+VirtuHome follows the language in the user's Home Assistant profile, else its main language
+(`de-CH` → `de`), else English. A language is a table of the English keys, loaded the first time it
+is needed, so it adds nothing to what anyone else loads:
+
+1. Add `frontend/src/i18n/<code>.ts` exporting a `Translation` with the keys it translates; a key it
+   lacks shows in English. A text with counts has the forms the language has (`one`, `few`, `many`,
+   `other`, as `Intl.PluralRules` names them).
+2. Register it in `LANGUAGES` in `frontend/src/i18n/index.ts`:
+   `de: () => import("./de").then((m) => m.DE)`.
 
 ## Rules
 

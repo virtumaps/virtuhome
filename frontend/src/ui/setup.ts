@@ -1,16 +1,12 @@
 // Getting started: the first-run choices and the checklist that follows a new home until it is set up.
 import type { Hass } from "../live/hass";
 import type { Plan } from "../model/plan";
+import { t } from "../i18n";
 
 /** How a new home is got in (the first-run choices). */
 export type StartKind = "scan" | "trace" | "starter" | "draw";
 
-export const START_CHOICES: { kind: StartKind; title: string; text: string }[] = [
-  { kind: "trace", title: "Trace a floor plan picture", text: "An estate agent's plan, or a photo of a sketch. No scanner needed." },
-  { kind: "starter", title: "Start from a house type", text: "A terrace, semi, detached, bungalow or flat, fitted to your home's size." },
-  { kind: "scan", title: "Import a scan or plan", text: "A scan from the House Scan app, or a plan from Sweet Home 3D or another program." },
-  { kind: "draw", title: "Draw it myself", text: "Drag out the rooms in the 2D plan and type their sizes." },
-];
+export const START_CHOICES: StartKind[] = ["trace", "starter", "scan", "draw"];
 
 export type SetupId = "home" | "areas" | "devices" | "north" | "card" | "tablet";
 
@@ -44,16 +40,16 @@ export function setupItems(plan: Plan, hass: Hass | null | undefined, facts: Set
   const areasDone = rooms.length > 0 && (rooms.every((r) => r.area_id) || freeAreas.length === 0);
   const placed = plan.floors.some((f) => f.devices.length > 0 || f.furniture.some((x) => x.entity));
   // seen: done by what the plan shows; null: only a tick says it is done
-  const item = (id: SetupId, title: string, hint: string, seen: boolean | null, optional = false): SetupItem => ({
-    id, title, hint, optional, manual: seen === null, done: !!seen || ticked.has(id),
+  const item = (id: SetupId, seen: boolean | null, optional = false): SetupItem => ({
+    id, title: t(`setup.${id}.title`), hint: t(`setup.${id}.hint`), optional, manual: seen === null, done: !!seen || ticked.has(id),
   });
   return [
-    item("home", "Get your home in", "Trace a floor plan picture, start from a house type, import a scan or plan, or draw the rooms.", rooms.length > 0),
-    item("areas", "Link the rooms to areas", "Each room shows the devices of its Home Assistant area.", areasDone),
-    item("devices", "Place your devices", "Lights, sensors, cameras and thermostats go into their rooms, contacts onto their doors and windows.", placed),
-    item("north", "Set north", "So the sun shines in from the right side.", plan.settings.north !== 0 ? true : null),
-    item("card", "Put the house on a dashboard", "Edit a dashboard, add a card and pick VirtuHome.", facts.cardOnDashboard ? true : null),
-    item("tablet", "Set up a wall tablet", "A tablet on the wall showing the house.", null, true),
+    item("home", rooms.length > 0),
+    item("areas", areasDone),
+    item("devices", placed),
+    item("north", plan.settings.north !== 0 ? true : null),
+    item("card", facts.cardOnDashboard ? true : null),
+    item("tablet", null, true),
   ];
 }
 

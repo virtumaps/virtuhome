@@ -3,6 +3,7 @@
 import { mdiClose } from "@mdi/js";
 import { bounds } from "../model/geom";
 import type { Plan } from "../model/plan";
+import { t } from "../i18n/editor";
 import type { Starter } from "../starters/houses";
 
 type Houses = typeof import("../starters/houses");
@@ -33,11 +34,11 @@ export class HouseTypes {
 
   constructor(private host: { use(plan: Plan, name: string): void; close(): void; reveal(el: HTMLElement): void }) {
     const close = el("button", "ed-ib small");
-    close.title = "Close";
+    close.title = t("editor.close");
     close.innerHTML = `<svg viewBox="0 0 24 24"><path d="${mdiClose}"/></svg>`;
     close.onclick = () => host.close();
-    this.el.append(el("div", "ed-houses-head", el("h4", "", "Start from a house type"), close), el("p", "ed-hint", "Loading…"));
-    load().then((m) => this.list(m), () => this.el.lastElementChild!.replaceWith(el("p", "ed-hint", "The house types could not be loaded.")));
+    this.el.append(el("div", "ed-houses-head", el("h4", "", t("editor.houses.title")), close), el("p", "ed-hint", t("editor.loading")));
+    load().then((m) => this.list(m), () => this.el.lastElementChild!.replaceWith(el("p", "ed-hint", t("editor.houses.failed"))));
   }
 
   private list(m: Houses): void {
@@ -53,7 +54,7 @@ export class HouseTypes {
       };
       grid.append(card);
     }
-    this.el.lastElementChild!.replaceWith(el("p", "ed-hint", "Pick the one most like your home. The walls can be dragged to fit afterwards."), grid, fit);
+    this.el.lastElementChild!.replaceWith(el("p", "ed-hint", t("editor.houses.pick")), grid, fit);
   }
 
   private pick(m: Houses, s: Starter, box: HTMLElement): void {
@@ -89,7 +90,7 @@ export class HouseTypes {
         };
         return c;
       };
-      side = el("div", "ed-row", el("span", "ed-hint", "Joins next door on the"), chip("Left", true), chip("Right", false));
+      side = el("div", "ed-row", el("span", "ed-hint", t("editor.houses.joins")), chip(t("editor.houses.left"), true), chip(t("editor.houses.right"), false));
     } else {
       const box2 = el("input", "");
       box2.type = "checkbox";
@@ -97,18 +98,18 @@ export class HouseTypes {
         this.size.mirror = box2.checked;
         thumb()?.classList.toggle("flip", box2.checked);
       };
-      side = el("label", "ed-check", box2, "Mirror left to right");
+      side = el("label", "ed-check", box2, t("editor.houses.mirror"));
     }
     thumb()?.classList.remove("flip");
-    const use = el("button", "ed-btn", "Use this house type");
+    const use = el("button", "ed-btn", t("editor.houses.use"));
     use.onclick = () => {
       const { width, depth, mirror } = this.size;
       this.host.use(m.starterPlan(s.id, { width, depth, mirror }), s.name);
     };
     box.replaceChildren(
-      el("h4", "", "Fit to my home"),
-      el("p", "ed-hint", "Your home's outside width and depth, as an estate agent's listing gives them. Doors, windows and stairs keep their size."),
-      el("div", "ed-row", num("width", "Width"), num("depth", "Depth")),
+      el("h4", "", t("editor.houses.fit")),
+      el("p", "ed-hint", t("editor.houses.fitHint")),
+      el("div", "ed-row", num("width", t("editor.houses.width")), num("depth", t("editor.houses.depth"))),
       side,
       el("div", "ed-row", use),
     );
