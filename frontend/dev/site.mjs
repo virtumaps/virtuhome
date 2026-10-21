@@ -1,11 +1,17 @@
 // Builds the static site GitHub Pages serves (.github/workflows/pages.yml):
-//   site/index.html   a front page; the root is left for the user guide
+//   site/             the user guide, a page per part of docs/GUIDE.md (dev/guide-site.mjs)
+//   site/<minor>/     the guide of the minor release before it (0.10/ beside 0.11.0), from its tag
 //   site/demo/        the online demo: the demo house with pretend states (dev/demo.ts)
-// `npm run site` (or `node dev/site.mjs [out]`). It fails if the harness's live mode, or anything
-// that handles a Home Assistant address or token, ends up in the files.
+// `npm run site` (or `node dev/site.mjs [out]`); `--serve` then shows it on
+// http://127.0.0.1:5180/virtuhome/, as Pages does. It fails if the harness's live mode, or anything
+// that handles a Home Assistant address or token, ends up in the demo, or if a link in the guide
+// leads nowhere.
 import * as esbuild from "esbuild";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { createServer } from "node:http";
+import { basename, dirname, extname, join, normalize, resolve } from "node:path";
+import { currentVersion, guideSite, previousMinor, readRelease } from "./guide-site.mjs";
 
 const dev = new URL(".", import.meta.url).pathname;
 const frontend = join(dev, "..");
@@ -65,28 +71,82 @@ export function demoPage(preload) {
 
 export async function buildSite(out) {
   const { files, preload, problems } = await bundle();
-  const pages = [
-    { name: "index.html", text: readFileSync(join(dev, "site-index.html"), "utf8") },
-    { name: "demo/index.html", text: demoPage(preload) },
-  ];
+  const pages = [{ name: "demo/index.html", text: demoPage(preload) }];
   problems.push(...liveCode(pages, []));
   if (problems.length) throw new Error(`The site must not reach a Home Assistant:\n  ${problems.join("\n  ")}`);
-  const all = [...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text }))];
+  const version = currentVersion();
+  const before = previousMinor(version);
+  const md = before && readRelease(before)("docs/GUIDE.md");
+  const minor = before?.replace(/\.\d+$/, "");
+  const guide = guideSite({ version, older: md ? [{ version: before, href: `${minor}/` }] : [] });
+  if (guide.problems.length) throw new Error(`Links in docs/GUIDE.md lead nowhere:\n  ${guide.problems.join("\n  ")}`);
+  let older = [];
+  if (md) {
+    const newest = { version, href: "../", anchors: guide.anchors };
+    const old = guideSite({ md: md.toString("utf8"), version: before, read: readRelease(before), root: "../", newest });
+    // a released guide can't be changed any more: what it gets wrong is only reported
+    for (const p of old.problems) console.warn(`The ${before} guide: ${p}`);
+    older = old.files.map((f) => ({ ...f, name: `${minor}/${f.name}` }));
+  } else {
+    console.warn(`No guide of a release before ${version} to publish beside it (are the tags fetched?)`);
+  }
+  const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text }))];
   rmSync(out, { recursive: true, force: true });
   for (const f of all) {
     mkdirSync(dirname(join(out, f.name)), { recursive: true });
-    writeFileSync(join(out, f.name), f.text);
+    writeFileSync(join(out, f.name), f.data ?? f.text);
   }
-  return all.map((f) => ({ name: f.name, bytes: Buffer.byteLength(f.text) }));
+  return all.map((f) => ({ name: f.name, bytes: f.data?.length ?? Buffer.byteLength(f.text) }));
+}
+
+const TYPES = {
+  ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
+  ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm",
+};
+
+/** Serves the built site under /virtuhome/, as GitHub Pages does, on this computer only. */
+export function serveSite(out, port = 5180) {
+  createServer(async (req, res) => {
+    let path;
+    try {
+      path = normalize(decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname));
+    } catch {
+      path = "";
+    }
+    if (!path.startsWith("/virtuhome/")) {
+      res.writeHead(302, { location: "/virtuhome/" });
+      return res.end();
+    }
+    let file = join(out, path.slice("/virtuhome".length));
+    if ((await stat(file).catch(() => null))?.isDirectory()) {
+      if (!path.endsWith("/")) {
+        res.writeHead(301, { location: `${path}/` });
+        return res.end();
+      }
+      file = join(file, "index.html");
+    }
+    try {
+      const body = await readFile(file);
+      res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream", "cache-control": "no-store" });
+      res.end(body);
+    } catch {
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("Not found");
+    }
+  }).listen(port, "127.0.0.1", () => console.log(`Site: http://127.0.0.1:${port}/virtuhome/`));
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  const out = resolve(process.argv[2] ?? join(frontend, "../site"));
+  const args = process.argv.slice(2);
+  const serve = args.indexOf("--serve");
+  const port = serve >= 0 && /^\d+$/.test(args[serve + 1] ?? "") ? Number(args.splice(serve + 1, 1)[0]) : undefined;
+  const out = resolve(args.find((a) => !a.startsWith("--")) ?? join(frontend, "../site"));
   try {
-    for (const f of await buildSite(out)) console.log(`  ${f.name.padEnd(28)} ${(f.bytes / 1024).toFixed(0).padStart(5)} KB`);
+    for (const f of await buildSite(out)) console.log(`  ${f.name.padEnd(40)} ${(f.bytes / 1024).toFixed(0).padStart(5)} KB`);
     console.log(`Site built in ${out}`);
   } catch (err) {
     console.error(String(err?.message ?? err));
     process.exit(1);
   }
+  if (serve >= 0) serveSite(out, port);
 }

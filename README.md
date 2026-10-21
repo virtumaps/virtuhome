@@ -68,8 +68,9 @@ and shadows, and the weather.
   house: doors, motion, cameras, the doorbell and the alarm on a timeline, and what happened while
   everyone was out) are available to VirtuMaps installation clients.
 
-**[Read the user guide](docs/GUIDE.md)**: installing, getting your home in with or without a
-scanner, devices, wall tablets, FAQ and troubleshooting.
+**[Read the user guide](https://virtumaps.github.io/virtuhome/)**: installing, getting your home in
+with or without a scanner, devices, wall tablets, FAQ and troubleshooting. It is also here as
+[docs/GUIDE.md](docs/GUIDE.md).
 
 | Realistic, by day | Live: alerts, people, temperature map |
 |---|---|
@@ -195,7 +196,8 @@ cd frontend
 npm install
 npm run dev        # rebuilds on change, dev harness on http://127.0.0.1:5173
 npm run build      # writes custom_components/virtuhome/frontend
-npm run site       # writes site/: the online demo in site/demo, for GitHub Pages
+npm run site       # writes site/ for GitHub Pages: the user guide (and the one before), and the online demo
+npm run site -- --serve   # and shows it on http://127.0.0.1:5180/virtuhome/
 npm test
 node ../tools/shot.mjs "floor=0&theme=night&quality=high" /tmp/shot.png   # screenshot with local Chrome
 ```
@@ -205,7 +207,8 @@ with `HA_URL` and `HA_TOKEN` in the dev server's environment; they are never wri
 `?plan=catalog` shows every built-in item, labelled.
 The online demo (`frontend/dev/demo.ts`) is the demo house without the live mode or saving; the
 Pages workflow builds it from each release, and the build fails if live-mode code or any Home
-Assistant URL or token handling ends up in it.
+Assistant URL or token handling ends up in it. The same workflow publishes the user guide as a
+website, a page per part of `docs/GUIDE.md` (`frontend/dev/guide-site.mjs`).
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md) and
 [CONTRIBUTING.md](CONTRIBUTING.md).
