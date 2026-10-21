@@ -8,21 +8,23 @@ import { JOINERY_FINISHES, parseHex, type FinishDef, type JoineryFinish } from "
 import type { Geo, V3 } from "./geo";
 import { WALL_HANG } from "./materials";
 import { inPalette, type Palette } from "./palette";
+import type { Key } from "../i18n";
 
+/** The styles of each kind of opening, with their names in the table. */
 export const DOOR_STYLES = {
-  flush: "Flush", panel: "Panelled", glazed: "Glazed", french: "French doors", sliding: "Sliding glass", barn: "Barn door",
-} as const;
+  flush: "door.flush", panel: "door.panel", glazed: "door.glazed", french: "door.french", sliding: "door.sliding", barn: "door.barn",
+} as const satisfies Record<string, Key>;
 export const WINDOW_STYLES = {
-  casement: "Casement", tilt: "Tilt and turn", awning: "Top-hung", sash: "Sliding sash", sliding: "Sliding", fixed: "Fixed",
-} as const;
-export const GARAGE_STYLES = { sectional: "Up and over", roller: "Roller", side: "Side-hinged" } as const;
+  casement: "window.casement", tilt: "window.tilt", awning: "window.awning", sash: "window.sash", sliding: "window.sliding", fixed: "window.fixed",
+} as const satisfies Record<string, Key>;
+export const GARAGE_STYLES = { sectional: "garage.sectional", roller: "garage.roller", side: "garage.side" } as const satisfies Record<string, Key>;
 
 export type DoorStyle = keyof typeof DOOR_STYLES;
 export type WindowStyle = keyof typeof WINDOW_STYLES;
 export type GarageStyle = keyof typeof GARAGE_STYLES;
 
 /** The styles of a kind of opening, the usual one first; null for a plain opening. */
-export function stylesFor(kind: OpeningKind): Record<string, string> | null {
+export function stylesFor(kind: OpeningKind): Record<string, (typeof DOOR_STYLES)[DoorStyle] | (typeof WINDOW_STYLES)[WindowStyle] | (typeof GARAGE_STYLES)[GarageStyle]> | null {
   return kind === "door" ? DOOR_STYLES : kind === "window" ? WINDOW_STYLES : kind === "garage" ? GARAGE_STYLES : null;
 }
 

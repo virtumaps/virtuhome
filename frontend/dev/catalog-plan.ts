@@ -1,6 +1,6 @@
 // ?plan=catalog: every built-in item in its own little labelled room, by category, to check how
 // each one looks in both looks.
-import { CATEGORY_NAMES, FURNITURE, type Category } from "../src/scene/furniture-lib";
+import { CATEGORIES, FURNITURE } from "../src/scene/furniture-lib";
 import { normalizePlan, type Furniture, type Plan, type Room } from "../src/model/plan";
 
 export function catalogPlan(only?: string | null): Plan {
@@ -8,7 +8,7 @@ export function catalogPlan(only?: string | null): Plan {
   const perRow = 10;
   const rooms: Room[] = [];
   const furniture: Furniture[] = [];
-  const cats = Object.keys(CATEGORY_NAMES) as Category[];
+  const cats = CATEGORIES;
   let row = 0;
   for (const cat of cats) {
     if (only && only !== cat) continue;

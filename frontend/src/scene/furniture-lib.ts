@@ -7,6 +7,7 @@
 // same family can be swapped for each other in the editor (a sofa for a corner sofa).
 import type { Furniture } from "../model/plan";
 import type { Upholstery } from "./finishes";
+import type { Key } from "../i18n";
 import { GARDEN_FURNITURE } from "./garden";
 
 export type Role =
@@ -66,11 +67,10 @@ export type Category =
   | "living" | "dining" | "kitchen" | "bedroom" | "bath" | "office" | "decor" | "plants" | "fitness"
   | "kids" | "outdoor" | "lights" | "utility" | "structure";
 
-export const CATEGORY_NAMES: Record<Category, string> = {
-  living: "Living", dining: "Dining", kitchen: "Kitchen", bedroom: "Bedroom", bath: "Bathroom",
-  office: "Office", decor: "Decor", plants: "Plants", fitness: "Fitness", kids: "Kids",
-  outdoor: "Garden", lights: "Lights", utility: "Utility", structure: "Structure",
-};
+/** The categories in the order the editor lists them; each named category.<id> in the table. */
+export const CATEGORIES: Category[] = [
+  "living", "dining", "kitchen", "bedroom", "bath", "office", "decor", "plants", "fitness", "kids", "outdoor", "lights", "utility", "structure",
+];
 
 export interface FurnitureType {
   name: string;
@@ -289,17 +289,20 @@ function steps(w: number, d: number, h: number, item?: Furniture): Part[] {
   return parts;
 }
 
-export const BALUSTRADES = { none: "None", spindles: "Spindles", bars: "Slim bars", glass: "Glass", panel: "Solid panel" } as const;
+/** Balustrade styles and their names in the table. */
+export const BALUSTRADES = {
+  none: "balustrade.none", spindles: "balustrade.spindles", bars: "balustrade.bars", glass: "balustrade.glass", panel: "balustrade.panel",
+} as const satisfies Record<string, Key>;
 
 export const BALUSTRADE_MATERIALS = {
-  primed: { name: "White primed", role: "primed", color: 0xf3f2ee },
-  pine: { name: "Pine", role: "pine", color: 0xd9a865 },
-  softwood: { name: "Softwood", role: "softwood", color: 0xe6cfa3 },
-  oak: { name: "Oak", role: "oak", color: 0xc39a6c },
-  walnut: { name: "Walnut", role: "walnut", color: 0x6e4f38 },
-  black: { name: "Black metal", role: "blackMetal", color: 0x2a2b2e },
-  steel: { name: "Steel", role: "metal", color: 0xb9bec4 },
-} satisfies Record<string, { name: string; role: Role; color: number }>;
+  primed: { label: "balustrade.primed", role: "primed", color: 0xf3f2ee },
+  pine: { label: "balustrade.pine", role: "pine", color: 0xd9a865 },
+  softwood: { label: "balustrade.softwood", role: "softwood", color: 0xe6cfa3 },
+  oak: { label: "balustrade.oak", role: "oak", color: 0xc39a6c },
+  walnut: { label: "balustrade.walnut", role: "walnut", color: 0x6e4f38 },
+  black: { label: "balustrade.black", role: "blackMetal", color: 0x2a2b2e },
+  steel: { label: "balustrade.steel", role: "metal", color: 0xb9bec4 },
+} as const satisfies Record<string, { label: Key; role: Role; color: number }>;
 
 export type BalustradeStyle = keyof typeof BALUSTRADES;
 export type BalustradeMaterial = keyof typeof BALUSTRADE_MATERIALS;

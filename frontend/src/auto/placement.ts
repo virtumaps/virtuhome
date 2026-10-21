@@ -12,6 +12,7 @@ import { newId, type Device, type Floor, type Mount, type Opening, type OutdoorA
 import { domainOf, type Hass, type HassEntity } from "../live/hass";
 import { findChargers, readEv, type EvCharger } from "../live/ev";
 import { CAR_TYPES, carModel, FURNITURE } from "../scene/furniture-lib";
+import { t } from "../i18n";
 
 export interface PlacementReport {
   roomsLinked: string[];
@@ -190,7 +191,7 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
     const o = pickOpening(floor, room, dc === "window" ? "window" : "door", c.name);
     if (o) {
       o.entity = id;
-      report.linked.push(`${c.name} → ${room.name} ${o.kind}`);
+      report.linked.push(`${c.name} → ${t(`report.opening.${o.kind}`, { room: room.name })}`);
       return true;
     }
     return false;
@@ -200,7 +201,7 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
     const o = floor.openings.find((x) => x.room_id === room.id && x.kind === "window" && !x.cover);
     if (o) {
       o.cover = id;
-      report.linked.push(`${c.name} → ${room.name} window`);
+      report.linked.push(`${c.name} → ${t("report.opening.window", { room: room.name })}`);
       return true;
     }
   }
@@ -209,7 +210,7 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
     const tv = floor.furniture.find((x) => (x.type === "tv_wall" || x.type === "tv_board") && !x.entity && pointInPolygon([x.x, x.z], room.points));
     if (tv && isTv) {
       tv.entity = id;
-      report.linked.push(`${c.name} → ${room.name} TV`);
+      report.linked.push(`${c.name} → ${t("report.tv", { room: room.name })}`);
       return true;
     }
     const at = spots.corner(0.4);
@@ -219,7 +220,7 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
   if (dom === "sensor") {
     if (dc === "temperature" && !room.temperature && !outdoor) {
       room.temperature = id;
-      report.linked.push(`${c.name} → ${room.name} temperature`);
+      report.linked.push(`${c.name} → ${t("report.temperature", { room: room.name })}`);
       // its humidity sits on the same device
       const hum = c.entities.find((e) => hass.states[e]?.attributes.device_class === "humidity");
       if (hum && !room.humidity) room.humidity = hum;
@@ -318,7 +319,7 @@ function placeCharger(p: Plan, hass: Hass, c: EvCharger, report: PlacementReport
     id: newId("f"), type: model?.type ?? "car", x: mid[0], z: mid[1], rotation: (heading(-n[0], -n[1]) + 360) % 360, w: cw, d: cd, h: ch, entity: link,
     color: "#b9bec6", ...(c.status || c.plug ? { parked: "plugged" } : {}),
   });
-  report.placed.push(`${model ? car : "Car"} → ${spot.name}`);
+  report.placed.push(`${model ? car : t("report.car")} → ${spot.name}`);
 }
 
 /** Garden areas take part like rooms (their lights, cameras and plugs go there). */

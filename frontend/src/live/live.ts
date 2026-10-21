@@ -14,6 +14,7 @@ import type { EnergyLive } from "./energy";
 import { chargerEntities, type EvNow } from "./ev";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
 import { roomOf, roomTrackers, slug, sourcesOf } from "./presence";
+import { t } from "../i18n";
 
 export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status";
 
@@ -46,10 +47,6 @@ export interface Person {
   room: string | null;
 }
 
-const ALERT_NAMES: Record<string, string> = {
-  smoke: "Smoke", gas: "Gas", moisture: "Water leak", carbon_monoxide: "Carbon monoxide", safety: "Safety alert",
-};
-
 interface RoomWatch {
   temperature: string | null;
   humidity: string | null;
@@ -62,7 +59,9 @@ interface RoomWatch {
   heating: string[];
 }
 
-const ALERT_CLASSES = new Set(["smoke", "gas", "moisture", "carbon_monoxide", "safety"]);
+/** Sensors whose "on" is an alert, by device class (each has its name in the table: alert.smoke…). */
+const ALERTS = ["smoke", "gas", "moisture", "carbon_monoxide", "safety"] as const;
+const ALERT_CLASSES = new Set<string>(ALERTS);
 const MOTION_CLASSES = new Set(["motion", "occupancy", "presence"]);
 const OPENING_CLASSES = new Set(["door", "window", "opening", "garage_door"]);
 /** Temperatures of machines, not of the room. */
@@ -538,13 +537,15 @@ export class HassLive implements LiveSource {
     const out: Alert[] = [];
     for (const [id, s] of Object.entries(hass.states)) {
       const dom = domainOf(id);
-      if (dom === "alarm_control_panel" && s.state === "triggered") out.push({ id, text: `Alarm triggered: ${s.attributes.friendly_name ?? id}` });
+      if (dom === "alarm_control_panel" && s.state === "triggered") out.push({ id, text: t("alert.alarm", { name: String(s.attributes.friendly_name ?? id) }) });
       else if (dom === "binary_sensor" && s.state === "on") {
         const dc = String(s.attributes.device_class);
         if (ALERT_CLASSES.has(dc)) {
           const area = areaOf(hass, id);
           const where = area ? hass.areas?.[area]?.name : null;
-          out.push({ id, text: `${ALERT_NAMES[dc] ?? "Alert"}${where ? ` in ${where}` : ""}` });
+          const kind = ALERTS.find((a) => a === dc);
+          const alert = kind ? t(`alert.${kind}`) : t("alert.other");
+          out.push({ id, text: where ? t("alert.in", { alert, area: where }) : alert });
         }
       }
     }
@@ -580,7 +581,7 @@ export class HassLive implements LiveSource {
       name: String(s.attributes.friendly_name ?? id.slice(7)),
       // a person whose tracker names a room is home, whatever their state says
       home: s.state === "home" || !!at,
-      where: s.state === "home" || at ? "Home" : s.state === "not_home" ? "Away" : isUnavailable(s) ? "Unknown" : s.state,
+      where: s.state === "home" || at ? t("person.home") : s.state === "not_home" ? t("person.away") : isUnavailable(s) ? t("person.unknown") : s.state,
       picture: typeof s.attributes.entity_picture === "string" ? s.attributes.entity_picture : null,
       room: at ? spaces(this.plan.floors[at.floor])[at.room]?.name ?? null : null,
     };
@@ -678,8 +679,8 @@ function evGlow(ev: EvNow | null, day: boolean): V3 | null {
 
 /** Under the driveway's name: "Car 52% · charging". */
 function evText(ev: EvNow): string {
-  const what: Partial<Record<EvNow["state"], string>> = { charging: "charging", plugged: "plugged in", approval: "waiting", paused: "paused", finished: "charged", fault: "fault" };
-  return [`Car${ev.level !== null ? ` ${Math.round(ev.level)}%` : ""}`, what[ev.state]].filter(Boolean).join(" · ");
+  const what = ev.state === "unplugged" || ev.state === "unknown" ? "" : t(`room.ev.${ev.state}`);
+  return [ev.level !== null ? t("room.carLevel", { level: Math.round(ev.level) }) : t("room.car"), what].filter(Boolean).join(" · ");
 }
 
 /**
