@@ -1,5 +1,6 @@
 // The dashboard card: the live view at a fixed height (or filling a panel view).
 import type { Hass } from "../live/hass";
+import { failedView } from "./errors";
 import { VhView, type ViewConfig } from "./view";
 
 export interface CardConfig extends ViewConfig {
@@ -9,8 +10,10 @@ export interface CardConfig extends ViewConfig {
 }
 
 export class CardImpl {
-  private view: VhView;
+  /** Null when the view could not be made (the error box shows instead). */
+  private view: VhView | null;
   private frame: HTMLElement;
+  private failed: { hass: Hass | null } | null = null;
 
   constructor(private host: HTMLElement, private config: CardConfig) {
     const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
@@ -24,7 +27,12 @@ export class CardImpl {
     shadow.appendChild(this.frame);
     this.applyHeight();
     const inner = this.frame.attachShadow({ mode: "open" });
-    this.view = new VhView(inner, config);
+    try {
+      this.view = new VhView(inner, config);
+    } catch (err) {
+      this.view = null;
+      this.failed = failedView(inner, err, "card", config.quality);
+    }
   }
 
   private applyHeight(): void {
@@ -35,18 +43,19 @@ export class CardImpl {
   setConfig(config: CardConfig): void {
     this.config = config;
     this.applyHeight();
-    this.view.setConfig(config);
+    this.view?.setConfig(config);
   }
 
   set hass(h: Hass) {
-    this.view.hass = h;
+    if (this.view) this.view.hass = h;
+    else if (this.failed) this.failed.hass = h;
   }
 
   connect(): void {
-    this.view.connect();
+    this.view?.connect();
   }
 
   disconnect(): void {
-    this.view.disconnect();
+    this.view?.disconnect();
   }
 }

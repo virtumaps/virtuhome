@@ -648,6 +648,14 @@ should, with a fix where there is a safe one. Nothing changes until you press a 
   `module` resource yourself. In storage mode VirtuHome adds it.
 - After an update, reload the page, or clear the browser's cache on a tablet.
 
+**"Something went wrong drawing the house"**: the card or panel shows this instead of the house when
+it can't draw it.
+- **Reload** loads the page again.
+- **Copy details** copies what went wrong: the VirtuHome version, the graphics level, the browser
+  and the error. Names of rooms, areas, devices and people, entity ids and web addresses are taken
+  out. Paste it into an [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) if it
+  keeps happening.
+
 **"VirtuHome is not set up"**: add the integration under Settings → Devices & services.
 
 **"No home yet"**: an administrator opens **VirtuHome** in the sidebar and picks how to [get the
