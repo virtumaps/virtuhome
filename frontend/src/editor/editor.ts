@@ -909,6 +909,11 @@ export class Editor {
     if (this.tab === "home") this.render();
   }
 
+  /** The integration answered Check my setup again (Home Assistant finished starting). */
+  checksChanged(): void {
+    if (this.tab === "home") this.render();
+  }
+
   /** Check my setup: what stops VirtuHome working as it should, each with a fix where a safe one exists. */
   private checkSection(): HTMLElement[] {
     const view = this.host.view;

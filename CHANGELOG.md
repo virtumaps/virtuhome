@@ -8,6 +8,11 @@
   dark and without JavaScript. It is rebuilt from docs/GUIDE.md with each release, keeps the guide
   for the version before, and **How** in Getting started opens it.
 
+### Fixed
+- Check my setup no longer calls the dashboard card a problem just after Home Assistant restarts
+  (after an update it still named the version before). It says it's checking until Home Assistant
+  has finished starting, and looks again by itself.
+
 ## 0.11.0
 
 ### New
