@@ -162,7 +162,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     floors: {},
     user: { id: "demo", name: "Demo", is_admin: true },
     // the sky over the house is as it is at its place now
-    config: { latitude: place.latitude, longitude: place.longitude, time_zone: place.time_zone ?? "Europe/London" },
+    config: { latitude: place.latitude, longitude: place.longitude, time_zone: place.time_zone },
     async callService(domain, service, _data, target) {
       const ids = ([] as string[]).concat((target?.entity_id as string | string[]) ?? []);
       for (const id of ids) {
