@@ -140,7 +140,11 @@ its `NOT_TEXT` list.
 Not in the table: log messages, the details Copy details copies (read by whoever fixes the bug),
 the dev harness, the loader (it runs on every Home Assistant page and stays tiny), and the
 integration, whose texts are in `custom_components/virtuhome/strings.json` and `translations/` as
-Home Assistant keeps them. Extensions bring their own texts.
+Home Assistant keeps them. Extensions bring their own texts. Also left as they are: the demo home's
+own names (its rooms, pretend people and devices are sample data, like the names in a user's plan),
+units after numbers (`kW`, `p/h`; numbers are formatted in one place, `live/energy.ts`, ready for
+`Intl`), and names that are looked up rather than shown (Sweet Home 3D's catalogue names in
+`import/sh3d.ts`).
 
 ### Adding a language
 

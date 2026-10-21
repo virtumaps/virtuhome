@@ -20,7 +20,7 @@ import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, rec
 import { domainOf, type Hass } from "../live/hass";
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, furnitureName, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
-import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef } from "../scene/finishes";
+import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef, type Swatch } from "../scene/finishes";
 import {
   faceBearing, fitPanels, floorRoofs, fromRoofFrame, itemFrame, planeHeight, polyArea, ROOF_ITEM_DEFAULTS, ROOF_SHAPE_ORDER, ROOF_SHAPES, sunniestFace,
   type RoofFace, type RoofModel,
@@ -45,7 +45,8 @@ import type { VhView } from "../ui/view";
 import type { Check, Fix } from "../ui/checks";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { guideLink } from "../ui/guide";
-import { t } from "../i18n/editor";
+import type { PlainKey } from "../i18n";
+import { t, th, type EditorPlainKey } from "../i18n/editor";
 import { EDITOR_CSS } from "./styles";
 import { HouseTypes } from "./house-types";
 import { Collider, settle } from "./collide";
@@ -59,13 +60,15 @@ type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
 type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 /** Common solar panel sizes (mm), long side first, newest first. */
-const PANEL_SIZES: [number, number, string][] = [
-  [1722, 1134, "Most panels sold since 2022, about 400–440 W"],
-  [1762, 1134, "A little longer, about 430–455 W"],
-  [1755, 1038, "Common from 2019 to 2022, about 330–380 W"],
-  [1650, 992, "Older 60-cell panels, about 250–300 W"],
+const PANEL_SIZES: [number, number, EditorPlainKey][] = [
+  [1722, 1134, "editor.panelSize.1722"],
+  [1762, 1134, "editor.panelSize.1762"],
+  [1755, 1038, "editor.panelSize.1755"],
+  [1650, 992, "editor.panelSize.1650"],
 ];
-const KIND_NAMES: Record<OutdoorKind, string> = { lawn: "Lawn", patio: "Patio", deck: "Deck", path: "Path", driveway: "Driveway", bed: "Flower bed", gravel: "Gravel" };
+const KIND_NAMES: Record<OutdoorKind, EditorPlainKey> = {
+  lawn: "editor.kind.lawn", patio: "editor.kind.patio", deck: "editor.kind.deck", path: "editor.kind.path", driveway: "editor.kind.driveway", bed: "editor.kind.bed", gravel: "editor.kind.gravel",
+};
 
 const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
@@ -78,20 +81,22 @@ function isDetections(data: unknown): data is Detections {
 
 /** What an import brought in and left out, for its report. */
 function importLines(s: ImportSummary): string[] {
-  const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
   const names = (list: string[]) => {
     const counts = new Map<string, number>();
     for (const x of list) counts.set(x, (counts.get(x) ?? 0) + 1);
     const all = [...counts].map(([x, k]) => (k > 1 ? `${x} ×${k}` : x));
-    return all.length > 8 ? `${all.slice(0, 8).join("; ")} and ${all.length - 8} more` : all.join("; ");
+    return all.length > 8 ? t("editor.import.namesMore", { list: all.slice(0, 8).join("; "), n: all.length - 8 }) : all.join("; ");
   };
   return [
-    `In: ${n(s.floors, "floor")}, ${n(s.rooms, "room")}, ${n(s.doors, "door")}, ${n(s.windows, "window")}, ${n(s.furniture, "piece of furniture", "pieces of furniture")}.`,
-    ...(s.boxes.length ? [`As plain boxes (no matching type): ${names(s.boxes)}.`] : []),
-    ...(s.left.length ? [`Left out: ${names(s.left)}.`] : []),
+    t("editor.import.in", {
+      floors: t("editor.import.floors", { n: s.floors }), rooms: t("editor.import.rooms", { n: s.rooms }), doors: t("editor.import.doors", { n: s.doors }),
+      windows: t("editor.import.windows", { n: s.windows }), furniture: t("editor.import.furniture", { n: s.furniture }),
+    }),
+    ...(s.boxes.length ? [t("editor.import.boxes", { names: names(s.boxes) })] : []),
+    ...(s.left.length ? [t("editor.import.leftOut", { names: names(s.left) })] : []),
     s.north !== null
-      ? `North from the file: the top of the plan faces ${Math.round(s.north)}° (${compassName(s.north)}).`
-      : "Set north under Sun and weather for the sun's shadows.",
+      ? t("editor.import.northFromFile", { north: Math.round(s.north), compass: compassName(s.north) })
+      : t("editor.import.setNorth"),
   ];
 }
 
@@ -188,24 +193,24 @@ export class Editor {
     const style = h("style", {}, EDITOR_CSS + PLAN2D_CSS);
     this.status = h("span", { class: "ed-status" });
     this.body = h("div", { class: "ed-body" });
-    this.undoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowULeftTop)}<span>Undo</span>`, onclick: () => this.doUndo() });
-    this.redoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowURightTop)}<span>Redo</span>`, onclick: () => this.doRedo() });
-    this.saveBtn = h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>Save</span>`, disabled: true, title: host.demo ? "The demo can't save" : "Nothing to save", onclick: () => this.save() });
+    this.undoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowULeftTop)}<span>${th("editor.main.undo")}</span>`, onclick: () => this.doUndo() });
+    this.redoBtn = h("button", { class: "ed-hb", html: `${svg(mdiArrowURightTop)}<span>${th("editor.main.redo")}</span>`, onclick: () => this.doRedo() });
+    this.saveBtn = h("button", { class: "ed-save", html: `${svg(mdiContentSave)}<span>${th("editor.main.save")}</span>`, disabled: true, title: host.demo ? t("view.demoCantSave") : t("editor.nothingToSave"), onclick: () => this.save() });
     this.el = h("div", { class: "ed" },
       style,
       h("div", { class: "ed-head" },
-        h("b", {}, "Edit home"),
+        h("b", {}, t("editor.main.editHome")),
         this.undoBtn,
         this.redoBtn,
         this.saveBtn,
-        h("button", { class: "ed-ib", title: "Close", html: svg(mdiClose), onclick: () => this.close() }),
+        h("button", { class: "ed-ib", title: t("editor.close"), html: svg(mdiClose), onclick: () => this.close() }),
       ),
       h("div", { class: "ed-modes" },
         ...this.modeButtons(),
       ),
       h("div", { class: "ed-tabs" },
-        ...(["home", "rooms", "devices", "selected", "extensions"] as Tab[]).map((t) =>
-          h("button", { class: "ed-tab", "data-tab": t, onclick: () => this.show(t) }, { home: "Home", rooms: "Rooms", devices: "Devices", selected: "Selected", extensions: "Extras" }[t]),
+        ...(["home", "rooms", "devices", "selected", "extensions"] as Tab[]).map((tab) =>
+          h("button", { class: "ed-tab", "data-tab": tab, onclick: () => this.show(tab) }, { home: t("editor.main.home"), rooms: t("editor.rooms"), devices: t("editor.devices"), selected: t("editor.main.selected"), extensions: t("editor.main.extras") }[tab]),
         ),
       ),
       this.body,
@@ -234,7 +239,7 @@ export class Editor {
         this.scrollDrawerTo(scan);
         scan.classList.add("ed-flash");
       }
-      this.status.textContent = "Tap Import a scan or plan… and choose the files.";
+      this.status.textContent = t("editor.main.tapImportAScan");
       return;
     }
     this.setPlanMode(true);
@@ -243,8 +248,8 @@ export class Editor {
 
   private modeButtons(): HTMLButtonElement[] {
     this.modeBtns = [
-      h("button", { class: "ed-mode on", onclick: () => this.setPlanMode(false) }, "3D view"),
-      h("button", { class: "ed-mode", onclick: () => this.setPlanMode(true) }, "2D plan"),
+      h("button", { class: "ed-mode on", onclick: () => this.setPlanMode(false) }, t("editor.main.view3d")),
+      h("button", { class: "ed-mode", onclick: () => this.setPlanMode(true) }, t("editor.main.plan2d")),
     ];
     return this.modeBtns;
   }
@@ -284,7 +289,7 @@ export class Editor {
         },
       });
       root.append(this.plan2d.el);
-      this.status.textContent = "Select something, then drag it: furniture, devices, doors, windows, a room's corners and walls. Click a measurement to type it.";
+      this.status.textContent = t("editor.main.selectSomethingThenDrag");
     } else if (!on && this.plan2d) {
       this.plan2d.dispose();
       this.plan2d = null;
@@ -318,8 +323,8 @@ export class Editor {
     if (!sel || (sel.kind !== "furniture" && sel.kind !== "device" && sel.kind !== "opening" && sel.kind !== "fence" && sel.kind !== "roof" && sel.kind !== "roofitem")) return false;
     const f = this.plan.floors[sel.floor];
     const name = sel.kind === "furniture" ? furnitureName(f?.furniture.find((x) => x.id === sel.id)?.type ?? "") ?? "furniture"
-      : sel.kind === "device" ? "a device" : sel.kind === "fence" ? "a fence" : sel.kind === "roof" ? "a roof"
-      : sel.kind === "roofitem" ? this.roofItemName(this.roofItemOf(this.plan, sel.id)?.item ?? ({ kind: "window" } as RoofItem)).toLowerCase() : "an opening";
+      : sel.kind === "device" ? t("editor.aDevice") : sel.kind === "fence" ? t("editor.main.aFence") : sel.kind === "roof" ? t("editor.main.aRoof")
+      : sel.kind === "roofitem" ? this.roofItemName(this.roofItemOf(this.plan, sel.id)?.item ?? ({ kind: "window" } as RoofItem)).toLowerCase() : t("editor.main.anOpening");
     this.change((p) => {
       const fl = p.floors[sel.floor];
       if (!fl) return;
@@ -329,7 +334,7 @@ export class Editor {
       else if (sel.kind === "roof") fl.roofs = (fl.roofs ?? []).filter((x) => x.id !== sel.id);
       else if (sel.kind === "roofitem") for (const r of fl.roofs ?? []) r.items = (r.items ?? []).filter((x) => x.id !== sel.id);
       else fl.openings = fl.openings.filter((x) => x.id !== sel.id);
-    }, false, `Remove ${name}`);
+    }, false, t("editor.removeName", { name }));
     this.select(null);
     return true;
   }
@@ -341,7 +346,7 @@ export class Editor {
   }
 
   /** Applies a change with undo; `quiet` skips re-rendering the drawer (while dragging). */
-  private change(fn: (p: Plan) => void, quiet = false, label = "Change"): void {
+  private change(fn: (p: Plan) => void, quiet = false, label = t("editor.main.change")): void {
     const before = structuredClone(this.plan);
     this.undo.push({ plan: before, label });
     if (this.undo.length > 100) this.undo.shift();
@@ -358,7 +363,7 @@ export class Editor {
     const items = setupItems(this.plan, this.hass, { cardOnDashboard: this.cardSeen });
     if (!showChecklist(this.plan, items)) return;
     // after the 2D plan has said its own piece about the tool
-    queueMicrotask(() => (this.status.textContent = "Your first room. Once all the rooms are drawn: Home → Place devices automatically."));
+    queueMicrotask(() => (this.status.textContent = t("editor.main.yourFirstRoomOnce")));
   }
 
   private apply(quiet = false): void {
@@ -375,8 +380,8 @@ export class Editor {
     const r = this.redo[this.redo.length - 1];
     this.undoBtn.disabled = !u;
     this.redoBtn.disabled = !r;
-    this.undoBtn.title = u ? `Undo: ${u.label} (Ctrl+Z)` : "Nothing to undo";
-    this.redoBtn.title = r ? `Redo: ${r.label} (Ctrl+Shift+Z)` : "Nothing to redo";
+    this.undoBtn.title = u ? t("editor.history.undoLabelCtrlZ", { label: u.label }) : t("editor.history.nothingToUndo");
+    this.redoBtn.title = r ? t("editor.history.redoLabelCtrlShift", { label: r.label }) : t("editor.history.nothingToRedo");
   }
 
   private doUndo(): void {
@@ -387,7 +392,7 @@ export class Editor {
     this.changed();
     this.dropMissingSelection();
     this.apply();
-    this.status.textContent = `Undone: ${prev.label}`;
+    this.status.textContent = t("editor.history.undoneLabel", { label: prev.label });
   }
 
   private doRedo(): void {
@@ -398,7 +403,7 @@ export class Editor {
     this.changed();
     this.dropMissingSelection();
     this.apply();
-    this.status.textContent = `Redone: ${next.label}`;
+    this.status.textContent = t("editor.history.redoneLabel", { label: next.label });
   }
 
   /** After undo the selected thing may no longer exist. */
@@ -431,20 +436,20 @@ export class Editor {
   private updateSaveButton(): void {
     if (!this.saveBtn) return;
     this.saveBtn.disabled = !this.unsaved || this.saving || !!this.host.demo;
-    this.saveBtn.title = this.host.demo ? "The demo can't save" : this.saving ? "Saving…" : this.unsaved ? "Save changes" : "Nothing to save";
+    this.saveBtn.title = this.host.demo ? t("view.demoCantSave") : this.saving ? t("editor.saving") : this.unsaved ? t("editor.save.saveChanges") : t("editor.nothingToSave");
   }
 
   /** The footer's word on saving. */
   private savedText(): string {
-    if (this.host.demo) return "This is a demo: changes aren't saved.";
-    return this.dirty ? "Unsaved changes" : "Saved";
+    if (this.host.demo) return t("editor.save.thisIsADemo");
+    return this.dirty ? t("editor.save.unsavedChanges") : t("editor.save.saved");
   }
 
   private async save(): Promise<void> {
     if (!this.unsaved || this.saving || this.host.demo) return;
     this.saving = true;
     this.updateSaveButton();
-    this.status.textContent = "Saving…";
+    this.status.textContent = t("editor.saving");
     // each linked entity's registry id goes with the plan, so a later rename is followed
     recordLinks(this.plan, this.hass, await entityRegistry(this.hass));
     const json = JSON.stringify(this.plan);
@@ -462,11 +467,11 @@ export class Editor {
     } catch (err) {
       const msg = String((err as { message?: string })?.message ?? err);
       if (/changed meanwhile|conflict/i.test(msg)) {
-        this.confirm("Someone else saved the plan meanwhile. Save yours over it?", "Save mine", async () => {
+        this.confirm(t("editor.save.someoneElseSavedThe"), t("editor.save.saveMine"), async () => {
           this.host.revision = await this.host.save(this.plan, null);
           saved();
         });
-      } else this.status.textContent = `Not saved: ${msg}`;
+      } else this.status.textContent = t("editor.save.notSavedMsg", { msg });
     } finally {
       this.saving = false;
       this.updateSaveButton();
@@ -475,7 +480,7 @@ export class Editor {
 
   close(): void {
     if (this.dirty) {
-      this.confirm("Close without saving? Your changes are lost.", "Discard", () => this.finish());
+      this.confirm(t("editor.main.closeWithoutSavingYour"), t("editor.main.discard"), () => this.finish());
       return;
     }
     this.finish();
@@ -511,14 +516,14 @@ export class Editor {
         const i = Number(ref.slice(at + 1));
         const a = fence?.points[i], b = fence?.points[i + 1];
         if (fence && a && b) fence.points.splice(i + 1, 0, [Math.round(((a[0] + b[0]) / 2) * 100) / 100, Math.round(((a[1] + b[1]) / 2) * 100) / 100]);
-      }, false, "Add a fence corner");
+      }, false, t("editor.addAFenceCorner"));
       return;
     }
     if (hit.item?.kind === "edge") {
       // a tap on a +: a corner in the middle of that edge (dragging the + puts it anywhere)
       const sel = this.sel;
       const e = sel && this.edgeOf(hit.item.id, sel.floor);
-      if (sel && e) this.change((p) => splitEdge(p.floors[sel.floor], e.id, e.outdoor, e.k, e.len / 2), false, "Add a corner");
+      if (sel && e) this.change((p) => splitEdge(p.floors[sel.floor], e.id, e.outdoor, e.k, e.len / 2), false, t("editor.addACorner"));
       return;
     }
     if (hit.item) this.select({ floor: hit.floor, kind: hit.item.kind, id: hit.item.id });
@@ -738,10 +743,10 @@ export class Editor {
     if (this.dragStart) {
       const moved = JSON.stringify(this.dragStart) !== JSON.stringify(this.plan);
       if (moved) {
-        const what = item.kind === "corner" ? "a corner" : item.kind === "opening" ? `a ${f.openings.find((o) => o.id === item.id)?.kind ?? "door"}` : item.kind === "device"
-          ? String(this.hass.states[f.devices.find((d) => d.id === item.id)?.entity ?? ""]?.attributes.friendly_name ?? "a device")
+        const what = item.kind === "corner" ? t("editor.drag.aCorner") : item.kind === "opening" ? t("editor.drag.aKind", { kind: f.openings.find((o) => o.id === item.id)?.kind ?? "door" }) : item.kind === "device"
+          ? String(this.hass.states[f.devices.find((d) => d.id === item.id)?.entity ?? ""]?.attributes.friendly_name ?? t("editor.aDevice"))
           : furnitureName(f.furniture.find((x) => x.id === item.id)?.type ?? "") ?? "furniture";
-        this.undo.push({ plan: this.dragStart, label: item.kind === "edge" ? "Add a corner" : `Move ${what}` });
+        this.undo.push({ plan: this.dragStart, label: item.kind === "edge" ? t("editor.addACorner") : t("editor.drag.moveWhat", { what }) });
         this.redo = [];
         this.changed();
         // the floor is rebuilt with the piece in its new place
@@ -789,7 +794,7 @@ export class Editor {
     this.fenceDrag = null;
     if (!this.dragStart) return;
     if (JSON.stringify(this.dragStart) !== JSON.stringify(this.plan)) {
-      this.undo.push({ plan: this.dragStart, label: kind === "fence" ? "Move a fence" : kind === "fenceedge" ? "Add a fence corner" : "Move a fence point" });
+      this.undo.push({ plan: this.dragStart, label: kind === "fence" ? t("editor.drag.moveAFence") : kind === "fenceedge" ? t("editor.addAFenceCorner") : t("editor.drag.moveAFencePoint") });
       this.redo = [];
       this.changed();
       this.apply();
@@ -835,53 +840,53 @@ export class Editor {
       ...this.setupSection(() => fileIn.click()),
       ...this.checkSection(),
       ...this.demoSection(),
-      this.houseTypes ? null : h("h4", {}, "House type"),
-      this.houseTypes ? null : h("p", { class: "ed-hint" }, "A ready-made home with its rooms, doors, windows, stairs and roof, fitted to your home's size."),
-      this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, "Start from a house type…"),
+      this.houseTypes ? null : h("h4", {}, t("editor.houseType")),
+      this.houseTypes ? null : h("p", { class: "ed-hint" }, t("editor.home.aReadyMadeHome")),
+      this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, t("editor.home.startFromAHouse")),
       h("div", { class: "ed-scan" },
-        h("h4", {}, "Import"),
-        h("p", { class: "ed-hint" }, "A House Scan scan: choose house.json, manifest.json (room names) and detections.json (decor) together. Or a plan from another program: a Sweet Home 3D file (.sh3d), or a file in the simple plan format (.json)."),
-        h("button", { class: "ed-btn", onclick: () => fileIn.click() }, "Import a scan or plan…"),
+        h("h4", {}, t("editor.home.import")),
+        h("p", { class: "ed-hint" }, t("editor.home.aHouseScanScan")),
+        h("button", { class: "ed-btn", onclick: () => fileIn.click() }, t("editor.importAScanOr")),
       ),
       fileIn,
-      h("h4", {}, "Devices"),
-      h("p", { class: "ed-hint" }, "Links rooms to areas, contacts to doors and windows, and puts lights, cameras and sensors into their rooms. Keeps what is already placed."),
-      h("button", { class: "ed-btn", onclick: () => this.runAutoPlace() }, "Place devices automatically"),
+      h("h4", {}, t("editor.devices")),
+      h("p", { class: "ed-hint" }, t("editor.home.linksRoomsToAreas")),
+      h("button", { class: "ed-btn", onclick: () => this.runAutoPlace() }, t("editor.placeDevicesAutomatically")),
       h("div", { class: "ed-report" }),
-      h("h4", {}, "Outside walls"),
+      h("h4", {}, t("editor.home.outsideWalls")),
       this.finishChips(EXTERIOR_FINISHES, this.plan.settings.exterior_finish ?? "render", (k) =>
-        this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, `Outside walls: ${(EXTERIOR_FINISHES as Record<string, FinishDef>)[k].name}`)),
+        this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, t("editor.home.outsideWallsName", { name: t((EXTERIOR_FINISHES as Record<string, FinishDef>)[k].label) }))),
       (EXTERIOR_FINISHES as Record<string, FinishDef>)[this.plan.settings.exterior_finish ?? "render"]?.tintable
-        ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, "Outside wall colour"))
+        ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, t("editor.home.outsideWallColour")))
         : null,
       ...this.roofSection(),
       ...this.energySection(),
       ...this.peopleSection(),
       ...this.skySection(),
-      h("h4", {}, "Floors"),
+      h("h4", {}, t("editor.home.floors")),
       ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
-      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.addFloor() }, "Add a floor")),
-      h("p", { class: "ed-hint" }, `A new floor goes on top. Draw its rooms in the 2D plan, over the floor below it.${this.plan.floors.some((f) => (f.roofs ?? []).length) ? " Then tap the roof and set Sits on to the new floor, to put it on top." : ""}`),
-      h("h4", {}, "Plan file"),
+      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.addFloor() }, t("editor.home.addAFloor"))),
+      h("p", { class: "ed-hint" }, t("editor.home.aNewFloorGoes", { x: this.plan.floors.some((f) => (f.roofs ?? []).length) ? ` ${t("editor.home.thenTapTheRoof")}` : "" })),
+      h("h4", {}, t("editor.home.planFile")),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost", onclick: () => this.downloadPlan() }, "Download"),
-        h("button", { class: "ed-btn ghost", onclick: () => planIn.click() }, "Load…"),
+        h("button", { class: "ed-btn ghost", onclick: () => this.downloadPlan() }, t("editor.home.download")),
+        h("button", { class: "ed-btn ghost", onclick: () => planIn.click() }, t("editor.home.load")),
         planIn,
       ),
     );
     if (this.host.restorePoints) {
-      const list = h("div", { class: "ed-list" }, h("p", { class: "ed-hint" }, "Loading…"));
-      box.append(h("h4", {}, "Restore points"), list);
+      const list = h("div", { class: "ed-list" }, h("p", { class: "ed-hint" }, t("editor.loading")));
+      box.append(h("h4", {}, t("editor.home.restorePoints")), list);
       this.host.restorePoints().then((points) => {
         list.replaceChildren(...(points.length ? points.map((p) =>
           h("div", { class: "ed-item" },
             h("span", {}, `${new Date(p.time * 1000).toLocaleString()}${p.label ? ` · ${p.label}` : ""}`),
-            h("button", { class: "ed-btn ghost small", onclick: () => this.confirm("Go back to this version of the plan?", "Restore", async () => {
+            h("button", { class: "ed-btn ghost small", onclick: () => this.confirm(t("editor.home.goBackToThis"), t("editor.home.restore"), async () => {
               await this.host.restore!(p.id);
               this.finish();
-            }) }, "Restore"),
-          )) : [h("p", { class: "ed-hint" }, "None yet: every save keeps the version before it.")]));
-      }).catch(() => list.replaceChildren(h("p", { class: "ed-hint" }, "Not available here.")));
+            }) }, t("editor.home.restore")),
+          )) : [h("p", { class: "ed-hint" }, t("editor.home.noneYetEverySave"))]));
+      }).catch(() => list.replaceChildren(h("p", { class: "ed-hint" }, t("editor.home.notAvailableHere"))));
     }
     return box;
   }
@@ -890,7 +895,7 @@ export class Editor {
   private demoSection(): HTMLElement[] {
     if (this.host.demo) return [];
     return [
-      h("h4", {}, "Demo home"),
+      h("h4", {}, t("editor.demo.demoHome")),
       h("p", { class: "ed-hint" }, t("start.demo.text")),
       h("button", { class: "ed-btn ghost", onclick: () => {
         // back to 3D first: the 2D plan's keys would still reach this plan under the demo
@@ -922,7 +927,7 @@ export class Editor {
     if (canFollow(this.plan, hass)) {
       const registry = await entityRegistry(hass);
       if (registry && followRenames(structuredClone(this.plan), hass, registry).length) {
-        this.change((p) => void followRenames(p, hass, registry), true, "Follow renamed entities");
+        this.change((p) => void followRenames(p, hass, registry), true, t("editor.checks.followRenamedEntities"));
       }
     }
     if (this.tab === "home") this.render();
@@ -945,7 +950,7 @@ export class Editor {
         h("div", { class: "ed-row" }, h("span", { html: svg(icons[c.level]) }), h("b", {}, c.title), c.level === "ok" ? h("small", {}, c.text) : null),
         c.level === "ok" ? null : h("p", { class: "ed-hint" }, c.text),
         c.id === "links" && followed.length && this.dirty
-          ? h("p", { class: "ed-hint" }, `${followed.length === 1 ? "An entity was" : `${followed.length} entities were`} renamed in Home Assistant, and the plan followed. Save to keep it.`)
+          ? h("p", { class: "ed-hint" }, t("editor.checks.followed", { n: followed.length }))
           : null,
         buttons.length ? h("div", { class: "ed-row" }, ...buttons) : null,
         ...(c.fixes.includes("relink") ? this.linkFixes() : []),
@@ -953,13 +958,13 @@ export class Editor {
       );
     });
     return [
-      h("h4", {}, "Check my setup"),
-      h("p", { class: "ed-hint" }, "What stops VirtuHome working as it should, with a fix where there is one. Nothing changes until you press a fix."),
+      h("h4", {}, t("editor.checks.checkMySetup")),
+      h("p", { class: "ed-hint" }, t("editor.checks.whatStopsVirtuhomeWorking")),
       ...cards,
       h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: async () => {
         await view.refreshServer();
         this.render();
-      } }, "Check again")),
+      } }, t("editor.checks.checkAgain"))),
     ];
   }
 
@@ -968,20 +973,20 @@ export class Editor {
     const view = this.host.view;
     const hass = this.hass;
     const run: Partial<Record<Fix, [string, () => unknown]>> = {
-      "link-rooms": ["Link rooms by name", () => this.change((p) => {
+      "link-rooms": [t("editor.checks.linkRoomsByName"), () => this.change((p) => {
         // areas Home Assistant no longer has are let go first
         for (const r of p.floors.flatMap((f) => [...f.rooms, ...(f.outdoor ?? [])])) if (r.area_id && hass.areas && !hass.areas[r.area_id]) r.area_id = null;
         linkRoomsByName(p, hass);
-      }, true, "Link rooms to areas")],
-      "open-rooms": ["Open Rooms", () => this.show("rooms")],
-      reload: ["Reload", () => location.reload()],
-      resource: ["Add it again", () => view.refreshServer(true)],
-      graphics: ["Try again", () => view.resetGraphics()],
-      renew: ["Renew now", async () => {
+      }, true, t("editor.checks.linkRoomsToAreas"))],
+      "open-rooms": [t("editor.checks.openRooms"), () => this.show("rooms")],
+      reload: [t("editor.checks.reload"), () => location.reload()],
+      resource: [t("editor.checks.addItAgain"), () => view.refreshServer(true)],
+      graphics: [t("editor.checks.tryAgain"), () => view.resetGraphics()],
+      renew: [t("editor.checks.renewNow"), async () => {
         await hass.callWS({ type: "virtuhome/licence/refresh" }).catch(() => undefined);
         await view.refreshServer();
       }],
-      save: ["Save", () => {
+      save: [t("editor.checks.save"), () => {
         this.unsaved = true;
         return this.save();
       }],
@@ -1000,7 +1005,7 @@ export class Editor {
   private areaFixes(c: Check): HTMLElement[] {
     return (c.areas ?? []).slice(0, 12).map((id) => {
       const name = this.hass.areas?.[id]?.name ?? id;
-      return h("div", { class: "ed-item" }, h("span", {}, name), h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom(name, id) }, "Add a room"));
+      return h("div", { class: "ed-item" }, h("span", {}, name), h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom(name, id) }, t("editor.addARoom")));
     });
   }
 
@@ -1017,29 +1022,29 @@ export class Editor {
       }
     }
     const name = (id: string) => String(hass.states[id]?.attributes.friendly_name ?? id);
-    const why: Record<Proposal["why"], string> = { renamed: "", "same device": "same device", "same area": "same room, like name", "same name": "like name" };
+    const why: Record<Proposal["why"], string> = { renamed: "", "same device": t("editor.relink.sameDevice"), "same area": t("editor.relink.sameRoomLikeName"), "same name": t("editor.relink.likeName") };
     const relink = (pairs: [string, string | null][]) => {
-      const label = pairs.length > 1 ? `Relink ${pairs.length} entities` : pairs[0][1] ? "Relink" : "Unlink";
+      const label = pairs.length > 1 ? t("editor.relink.relinkNEntities", { n: pairs.length }) : pairs[0][1] ? t("editor.relink.relink") : t("editor.relink.unlink");
       this.change((p) => pairs.forEach(([from, to]) => replaceEntity(p, from, to)), false, label);
-      this.status.textContent = pairs.length > 1 ? `Relinked ${pairs.length} entities` : pairs[0][1] ? "Relinked" : "Unlinked";
+      this.status.textContent = pairs.length > 1 ? t("editor.relink.relinkedNEntities", { n: pairs.length }) : pairs[0][1] ? t("editor.relink.relinked") : t("editor.relink.unlinked");
     };
     const cards = missing.map((m) => {
       const p = proposals.get(m.entity);
       const others = this.entities((id) => domainOf(id) === domainOf(m.entity));
-      const unlink: [string, string] = ["-", m.uses.every((u) => u.device) ? "Remove from plan" : "Unlink"];
+      const unlink: [string, string] = ["-", m.uses.every((u) => u.device) ? t("editor.removeFromPlan") : t("editor.relink.unlink")];
       return h("div", { class: "ed-card" },
         h("div", { class: "ed-row" }, h("b", {}, m.uses[0].label), m.uses.length > 1 ? h("small", {}, `and ${m.uses.length - 1} more`) : null),
         h("small", { class: "ed-id" }, m.entity),
         p ? h("div", { class: "ed-row" },
-          h("span", { class: "ed-col" }, `${p.why === "renamed" ? "Renamed" : "Likely"}: ${name(p.entity)}`, h("small", { class: "ed-id" }, p.why === "renamed" ? p.entity : `${p.entity} · ${why[p.why]}`)),
-          h("button", { class: "ed-btn small", onclick: () => relink([[m.entity, p.entity]]) }, "Relink"),
-        ) : registry !== undefined ? h("p", { class: "ed-hint" }, "Nothing like it found.") : null,
-        h("div", { class: "ed-row" }, this.dropdown([unlink, ...others], "", (v) => v && relink([[m.entity, v === "-" ? null : v]]), "Pick another…")),
+          h("span", { class: "ed-col" }, `${p.why === "renamed" ? t("editor.relink.renamed") : t("editor.relink.likely")}: ${name(p.entity)}`, h("small", { class: "ed-id" }, p.why === "renamed" ? p.entity : `${p.entity} · ${why[p.why]}`)),
+          h("button", { class: "ed-btn small", onclick: () => relink([[m.entity, p.entity]]) }, t("editor.relink.relink")),
+        ) : registry !== undefined ? h("p", { class: "ed-hint" }, t("editor.relink.nothingLikeItFound")) : null,
+        h("div", { class: "ed-row" }, this.dropdown([unlink, ...others], "", (v) => v && relink([[m.entity, v === "-" ? null : v]]), t("editor.relink.pickAnother"))),
       );
     });
     const out: (HTMLElement | null)[] = [
-      registry === undefined ? h("p", { class: "ed-hint" }, "Looking for what replaced them…") : null,
-      proposals.size > 1 ? h("div", { class: "ed-row" }, h("button", { class: "ed-btn small", onclick: () => relink([...proposals].map(([from, p]) => [from, p.entity])) }, `Relink all (${proposals.size})`)) : null,
+      registry === undefined ? h("p", { class: "ed-hint" }, t("editor.relink.lookingForWhatReplaced")) : null,
+      proposals.size > 1 ? h("div", { class: "ed-row" }, h("button", { class: "ed-btn small", onclick: () => relink([...proposals].map(([from, p]) => [from, p.entity])) }, t("editor.relink.relinkAllSize", { size: proposals.size }))) : null,
       ...cards,
     ];
     return out.filter((e): e is HTMLElement => !!e);
@@ -1050,7 +1055,7 @@ export class Editor {
     const items = setupItems(this.plan, this.hass, { cardOnDashboard: this.cardSeen });
     if (!showChecklist(this.plan, items)) {
       if (!this.plan.settings.setup?.dismissed || setupComplete(items)) return [];
-      return [h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.setSetup((s) => (s.dismissed = false), "Show getting started") }, "Show getting started"))];
+      return [h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.setSetup((s) => (s.dismissed = false), t("editor.setup.showGettingStarted")) }, t("editor.setup.showGettingStarted")))];
     }
     const card = items.find((it) => it.id === "card");
     if (card && !card.done && !this.cardAsked) {
@@ -1062,10 +1067,10 @@ export class Editor {
     }
     const left = items.filter((it) => !it.done && !it.optional).length;
     return [
-      h("h4", {}, "Getting started"),
-      h("p", { class: "ed-hint" }, left ? `${left} ${left === 1 ? "step" : "steps"} to go.` : "All done. The wall tablet is up to you."),
+      h("h4", {}, t("editor.setup.gettingStarted")),
+      h("p", { class: "ed-hint" }, left ? t("editor.setup.stepsToGo", { n: left }) : t("editor.setup.allDoneTheWall")),
       h("div", { class: "ed-setup" }, ...items.map((it) => this.setupRow(it, importScan))),
-      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.setSetup((s) => (s.dismissed = true), "Hide getting started") }, "Hide this list")),
+      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.setSetup((s) => (s.dismissed = true), t("editor.setup.hideGettingStarted")) }, t("editor.setup.hideThisList"))),
     ];
   }
 
@@ -1076,26 +1081,26 @@ export class Editor {
       if (on) done.add(it.id);
       else done.delete(it.id);
       s.done = [...done];
-    }, on ? `Done: ${it.title}` : `Not done: ${it.title}`);
+    }, on ? t("editor.setup.doneTitle", { title: it.title }) : t("editor.setup.notDoneTitle", { title: it.title }));
     const ticked = (this.plan.settings.setup?.done ?? []).includes(it.id);
     const actions: Record<SetupId, () => HTMLElement[]> = {
-      home: () => [btn("Trace a picture", () => this.startSetup("trace")), btn("House type", () => this.startSetup("starter")), btn("Import a scan or plan…", importScan), btn("Draw rooms", () => this.startSetup("draw"))],
-      areas: () => [btn("Rooms", () => this.show("rooms"))],
-      devices: () => [btn("Place devices automatically", () => this.runAutoPlace())],
-      north: () => [btn("Sun and weather", () => this.scrollToHeading("Sun and weather")), btn("It's right", () => tick(true))],
-      card: () => [btn("Done", () => tick(true))],
-      tablet: () => [btn("How", () => window.open(guideLink("wall-tablets"), "_blank", "noopener")), btn("Done", () => tick(true))],
+      home: () => [btn(t("editor.setup.traceAPicture"), () => this.startSetup("trace")), btn(t("editor.houseType"), () => this.startSetup("starter")), btn(t("editor.importAScanOr"), importScan), btn(t("editor.setup.drawRooms"), () => this.startSetup("draw"))],
+      areas: () => [btn(t("editor.rooms"), () => this.show("rooms"))],
+      devices: () => [btn(t("editor.placeDevicesAutomatically"), () => this.runAutoPlace())],
+      north: () => [btn(t("editor.sunAndWeather"), () => this.scrollToHeading(t("editor.sunAndWeather"))), btn(t("editor.setup.itsRight"), () => tick(true))],
+      card: () => [btn(t("editor.setup.done"), () => tick(true))],
+      tablet: () => [btn(t("editor.setup.how"), () => window.open(guideLink("wall-tablets"), "_blank", "noopener")), btn(t("editor.setup.done"), () => tick(true))],
     };
     const icon = h("span", { class: `ed-tick${it.done ? " on" : ""}`, html: svg(it.done ? mdiCheckCircle : mdiCheckboxBlankCircleOutline) });
     // a step ticked by hand can be unticked
     const mark = it.manual && ticked
-      ? h("button", { class: "ed-tick on", title: "Not done after all", html: svg(mdiCheckCircle), onclick: () => tick(false) })
+      ? h("button", { class: "ed-tick on", title: t("editor.setup.notDoneAfterAll"), html: svg(mdiCheckCircle), onclick: () => tick(false) })
       : icon;
     return h("div", { class: `ed-step${it.done ? " done" : ""}` },
       mark,
       h("div", {},
-        h("b", {}, it.title + (it.optional ? " (optional)" : "")),
-        it.done ? null : h("p", { class: "ed-hint" }, it.id === "areas" ? `${it.hint} Smart Setup links rooms named like an area; pick the rest in Rooms → Area.` : it.hint),
+        h("b", {}, it.title + (it.optional ? ` ${t("editor.setup.optional")}` : "")),
+        it.done ? null : h("p", { class: "ed-hint" }, it.id === "areas" ? t("editor.setup.hintSmartSetupLinks", { hint: it.hint }) : it.hint),
         it.done ? null : h("div", { class: "ed-row" }, ...actions[it.id]()),
       ),
     );
@@ -1134,7 +1139,7 @@ export class Editor {
       return short || full;
     };
     const sensors = (ok: (id: string) => boolean): [string, string][] =>
-      Object.keys(hass.states).filter((id) => domainOf(id) === "sensor" && ok(id)).map((id) => [id, name(id)] as [string, string]).sort((a, b) => a[1].localeCompare(b[1]));
+      Object.keys(hass.states).filter((id) => domainOf(id) === "sensor" && ok(id)).map((id) => [id, name(id)] as Swatch).sort((a, b) => a[1].localeCompare(b[1]));
     const dc = (id: string) => hass.states[id].attributes.device_class;
     const power = sensors((id) => dc(id) === "power");
     const levels = sensors((id) => dc(id) === "battery");
@@ -1148,40 +1153,40 @@ export class Editor {
       }, false, label);
     const automatic = (...ids: (string | null)[]) => {
       const found = ids.filter((x): x is string => !!x);
-      return `Automatic: ${found.length ? found.map(name).join(" + ") : "none"}`;
+      return t("editor.automaticX", { x: found.length ? found.map(name).join(" + ") : t("editor.energy.none") });
     };
     const row = (label: string, k: keyof EnergySettings, options: [string, string][], autoLabel: string) =>
       h("div", { class: "ed-row" },
         h("label", {}, label),
         this.dropdown(options, k === "solar" ? set.solar?.[0] ?? "" : String(set[k] ?? ""), (v) =>
-          edit(k, k === "solar" ? (v ? [v] : null) : v || null, `Energy: ${label.toLowerCase()}`), autoLabel),
+          edit(k, k === "solar" ? (v ? [v] : null) : v || null, t("editor.energy.energyName", { name: label.toLowerCase() })), autoLabel),
       );
     return [
-      h("h4", {}, "Energy"),
-      h("p", { class: "ed-hint" }, "Solar, battery and grid are read from Home Assistant's energy settings, and car chargers from their integrations. Pick a sensor only where the automatic one is wrong. Solar panels placed in the plan shine with what they make; EV chargers and cars light up while charging."),
+      h("h4", {}, t("editor.energy.energy")),
+      h("p", { class: "ed-hint" }, t("editor.energy.solarBatteryAndGrid")),
       h("label", { class: "ed-check" },
-        h("input", { type: "checkbox", checked: set.enabled !== false, onchange: (e: Event) => edit("enabled", (e.target as HTMLInputElement).checked ? null : false, "Energy shown") }),
-        " Show solar, battery and grid"),
-      row("Solar", "solar", power, automatic(...auto.solar)),
-      row("House", "home", power, auto.home ? automatic(auto.home) : "Automatic: worked out from the others"),
-      row("Battery in", "battery_charge", power, automatic(auto.batteryCharge ?? auto.battery)),
-      row("Battery out", "battery_discharge", power, automatic(auto.batteryDischarge ?? auto.battery)),
-      row("Battery level", "battery_level", levels, automatic(auto.batteryLevel)),
-      row("Grid import", "grid_import", power, automatic(auto.gridImport ?? auto.grid)),
-      row("Grid export", "grid_export", power, automatic(auto.gridExport ?? auto.grid)),
-      row("Price to buy", "price_import", prices, automatic(auto.priceImport)),
-      row("Price to sell", "price_export", prices, automatic(auto.priceExport)),
+        h("input", { type: "checkbox", checked: set.enabled !== false, onchange: (e: Event) => edit("enabled", (e.target as HTMLInputElement).checked ? null : false, t("editor.energy.energyShown")) }),
+        ` ${t("editor.energy.showSolarBatteryAnd")}`),
+      row(t("editor.energy.solar"), "solar", power, automatic(...auto.solar)),
+      row(t("editor.energy.house"), "home", power, auto.home ? automatic(auto.home) : t("editor.energy.automaticWorkedOutFrom")),
+      row(t("editor.energy.batteryIn"), "battery_charge", power, automatic(auto.batteryCharge ?? auto.battery)),
+      row(t("editor.energy.batteryOut"), "battery_discharge", power, automatic(auto.batteryDischarge ?? auto.battery)),
+      row(t("editor.energy.batteryLevel"), "battery_level", levels, automatic(auto.batteryLevel)),
+      row(t("editor.energy.gridImport"), "grid_import", power, automatic(auto.gridImport ?? auto.grid)),
+      row(t("editor.energy.gridExport"), "grid_export", power, automatic(auto.gridExport ?? auto.grid)),
+      row(t("editor.energy.priceToBuy"), "price_import", prices, automatic(auto.priceImport)),
+      row(t("editor.energy.priceToSell"), "price_export", prices, automatic(auto.priceExport)),
       h("div", { class: "ed-row" },
-        h("label", {}, "Panels' peak (kW)"),
-        h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0", value: set.solar_peak ? String(set.solar_peak) : "", placeholder: "auto",
-          onchange: (e: Event) => edit("solar_peak", Number((e.target as HTMLInputElement).value) || null, "Energy: panels' peak") }),
+        h("label", {}, t("editor.energy.panelsPeakKw")),
+        h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0", value: set.solar_peak ? String(set.solar_peak) : "", placeholder: t("editor.auto"),
+          onchange: (e: Event) => edit("solar_peak", Number((e.target as HTMLInputElement).value) || null, t("editor.energy.energyPanelsPeak")) }),
       ),
-      h("div", { class: "ed-sub" }, "Car charging"),
+      h("div", { class: "ed-sub" }, t("editor.energy.carCharging")),
       h("label", { class: "ed-check" },
-        h("input", { type: "checkbox", checked: set.ev_enabled !== false, onchange: (e: Event) => edit("ev_enabled", (e.target as HTMLInputElement).checked ? null : false, "Car charging shown") }),
-        " Show the car charger"),
-      row("Charger", "ev_charger", power, auto.ev.length ? `Automatic: ${auto.ev.map((c) => c.name).join(" + ")}` : "Automatic: none found"),
-      row("Car battery", "ev_level", levels, automatic(auto.ev[0]?.level ?? null)),
+        h("input", { type: "checkbox", checked: set.ev_enabled !== false, onchange: (e: Event) => edit("ev_enabled", (e.target as HTMLInputElement).checked ? null : false, t("editor.energy.carChargingShown")) }),
+        ` ${t("editor.energy.showTheCarCharger")}`),
+      row(t("editor.charger"), "ev_charger", power, auto.ev.length ? t("editor.energy.automaticList", { list: auto.ev.map((c) => c.name).join(" + ") }) : t("editor.energy.automaticNoneFound")),
+      row(t("editor.energy.carBattery"), "ev_level", levels, automatic(auto.ev[0]?.level ?? null)),
     ];
   }
 
@@ -1205,31 +1210,31 @@ export class Editor {
       const auto = sourcesOf(hass, id, null, [...found]).filter((t) => found.has(t));
       return h("div", { class: "ed-row" },
         h("label", {}, who),
-        this.dropdown([["none", "Never in a room"], ...trackers], picked, (v) => edit((e) => {
+        this.dropdown([["none", t("editor.people.neverInARoom")], ...trackers], picked, (v) => edit((e) => {
           if (!v) delete e.people![id];
           else e.people![id] = v === "none" ? null : v;
-        }, `${who}: room from`), `Automatic: ${auto.length ? auto.map(name).join(" or ") : "none found"}`));
+        }, t("editor.people.whoRoomFrom", { who })), t("editor.automaticX", { x: auto.length ? auto.map(name).join(` ${t("editor.people.or")} `) : t("editor.people.noneFound") })));
     });
     // where the trackers put everyone now, to check them against
     const now = people.flatMap(([id, who]) => {
       const at = this.host.view.live.personRoom(id);
       const room = at ? spaces(this.plan.floors[at.floor])[at.room]?.name : null;
-      return room ? [`${who} in ${room}`] : [];
+      return room ? [t("editor.people.whoInRoom", { who, room })] : [];
     });
     const out: (HTMLElement | null)[] = [
-      h("h4", {}, "People"),
-      h("p", { class: "ed-hint" }, "People show in the room they are in when a room tracker knows it: Bermuda, ESPresense or mqtt_room. Each person's tracker is found on their devices, or by its name; pick another where it is wrong. Rooms must be linked to their areas."),
+      h("h4", {}, t("editor.people.people")),
+      h("p", { class: "ed-hint" }, t("editor.people.peopleShowInThe")),
       h("label", { class: "ed-check" },
         h("input", { type: "checkbox", checked: set.enabled !== false, onchange: (e: Event) => edit((x) => {
           if ((e.target as HTMLInputElement).checked) delete x.enabled;
           else x.enabled = false;
-        }, "People in rooms shown") }),
-        " Show people in their rooms"),
+        }, t("editor.people.peopleInRoomsShown")) }),
+        ` ${t("editor.people.showPeopleInTheir")}`),
       ...(set.enabled === false ? [] : rows),
-      set.enabled !== false && now.length ? h("p", { class: "ed-hint" }, `Now: ${now.join(", ")}.`) : null,
-      people.length ? null : h("p", { class: "ed-hint" }, "No people in Home Assistant yet: add them under Settings → People."),
+      set.enabled !== false && now.length ? h("p", { class: "ed-hint" }, t("editor.people.nowList", { list: now.join(", ") })) : null,
+      people.length ? null : h("p", { class: "ed-hint" }, t("editor.people.noPeopleInHome")),
       people.length && !trackers.length && set.enabled !== false
-        ? h("p", { class: "ed-hint" }, "No room trackers found. Bermuda and ESPresense find phones, watches and tags with Bluetooth proxies in the rooms.")
+        ? h("p", { class: "ed-hint" }, t("editor.people.noRoomTrackersFound"))
         : null,
     ];
     return out.filter((e): e is HTMLElement => !!e);
@@ -1251,50 +1256,50 @@ export class Editor {
     const autoWeather = this.host.view.skyLive.weatherEntity(this.hass);
     const fit = this.mapFit;
     let mapRows: (HTMLElement | null)[] = [];
-    if (fit && "busy" in fit) mapRows = [h("p", { class: "ed-hint" }, "Asking OpenStreetMap…")];
+    if (fit && "busy" in fit) mapRows = [h("p", { class: "ed-hint" }, t("editor.sky.askingOpenstreetmap"))];
     else if (fit && "error" in fit) mapRows = [h("p", { class: "ed-hint" }, fit.error)];
     else if (fit && "building" in fit) {
       const b = fit.building;
-      const where = b.distance < 1 ? "at the home location" : `${Math.round(b.distance)} m from the home location`;
+      const where = b.distance < 1 ? t("editor.sky.atTheHomeLocation") : t("editor.sky.distanceMFromThe", { distance: Math.round(b.distance) });
       mapRows = [
-        h("p", { class: "ed-hint" }, `Found a building ${where}, ${b.size[0].toFixed(1)} × ${b.size[1].toFixed(1)} m. If the house faces another way, pick it:`),
+        h("p", { class: "ed-hint" }, t("editor.sky.foundABuildingWhere", { where, fixed: b.size[0].toFixed(1), fixed2: b.size[1].toFixed(1) })),
         h("div", { class: "ed-row" }, ...fit.fits.map((f) =>
           h("button", { class: `ed-btn small${Math.abs(f.north - north) < 0.5 ? "" : " ghost"}`, onclick: () => this.setNorth(f.north) }, `${Math.round(f.north)}° ${compassName(f.north)}`))),
       ];
     }
     return [
-      h("h4", {}, "Sun and weather"),
-      h("p", { class: "ed-hint" }, "Which way the top of the plan faces. With it right, the sun lights the house and casts its shadows as it does outside, at every hour and season. Drag the N to where north is."),
+      h("h4", {}, t("editor.sunAndWeather")),
+      h("p", { class: "ed-hint" }, t("editor.sky.whichWayTheTop")),
       h("div", { class: "ed-row" },
         this.northDial(north),
         h("div", { class: "ed-col" },
           h("div", { class: "ed-row" },
-            h("label", {}, "Faces"),
+            h("label", {}, t("editor.sky.faces")),
             h("input", { class: "ed-in num", type: "number", step: "1", min: "0", max: "359", value: String(Math.round(north * 10) / 10),
               onchange: (e: Event) => this.setNorth(Number((e.target as HTMLInputElement).value) || 0) }),
             h("span", {}, `° ${compassName(north)}`)),
-          h("button", { class: "ed-btn ghost", onclick: () => this.lineUpWithMap() }, "Line up with the map"),
+          h("button", { class: "ed-btn ghost", onclick: () => this.lineUpWithMap() }, t("editor.sky.lineUpWithThe")),
         ),
       ),
-      h("p", { class: "ed-hint" }, "Line up with the map sends Home Assistant's home location to a public OpenStreetMap server (overpass-api.de, or overpass.kumi.systems when that one is busy) for the outline of the building there, and turns the plan to match its walls. Map data © OpenStreetMap contributors."),
+      h("p", { class: "ed-hint" }, t("editor.sky.lineUpWithTheMap")),
       ...mapRows.filter((e): e is HTMLElement => !!e),
       h("label", { class: "ed-check" },
-        h("input", { type: "checkbox", checked: sky.enabled !== false, onchange: (e: Event) => editSky("enabled", (e.target as HTMLInputElement).checked ? null : false, "Weather shown") }),
-        " Show the weather: clouds, rain, snow, fog and wind"),
+        h("input", { type: "checkbox", checked: sky.enabled !== false, onchange: (e: Event) => editSky("enabled", (e.target as HTMLInputElement).checked ? null : false, t("editor.sky.weatherShown")) }),
+        ` ${t("editor.sky.showTheWeatherClouds")}`),
       h("div", { class: "ed-row" },
-        h("label", {}, "Weather"),
-        this.dropdown(weathers, sky.weather ?? "", (v) => editSky("weather", v || null, "Weather entity"), `Automatic: ${autoWeather ? weathers.find(([id]) => id === autoWeather)?.[1] ?? autoWeather : "none"}`)),
+        h("label", {}, t("editor.sky.weather")),
+        this.dropdown(weathers, sky.weather ?? "", (v) => editSky("weather", v || null, t("editor.sky.weatherEntity")), t("editor.automaticX", { x: autoWeather ? weathers.find(([id]) => id === autoWeather)?.[1] ?? autoWeather : "none" }))),
     ];
   }
 
   private setNorth(n: number): void {
     const v = Math.round((((n % 360) + 360) % 360) * 10) / 10;
-    this.change((p) => (p.settings.north = v), false, "North");
+    this.change((p) => (p.settings.north = v), false, t("editor.north"));
   }
 
   /** A compass to drag: the N goes where north is on the plan (the plan's top is up). Shift snaps to 15°. */
   private northDial(north: number): HTMLElement {
-    const dial = h("div", { class: "ed-compass", title: "Drag the N to where north is on the plan" });
+    const dial = h("div", { class: "ed-compass", title: t("editor.sky.dragTheNTo") });
     const draw = (n: number) => {
       const ticks = Array.from({ length: 12 }, (_, i) => `<line x1="42" y1="6" x2="42" y2="${i % 3 ? 10 : 13}" transform="rotate(${i * 30} 42 42)"/>`).join("");
       // the letters stay upright as the rose turns
@@ -1331,7 +1336,7 @@ export class Editor {
       start = null;
       this.plan.settings.north = angle(e);
       if (before.settings.north !== this.plan.settings.north) {
-        this.undo.push({ plan: before, label: "North" });
+        this.undo.push({ plan: before, label: t("editor.north") });
         this.redo = [];
         this.changed();
       }
@@ -1346,7 +1351,7 @@ export class Editor {
   private async lineUpWithMap(): Promise<void> {
     const loc = homeLocation(this.hass);
     if (!loc) {
-      this.mapFit = { error: "Home Assistant has no home location: set it under Settings → System → General." };
+      this.mapFit = { error: t("editor.sky.homeAssistantHasNo") };
       this.render();
       return;
     }
@@ -1356,7 +1361,7 @@ export class Editor {
       const buildings = await fetchBuildings(loc.lat, loc.lon);
       const building = pickBuilding(this.plan, buildings);
       if (!building) {
-        this.mapFit = { error: "OpenStreetMap has no building outline near the home location. Set north by hand." };
+        this.mapFit = { error: t("editor.sky.openstreetmapHasNoBuilding") };
         this.render();
         return;
       }
@@ -1365,7 +1370,7 @@ export class Editor {
       if (fits[0]) this.setNorth(fits[0].north);
       else this.render();
     } catch (err) {
-      this.mapFit = { error: `OpenStreetMap could not be reached (${(err as Error).message ?? err}). Try again later, or set north by hand.` };
+      this.mapFit = { error: t("editor.sky.openstreetmapCouldNotBe", { x: (err as Error).message ?? err }) };
       this.render();
     }
   }
@@ -1377,18 +1382,18 @@ export class Editor {
     const model = carModel(name);
     const same = model && model.type === x.type && [x.w, x.d, x.h].every((v, i) => Math.abs(v - model.size[i]) < 0.005);
     const rows: (HTMLElement | null)[] = [
-      h("div", { class: "ed-row" }, h("label", {}, "Shown"),
-        this.dropdown([["plugged", "While plugged in"], ...here], x.parked ?? "", (v) => this.change((p) => {
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.car.shown")),
+        this.dropdown([["plugged", t("editor.car.whilePluggedIn")], ...here], x.parked ?? "", (v) => this.change((p) => {
           const y = p.floors[fi].furniture.find((z) => z.id === x.id)!;
           if (v) y.parked = v;
           else delete y.parked;
-        }, false, "Car shown"), "Always")),
-      h("p", { class: "ed-hint" }, "A car that is away is left out of the 3D view. A charger only knows when the car is plugged in; a tracker in the car, or its own integration, knows when it is parked."),
+        }, false, t("editor.car.carShown")), t("editor.car.always"))),
+      h("p", { class: "ed-hint" }, t("editor.car.aCarThatIs")),
       model && name && !same
-        ? h("button", { class: "ed-btn ghost", onclick: () => reshape("Shape")((y) => {
+        ? h("button", { class: "ed-btn ghost", onclick: () => reshape(t("editor.car.shape"))((y) => {
           y.type = model.type;
           [y.w, y.d, y.h] = model.size;
-        }) }, `Shape it like the ${name}`)
+        }) }, t("editor.car.shapeItLikeThe", { name }))
         : null,
     ];
     return rows.filter((e): e is HTMLElement => !!e);
@@ -1399,117 +1404,117 @@ export class Editor {
     return h("div", { class: "ed-card" },
       h("div", { class: "ed-row" },
         h("input", { class: "ed-in", value: f.name, onchange: (e: Event) => this.change((p) => (p.floors[i].name = (e.target as HTMLInputElement).value)) }),
-        this.plan.floors.length > 1 ? h("button", { class: "ed-ib small", title: `Remove ${f.name}`, html: svg(mdiDelete), onclick: () => this.removeFloor(i) }) : null,
+        this.plan.floors.length > 1 ? h("button", { class: "ed-ib small", title: t("editor.removeName", { name: f.name }), html: svg(mdiDelete), onclick: () => this.removeFloor(i) }) : null,
       ),
       h("div", { class: "ed-row" },
-        h("label", {}, "HA floor"),
+        h("label", {}, t("editor.floor.haFloor")),
         this.dropdown(haFloors.map((x) => [x.floor_id, x.name]), f.ha_floor ?? "", (v) => this.change((p) => (p.floors[i].ha_floor = v || null)), "—"),
       ),
       h("div", { class: "ed-row" },
-        h("label", {}, "Level (m)"),
+        h("label", {}, t("editor.floor.levelM")),
         h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(f.elevation), onchange: (e: Event) => this.change((p) => (p.floors[i].elevation = Number((e.target as HTMLInputElement).value))) }),
-        h("label", {}, "Height"),
+        h("label", {}, t("editor.height")),
         h("input", { class: "ed-in num", type: "number", step: "0.05", value: String(f.height), onchange: (e: Event) => this.change((p) => (p.floors[i].height = Number((e.target as HTMLInputElement).value))) }),
       ),
       h("div", { class: "ed-row" },
-        h("label", {}, "Outside"),
-        this.dropdown(Object.entries(EXTERIOR_FINISHES).map(([k, d]) => [k, d.name]), f.exterior_finish ?? "", (v) =>
-          this.change((p) => (p.floors[i].exterior_finish = (v || null) as Floor["exterior_finish"]), false, `${f.name} outside walls`), "Same as the house"),
+        h("label", {}, t("editor.outside")),
+        this.dropdown(Object.entries(EXTERIOR_FINISHES).map(([k, d]) => [k, t(d.label)]), f.exterior_finish ?? "", (v) =>
+          this.change((p) => (p.floors[i].exterior_finish = (v || null) as Floor["exterior_finish"]), false, t("editor.floor.nameOutsideWalls", { name: f.name })), t("editor.floor.sameAsTheHouse")),
       ),
     );
   }
 
   /** Licence key and extensions. Buying shows up only once VirtuMaps opens the shop on the server. */
   private extensionsTab(): HTMLElement {
-    const box = h("div", {}, h("p", { class: "ed-hint" }, "Loading…"));
+    const box = h("div", {}, h("p", { class: "ed-hint" }, t("editor.loading")));
     const hass = this.hass;
     type Summary = { status: string; error: string | null; key_hint: string | null; extensions: { id: string; name: string; version: string }[] };
     type Catalog = { id: string; name: string; description?: string; price?: string; checkout_url?: string }[];
-    const render = (s: Summary | null, catalog: Catalog, note = "") => {
+    const render = (s: Summary | null, catalog: Catalog, note = "", reload = false) => {
       const installed = new Set(s?.extensions.map((x) => x.id));
-      const input = h("input", { class: "ed-in", placeholder: "Licence key", autocomplete: "off", spellcheck: false });
+      const input = h("input", { class: "ed-in", placeholder: t("editor.extensions.licenceKey"), autocomplete: "off", spellcheck: false });
       const status = h("p", { class: "ed-hint" }, note);
       const busy = (b: HTMLButtonElement, text: string) => {
         b.disabled = true;
         b.textContent = text;
       };
       const parts: (Node | null)[] = [
-        h("h4", {}, "Licence"),
+        h("h4", {}, t("editor.extensions.licence")),
         s && s.status !== "none"
           ? h("div", { class: "ed-card" },
-            h("div", { class: "ed-row" }, h("b", {}, s.status === "active" ? "Active" : s.status === "expired" ? "Expired — renews online" : "Not valid"), h("small", {}, s.key_hint ?? "")),
+            h("div", { class: "ed-row" }, h("b", {}, s.status === "active" ? t("editor.extensions.active") : s.status === "expired" ? t("editor.extensions.expiredRenewsOnline") : t("editor.extensions.notValid")), h("small", {}, s.key_hint ?? "")),
             s.error ? h("p", { class: "ed-hint" }, s.error) : null,
             ...s.extensions.map((x) => h("div", { class: "ed-item" }, h("span", {}, x.name), h("small", {}, x.version))),
             h("div", { class: "ed-row" },
               h("button", { class: "ed-btn ghost small", onclick: async (ev: Event) => {
-                busy(ev.target as HTMLButtonElement, "Checking…");
+                busy(ev.target as HTMLButtonElement, t("editor.extensions.checking"));
                 try {
-                  render(await hass.callWS<Summary>({ type: "virtuhome/licence/refresh" }), catalog, "Up to date. Reload the page to use new versions.");
+                  render(await hass.callWS<Summary>({ type: "virtuhome/licence/refresh" }), catalog, t("editor.extensions.upToDateReload"), true);
                 } catch (err) {
                   render(s, catalog, String((err as { message?: string }).message ?? err));
                 }
-              } }, "Check for updates"),
-              h("button", { class: "ed-btn ghost small", onclick: () => this.confirm("Remove the licence from this Home Assistant? Its extensions stop working here, and the activation is freed for another one.", "Remove", async () => {
-                render(await hass.callWS<Summary>({ type: "virtuhome/licence/remove" }), catalog, "Licence removed.");
-              }) }, "Remove licence"),
+              } }, t("editor.extensions.checkForUpdates")),
+              h("button", { class: "ed-btn ghost small", onclick: () => this.confirm(t("editor.extensions.removeTheLicenceFrom"), t("editor.remove"), async () => {
+                render(await hass.callWS<Summary>({ type: "virtuhome/licence/remove" }), catalog, t("editor.extensions.licenceRemoved"));
+              }) }, t("editor.extensions.removeLicence")),
             ))
-          : h("p", { class: "ed-hint" }, "Extensions add features such as the wall tablet mode. Enter the licence key you got from VirtuMaps."),
+          : h("p", { class: "ed-hint" }, t("editor.extensions.extensionsAddFeaturesSuch")),
         h("div", { class: "ed-row" },
           input,
           h("button", { class: "ed-btn small", onclick: async (ev: Event) => {
             const key = input.value.trim();
             if (key.length < 8) return;
-            busy(ev.target as HTMLButtonElement, "Activating…");
+            busy(ev.target as HTMLButtonElement, t("editor.extensions.activating"));
             try {
               const next = await hass.callWS<Summary>({ type: "virtuhome/licence/activate", key });
-              render(next, catalog, "Activated. Reload the page to start using the extensions.");
+              render(next, catalog, t("editor.extensions.activatedReloadThePage"), true);
             } catch (err) {
               render(s, catalog, String((err as { message?: string }).message ?? err));
             }
-          } }, "Activate"),
+          } }, t("editor.extensions.activate")),
         ),
         status,
-        note.includes("Reload") ? h("button", { class: "ed-btn ghost small", onclick: () => location.reload() }, "Reload now") : null,
-        h("h4", {}, "Available extensions"),
+        reload ? h("button", { class: "ed-btn ghost small", onclick: () => location.reload() }, t("editor.extensions.reloadNow")) : null,
+        h("h4", {}, t("editor.extensions.availableExtensions")),
         ...(catalog.length ? catalog.map((c) => h("div", { class: "ed-card" },
-          h("div", { class: "ed-row" }, h("b", {}, c.name), installed.has(c.id) ? h("small", {}, "· installed") : null),
+          h("div", { class: "ed-row" }, h("b", {}, c.name), installed.has(c.id) ? h("small", {}, t("editor.extensions.installed")) : null),
           c.description ? h("p", { class: "ed-hint" }, c.description) : null,
-          !installed.has(c.id) && c.checkout_url ? h("a", { class: "ed-btn small", href: c.checkout_url, target: "_blank", rel: "noopener" }, `Get it${c.price ? ` · ${c.price}` : ""}`) : null,
-        )) : [h("p", { class: "ed-hint" }, "The list of extensions could not be loaded right now.")]),
-        !catalog.some((c) => c.checkout_url) ? h("p", { class: "ed-hint" }, "Extensions are currently available to VirtuMaps installation clients.") : null,
+          !installed.has(c.id) && c.checkout_url ? h("a", { class: "ed-btn small", href: c.checkout_url, target: "_blank", rel: "noopener" }, t("editor.extensions.getItX", { x: c.price ? ` · ${c.price}` : "" })) : null,
+        )) : [h("p", { class: "ed-hint" }, t("editor.extensions.theListOfExtensions"))]),
+        !catalog.some((c) => c.checkout_url) ? h("p", { class: "ed-hint" }, t("editor.extensions.extensionsAreCurrentlyAvailable")) : null,
       ];
       box.replaceChildren(...parts.filter((x): x is Node => x !== null));
     };
     Promise.all([
       hass.callWS<Summary>({ type: "virtuhome/licence/get" }).catch(() => null),
       hass.callWS<Catalog>({ type: "virtuhome/catalog" }).catch(() => [] as Catalog),
-    ]).then(([s, c]) => render(s, c, s ? "" : "Extensions need the VirtuHome integration."));
+    ]).then(([s, c]) => render(s, c, s ? "" : t("editor.extensions.extensionsNeedTheVirtuhome")));
     return box;
   }
 
   private roomsTab(): HTMLElement {
     const areas = Object.values(this.hass.areas ?? {}).sort((a, b) => a.name.localeCompare(b.name));
     const box = h("div", {},
-      h("p", { class: "ed-hint" }, "Tap a room or garden area in 3D, then drag its blue corners to reshape it. Corners shared with a neighbour move together. To add a corner, drag a + from the middle of an edge to where it goes."),
+      h("p", { class: "ed-hint" }, t("editor.rooms.tapARoomOr")),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom() }, "Add a room"),
-        h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("back") }, "Add back garden"),
-        h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("front") }, "Add front area"),
-        h("button", { class: "ed-btn ghost small", onclick: () => this.startFence() }, "Draw a fence"),
-        h("button", { class: "ed-btn ghost small", onclick: () => this.addArea("patio", "rect") }, "Add a patio"),
-        h("button", { class: "ed-btn ghost small", onclick: () => this.addArea("deck", "rect") }, "Add a deck"),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addRoom() }, t("editor.addARoom")),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("back") }, t("editor.rooms.addBackGarden")),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addGarden("front") }, t("editor.rooms.addFrontArea")),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.startFence() }, t("editor.rooms.drawAFence")),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addArea("patio", "rect") }, t("editor.rooms.addAPatio")),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addArea("deck", "rect") }, t("editor.rooms.addADeck")),
       ),
     );
     this.plan.floors.forEach((f, fi) => {
       box.append(h("h4", {}, f.name));
       for (const fence of f.fences ?? []) {
         box.append(h("div", { class: `ed-card ${this.sel?.id === fence.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "fence", id: fence.id }) },
-          h("div", { class: "ed-row" }, h("b", {}, `${fenceStyle(fence.style).name} fence`), h("small", {}, ` · ${fenceLength(fence).toFixed(1)} m${fence.gates?.length ? `, ${fence.gates.length} gate${fence.gates.length > 1 ? "s" : ""}` : ""}`)),
+          h("div", { class: "ed-row" }, h("b", {}, t("editor.nameFence", { name: t(fenceStyle(fence.style).label) })), h("small", {}, ` · ${t("editor.rooms.fenceMetres", { m: fenceLength(fence).toFixed(1) })}${fence.gates?.length ? t("editor.rooms.fenceGates", { n: fence.gates.length }) : ""}`)),
         ));
       }
       for (const o of f.outdoor ?? []) {
         box.append(h("div", { class: `ed-card ${this.sel?.id === o.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "outdoor", id: o.id }) },
-          h("div", { class: "ed-row" }, h("b", {}, o.name), h("small", {}, ` · ${o.kind === "deck" ? `${DECK_BOARDS[deckLook(o).boards].name.toLowerCase()} deck` : isPaved(o) ? PAVING[areaPaving(o).material].name.toLowerCase() : KIND_NAMES[o.kind].toLowerCase()}`)),
+          h("div", { class: "ed-row" }, h("b", {}, o.name), h("small", {}, ` · ${o.kind === "deck" ? t("editor.rooms.nameDeck", { name: t(DECK_BOARDS[deckLook(o).boards].label).toLowerCase() }) : isPaved(o) ? t(PAVING[areaPaving(o).material].label).toLowerCase() : t(KIND_NAMES[o.kind]).toLowerCase()}`)),
         ));
       }
       f.rooms.forEach((r, ri) => {
@@ -1519,15 +1524,15 @@ export class Editor {
             h("button", { class: "ed-btn ghost small", onclick: () => {
               this.host.view.viewer.selectRoom(fi, ri);
               this.select({ floor: fi, kind: "room", id: r.id });
-            } }, "Show"),
+            } }, t("editor.rooms.show")),
           ),
           h("div", { class: "ed-row" },
-            h("label", {}, "Area"),
-            this.dropdown(areas.map((a) => [a.area_id, a.name]), r.area_id ?? "", (v) => this.change((p) => (p.floors[fi].rooms[ri].area_id = v || null)), "Not linked"),
+            h("label", {}, t("editor.area")),
+            this.dropdown(areas.map((a) => [a.area_id, a.name]), r.area_id ?? "", (v) => this.change((p) => (p.floors[fi].rooms[ri].area_id = v || null)), t("editor.notLinked")),
           ),
           h("div", { class: "ed-row" },
-            h("label", {}, "Floor"),
-            this.dropdown(Object.entries(FLOOR_FINISHES).map(([k, d]) => [k, d.name]), r.floor ?? "wood", (v) => this.change((p) => (p.floors[fi].rooms[ri].floor = v as FloorMaterial), false, `${r.name} floor`)),
+            h("label", {}, t("editor.floor")),
+            this.dropdown(Object.entries(FLOOR_FINISHES).map(([k, d]) => [k, t(d.label)]), r.floor ?? "wood", (v) => this.change((p) => (p.floors[fi].rooms[ri].floor = v as FloorMaterial), false, t("editor.nameFloor", { name: r.name }))),
           ),
         ));
       });
@@ -1553,20 +1558,20 @@ export class Editor {
       const target = area ? roomByArea.get(area) : undefined;
       if (target) missing.push({ id, ...target });
     }
-    box.append(h("h4", {}, `Not placed (${missing.length})`));
-    if (!missing.length) box.append(h("p", { class: "ed-hint" }, "Everything in the linked areas is in the plan."));
+    box.append(h("h4", {}, t("editor.devices.notPlacedN", { n: missing.length })));
+    if (!missing.length) box.append(h("p", { class: "ed-hint" }, t("editor.devices.everythingInTheLinked")));
     for (const m of missing.slice(0, 80)) {
       box.append(h("div", { class: "ed-item" },
         h("span", {}, name(m.id), h("small", {}, ` · ${m.room.name}`)),
-        h("button", { class: "ed-btn ghost small", onclick: () => this.addDevice(m.fi, m.room, m.id) }, "Add"),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.addDevice(m.fi, m.room, m.id) }, t("editor.devices.add")),
       ));
     }
     this.plan.floors.forEach((f, fi) => {
-      box.append(h("h4", {}, `${f.name}: placed`));
+      box.append(h("h4", {}, t("editor.devices.namePlaced", { name: f.name })));
       for (const d of f.devices) {
         box.append(h("div", { class: "ed-item", onclick: () => this.select({ floor: fi, kind: "device", id: d.id }) },
           h("span", {}, name(d.entity)),
-          h("button", { class: "ed-ib small", title: "Remove", html: svg(mdiDelete), onclick: (e: Event) => {
+          h("button", { class: "ed-ib small", title: t("editor.remove"), html: svg(mdiDelete), onclick: (e: Event) => {
             e.stopPropagation();
             this.change((p) => (p.floors[fi].devices = p.floors[fi].devices.filter((x) => x.id !== d.id)));
           } }),
@@ -1578,7 +1583,7 @@ export class Editor {
 
   private selectedTab(): HTMLElement {
     const s = this.sel;
-    if (!s) return h("p", { class: "ed-hint" }, "Tap a room, a device or a piece of furniture in 3D. Once it is selected, drag it to move it; dragging anything else turns the view.");
+    if (!s) return h("p", { class: "ed-hint" }, t("editor.selected.tapARoomA"));
     const fi = s.floor;
     const f = this.plan.floors[fi];
     if (!f) return h("div", {});
@@ -1603,12 +1608,12 @@ export class Editor {
     const inRoom = f.furniture.filter((x) => pointInPolygon([x.x, x.z], room.points));
     return h("div", {},
       h("h4", {}, room.name),
-      h("div", { class: "ed-sub" }, "Floor"),
-      this.finishChips(FLOOR_FINISHES, room.floor ?? "wood", (k) => updRoom(`${room.name} floor`, (r) => (r.floor = k as FloorMaterial))),
-      h("div", { class: "ed-sub" }, "Walls"),
-      this.finishChips(WALL_FINISHES, wallFinish, (k) => updRoom(`${room.name} walls`, (r) => (r.wall_finish = k as Room["wall_finish"]))),
+      h("div", { class: "ed-sub" }, t("editor.floor")),
+      this.finishChips(FLOOR_FINISHES, room.floor ?? "wood", (k) => updRoom(t("editor.nameFloor", { name: room.name }), (r) => (r.floor = k as FloorMaterial))),
+      h("div", { class: "ed-sub" }, t("editor.room.walls")),
+      this.finishChips(WALL_FINISHES, wallFinish, (k) => updRoom(t("editor.room.nameWalls", { name: room.name }), (r) => (r.wall_finish = k as Room["wall_finish"]))),
       (WALL_FINISHES as Record<string, FinishDef>)[wallFinish]?.tintable
-        ? this.colourPicker(PAINT_SWATCHES, room.wall_color, (c) => updRoom(`${room.name} wall colour`, (r) => (r.wall_color = c)), "Plain white")
+        ? this.colourPicker(PAINT_SWATCHES, room.wall_color, (c) => updRoom(t("editor.room.nameWallColour", { name: room.name }), (r) => (r.wall_color = c)), t("editor.room.plainWhite"))
         : null,
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
@@ -1616,52 +1621,52 @@ export class Editor {
             r.wall_finish = room.wall_finish;
             r.wall_color = room.wall_color ?? null;
           }
-        }, false, "Walls in every room") }, "Use these walls everywhere"),
+        }, false, t("editor.room.wallsInEveryRoom")) }, t("editor.room.useTheseWallsEverywhere")),
       ),
-      h("h4", {}, "Add furniture and decor"),
+      h("h4", {}, t("editor.room.addFurnitureAndDecor")),
       this.itemPicker((type) => this.addFurniture(fi, room, type)),
-      h("h4", {}, `In this room (${inRoom.length})`),
+      h("h4", {}, t("editor.room.inThisRoomN", { n: inRoom.length })),
       h("div", { class: "ed-chips" }, ...inRoom.map((x) => h("button", { class: "ed-chip", onclick: () => this.select({ floor: fi, kind: "furniture", id: x.id }) },
         furnitureName(x.type) ?? x.type))),
-      h("h4", {}, `Doors and windows (${openings.length})`),
+      h("h4", {}, t("editor.room.doorsAndWindowsN", { n: openings.length })),
       ...openings.map((o) => h("div", { class: "ed-card" },
-        h("div", { class: "ed-row" }, h("b", {}, o.kind), h("small", {}, `${o.width.toFixed(2)} m wide`),
-          h("button", { class: "ed-btn ghost small", onclick: () => this.select({ floor: fi, kind: "opening", id: o.id }) }, "Edit")),
+        h("div", { class: "ed-row" }, h("b", {}, o.kind), h("small", {}, t("editor.room.fixedMWide", { fixed: o.width.toFixed(2) })),
+          h("button", { class: "ed-btn ghost small", onclick: () => this.select({ floor: fi, kind: "opening", id: o.id }) }, t("editor.room.edit"))),
         h("div", { class: "ed-row" },
-          h("label", {}, "Sensor"),
+          h("label", {}, t("editor.sensor")),
           this.dropdown(contacts, o.entity ?? "", (v) => this.change((p) => {
             const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
             x.entity = v || null;
-          }), "None"),
+          }), t("editor.none")),
         ),
         o.kind === "window" ? h("div", { class: "ed-row" },
-          h("label", {}, "Blind"),
+          h("label", {}, t("editor.blind")),
           this.dropdown(covers, o.cover ?? "", (v) => this.change((p) => {
             const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
             x.cover = v || null;
-          }), "None"),
+          }), t("editor.none")),
         ) : null,
         o.kind === "door" ? h("div", { class: "ed-row" },
           h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
             const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
             x.hinge = x.hinge === "right" ? "left" : "right";
-          }) }, "Flip hinge"),
+          }) }, t("editor.flipHinge")),
           h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
             const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
             x.swing = x.swing === "out" ? "in" : "out";
-          }) }, "Swing other way"),
+          }) }, t("editor.room.swingOtherWay")),
         ) : null,
       )),
-      h("p", { class: "ed-hint" }, "To add a corner, drag a + from the middle of a wall to where it goes; a tap puts it in the middle. In the 2D plan, the corner tool puts it where you click."),
+      h("p", { class: "ed-hint" }, t("editor.room.toAddACorner")),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost small", onclick: () => this.confirm(`Remove ${room.name} with its doors and windows?`, "Remove", () => {
+        h("button", { class: "ed-btn ghost small", onclick: () => this.confirm(t("editor.room.removeNameWithIts", { name: room.name }), t("editor.remove"), () => {
           this.change((p) => {
             const fl = p.floors[fi];
             fl.rooms = fl.rooms.filter((r) => r.id !== room.id);
             fl.openings = fl.openings.filter((x) => x.room_id !== room.id);
           });
           this.select(null);
-        }) }, "Remove room"),
+        }) }, t("editor.room.removeRoom")),
       ),
     );
   }
@@ -1674,38 +1679,38 @@ export class Editor {
     const lawn = o.kind === "lawn";
     return h("div", {},
       h("h4", {}, o.name),
-      h("p", { class: "ed-hint" }, "Drag the blue corners to shape it. To add a corner, drag a + from the middle of an edge to where it goes; a tap puts it in the middle. Lights of its area light it up at night."),
-      h("div", { class: "ed-row" }, h("label", {}, "Name"), h("input", { class: "ed-in", value: o.name, onchange: (e: Event) => upd("Rename a garden area", (x) => (x.name = (e.target as HTMLInputElement).value)) })),
-      h("div", { class: "ed-sub" }, "Ground"),
-      h("div", { class: "ed-chips" }, ...OUTDOOR_KINDS.map((k) => chip(KIND_NAMES[k], o.kind === k, () => upd(`Make ${o.name} ${KIND_NAMES[k].toLowerCase()}`, (x) => (x.kind = k))))),
+      h("p", { class: "ed-hint" }, t("editor.outdoor.dragTheBlueCorners")),
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.outdoor.name")), h("input", { class: "ed-in", value: o.name, onchange: (e: Event) => upd(t("editor.outdoor.renameAGardenArea"), (x) => (x.name = (e.target as HTMLInputElement).value)) })),
+      h("div", { class: "ed-sub" }, t("editor.outdoor.ground")),
+      h("div", { class: "ed-chips" }, ...OUTDOOR_KINDS.map((k) => chip(t(KIND_NAMES[k]), o.kind === k, () => upd(t("editor.outdoor.makeNameLowercase", { name: o.name, lowerCase: t(KIND_NAMES[k]).toLowerCase() }), (x) => (x.kind = k))))),
       ...(isPaved(o) ? this.pavingRows(o, upd) : []),
       ...(o.kind === "deck" ? this.deckRows(o, upd) : []),
       ...(o.kind === "patio" || o.kind === "deck" ? this.raisedRows(fi, o, upd) : []),
       ...this.areaSizeRows(o, upd),
-      h("div", { class: "ed-row" }, h("label", {}, "Area"), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd("Link a garden area", (x) => (x.area_id = v || null)), "Not linked")),
-      lawn ? h("h4", {}, "Add to this garden") : null,
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.area")), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd(t("editor.outdoor.linkAGardenArea"), (x) => (x.area_id = v || null)), t("editor.notLinked"))),
+      lawn ? h("h4", {}, t("editor.outdoor.addToThisGarden")) : null,
       lawn ? h("div", { class: "ed-chips" },
-        h("button", { class: "ed-chip", onclick: () => this.addArea("patio", "rect", o) }, "Patio"),
-        h("button", { class: "ed-chip", onclick: () => this.addArea("patio", "round", o) }, "Round patio"),
-        h("button", { class: "ed-chip", onclick: () => this.addArea("deck", "rect", o) }, "Deck"),
-        h("button", { class: "ed-chip", onclick: () => this.addArea("path", "rect", o) }, "Path"),
-        h("button", { class: "ed-chip", title: "Draw its outline in the 2D plan", onclick: () => this.drawArea("patio") }, "Draw a patio"),
+        h("button", { class: "ed-chip", onclick: () => this.addArea("patio", "rect", o) }, t("editor.patio")),
+        h("button", { class: "ed-chip", onclick: () => this.addArea("patio", "round", o) }, t("editor.outdoor.roundPatio")),
+        h("button", { class: "ed-chip", onclick: () => this.addArea("deck", "rect", o) }, t("editor.deck")),
+        h("button", { class: "ed-chip", onclick: () => this.addArea("path", "rect", o) }, t("editor.path")),
+        h("button", { class: "ed-chip", title: t("editor.outdoor.drawItsOutlineIn"), onclick: () => this.drawArea("patio") }, t("editor.outdoor.drawAPatio")),
       ) : null,
       lawn ? this.itemPicker((type) => this.addFurniture(fi, o, type), true) : null,
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost", title: "A fence along its edges, except those along the house", onclick: () => this.fenceRound(fi, o) }, "Fence round it"),
+        h("button", { class: "ed-btn ghost", title: t("editor.outdoor.aFenceAlongIts"), onclick: () => this.fenceRound(fi, o) }, t("editor.outdoor.fenceRoundIt")),
         h("button", { class: "ed-btn ghost", onclick: () => {
           const id = newId("out");
           this.change((p) => {
             const fl = p.floors[fi];
             fl.outdoor = [...(fl.outdoor ?? []), { ...structuredClone(o), id, name: `${o.name} 2`, points: o.points.map(([px, pz]) => [px + 0.5, pz + 0.5] as Vec2) }];
-          }, false, `Duplicate ${o.name}`);
+          }, false, t("editor.duplicateName", { name: o.name }));
           this.select({ floor: fi, kind: "outdoor", id });
-        } }, "Duplicate"),
+        } }, t("editor.duplicate")),
         h("button", { class: "ed-btn danger", onclick: () => {
-          this.change((p) => (p.floors[fi].outdoor = (p.floors[fi].outdoor ?? []).filter((x) => x.id !== o.id)), false, `Remove ${o.name}`);
+          this.change((p) => (p.floors[fi].outdoor = (p.floors[fi].outdoor ?? []).filter((x) => x.id !== o.id)), false, t("editor.removeName", { name: o.name }));
           this.select(null);
-        } }, "Remove"),
+        } }, t("editor.remove")),
       ),
     );
   }
@@ -1721,44 +1726,44 @@ export class Editor {
     const border = o.border && BORDER_MATERIALS.includes(o.border as PavingMaterial) ? (o.border as PavingMaterial) : null;
     // a gravel area's stones only take a colour (gravel is a kind of ground of its own)
     if (o.kind === "gravel") {
-      return [h("div", { class: "ed-sub" }, "Stones"), this.colourPicker(def.colors.map(([name, c]) => [name, c] as [string, string]), o.color && o.color !== usual.color ? o.color : null, (c) => upd(`Stones of ${o.name}`, (x) => (x.color = c)), def.colors[0][0])];
+      return [h("div", { class: "ed-sub" }, t("editor.paving.stones")), this.colourPicker(def.colors.map(([name, c]) => [name, c] as Swatch), o.color && o.color !== usual.color ? o.color : null, (c) => upd(t("editor.paving.stonesOfName", { name: o.name }), (x) => (x.color = c)), t(def.colors[0][0]))];
     }
     return [
-      h("div", { class: "ed-sub" }, "Laid with"),
-      h("div", { class: "ed-chips" }, ...PAVING_ORDER.filter((k) => k !== "gravel").map((k) => h("button", { class: `ed-chip${k === look.material ? " on" : ""}`, onclick: () => k !== look.material && upd(`${PAVING[k].name} for ${o.name}`, (x) => {
+      h("div", { class: "ed-sub" }, t("editor.paving.laidWith")),
+      h("div", { class: "ed-chips" }, ...PAVING_ORDER.filter((k) => k !== "gravel").map((k) => h("button", { class: `ed-chip${k === look.material ? " on" : ""}`, onclick: () => k !== look.material && upd(t("editor.paving.tForName", { t: t(PAVING[k].label), name: o.name }), (x) => {
         x.paving = k;
         x.pattern = x.unit = x.color = x.joint = null;
         if (x.kind === "driveway") x.surface = null;
-      }) }, h("i", { style: `background:${PAVING[k].colors[0][1]}` }), PAVING[k].name))),
-      h("div", { class: "ed-sub" }, "Colour"),
-      this.colourPicker(def.colors.map(([name, c]) => [name, c] as [string, string]), o.color && o.color !== usual.color ? o.color : null, (c) => upd(`Colour of ${o.name}`, (x) => (x.color = c)),
-        def.colors.find(([, c]) => c === usual.color)?.[0] ?? "Usual"),
-      def.patterns.length > 1 ? h("div", { class: "ed-sub" }, "Pattern") : null,
-      def.patterns.length > 1 ? h("div", { class: "ed-chips" }, ...def.patterns.map((k) => chip(PATTERN_NAMES[k], look.pattern === k, () => upd(`${PATTERN_NAMES[k]} pattern for ${o.name}`, (x) => (x.pattern = k))))) : null,
-      sized && def.sizes.length > 1 ? h("div", { class: "ed-sub" }, "Size (mm)") : null,
-      sized && def.sizes.length > 1 ? h("div", { class: "ed-chips" }, ...def.sizes.map((k) => chip(k.replace("x", " × "), unit === k, () => upd(`${k} units for ${o.name}`, (x) => (x.unit = k))))) : null,
-      def.joint > 0 ? h("div", { class: "ed-sub" }, "Joints") : null,
-      def.joint > 0 ? this.colourPicker(JOINT_SWATCHES, o.joint, (c) => upd(`Joints of ${o.name}`, (x) => (x.joint = c)), "Usual") : null,
+      }) }, h("i", { style: `background:${PAVING[k].colors[0][1]}` }), t(PAVING[k].label)))),
+      h("div", { class: "ed-sub" }, t("editor.colour")),
+      this.colourPicker(def.colors.map(([name, c]) => [name, c] as Swatch), o.color && o.color !== usual.color ? o.color : null, (c) => upd(t("editor.colourOfName", { name: o.name }), (x) => (x.color = c)),
+        ((k) => (k ? t(k) : t("editor.usual")))(def.colors.find(([, c]) => c === usual.color)?.[0])),
+      def.patterns.length > 1 ? h("div", { class: "ed-sub" }, t("editor.paving.pattern")) : null,
+      def.patterns.length > 1 ? h("div", { class: "ed-chips" }, ...def.patterns.map((k) => chip(t(PATTERN_NAMES[k]), look.pattern === k, () => upd(t("editor.paving.tPatternForName", { t: t(PATTERN_NAMES[k]), name: o.name }), (x) => (x.pattern = k))))) : null,
+      sized && def.sizes.length > 1 ? h("div", { class: "ed-sub" }, t("editor.paving.sizeMm")) : null,
+      sized && def.sizes.length > 1 ? h("div", { class: "ed-chips" }, ...def.sizes.map((k) => chip(k.replace("x", " × "), unit === k, () => upd(t("editor.paving.kUnitsForName", { k, name: o.name }), (x) => (x.unit = k))))) : null,
+      def.joint > 0 ? h("div", { class: "ed-sub" }, t("editor.paving.joints")) : null,
+      def.joint > 0 ? this.colourPicker(JOINT_SWATCHES, o.joint, (c) => upd(t("editor.paving.jointsOfName", { name: o.name }), (x) => (x.joint = c)), t("editor.usual")) : null,
       look.pattern !== "plain" && look.pattern !== "crazy" ? this.directionRow(o, upd) : null,
-      look.material !== "gravel" ? h("div", { class: "ed-sub" }, "Border") : null,
+      look.material !== "gravel" ? h("div", { class: "ed-sub" }, t("editor.paving.border")) : null,
       look.material !== "gravel" ? h("div", { class: "ed-chips" },
-        chip("None", !border, () => upd(`No border round ${o.name}`, (x) => (x.border = null))),
-        ...BORDER_MATERIALS.map((k) => chip(PAVING[k].name, border === k, () => upd(`${PAVING[k].name} border round ${o.name}`, (x) => {
+        chip(t("editor.none"), !border, () => upd(t("editor.paving.noBorderRoundName", { name: o.name }), (x) => (x.border = null))),
+        ...BORDER_MATERIALS.map((k) => chip(t(PAVING[k].label), border === k, () => upd(t("editor.paving.tBorderRoundName", { t: t(PAVING[k].label), name: o.name }), (x) => {
           x.border = k;
           x.border_color = null;
         })))) : null,
-      border ? this.colourPicker(PAVING[border].colors.map(([name, c]) => [name, c] as [string, string]), o.border_color, (c) => upd(`Border colour of ${o.name}`, (x) => (x.border_color = c)), PAVING[border].colors[0][0]) : null,
+      border ? this.colourPicker(PAVING[border].colors.map(([name, c]) => [name, c] as Swatch), o.border_color, (c) => upd(t("editor.paving.borderColourOfName", { name: o.name }), (x) => (x.border_color = c)), t(PAVING[border].colors[0][0])) : null,
     ];
   }
 
   /** Which way the pattern or the boards run, from the area's longest edge. */
   private directionRow(o: OutdoorArea, upd: (label: string, fn: (x: OutdoorArea) => void) => void): HTMLElement {
     const a = o.angle ?? 0;
-    const chip = (label: string, v: number) => h("button", { class: `ed-chip${Math.abs(a - v) < 0.01 ? " on" : ""}`, onclick: () => upd(`Lay ${o.name} ${label.toLowerCase()}`, (x) => (x.angle = v || null)) }, label);
-    return h("div", { class: "ed-row" }, h("label", {}, "Runs"), chip("Along", 0), chip("Diagonal", 45), chip("Across", 90),
-      h("input", { class: "ed-in num", type: "number", step: "5", value: String(a), title: "Degrees from the longest edge", onchange: (e: Event) => {
+    const chip = (label: string, v: number) => h("button", { class: `ed-chip${Math.abs(a - v) < 0.01 ? " on" : ""}`, onclick: () => upd(t("editor.direction.layNameLowercase", { name: o.name, lowerCase: label.toLowerCase() }), (x) => (x.angle = v || null)) }, label);
+    return h("div", { class: "ed-row" }, h("label", {}, t("editor.direction.runs")), chip(t("editor.direction.along"), 0), chip(t("editor.direction.diagonal"), 45), chip(t("editor.across"), 90),
+      h("input", { class: "ed-in num", type: "number", step: "5", value: String(a), title: t("editor.direction.degreesFromTheLongest"), onchange: (e: Event) => {
         const v = Number((e.target as HTMLInputElement).value);
-        upd(`Turn the pattern of ${o.name}`, (x) => (x.angle = isFinite(v) && v ? ((v % 180) + 180) % 180 : null));
+        upd(t("editor.direction.turnThePatternOf", { name: o.name }), (x) => (x.angle = isFinite(v) && v ? ((v % 180) + 180) % 180 : null));
       } }));
   }
 
@@ -1768,18 +1773,18 @@ export class Editor {
     const def = DECK_BOARDS[look.boards];
     const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
     return [
-      h("div", { class: "ed-sub" }, "Boards"),
-      h("div", { class: "ed-chips" }, ...DECK_ORDER.map((k) => h("button", { class: `ed-chip${k === look.boards ? " on" : ""}`, onclick: () => k !== look.boards && upd(`${DECK_BOARDS[k].name} boards on ${o.name}`, (x) => {
+      h("div", { class: "ed-sub" }, t("editor.deck.boards")),
+      h("div", { class: "ed-chips" }, ...DECK_ORDER.map((k) => h("button", { class: `ed-chip${k === look.boards ? " on" : ""}`, onclick: () => k !== look.boards && upd(t("editor.deck.tBoardsOnName", { t: t(DECK_BOARDS[k].label), name: o.name }), (x) => {
         x.boards = k;
         x.color = x.board_width = null;
-      }) }, h("i", { style: `background:${DECK_BOARDS[k].colors[0][1]}` }), DECK_BOARDS[k].name))),
-      h("div", { class: "ed-sub" }, "Colour"),
-      this.colourPicker(def.colors, o.color && o.color !== def.colors[0][1] ? o.color : null, (c) => upd(`Colour of ${o.name}`, (x) => (x.color = c)), def.colors[0][0]),
-      h("div", { class: "ed-row" }, h("label", {}, "Boards mm"), ...def.widths.map((w) => chip(String(w), look.width === w, () => upd(`${w} mm boards on ${o.name}`, (x) => (x.board_width = w))))),
+      }) }, h("i", { style: `background:${DECK_BOARDS[k].colors[0][1]}` }), t(DECK_BOARDS[k].label)))),
+      h("div", { class: "ed-sub" }, t("editor.colour")),
+      this.colourPicker(def.colors, o.color && o.color !== def.colors[0][1] ? o.color : null, (c) => upd(t("editor.colourOfName", { name: o.name }), (x) => (x.color = c)), t(def.colors[0][0])),
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.deck.boardsMm")), ...def.widths.map((w) => chip(String(w), look.width === w, () => upd(t("editor.deck.wMmBoardsOn", { w, name: o.name }), (x) => (x.board_width = w))))),
       this.directionRow(o, upd),
       h("label", { class: "ed-check" },
-        h("input", { type: "checkbox", checked: o.border === "frame", onchange: (e: Event) => upd(`Picture frame round ${o.name}`, (x) => (x.border = (e.target as HTMLInputElement).checked ? "frame" : null)) }),
-        " Picture frame: boards along the edges"),
+        h("input", { type: "checkbox", checked: o.border === "frame", onchange: (e: Event) => upd(t("editor.deck.pictureFrameRoundName", { name: o.name }), (x) => (x.border = (e.target as HTMLInputElement).checked ? "frame" : null)) }),
+        ` ${t("editor.deck.pictureFrameBoardsAlong")}`),
     ];
   }
 
@@ -1789,8 +1794,8 @@ export class Editor {
     const raised = isRaised(o);
     const chip = (label: string, on: boolean, onclick: () => void, title = "") => h("button", { class: `ed-chip${on ? " on" : ""}`, title, onclick: () => !on && onclick() }, label);
     const heights: [number | null, string][] = deck
-      ? [[null, "Level with the floor"], [0.05, "On the ground"], [0.3, "0.3"], [0.45, "0.45"], [0.6, "0.6"], [0.9, "0.9"]]
-      : [[null, "On the ground"], [0.15, "0.15"], [0.3, "0.3"], [0.45, "0.45"], [0.6, "0.6"], [0.9, "0.9"]];
+      ? [[null, t("editor.raised.levelWithTheFloor")], [0.05, t("editor.raised.onTheGround")], [0.3, "0.3"], [0.45, "0.45"], [0.6, "0.6"], [0.9, "0.9"]]
+      : [[null, t("editor.raised.onTheGround")], [0.15, "0.15"], [0.3, "0.3"], [0.45, "0.45"], [0.6, "0.6"], [0.9, "0.9"]];
     const cur = o.height ?? null;
     const f = this.plan.floors[fi];
     const open = openEdges(f, o, this.plan.settings.wall_exterior);
@@ -1799,32 +1804,32 @@ export class Editor {
     const steps = o.steps ?? [];
     const railings: FenceStyle[] = ["balustrade", "glass", "railings", "post_rail", "slatted", "picket"];
     const rows: (HTMLElement | null)[] = [
-      h("div", { class: "ed-sub" }, deck ? "Height (m)" : "Raised (m)"),
-      h("div", { class: "ed-chips" }, ...heights.map(([v, label]) => chip(label, cur === v || (v !== null && cur !== null && Math.abs(cur - v) < 0.001), () => upd(`Height of ${o.name}`, (x) => (x.height = v)))),
+      h("div", { class: "ed-sub" }, deck ? t("editor.raised.heightM") : t("editor.raised.raisedM")),
+      h("div", { class: "ed-chips" }, ...heights.map(([v, label]) => chip(label, cur === v || (v !== null && cur !== null && Math.abs(cur - v) < 0.001), () => upd(t("editor.raised.heightOfName", { name: o.name }), (x) => (x.height = v)))),
         h("input", { class: "ed-in num", type: "number", step: "0.05", min: "0", value: cur === null ? "" : String(cur), placeholder: "m", onchange: (e: Event) => {
           const v = (e.target as HTMLInputElement).value;
-          upd(`Height of ${o.name}`, (x) => (x.height = v === "" ? null : Math.max(0, Math.min(3, Number(v)))));
+          upd(t("editor.raised.heightOfName", { name: o.name }), (x) => (x.height = v === "" ? null : Math.max(0, Math.min(3, Number(v)))));
         } })),
     ];
     if (!raised) return rows;
     if (!deck) {
-      rows.push(h("div", { class: "ed-row" }, h("label", {}, "Sides"), ...Object.entries(RAISED_WALLS).map(([k, name]) =>
-        chip(name, (o.walls ?? "brick") === k, () => upd(`${name} sides on ${o.name}`, (x) => (x.walls = k as RaisedWall))))));
+      rows.push(h("div", { class: "ed-row" }, h("label", {}, t("editor.raised.sides")), ...Object.entries(RAISED_WALLS).map(([k, key]) =>
+        chip(t(key), (o.walls ?? "brick") === k, () => upd(t("editor.raised.tSidesOnName", { t: t(key), name: o.name }), (x) => (x.walls = k as RaisedWall))))));
     }
-    rows.push(h("div", { class: "ed-sub" }, "Steps down"));
+    rows.push(h("div", { class: "ed-sub" }, t("editor.raised.stepsDown")));
     o.points.forEach((_, i) => {
       if (!open[i]) return;
       const e = edgeOf(o.points, i, turn);
       const facing = compassName(north + (Math.atan2(e.out[0], -e.out[1]) * 180) / Math.PI);
       const s = steps.find((x) => x.edge === i);
       rows.push(h("div", { class: "ed-row" },
-        h("label", {}, `${facing} side`), h("small", {}, `${e.len.toFixed(1)} m`),
-        h("button", { class: `ed-chip${s ? " on" : ""}`, title: s ? "Take them off" : "Add steps here", onclick: () => upd(s ? `Take the steps off ${o.name}` : `Steps down from ${o.name}`, (x) => {
+        h("label", {}, t("editor.raised.facingSide", { facing })), h("small", {}, `${e.len.toFixed(1)} m`),
+        h("button", { class: `ed-chip${s ? " on" : ""}`, title: s ? t("editor.raised.takeThemOff") : t("editor.raised.addStepsHere"), onclick: () => upd(s ? t("editor.raised.takeTheStepsOff", { name: o.name }) : t("editor.raised.stepsDownFromName", { name: o.name }), (x) => {
           x.steps = s ? (x.steps ?? []).filter((y) => y.edge !== i) : [...(x.steps ?? []), { edge: i, width: Math.min(e.len, 1.2) }];
-        }) }, "Steps"),
-        s ? h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0.6", value: String(s.width ?? e.len.toFixed(2)), title: "Width of the steps (m)", onchange: (ev: Event) => {
+        }) }, t("editor.raised.steps")),
+        s ? h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0.6", value: String(s.width ?? e.len.toFixed(2)), title: t("editor.raised.widthOfTheSteps"), onchange: (ev: Event) => {
           const v = Number((ev.target as HTMLInputElement).value);
-          upd(`Width of the steps of ${o.name}`, (x) => {
+          upd(t("editor.raised.widthOfTheStepsOf", { name: o.name }), (x) => {
             const y = x.steps?.find((z) => z.edge === i);
             if (y) y.width = isFinite(v) && v > 0 ? Math.max(0.6, Math.min(e.len, v)) : null;
           });
@@ -1832,9 +1837,9 @@ export class Editor {
       ));
     });
     rows.push(
-      h("div", { class: "ed-sub" }, "Railing"),
-      h("div", { class: "ed-chips" }, chip("None", !o.railing, () => upd(`No railing round ${o.name}`, (x) => (x.railing = null))),
-        ...railings.map((k) => chip(FENCE_STYLES[k].name, o.railing === k, () => upd(`${FENCE_STYLES[k].name} railing round ${o.name}`, (x) => (x.railing = k))))),
+      h("div", { class: "ed-sub" }, t("editor.raised.railing")),
+      h("div", { class: "ed-chips" }, chip(t("editor.none"), !o.railing, () => upd(t("editor.raised.noRailingRoundName", { name: o.name }), (x) => (x.railing = null))),
+        ...railings.map((k) => chip(t(FENCE_STYLES[k].label), o.railing === k, () => upd(t("editor.raised.tRailingRoundName", { t: t(FENCE_STYLES[k].label), name: o.name }), (x) => (x.railing = k))))),
     );
     return rows;
   }
@@ -1847,15 +1852,15 @@ export class Editor {
       if (isFinite(v) && v >= 0.5) onSet(v);
     } });
     if (round) {
-      return [h("div", { class: "ed-row" }, h("label", {}, "Across m"), num(round.radius * 2, "Diameter", (v) => upd(`Resize ${o.name}`, (x) => (x.points = circlePoints(round.centre, v / 2, x.points.length)))))];
+      return [h("div", { class: "ed-row" }, h("label", {}, t("editor.areaSize.acrossM")), num(round.radius * 2, t("editor.areaSize.diameter"), (v) => upd(t("editor.areaSize.resizeName", { name: o.name }), (x) => (x.points = circlePoints(round.centre, v / 2, x.points.length)))))];
     }
     const rect = rectSides(o.points);
     if (!rect) return [];
     return [h("div", { class: "ed-row" },
-      h("label", {}, "Size m"),
-      num(rect[0], "Along its first edge", (v) => upd(`Resize ${o.name}`, (x) => (x.points = resizeRect(x.points, 0, v)))),
+      h("label", {}, t("editor.areaSize.sizeM")),
+      num(rect[0], t("editor.areaSize.alongItsFirstEdge"), (v) => upd(t("editor.areaSize.resizeName", { name: o.name }), (x) => (x.points = resizeRect(x.points, 0, v)))),
       h("span", {}, "×"),
-      num(rect[1], "Along its second edge", (v) => upd(`Resize ${o.name}`, (x) => (x.points = resizeRect(x.points, 1, v)))),
+      num(rect[1], t("editor.areaSize.alongItsSecondEdge"), (v) => upd(t("editor.areaSize.resizeName", { name: o.name }), (x) => (x.points = resizeRect(x.points, 1, v)))),
     )];
   }
 
@@ -1870,7 +1875,7 @@ export class Editor {
         const v = (e.target as HTMLInputElement).value;
         onSet(v === "" ? null : Number(v));
       } });
-    const posts: [FencePost, string][] = [["timber", "timber"], ["concrete", "concrete"], ["metal", "metal"], ["pier", "brick piers"]];
+    const posts: [FencePost, string][] = [["timber", "timber"], ["concrete", "concrete"], ["metal", "metal"], ["pier", t("editor.fence.brickPiers")]];
     // a new gate goes in the middle of the longest stretch without one
     const freeSpot = (width: number) => {
       const taken = gates.map((g) => [g.at - g.width / 2, g.at + g.width / 2]).sort((a, b) => a[0] - b[0]);
@@ -1882,48 +1887,48 @@ export class Editor {
       return Math.round(Math.max(width / 2, Math.min(len - width / 2, best.at)) * 100) / 100;
     };
     return h("div", {},
-      h("h4", {}, `${def.name} fence`),
-      h("p", { class: "ed-hint" }, `${len.toFixed(1)} m long. Drag its blue points to move them or a + to add a corner; drag the fence itself to move it. In the 2D plan, the fence tool draws new ones.`),
-      h("div", { class: "ed-sub" }, "Style"),
-      h("div", { class: "ed-chips" }, ...FENCE_ORDER.map((k) => h("button", { class: `ed-chip${k === fence.style ? " on" : ""}`, onclick: () => k !== fence.style && upd(`Fence: ${FENCE_STYLES[k].name}`, (x) => {
+      h("h4", {}, t("editor.nameFence", { name: t(def.label) })),
+      h("p", { class: "ed-hint" }, t("editor.fence.fixedMLongDrag", { fixed: len.toFixed(1) })),
+      h("div", { class: "ed-sub" }, t("editor.style")),
+      h("div", { class: "ed-chips" }, ...FENCE_ORDER.map((k) => h("button", { class: `ed-chip${k === fence.style ? " on" : ""}`, onclick: () => k !== fence.style && upd(t("editor.fence.fenceName", { name: t(FENCE_STYLES[k].label) }), (x) => {
         // the new style's usual height, unless the height was picked
         if (Math.abs(x.height - def.height) < 0.001) x.height = FENCE_STYLES[k].height;
         if (x.color && x.color === def.color) x.color = null;
         x.style = k as FenceStyle;
         x.posts = null;
         x.spacing = null;
-      }) }, FENCE_STYLES[k].name))),
+      }) }, t(FENCE_STYLES[k].label)))),
       h("div", { class: "ed-row" },
-        h("label", {}, "Height m"),
-        num(fence.height, String(def.height), "0.05", (v) => upd("Fence height", (x) => (x.height = Math.max(0.3, Math.min(3, v ?? def.height))))),
-        ...[0.9, 1.2, 1.5, 1.8, 2.0].map((v) => h("button", { class: `ed-chip${Math.abs(fence.height - v) < 0.001 ? " on" : ""}`, onclick: () => upd("Fence height", (x) => (x.height = v)) }, `${v.toFixed(1)}`)),
+        h("label", {}, t("editor.fence.heightM")),
+        num(fence.height, String(def.height), "0.05", (v) => upd(t("editor.fence.fenceHeight"), (x) => (x.height = Math.max(0.3, Math.min(3, v ?? def.height))))),
+        ...[0.9, 1.2, 1.5, 1.8, 2.0].map((v) => h("button", { class: `ed-chip${Math.abs(fence.height - v) < 0.001 ? " on" : ""}`, onclick: () => upd(t("editor.fence.fenceHeight"), (x) => (x.height = v)) }, `${v.toFixed(1)}`)),
       ),
-      def.paint.length ? h("div", { class: "ed-sub" }, "Colour") : null,
-      def.paint.length ? this.colourPicker(FENCE_SWATCHES, fence.color, (c) => upd("Fence colour", (x) => (x.color = c)), def.color ? "Usual" : "Natural") : null,
+      def.paint.length ? h("div", { class: "ed-sub" }, t("editor.colour")) : null,
+      def.paint.length ? this.colourPicker(FENCE_SWATCHES, fence.color, (c) => upd(t("editor.fence.fenceColour"), (x) => (x.color = c)), def.color ? t("editor.usual") : t("editor.fence.natural")) : null,
       h("div", { class: "ed-row" },
-        h("label", {}, "Posts"),
-        this.dropdown(posts, fence.posts ?? "", (v) => upd("Fence posts", (x) => (x.posts = (v || null) as FencePost | null)), `usual (${def.posts === "pier" ? "brick piers" : def.posts})`),
-        h("label", {}, "Every m"),
-        num(fence.spacing, String(def.spacing), "0.05", (v) => upd("Post spacing", (x) => (x.spacing = v && v >= 0.6 ? v : null)), "Distance between posts"),
+        h("label", {}, t("editor.fence.posts")),
+        this.dropdown(posts, fence.posts ?? "", (v) => upd(t("editor.fence.fencePosts"), (x) => (x.posts = (v || null) as FencePost | null)), `usual (${def.posts === "pier" ? t("editor.fence.brickPiers") : def.posts})`),
+        h("label", {}, t("editor.fence.everyM")),
+        num(fence.spacing, String(def.spacing), "0.05", (v) => upd(t("editor.fence.postSpacing"), (x) => (x.spacing = v && v >= 0.6 ? v : null)), t("editor.fence.distanceBetweenPosts")),
       ),
       def.timber ? h("label", { class: "ed-check" },
-        h("input", { type: "checkbox", checked: fence.gravel_board ?? def.gravel, onchange: (e: Event) => upd("Gravel board", (x) => (x.gravel_board = (e.target as HTMLInputElement).checked)) }),
-        " Concrete gravel board along the bottom") : null,
+        h("input", { type: "checkbox", checked: fence.gravel_board ?? def.gravel, onchange: (e: Event) => upd(t("editor.fence.gravelBoard"), (x) => (x.gravel_board = (e.target as HTMLInputElement).checked)) }),
+        ` ${t("editor.fence.concreteGravelBoardAlong")}`) : null,
       def.timber && fence.style !== "trellis" ? h("label", { class: "ed-check" },
-        h("input", { type: "checkbox", checked: fence.topper === "trellis", onchange: (e: Event) => upd("Trellis topper", (x) => (x.topper = (e.target as HTMLInputElement).checked ? "trellis" : null)) }),
-        " Trellis on top (30 cm)") : null,
-      h("div", { class: "ed-sub" }, `Gates (${gates.length})`),
+        h("input", { type: "checkbox", checked: fence.topper === "trellis", onchange: (e: Event) => upd(t("editor.fence.trellisTopper"), (x) => (x.topper = (e.target as HTMLInputElement).checked ? "trellis" : null)) }),
+        ` ${t("editor.fence.trellisOnTop30")}`) : null,
+      h("div", { class: "ed-sub" }, t("editor.fence.gatesN", { n: gates.length })),
       ...gates.map((g, gi) => h("div", { class: "ed-row" },
-        h("label", {}, "At m"),
-        num(g.at, "", "0.1", (v) => upd("Move a gate", (x) => (x.gates![gi].at = Math.max(g.width / 2, Math.min(len - g.width / 2, v ?? g.at)))), "Its middle, from the fence's first point"),
-        h("label", {}, "Wide"),
-        num(g.width, "", "0.05", (v) => upd("Gate width", (x) => (x.gates![gi].width = Math.max(0.5, Math.min(6, v ?? g.width))))),
-        h("button", { class: `ed-chip${g.double ? " on" : ""}`, title: "Two leaves meeting in the middle", onclick: () => upd("Gate leaves", (x) => (x.gates![gi].double = !g.double)) }, "Double"),
-        h("button", { class: "ed-ib small", title: "Remove the gate", html: svg(mdiDelete), onclick: () => upd("Remove a gate", (x) => (x.gates = x.gates!.filter((_, k) => k !== gi))) }),
+        h("label", {}, t("editor.fence.atM")),
+        num(g.at, "", "0.1", (v) => upd(t("editor.fence.moveAGate"), (x) => (x.gates![gi].at = Math.max(g.width / 2, Math.min(len - g.width / 2, v ?? g.at)))), t("editor.fence.itsMiddleFromThe")),
+        h("label", {}, t("editor.fence.wide")),
+        num(g.width, "", "0.05", (v) => upd(t("editor.fence.gateWidth"), (x) => (x.gates![gi].width = Math.max(0.5, Math.min(6, v ?? g.width))))),
+        h("button", { class: `ed-chip${g.double ? " on" : ""}`, title: t("editor.fence.twoLeavesMeetingIn"), onclick: () => upd(t("editor.fence.gateLeaves"), (x) => (x.gates![gi].double = !g.double)) }, t("editor.fence.double")),
+        h("button", { class: "ed-ib small", title: t("editor.fence.removeTheGate"), html: svg(mdiDelete), onclick: () => upd(t("editor.fence.removeAGate"), (x) => (x.gates = x.gates!.filter((_, k) => k !== gi))) }),
       )),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost small", onclick: () => upd("Add a gate", (x) => (x.gates = [...(x.gates ?? []), { at: freeSpot(0.9), width: 0.9 }])) }, "Add a gate"),
-        h("button", { class: "ed-btn ghost small", onclick: () => upd("Add a driveway gate", (x) => (x.gates = [...(x.gates ?? []), { at: freeSpot(3), width: 3, double: true }])) }, "Add a driveway gate"),
+        h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.fence.addAGate"), (x) => (x.gates = [...(x.gates ?? []), { at: freeSpot(0.9), width: 0.9 }])) }, t("editor.fence.addAGate")),
+        h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.fence.addADrivewayGate"), (x) => (x.gates = [...(x.gates ?? []), { at: freeSpot(3), width: 3, double: true }])) }, t("editor.fence.addADrivewayGate")),
       ),
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost", onclick: () => {
@@ -1931,13 +1936,13 @@ export class Editor {
           this.change((p) => {
             const fl = p.floors[fi];
             fl.fences = [...(fl.fences ?? []), { ...structuredClone(fence), id, points: fence.points.map(([px, pz]) => [px + 0.5, pz + 0.5] as Vec2) }];
-          }, false, "Duplicate a fence");
+          }, false, t("editor.fence.duplicateAFence"));
           this.select({ floor: fi, kind: "fence", id });
-        } }, "Duplicate"),
+        } }, t("editor.duplicate")),
         h("button", { class: "ed-btn danger", onclick: () => {
-          this.change((p) => (p.floors[fi].fences = (p.floors[fi].fences ?? []).filter((x) => x.id !== fence.id)), false, "Remove a fence");
+          this.change((p) => (p.floors[fi].fences = (p.floors[fi].fences ?? []).filter((x) => x.id !== fence.id)), false, t("editor.fence.removeAFence"));
           this.select(null);
-        } }, "Remove"),
+        } }, t("editor.remove")),
       ),
     );
   }
@@ -1974,7 +1979,7 @@ export class Editor {
       if (run.length) runs.push(run);
     }
     if (!runs.length) {
-      this.status.textContent = "Every edge of it is along the house.";
+      this.status.textContent = t("editor.fence.everyEdgeOfIt");
       return;
     }
     const style: FenceStyle = o.kind === "patio" || o.kind === "deck" ? "glass" : o.kind === "driveway" || o.kind === "path" ? "brick_wall" : "closeboard";
@@ -1982,7 +1987,7 @@ export class Editor {
     this.change((p) => {
       const fl = p.floors[fi];
       fl.fences = [...(fl.fences ?? []), ...made];
-    }, false, `Fence round ${o.name}`);
+    }, false, t("editor.fence.fenceRoundName", { name: o.name }));
     this.select({ floor: fi, kind: "fence", id: made[0].id });
   }
 
@@ -1994,12 +1999,12 @@ export class Editor {
     const rig = domainOf(d.entity) === "camera" ? cameraRig(floor, layoutWalls(floor, this.plan.settings), d) : null;
     return h("div", {},
       h("h4", {}, String(this.hass.states[d.entity]?.attributes.friendly_name ?? d.entity)),
-      h("div", { class: "ed-row" }, h("label", {}, "Entity"), this.entityInput(all, d.entity, (v) => upd((x) => (x.entity = v)))),
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.device.entity")), this.entityInput(all, d.entity, (v) => upd((x) => (x.entity = v)))),
       h("div", { class: "ed-row" },
-        h("label", {}, "Mount"),
+        h("label", {}, t("editor.device.mount")),
         this.dropdown([["ceiling", "ceiling"], ["wall", "wall"], ["floor", "floor"], ["table", "table"]], d.mount ?? "", (v) => upd((x) => (x.mount = (v || null) as Device["mount"])), "auto"),
-        h("label", {}, "Height"),
-        h("input", { class: "ed-in num", type: "number", step: "0.1", value: d.y === null || d.y === undefined ? "" : String(d.y), placeholder: "auto", onchange: (e: Event) => {
+        h("label", {}, t("editor.height")),
+        h("input", { class: "ed-in num", type: "number", step: "0.1", value: d.y === null || d.y === undefined ? "" : String(d.y), placeholder: t("editor.auto"), onchange: (e: Event) => {
           const v = (e.target as HTMLInputElement).value;
           upd((x) => (x.y = v === "" ? null : Number(v)));
         } }),
@@ -2007,22 +2012,22 @@ export class Editor {
       // a camera without a set direction looks away from its wall: turning starts from there
       this.turnRow((deg) => upd((x) => (x.rotation = ((x.rotation ?? rig?.heading ?? 0) + deg + 360) % 360))),
       rig ? h("div", { class: "ed-row" },
-        h("label", {}, "View °"),
-        h("input", { class: "ed-in num", type: "number", step: "5", min: "20", max: "360", value: d.fov ? String(d.fov) : "", placeholder: String(rig.fov), title: "Field of view in degrees (360: all round)", onchange: (e: Event) => {
+        h("label", {}, t("editor.device.view")),
+        h("input", { class: "ed-in num", type: "number", step: "5", min: "20", max: "360", value: d.fov ? String(d.fov) : "", placeholder: String(rig.fov), title: t("editor.device.fieldOfViewIn"), onchange: (e: Event) => {
           const v = (e.target as HTMLInputElement).value;
           upd((x) => (x.fov = v === "" ? null : Math.max(20, Math.min(360, Number(v)))));
         } }),
-        h("label", {}, "Reach m"),
-        h("input", { class: "ed-in num", type: "number", step: "0.5", min: "0.5", max: "30", value: d.reach ? String(d.reach) : "", placeholder: String(rig.reach), title: "How far it sees, in metres", onchange: (e: Event) => {
+        h("label", {}, t("editor.device.reachM")),
+        h("input", { class: "ed-in num", type: "number", step: "0.5", min: "0.5", max: "30", value: d.reach ? String(d.reach) : "", placeholder: String(rig.reach), title: t("editor.device.howFarItSees"), onchange: (e: Event) => {
           const v = (e.target as HTMLInputElement).value;
           upd((x) => (x.reach = v === "" ? null : Math.max(0.5, Math.min(30, Number(v)))));
         } }),
       ) : null,
-      rig ? h("p", { class: "ed-hint" }, `Shown as ${t(`camera.${rig.kind}`)}. Mount it on the ceiling for a dome, or on a table or the floor for a camera on a stand. Empty fields use the usual values.`) : null,
+      rig ? h("p", { class: "ed-hint" }, t("editor.device.shownAsNameMount", { name: t(`camera.${rig.kind}`) })) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
         this.change((p) => (p.floors[fi].devices = p.floors[fi].devices.filter((x) => x.id !== d.id)));
         this.select(null);
-      } }, "Remove from plan"),
+      } }, t("editor.removeFromPlan")),
     );
   }
 
@@ -2042,7 +2047,7 @@ export class Editor {
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
       fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
       settle(p, fi, x.id);
-    }, false, `${label} ${def ? t(def.label) : "item"}`);
+    }, false, `${label} ${def ? t(def.label) : t("editor.item")}`);
     const num = (label: string, key: "w" | "d" | "h" | "y") =>
       [h("label", {}, label), h("input", {
         class: "ed-in num", type: "number", step: "0.05",
@@ -2050,7 +2055,7 @@ export class Editor {
         value: key === "y" ? (x.y === null || x.y === undefined ? "" : String(x.y)) : String(x[key]), placeholder: key === "y" ? "auto" : "",
         onchange: (e: Event) => {
           const v = (e.target as HTMLInputElement).value;
-          reshape("Resize")((y) => {
+          reshape(t("editor.furniture.resize"))((y) => {
             if (key === "y" && v === "") delete y.y;
             else y[key] = Number(v);
           });
@@ -2059,37 +2064,37 @@ export class Editor {
     const styles = styleOptions(x.type);
     const garden = x.type in GARDEN_OPTIONS || x.type === "metal_shed" || x.type === "greenhouse";
     const finish = x.finish ?? def?.finish ?? "fabric";
-    const named = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!), false, `${label} ${def ? t(def.label) : "item"}`);
+    const named = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => fn(p.floors[fi].furniture.find((y) => y.id === x.id)!), false, `${label} ${def ? t(def.label) : t("editor.item")}`);
     return h("div", {},
       h("h4", {}, def ? t(def.label) : x.type),
-      styles.length > 1 ? h("div", { class: "ed-sub" }, "Style") : null,
+      styles.length > 1 ? h("div", { class: "ed-sub" }, t("editor.style")) : null,
       styles.length > 1 ? h("div", { class: "ed-chips" }, ...styles.map((k) =>
         h("button", { class: `ed-chip${k === x.type ? " on" : ""}`, onclick: () => k !== x.type && this.swapType(fi, x, k) }, t(FURNITURE[k].label)))) : null,
-      h("div", { class: "ed-sub" }, "Colour"),
-      this.colourPicker(garden ? FENCE_SWATCHES : FURNITURE_SWATCHES, x.color, (c) => named("Recolour")((y) => (y.color = c)), "Original"),
-      isUpholstered(x.type) ? h("div", { class: "ed-sub" }, "Upholstery") : null,
-      isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named("Reupholster")((y) => (y.finish = k as Furniture["finish"]))) : null,
+      h("div", { class: "ed-sub" }, t("editor.colour")),
+      this.colourPicker(garden ? FENCE_SWATCHES : FURNITURE_SWATCHES, x.color, (c) => named(t("editor.furniture.recolour"))((y) => (y.color = c)), t("editor.original")),
+      isUpholstered(x.type) ? h("div", { class: "ed-sub" }, t("editor.furniture.upholstery")) : null,
+      isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named(t("editor.furniture.reupholster"))((y) => (y.finish = k as Furniture["finish"]))) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
       ...(garden ? this.gardenRows(x, named) : []),
-      garden && !POST_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? "Charger" : POST_TYPES.has(x.type) ? "Post sensor" : "Linked to"),
-        this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? "The house's charger" : "None found") : "Nothing")),
+      garden && !POST_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : POST_TYPES.has(x.type) ? t("editor.furniture.postSensor") : t("editor.furniture.linkedTo")),
+        this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? t("editor.furniture.theHousesCharger") : t("editor.furniture.noneFound")) : t("editor.furniture.nothing"))),
       ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
-      h("div", { class: "ed-row" }, ...num("Width", "w"), ...num("Depth", "d")),
-      h("div", { class: "ed-row" }, ...num("Height", "h"), ...num("Above floor", "y")),
-      this.turnRow((deg) => reshape("Turn")((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360))),
-        h("button", { class: `ed-ib${x.mirror ? " on" : ""}`, title: "Mirror", html: svg(mdiFlipHorizontal), onclick: () => reshape("Mirror")((y) => (y.mirror = !y.mirror)) })),
+      h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), "w"), ...num(t("editor.houses.depth"), "d")),
+      h("div", { class: "ed-row" }, ...num(t("editor.height"), "h"), ...num(t("editor.furniture.aboveFloor"), "y")),
+      this.turnRow((deg) => reshape(t("editor.turn"))((y) => (y.rotation = Math.round(((y.rotation + deg) % 360 + 360) % 360))),
+        h("button", { class: `ed-ib${x.mirror ? " on" : ""}`, title: t("editor.furniture.mirror"), html: svg(mdiFlipHorizontal), onclick: () => reshape(t("editor.furniture.mirror"))((y) => (y.mirror = !y.mirror)) })),
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost", onclick: () => {
           const id = newId("f");
           this.change((p) => {
             p.floors[fi].furniture.push({ ...structuredClone(x), id, x: x.x + 0.3, z: x.z + 0.3 });
             settle(p, fi, id);
-          }, false, `Duplicate ${def ? t(def.label) : "item"}`);
-        } }, "Duplicate"),
+          }, false, t("editor.furniture.duplicateX", { x: def ? t(def.label) : t("editor.item") }));
+        } }, t("editor.duplicate")),
         h("button", { class: "ed-btn danger", onclick: () => {
           this.change((p) => (p.floors[fi].furniture = p.floors[fi].furniture.filter((y) => y.id !== x.id)));
           this.select(null);
-        } }, "Remove"),
+        } }, t("editor.remove")),
       ),
     );
   }
@@ -2099,28 +2104,28 @@ export class Editor {
     const o = GARDEN_OPTIONS[x.type] ?? {};
     const c = gardenChoice(x.type, x);
     const def = FURNITURE[x.type];
-    const chips = <T extends string>(title: string, list: T[] | undefined, names: Record<T, string>, cur: T | null, label: string, set: (y: Furniture, v: T) => void) =>
+    const chips = <T extends string>(title: string, list: T[] | undefined, names: Record<T, PlainKey>, cur: T | null, label: string, set: (y: Furniture, v: T) => void) =>
       list && list.length > 1 ? [h("div", { class: "ed-sub" }, title), h("div", { class: "ed-chips" }, ...list.map((k) => h("button", {
         class: `ed-chip${cur === k ? " on" : ""}`, onclick: () => cur !== k && named(label)((y) => set(y, k)),
-      }, names[k])))] : [];
+      }, t(names[k] as PlainKey))))] : [];
     const [most] = o.windows ?? [0, 0];
     return [
-      ...chips("Top", o.canopies, CANOPY_NAMES, c.canopy, "Top of", (y, v) => (y.canopy = v)),
-      ...chips("Roof", o.roofings, ROOFING_NAMES, c.roofing, "Roof of", (y, v) => (y.roofing = v)),
-      ...chips("Door", o.doors, DOOR_NAMES, c.door, "Door of", (y, v) => (y.door = v)),
-      most ? h("div", { class: "ed-row" }, h("label", {}, "Windows"), ...Array.from({ length: most + 1 }, (_, n) => h("button", {
-        class: `ed-chip${c.windows === n ? " on" : ""}`, onclick: () => c.windows !== n && named("Windows of")((y) => (y.windows = n)),
-      }, n ? String(n) : "None"))) : null,
-      ...chips("Waste", o.wastes, WASTE_NAMES, c.waste, "Waste in", (y, v) => {
+      ...chips(t("editor.garden.top"), o.canopies, CANOPY_NAMES, c.canopy, t("editor.garden.topOf"), (y, v) => (y.canopy = v)),
+      ...chips(t("editor.roof"), o.roofings, ROOFING_NAMES, c.roofing, t("editor.garden.roofOf"), (y, v) => (y.roofing = v)),
+      ...chips(t("editor.door"), o.doors, DOOR_NAMES, c.door, t("editor.garden.doorOf"), (y, v) => (y.door = v)),
+      most ? h("div", { class: "ed-row" }, h("label", {}, t("editor.garden.windows")), ...Array.from({ length: most + 1 }, (_, n) => h("button", {
+        class: `ed-chip${c.windows === n ? " on" : ""}`, onclick: () => c.windows !== n && named(t("editor.garden.windowsOf"))((y) => (y.windows = n)),
+      }, n ? String(n) : t("editor.none")))) : null,
+      ...chips(t("editor.garden.waste"), o.wastes, WASTE_NAMES, c.waste, t("editor.garden.wasteIn"), (y, v) => {
         // the bin takes the colours that waste's bins have here
         y.waste = v;
         [y.color, y.trim] = binColours(this.country(), v);
       }),
-      def?.trim ? h("div", { class: "ed-sub" }, o.wastes ? "Lid" : "Trim") : null,
-      def?.trim ? this.colourPicker(FENCE_SWATCHES, x.trim, (t) => named("Trim colour of")((y) => (y.trim = t)), "Original") : null,
-      ...chips("Made of", o.material ? (Object.keys(PLANTER_MATERIALS) as PlanterMaterial[]) : undefined,
-        Object.fromEntries(Object.entries(PLANTER_MATERIALS).map(([k, m]) => [k, m.name])) as Record<PlanterMaterial, string>, c.material, "Material of", (y, v) => (y.material = v)),
-      ...chips("Planting", o.plants ? (Object.keys(PLANTING_NAMES) as Planting[]) : undefined, PLANTING_NAMES, c.plants, "Planting in", (y, v) => (y.plants = v)),
+      def?.trim ? h("div", { class: "ed-sub" }, o.wastes ? t("editor.garden.lid") : t("editor.garden.trim")) : null,
+      def?.trim ? this.colourPicker(FENCE_SWATCHES, x.trim, (c) => named(t("editor.garden.trimColourOf"))((y) => (y.trim = c)), t("editor.original")) : null,
+      ...chips(t("editor.garden.madeOf"), o.material ? (Object.keys(PLANTER_MATERIALS) as PlanterMaterial[]) : undefined,
+        Object.fromEntries(Object.entries(PLANTER_MATERIALS).map(([k, m]) => [k, m.label])) as Record<PlanterMaterial, PlainKey>, c.material, t("editor.garden.materialOf"), (y, v) => (y.material = v)),
+      ...chips(t("editor.garden.planting"), o.plants ? (Object.keys(PLANTING_NAMES) as Planting[]) : undefined, PLANTING_NAMES, c.plants, t("editor.garden.plantingIn"), (y, v) => (y.plants = v)),
     ];
   }
 
@@ -2130,17 +2135,17 @@ export class Editor {
     const material = x.balustrade_material ?? (style === "none" ? "primed" : BALUSTRADE_DEFAULT[style]);
     const side = x.balustrade_side ?? "right";
     const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
-    const sides: [NonNullable<Furniture["balustrade_side"]>, string][] = [["left", "Left"], ["right", "Right"], ["both", "Both"]];
+    const sides: [NonNullable<Furniture["balustrade_side"]>, string][] = [["left", t("editor.houses.left")], ["right", t("editor.houses.right")], ["both", t("editor.balustrade.both")]];
     return [
-      h("div", { class: "ed-sub" }, "Balustrade"),
+      h("div", { class: "ed-sub" }, t("editor.balustrade.balustrade")),
       h("div", { class: "ed-chips" }, ...Object.entries(BALUSTRADES).map(([k, name]) =>
-        chip(t(name), style === k, () => named(k === "none" ? "No balustrade on" : `${t(name)} balustrade on`)((y) => (y.balustrade = k as BalustradeStyle))))),
-      style !== "none" ? h("div", { class: "ed-sub" }, style === "glass" ? "Handrail and posts" : "Material") : null,
+        chip(t(name), style === k, () => named(k === "none" ? t("editor.balustrade.noBalustradeOn") : t("editor.balustrade.nameBalustradeOn", { name: t(name) }))((y) => (y.balustrade = k as BalustradeStyle))))),
+      style !== "none" ? h("div", { class: "ed-sub" }, style === "glass" ? t("editor.balustrade.handrailAndPosts") : t("editor.balustrade.material")) : null,
       style !== "none" ? h("div", { class: "ed-chips" }, ...Object.entries(BALUSTRADE_MATERIALS).map(([k, m]) =>
-        h("button", { class: `ed-chip${material === k ? " on" : ""}`, onclick: () => material !== k && named(`${t(m.label)} balustrade on`)((y) => (y.balustrade_material = k as BalustradeMaterial)) },
+        h("button", { class: `ed-chip${material === k ? " on" : ""}`, onclick: () => material !== k && named(t("editor.balustrade.nameBalustradeOn", { name: t(m.label) }))((y) => (y.balustrade_material = k as BalustradeMaterial)) },
           h("i", { style: `background:${hexOf(m.color)}` }), t(m.label)))) : null,
-      style !== "none" ? h("div", { class: "ed-row" }, h("label", {}, "Side going up"),
-        ...sides.map(([k, label]) => chip(label, side === k, () => named("Move the balustrade of")((y) => (y.balustrade_side = k))))) : null,
+      style !== "none" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.balustrade.sideGoingUp")),
+        ...sides.map(([k, label]) => chip(label, side === k, () => named(t("editor.balustrade.moveTheBalustradeOf"))((y) => (y.balustrade_side = k))))) : null,
     ];
   }
 
@@ -2152,8 +2157,8 @@ export class Editor {
     const covers = this.entities((id) => domainOf(id) === "cover");
     const room = this.plan.floors[fi].rooms.find((r) => r.id === o.room_id);
     const num = (label: string, key: "width" | "height" | "sill" | "offset", step = "0.05") =>
-      [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step, min: "0", value: String(o[key]), onchange: (e: Event) => upd(`Change ${o.kind} ${label.toLowerCase()}`, (x) => (x[key] = Math.max(0, Number((e.target as HTMLInputElement).value)))) })];
-    const names: Record<Opening["kind"], string> = { door: "Door", window: "Window", passage: "Opening", garage: "Garage door" };
+      [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step, min: "0", value: String(o[key]), onchange: (e: Event) => upd(t("editor.opening.changeKindName", { kind: o.kind, name: label.toLowerCase() }), (x) => (x[key] = Math.max(0, Number((e.target as HTMLInputElement).value)))) })];
+    const names: Record<Opening["kind"], string> = { door: t("editor.door"), window: t("editor.opening.window"), passage: t("editor.opening.opening"), garage: t("editor.opening.garageDoor") };
     const what = names[o.kind].toLowerCase();
     const styles = stylesFor(o.kind);
     const style = styleOf(o);
@@ -2164,23 +2169,23 @@ export class Editor {
     return h("div", {},
       h("h4", {}, `${names[o.kind]}${room ? ` · ${room.name}` : ""}`),
       h("div", { class: "ed-chips" }, ...(["door", "window", "passage", "garage"] as Opening["kind"][]).map((k) =>
-        chip(names[k], o.kind === k, () => upd(`Make it a ${names[k].toLowerCase()}`, (x) => {
+        chip(names[k], o.kind === k, () => upd(t("editor.opening.makeItAName", { name: names[k].toLowerCase() }), (x) => {
           x.kind = k;
           x.style = null; // styles differ between kinds
           if (k === "window" && x.sill < 0.3) x.sill = 0.9;
           if (k !== "window") x.sill = 0;
         })))),
-      styles ? h("div", { class: "ed-sub" }, "Style") : null,
+      styles ? h("div", { class: "ed-sub" }, t("editor.style")) : null,
       styles ? h("div", { class: "ed-chips" }, ...Object.entries(styles).map(([k, name]) =>
         chip(t(name), style === k, () => upd(`${t(name)} ${what}`, (x) => (x.style = k as Opening["style"]))))) : null,
-      styles ? h("div", { class: "ed-sub" }, o.kind === "window" ? "Frame" : "Finish") : null,
-      styles ? this.finishChips(JOINERY_FINISHES, finish, (k) => upd(`${JOINERY_FINISHES[k as keyof typeof JOINERY_FINISHES].name} ${what}`, (x) => (x.finish = k as Opening["finish"]))) : null,
+      styles ? h("div", { class: "ed-sub" }, o.kind === "window" ? t("editor.opening.frame") : t("editor.opening.finish")) : null,
+      styles ? this.finishChips(JOINERY_FINISHES, finish, (k) => upd(t("editor.opening.finishOf", { finish: t(JOINERY_FINISHES[k as keyof typeof JOINERY_FINISHES].label), what }), (x) => (x.finish = k as Opening["finish"]))) : null,
       styles && def.tintable
-        ? this.colourPicker(JOINERY_SWATCHES, o.color, (c) => upd(`Colour of a ${what}`, (x) => (x.color = c)), finish === "aluminium" ? "Silver" : "White")
+        ? this.colourPicker(JOINERY_SWATCHES, o.color, (c) => upd(t("editor.opening.colourOfAWhat", { what }), (x) => (x.color = c)), finish === "aluminium" ? t("editor.opening.silver") : t("editor.white"))
         : null,
       styles ? h("div", { class: "ed-row" },
-        ctl.bars ? chip("Plain glass", !o.bars, () => upd(`Plain glass in a ${what}`, (x) => (x.bars = false))) : null,
-        ctl.bars ? chip("Glazing bars", !!o.bars, () => upd(`Glazing bars on a ${what}`, (x) => (x.bars = true))) : null,
+        ctl.bars ? chip(t("editor.opening.plainGlass"), !o.bars, () => upd(t("editor.opening.plainGlassInA", { what }), (x) => (x.bars = false))) : null,
+        ctl.bars ? chip(t("editor.opening.glazingBars"), !!o.bars, () => upd(t("editor.opening.glazingBarsOnA", { what }), (x) => (x.bars = true))) : null,
         // the whole look: style, finish, colour and glazing bars (hinge, swing and size stay each one's own)
         h("button", { class: "ed-btn ghost small", onclick: () => this.change((p) => {
           for (const fl of p.floors) for (const x of fl.openings) {
@@ -2190,37 +2195,37 @@ export class Editor {
             x.color = o.color ?? null;
             x.bars = !!o.bars;
           }
-        }, false, `Same style on every ${what}`) }, `Same style on every ${what}`),
+        }, false, t("editor.opening.sameStyleOnEvery", { what })) }, t("editor.opening.sameStyleOnEvery", { what })),
       ) : null,
-      h("div", { class: "ed-row" }, ...num("Width", "width"), ...num("Height", "height")),
-      h("div", { class: "ed-row" }, ...(o.kind === "window" ? num("Sill", "sill") : []), ...num("From corner", "offset")),
+      h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), "width"), ...num(t("editor.height"), "height")),
+      h("div", { class: "ed-row" }, ...(o.kind === "window" ? num(t("editor.opening.sill"), "sill") : []), ...num(t("editor.opening.fromCorner"), "offset")),
       ctl.swing ? h("div", { class: "ed-row" },
-        h("label", {}, "Opens"),
-        chip("Inwards", o.swing !== "out", () => upd(`Open a ${what} inwards`, (x) => (x.swing = "in"))),
-        chip("Outwards", o.swing === "out", () => upd(`Open a ${what} outwards`, (x) => (x.swing = "out"))),
+        h("label", {}, t("editor.opening.opens")),
+        chip(t("editor.opening.inwards"), o.swing !== "out", () => upd(t("editor.opening.openAWhatInwards", { what }), (x) => (x.swing = "in"))),
+        chip(t("editor.opening.outwards"), o.swing === "out", () => upd(t("editor.opening.openAWhatOutwards", { what }), (x) => (x.swing = "out"))),
       ) : null,
       ctl.side ? h("div", { class: "ed-row" },
-        h("label", {}, "Hangs"),
-        chip(room ? `In ${room.name}` : "Inside", o.swing !== "out", () => upd(`Hang a ${what} inside the room`, (x) => (x.swing = "in"))),
-        chip(room ? `Outside ${room.name}` : "Outside", o.swing === "out", () => upd(`Hang a ${what} outside the room`, (x) => (x.swing = "out"))),
+        h("label", {}, t("editor.opening.hangs")),
+        chip(room ? t("editor.opening.inName", { name: room.name }) : t("editor.opening.inside"), o.swing !== "out", () => upd(t("editor.opening.hangAWhatInside", { what }), (x) => (x.swing = "in"))),
+        chip(room ? t("editor.opening.outsideName", { name: room.name }) : t("editor.outside"), o.swing === "out", () => upd(t("editor.opening.hangAWhatOutside", { what }), (x) => (x.swing = "out"))),
       ) : null,
       ctl.hinge || ctl.slide ? h("div", { class: "ed-row" },
-        ctl.hinge ? h("button", { class: "ed-btn ghost small", onclick: () => upd(`Flip a ${what}'s hinge`, (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, "Flip hinge") : null,
-        ctl.slide ? h("button", { class: "ed-btn ghost small", onclick: () => upd(`Slide a ${what} the other way`, (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, "Slide the other way") : null,
+        ctl.hinge ? h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.opening.flipAWhatS", { what }), (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, t("editor.flipHinge")) : null,
+        ctl.slide ? h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.opening.slideAWhatThe", { what }), (x) => (x.hinge = x.hinge === "right" ? "left" : "right")) }, t("editor.opening.slideTheOtherWay")) : null,
       ) : null,
-      h("div", { class: "ed-row" }, h("label", {}, "Sensor"), this.dropdown(contacts, o.entity ?? "", (v) => upd("Link a sensor", (x) => (x.entity = v || null)), "None")),
-      o.kind !== "passage" && style !== "fixed" ? h("p", { class: "ed-hint" }, `The ${what} opens in 3D when its sensor does.`) : null,
-      o.kind === "window" ? h("div", { class: "ed-row" }, h("label", {}, "Blind"), this.dropdown(covers, o.cover ?? "", (v) => upd("Link a blind", (x) => (x.cover = v || null)), "None")) : null,
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.sensor")), this.dropdown(contacts, o.entity ?? "", (v) => upd(t("editor.opening.linkASensor"), (x) => (x.entity = v || null)), t("editor.none"))),
+      o.kind !== "passage" && style !== "fixed" ? h("p", { class: "ed-hint" }, t("editor.opening.theWhatOpensIn", { what })) : null,
+      o.kind === "window" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.blind")), this.dropdown(covers, o.cover ?? "", (v) => upd(t("editor.opening.linkABlind"), (x) => (x.cover = v || null)), t("editor.none"))) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
-        this.change((p) => (p.floors[fi].openings = p.floors[fi].openings.filter((x) => x.id !== o.id)), false, `Remove a ${what}`);
+        this.change((p) => (p.floors[fi].openings = p.floors[fi].openings.filter((x) => x.id !== o.id)), false, t("editor.opening.removeAWhat", { what }));
         this.select(null);
-      } }, "Remove"),
+      } }, t("editor.remove")),
     );
   }
 
   private turnRow(turn: (deg: number) => void, ...extra: HTMLElement[]): HTMLElement {
     return h("div", { class: "ed-row" },
-      h("label", {}, "Turn"),
+      h("label", {}, t("editor.turn")),
       h("button", { class: "ed-ib", title: "-90°", html: svg(mdiRotateLeft), onclick: () => turn(-90) }),
       h("button", { class: "ed-btn ghost small", onclick: () => turn(-15) }, "-15°"),
       h("button", { class: "ed-btn ghost small", onclick: () => turn(15) }, "+15°"),
@@ -2245,25 +2250,25 @@ export class Editor {
       else delete y.y;
       if (def.finish && !y.finish) y.finish = def.finish;
       settle(p, fi, y.id);
-    }, false, `Change to ${t(def.label)}`);
+    }, false, t("editor.furniture.changeToName", { name: t(def.label) }));
   }
 
   /** Named finishes as chips with their colour. */
   private finishChips(defs: Record<string, FinishDef>, current: string, onPick: (k: string) => void): HTMLElement {
     return h("div", { class: "ed-chips" }, ...Object.entries(defs).map(([k, d]) =>
       h("button", { class: `ed-chip${k === current ? " on" : ""}`, onclick: () => k !== current && onPick(k) },
-        h("i", { style: `background:${hexOf(d.color)}` }), d.name)));
+        h("i", { style: `background:${hexOf(d.color)}` }), t(d.label))));
   }
 
   /** Colour swatches, any colour, or the default (null). */
-  private colourPicker(swatches: [string, string][], current: string | null | undefined, onPick: (c: string | null) => void, defaultLabel = "Default"): HTMLElement {
+  private colourPicker(swatches: Swatch[], current: string | null | undefined, onPick: (c: string | null) => void, defaultLabel = t("editor.colour.default")): HTMLElement {
     const cur = current?.toLowerCase() ?? null;
     const custom = h("input", { type: "color", value: cur ?? "#ffffff", onchange: (e: Event) => onPick((e.target as HTMLInputElement).value) });
     const isCustom = !!cur && !swatches.some(([, c]) => c === cur);
     return h("div", { class: "ed-swatches" },
       h("button", { class: `ed-sw none${!cur ? " on" : ""}`, title: defaultLabel, onclick: () => cur && onPick(null) }),
-      ...swatches.map(([name, c]) => h("button", { class: `ed-sw${cur === c ? " on" : ""}`, title: name, style: `--c:${c}`, onclick: () => cur !== c && onPick(c) })),
-      h("label", { class: `ed-sw custom${isCustom ? " on" : ""}`, title: "Any colour", style: isCustom ? `--c:${cur}` : "" }, custom),
+      ...swatches.map(([name, c]) => h("button", { class: `ed-sw${cur === c ? " on" : ""}`, title: t(name), style: `--c:${c}`, onclick: () => cur !== c && onPick(c) })),
+      h("label", { class: `ed-sw custom${isCustom ? " on" : ""}`, title: t("editor.colour.anyColour"), style: isCustom ? `--c:${cur}` : "" }, custom),
     );
   }
 
@@ -2278,10 +2283,10 @@ export class Editor {
         .filter(([k, def]) => (cat() === "all" || def.category === cat()) && (!q || t(def.label).toLowerCase().includes(q) || k.includes(q.replace(/\s+/g, "_"))))
         .sort((a, b) => t(a[1].label).localeCompare(t(b[1].label)));
       results.replaceChildren(...list.slice(0, 80).map(([k, def]) =>
-        h("button", { class: "ed-pick", title: `Add ${t(def.label)}`, onclick: () => onAdd(k) }, h("span", { html: svg(mdiPlus) }), h("b", {}, t(def.label)), h("small", {}, t(`category.${def.category}`)))));
-      if (!list.length) results.append(h("p", { class: "ed-hint" }, "Nothing matches."));
+        h("button", { class: "ed-pick", title: t("editor.addName", { name: t(def.label) }), onclick: () => onAdd(k) }, h("span", { html: svg(mdiPlus) }), h("b", {}, t(def.label)), h("small", {}, t(`category.${def.category}`)))));
+      if (!list.length) results.append(h("p", { class: "ed-hint" }, t("editor.picker.nothingMatches")));
     };
-    const search = h("input", { class: "ed-in", placeholder: "Search: plant, sofa, dumbbells…", value: this.pickQuery, oninput: (e: Event) => {
+    const search = h("input", { class: "ed-in", placeholder: t("editor.picker.searchPlantSofaDumbbells"), value: this.pickQuery, oninput: (e: Event) => {
       this.pickQuery = (e.target as HTMLInputElement).value;
       draw();
     } });
@@ -2290,7 +2295,7 @@ export class Editor {
       else this.pickCat = c;
       chips.querySelectorAll(".ed-chip").forEach((b) => b.classList.toggle("on", b === e.currentTarget));
       draw();
-    } }, c === "all" ? "All" : t(`category.${c}`))));
+    } }, c === "all" ? t("editor.picker.all") : t(`category.${c}`))));
     draw();
     return h("div", {}, h("div", { class: "ed-search" }, h("span", { html: svg(mdiMagnify) }), search), chips, results);
   }
@@ -2325,7 +2330,7 @@ export class Editor {
   private roofSection(): HTMLElement[] {
     const all = this.plan.floors.flatMap((f, fi) => (f.roofs ?? []).map((r) => ({ fi, r, f })));
     const chip = (label: string, on: boolean, onclick: () => void, title = "") => h("button", { class: `ed-chip${on ? " on" : ""}`, title, onclick: () => !on && onclick() }, label);
-    const out: (HTMLElement | null)[] = [h("h4", {}, "Roof")];
+    const out: (HTMLElement | null)[] = [h("h4", {}, t("editor.roof"))];
     if (!all.length) {
       const seen = suggestRoofs(this.plan, {});
       const c = this.roofChoice;
@@ -2334,39 +2339,39 @@ export class Editor {
         this.roofChoice = { ...c, ...patch };
         this.render();
       };
-      const kinds: [HouseKind, string][] = [["detached", "Detached"], ["semi", "Semi-detached"], ["terrace", "Terraced"]];
+      const kinds: [HouseKind, string][] = [["detached", t("editor.roof.detached")], ["semi", t("editor.roof.semiDetached")], ["terrace", t("editor.roof.terraced")]];
       const shape = c.shape ?? (kind === "terrace" ? "gable" : "hip");
       const side = c.side ?? (seen.party === "left" ? "left" : "right");
       out.push(
-        h("p", { class: "ed-hint" }, "A roof over the top storey, and one over every part of a lower storey with nothing above it (an extension leans on the house). Semi-detached and terraced roofs carry on over the party wall."),
-        h("div", { class: "ed-sub" }, "The house"),
-        h("div", { class: "ed-chips" }, ...kinds.map(([k, name]) => chip(name + (k === seen.kind ? " ✓" : ""), kind === k, () => set({ kind: k }), k === seen.kind ? "How its walls look" : ""))),
-        kind === "semi" ? h("div", { class: "ed-row" }, h("label", {}, "Joined on the"),
-          chip("Left", side === "left", () => set({ side: "left" })), chip("Right", side === "right", () => set({ side: "right" }))) : null,
-        h("div", { class: "ed-sub" }, "Main roof"),
+        h("p", { class: "ed-hint" }, t("editor.roof.aRoofOverThe")),
+        h("div", { class: "ed-sub" }, t("editor.roof.theHouse")),
+        h("div", { class: "ed-chips" }, ...kinds.map(([k, name]) => chip(name + (k === seen.kind ? " ✓" : ""), kind === k, () => set({ kind: k }), k === seen.kind ? t("editor.roof.howItsWallsLook") : ""))),
+        kind === "semi" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.roof.joinedOnThe")),
+          chip(t("editor.houses.left"), side === "left", () => set({ side: "left" })), chip(t("editor.houses.right"), side === "right", () => set({ side: "right" }))) : null,
+        h("div", { class: "ed-sub" }, t("editor.roof.mainRoof")),
         h("div", { class: "ed-chips" }, ...(["hip", "gable", "half_hip", "dutch", "mansard", "gambrel", "pyramid", "m_shaped", "flat", "butterfly", "lean_to"] as RoofShape[]).map((k) =>
-          chip(ROOF_SHAPES[k].name, shape === k, () => set({ shape: k }), ROOF_SHAPES[k].hint))),
-        h("div", { class: "ed-sub" }, "Covering"),
+          chip(t(ROOF_SHAPES[k].label), shape === k, () => set({ shape: k }), t(ROOF_SHAPES[k].hint)))),
+        h("div", { class: "ed-sub" }, t("editor.covering")),
         this.finishChips(ROOF_COVERINGS, c.covering ?? "concrete_tiles", (k) => set({ covering: k as RoofCovering })),
-        h("button", { class: "ed-btn", onclick: () => this.addRoofs({ ...c, kind, side: kind === "semi" ? side : null, shape }) }, "Add the roof"),
+        h("button", { class: "ed-btn", onclick: () => this.addRoofs({ ...c, kind, side: kind === "semi" ? side : null, shape }) }, t("editor.addTheRoof")),
       );
       return out.filter((e): e is HTMLElement => !!e);
     }
-    out.push(h("p", { class: "ed-hint" }, "Tap a roof in 3D to change its shape, slope and covering, or to put solar panels, roof windows, a chimney or a dormer on it. The roof button beside the view takes the roofs off to look in from above."));
+    out.push(h("p", { class: "ed-hint" }, t("editor.roof.tapARoofIn")));
     for (const { fi, r, f } of all) {
       const items = r.items ?? [];
       const panels = items.filter((it) => it.kind === "solar").reduce((n, it) => n + (it.cols ?? 1) * (it.rows ?? 1), 0);
       out.push(h("div", { class: `ed-card ${this.sel?.id === r.id ? "on" : ""}`, onclick: () => this.select({ floor: fi, kind: "roof", id: r.id }) },
-        h("div", { class: "ed-row" }, h("b", {}, `${ROOF_SHAPES[r.shape]?.name ?? r.shape} roof`),
-          h("small", {}, ` · ${f.name} · ${r.w.toFixed(1)} × ${r.d.toFixed(1)} m${panels ? ` · ${panels} panels` : ""}${items.length - (panels ? items.filter((it) => it.kind === "solar").length : 0) ? ` · ${items.filter((it) => it.kind !== "solar").length} more` : ""}`)),
+        h("div", { class: "ed-row" }, h("b", {}, t("editor.roof.xRoof", { x: (ROOF_SHAPES[r.shape] ? t(ROOF_SHAPES[r.shape].label) : r.shape) })),
+          h("small", {}, ` ${t("editor.roof.nameFixedFixed2M", { name: f.name, fixed: r.w.toFixed(1), fixed2: r.d.toFixed(1), x: panels ? ` ${t("editor.roof.panelsPanels", { panels })}` : "", x2: items.length - (panels ? items.filter((it) => it.kind === "solar").length : 0) ? ` ${t("editor.roof.nMore", { n: items.filter((it) => it.kind !== "solar").length })}` : "" })}`)),
       ));
     }
     out.push(h("div", { class: "ed-row" },
-      h("button", { class: "ed-btn ghost small", onclick: () => this.addOneRoof() }, "Add a roof"),
-      h("button", { class: "ed-btn ghost small", onclick: () => this.confirm("Take every roof off, with what is on them, and work them out again?", "Start again", () => {
-        this.change((p) => p.floors.forEach((f) => (f.roofs = [])), false, "Take the roofs off");
+      h("button", { class: "ed-btn ghost small", onclick: () => this.addOneRoof() }, t("editor.addARoof")),
+      h("button", { class: "ed-btn ghost small", onclick: () => this.confirm(t("editor.roof.takeEveryRoofOff"), t("editor.roof.startAgain"), () => {
+        this.change((p) => p.floors.forEach((f) => (f.roofs = [])), false, t("editor.roof.takeTheRoofsOff"));
         this.select(null);
-      }) }, "Start again"),
+      }) }, t("editor.roof.startAgain")),
     ));
     return out.filter((e): e is HTMLElement => !!e);
   }
@@ -2375,12 +2380,12 @@ export class Editor {
   private addRoofs(choice: RoofChoice): void {
     const { roofs } = suggestRoofs(this.plan, choice);
     if (!roofs.length) {
-      this.toastInDrawer("The plan has no rooms to put a roof over.");
+      this.toastInDrawer(t("editor.roof.thePlanHasNo"));
       return;
     }
     this.change((p) => {
       for (const { floor, roof } of roofs) p.floors[floor].roofs = [...(p.floors[floor].roofs ?? []), roof];
-    }, false, "Add the roof");
+    }, false, t("editor.addTheRoof"));
     this.host.view.viewer.setMode("house");
     this.select({ floor: roofs[0].floor, kind: "roof", id: roofs[0].roof.id });
   }
@@ -2398,7 +2403,7 @@ export class Editor {
       w: Math.max(1, Math.round((b.maxX - b.minX) * 100) / 100), d: Math.max(1, Math.round((b.maxZ - b.minZ) * 100) / 100),
       rotation: 0, shape: "gable", pitch: 35, covering: "concrete_tiles", items: [],
     };
-    this.change((p) => (p.floors[fi].roofs = [...(p.floors[fi].roofs ?? []), roof]), false, "Add a roof");
+    this.change((p) => (p.floors[fi].roofs = [...(p.floors[fi].roofs ?? []), roof]), false, t("editor.addARoof"));
     viewer.setMode("house");
     this.select({ floor: fi, kind: "roof", id: roof.id });
   }
@@ -2416,43 +2421,43 @@ export class Editor {
     const f = this.plan.floors[fi];
     const pitched = roof.shape !== "flat";
     const m = this.roofModelOf(fi, roof.id);
-    const parties: [PartyEnds | null, string][] = [[null, "None"], ["left", "Left end"], ["right", "Right end"], ["both", "Both ends"]];
-    const kinds: [RoofItem["kind"], string][] = [["solar", "Solar panels"], ["window", "Roof window"], ["chimney", "Chimney"], ...(pitched ? [["dormer", "Dormer"]] as [RoofItem["kind"], string][] : [["lantern", "Roof lantern"]] as [RoofItem["kind"], string][])];
+    const parties: [PartyEnds | null, string][] = [[null, t("editor.none")], ["left", t("editor.roof.leftEnd")], ["right", t("editor.roof.rightEnd")], ["both", t("editor.roof.bothEnds")]];
+    const kinds: [RoofItem["kind"], string][] = [["solar", t("editor.roof.solarPanels")], ["window", t("editor.roof.roofWindow")], ["chimney", t("editor.roof.chimney")], ...(pitched ? [["dormer", t("editor.roof.dormer")]] as [RoofItem["kind"], string][] : [["lantern", t("editor.roof.roofLantern")]] as [RoofItem["kind"], string][])];
     const items = roof.items ?? [];
     return h("div", {},
-      h("h4", {}, `${ROOF_SHAPES[roof.shape]?.name ?? roof.shape} roof · ${f?.name ?? ""}`),
-      h("p", { class: "ed-hint" }, "Drag the blue corners to size it, or the roof itself to move it. Lengths are along the middle of the walls under it, like the rooms'."),
-      this.plan.floors.length > 1 ? h("div", { class: "ed-row" }, h("label", {}, "Sits on"),
+      h("h4", {}, t("editor.roof.xRoofX2", { x: (ROOF_SHAPES[roof.shape] ? t(ROOF_SHAPES[roof.shape].label) : roof.shape), x2: f?.name ?? "" })),
+      h("p", { class: "ed-hint" }, t("editor.roof.dragTheBlueCorners")),
+      this.plan.floors.length > 1 ? h("div", { class: "ed-row" }, h("label", {}, t("editor.roof.sitsOn")),
         this.dropdown(this.plan.floors.map((x, i) => [String(i), x.name]), String(fi), (v) => this.moveRoof(fi, roof.id, Number(v)))) : null,
-      h("div", { class: "ed-chips" }, ...ROOF_SHAPE_ORDER.map((k) => chip(ROOF_SHAPES[k].name, roof.shape === k, () => upd(`${ROOF_SHAPES[k].name} roof`, (r) => {
+      h("div", { class: "ed-chips" }, ...ROOF_SHAPE_ORDER.map((k) => chip(t(ROOF_SHAPES[k].label), roof.shape === k, () => upd(t("editor.roof.nameRoof", { name: t(ROOF_SHAPES[k].label) }), (r) => {
         r.shape = k;
         if (k === "flat") r.pitch = 0;
         else if (!r.pitch || r.shape === "flat" || Math.abs(r.pitch - ROOF_SHAPES[roof.shape].pitch) < 0.01) r.pitch = ROOF_SHAPES[k].pitch;
-      }), ROOF_SHAPES[k].hint))),
+      }), t(ROOF_SHAPES[k].hint)))),
       pitched ? h("div", { class: "ed-row" },
-        h("label", {}, "Pitch °"),
-        num(roof.pitch, "35", "1", (v) => upd("Roof pitch", (r) => (r.pitch = Math.max(5, Math.min(70, v ?? 35))))),
-        ...[15, 22.5, 30, 35, 40, 45].map((v) => chip(String(v), Math.abs(roof.pitch - v) < 0.01, () => upd("Roof pitch", (r) => (r.pitch = v)))),
+        h("label", {}, t("editor.roof.pitch")),
+        num(roof.pitch, "35", "1", (v) => upd(t("editor.roof.roofPitch"), (r) => (r.pitch = Math.max(5, Math.min(70, v ?? 35))))),
+        ...[15, 22.5, 30, 35, 40, 45].map((v) => chip(String(v), Math.abs(roof.pitch - v) < 0.01, () => upd(t("editor.roof.roofPitch"), (r) => (r.pitch = v)))),
       ) : h("label", { class: "ed-check" },
-        h("input", { type: "checkbox", checked: !!roof.parapet, onchange: (e: Event) => upd("Parapet", (r) => (r.parapet = (e.target as HTMLInputElement).checked)) }),
-        " A parapet round it instead of eaves"),
-      h("div", { class: "ed-row" }, h("label", {}, "Joined next door"),
-        ...parties.map(([k, label]) => chip(label, (roof.party ?? null) === k, () => upd(k ? "Party wall" : "No party wall", (r) => (r.party = k)),
-          k ? "A semi-detached or terraced house: the roof carries on over the party wall there" : ""))),
-      h("div", { class: "ed-sub" }, "Covering"),
-      this.finishChips(ROOF_COVERINGS, roof.covering, (k) => upd(`Roof: ${(ROOF_COVERINGS as Record<string, FinishDef>)[k].name}`, (r) => (r.covering = k as RoofCovering))),
-      def.tintable ? this.colourPicker(ROOF_SWATCHES, roof.color, (c) => upd("Roof colour", (r) => (r.color = c)), "Usual") : null,
-      roof.covering !== "glass" ? h("div", { class: "ed-sub" }, "Fascias and soffits") : null,
-      this.colourPicker(TRIM_SWATCHES, roof.trim, (c) => upd("Fascia colour", (r) => (r.trim = c)), "White"),
+        h("input", { type: "checkbox", checked: !!roof.parapet, onchange: (e: Event) => upd(t("editor.roof.parapet"), (r) => (r.parapet = (e.target as HTMLInputElement).checked)) }),
+        ` ${t("editor.roof.aParapetRoundIt")}`),
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.roof.joinedNextDoor")),
+        ...parties.map(([k, label]) => chip(label, (roof.party ?? null) === k, () => upd(k ? t("editor.roof.partyWall") : t("editor.roof.noPartyWall"), (r) => (r.party = k)),
+          k ? t("editor.roof.aSemiDetachedOr") : ""))),
+      h("div", { class: "ed-sub" }, t("editor.covering")),
+      this.finishChips(ROOF_COVERINGS, roof.covering, (k) => upd(t("editor.roof.roofName", { name: t((ROOF_COVERINGS as Record<string, FinishDef>)[k].label) }), (r) => (r.covering = k as RoofCovering))),
+      def.tintable ? this.colourPicker(ROOF_SWATCHES, roof.color, (c) => upd(t("editor.roof.roofColour"), (r) => (r.color = c)), t("editor.usual")) : null,
+      roof.covering !== "glass" ? h("div", { class: "ed-sub" }, t("editor.roof.fasciasAndSoffits")) : null,
+      this.colourPicker(TRIM_SWATCHES, roof.trim, (c) => upd(t("editor.roof.fasciaColour"), (r) => (r.trim = c)), t("editor.white")),
       h("div", { class: "ed-row" },
-        h("label", {}, "Eaves out"), num(roof.overhang, pitched ? "0.3" : "0.1", "0.05", (v) => upd("Eaves overhang", (r) => (r.overhang = v === null ? null : Math.max(0, Math.min(1.5, v)))), "How far the roof reaches past the walls (m)"),
-        h("label", {}, "Eaves at"), num(roof.eaves, String(f?.height ?? 2.5), "0.05", (v) => upd("Eaves height", (r) => (r.eaves = v === null ? null : Math.max(0, Math.min(20, v)))), "Height of the eaves above the storey's floor (m); empty: the top of its walls"),
+        h("label", {}, t("editor.roof.eavesOut")), num(roof.overhang, pitched ? "0.3" : "0.1", "0.05", (v) => upd(t("editor.roof.eavesOverhang"), (r) => (r.overhang = v === null ? null : Math.max(0, Math.min(1.5, v)))), t("editor.roof.howFarTheRoof")),
+        h("label", {}, t("editor.roof.eavesAt")), num(roof.eaves, String(f?.height ?? 2.5), "0.05", (v) => upd(t("editor.roof.eavesHeight"), (r) => (r.eaves = v === null ? null : Math.max(0, Math.min(20, v)))), t("editor.roof.heightOfTheEaves")),
       ),
       h("div", { class: "ed-row" },
-        h("label", {}, "Length"), num(roof.w, "", "0.05", (v) => v && upd("Roof length", (r) => (r.w = Math.max(0.5, v)))),
-        h("label", {}, "Span"), num(roof.d, "", "0.05", (v) => v && upd("Roof span", (r) => (r.d = Math.max(0.5, v)))),
+        h("label", {}, t("editor.length")), num(roof.w, "", "0.05", (v) => v && upd(t("editor.roof.roofLength"), (r) => (r.w = Math.max(0.5, v)))),
+        h("label", {}, t("editor.roof.span")), num(roof.d, "", "0.05", (v) => v && upd(t("editor.roof.roofSpan"), (r) => (r.d = Math.max(0.5, v)))),
       ),
-      this.turnRow((deg) => upd("Turn a roof", (r) => {
+      this.turnRow((deg) => upd(t("editor.roof.turnARoof"), (r) => {
         // the roof turns round its middle, and what is on it with it
         const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
         for (const it of r.items ?? []) {
@@ -2463,10 +2468,10 @@ export class Editor {
         }
         r.rotation = ((r.rotation + deg) % 360 + 360) % 360;
       })),
-      h("h4", {}, "Add on the roof"),
+      h("h4", {}, t("editor.roof.addOnTheRoof")),
       h("div", { class: "ed-chips" }, ...kinds.map(([k, label]) => h("button", { class: "ed-chip", onclick: () => this.addRoofItem(fi, roof.id, k) }, label))),
       m && pitched ? h("p", { class: "ed-hint" }, this.roofFacesText(m)) : null,
-      items.length ? h("h4", {}, `On this roof (${items.length})`) : null,
+      items.length ? h("h4", {}, t("editor.roof.onThisRoofN", { n: items.length })) : null,
       items.length ? h("div", { class: "ed-chips" }, ...items.map((it) => h("button", { class: "ed-chip", onclick: () => this.select({ floor: fi, kind: "roofitem", id: it.id }) }, this.roofItemName(it)))) : null,
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost", onclick: () => {
@@ -2476,13 +2481,13 @@ export class Editor {
             const copy: Roof = { ...structuredClone(roof), id, x: roof.x + 1, z: roof.z + 1 };
             copy.items = (copy.items ?? []).map((it) => ({ ...it, id: newId("ri"), x: it.x + 1, z: it.z + 1 }));
             fl.roofs = [...(fl.roofs ?? []), copy];
-          }, false, "Duplicate a roof");
+          }, false, t("editor.roof.duplicateARoof"));
           this.select({ floor: fi, kind: "roof", id });
-        } }, "Duplicate"),
+        } }, t("editor.duplicate")),
         h("button", { class: "ed-btn danger", onclick: () => {
-          this.change((p) => (p.floors[fi].roofs = (p.floors[fi].roofs ?? []).filter((r) => r.id !== roof.id)), false, "Remove a roof");
+          this.change((p) => (p.floors[fi].roofs = (p.floors[fi].roofs ?? []).filter((r) => r.id !== roof.id)), false, t("editor.roof.removeARoof"));
           this.select(null);
-        } }, "Remove"),
+        } }, t("editor.remove")),
       ),
     );
   }
@@ -2495,7 +2500,7 @@ export class Editor {
       if (!roof) return;
       p.floors[from].roofs = (p.floors[from].roofs ?? []).filter((r) => r.id !== id);
       p.floors[to].roofs = [...(p.floors[to].roofs ?? []), roof];
-    }, false, `Roof onto ${this.plan.floors[to].name}`);
+    }, false, t("editor.roof.roofOntoName", { name: this.plan.floors[to].name }));
     this.select({ floor: to, kind: "roof", id });
   }
 
@@ -2506,13 +2511,13 @@ export class Editor {
     if (!faces.length) return "";
     const parts = faces.map((f) => compassName(faceBearing(m, f, north)));
     const unique = [...new Set(parts)];
-    return `Its slopes face ${unique.join(", ")}${north === 0 ? " (with north up the plan: set north under Sun and weather)" : ""}.`;
+    return t("editor.roof.itsSlopesFaceList", { list: unique.join(", "), x: north === 0 ? ` ${t("editor.roof.withNorthUpThe")}` : "" });
   }
 
   private roofItemName(it: RoofItem): string {
-    if (it.kind === "solar") return `${(it.cols ?? 1) * (it.rows ?? 1)} solar panels`;
-    if (it.kind === "dormer") return `${it.style === "box" ? "Box" : it.style === "hipped" ? "Hipped" : "Gable"} dormer`;
-    return ROOF_ITEM_DEFAULTS[it.kind].name;
+    if (it.kind === "solar") return t("editor.roofItem.xSolarPanels", { x: (it.cols ?? 1) * (it.rows ?? 1) });
+    if (it.kind === "dormer") return t("editor.roofItem.xDormer", { x: it.style === "box" ? t("editor.box") : it.style === "hipped" ? t("editor.hipped") : t("editor.gable") });
+    return t(ROOF_ITEM_DEFAULTS[it.kind].label);
   }
 
   /** Something new on a roof, where it usually goes: panels on the sunniest slope, a chimney on the ridge… */
@@ -2554,7 +2559,7 @@ export class Editor {
     this.change((p) => {
       const r = this.roofOf(p, roofId)?.roof;
       if (r) r.items = [...(r.items ?? []), item];
-    }, false, `Add ${def.name.toLowerCase()}`);
+    }, false, t("editor.addName", { name: t(def.label).toLowerCase() }));
     this.select({ floor: fi, kind: "roofitem", id: item.id });
   }
 
@@ -2581,7 +2586,7 @@ export class Editor {
     const fr = m ? itemFrame(m, it) : null;
     const flat = !!fr && fr.slope < 1;
     const name = this.roofItemName(it);
-    const rows: (HTMLElement | null)[] = [h("h4", {}, name), h("p", { class: "ed-hint" }, "Drag it along the roof to move it.")];
+    const rows: (HTMLElement | null)[] = [h("h4", {}, name), h("p", { class: "ed-hint" }, t("editor.roofItem.dragItAlongThe"))];
     if (it.kind === "solar") {
       const n = (it.cols ?? 1) * (it.rows ?? 1);
       const kwp = (n * (it.watts ?? PANEL.watts)) / 1000;
@@ -2599,100 +2604,100 @@ export class Editor {
       }, false, label);
       const power = this.entities((id, st) => domainOf(id) === "sensor" && st.attributes.device_class === "power");
       rows.push(
-        h("p", { class: "ed-hint" }, `${n} panels, ${kwp.toFixed(2)} kWp, ${it.w.toFixed(2)} × ${it.d.toFixed(2)} m.`),
+        h("p", { class: "ed-hint" }, t("editor.roofItem.nPanelsFixedKwp", { n, fixed: kwp.toFixed(2), fixed2: it.w.toFixed(2), fixed3: it.d.toFixed(2) })),
         h("div", { class: "ed-row" },
-          ...num("Across", it.cols, "1", (v) => upd("Solar panels across", (x) => (x.cols = Math.max(1, Math.min(30, Math.round(v ?? 1)))))),
-          ...num("Up", it.rows, "1", (v) => upd("Solar panels up the slope", (x) => (x.rows = Math.max(1, Math.min(12, Math.round(v ?? 1)))))),
+          ...num(t("editor.across"), it.cols, "1", (v) => upd(t("editor.roofItem.solarPanelsAcross"), (x) => (x.cols = Math.max(1, Math.min(30, Math.round(v ?? 1)))))),
+          ...num(t("editor.roofItem.up"), it.rows, "1", (v) => upd(t("editor.roofItem.solarPanelsUpThe"), (x) => (x.rows = Math.max(1, Math.min(12, Math.round(v ?? 1)))))),
         ),
         h("div", { class: "ed-row" },
-          chip("Portrait", it.portrait !== false, () => upd("Panels portrait", (x) => (x.portrait = true))),
-          chip("Landscape", it.portrait === false, () => upd("Panels landscape", (x) => (x.portrait = false))),
-          chip("All black", it.style !== "blue", () => upd("All-black panels", (x) => (x.style = "black"))),
-          chip("Blue", it.style === "blue", () => upd("Blue panels", (x) => (x.style = "blue"))),
+          chip(t("editor.roofItem.portrait"), it.portrait !== false, () => upd(t("editor.roofItem.panelsPortrait"), (x) => (x.portrait = true))),
+          chip(t("editor.roofItem.landscape"), it.portrait === false, () => upd(t("editor.roofItem.panelsLandscape"), (x) => (x.portrait = false))),
+          chip(t("editor.roofItem.allBlack"), it.style !== "blue", () => upd(t("editor.roofItem.allBlackPanels"), (x) => (x.style = "black"))),
+          chip(t("editor.roofItem.blue"), it.style === "blue", () => upd(t("editor.roofItem.bluePanels"), (x) => (x.style = "blue"))),
         ),
-        h("div", { class: "ed-sub" }, "Panel size (mm)"),
-        h("div", { class: "ed-chips" }, ...PANEL_SIZES.map(([long, short, title]) => chip(`${long} × ${short}`, mm(panel.long) === long && mm(panel.short) === short, () => setPanel(`Panels ${long} × ${short} mm`, () => [long / 1000, short / 1000]), title))),
+        h("div", { class: "ed-sub" }, t("editor.roofItem.panelSizeMm")),
+        h("div", { class: "ed-chips" }, ...PANEL_SIZES.map(([long, short, title]) => chip(`${long} × ${short}`, mm(panel.long) === long && mm(panel.short) === short, () => setPanel(t("editor.roofItem.panelsLongShortMm", { long, short }), () => [long / 1000, short / 1000]), t(title)))),
         h("div", { class: "ed-row" },
-          ...num("Long", mm(panel.long), "1", (v) => setPanel("Panel length", (x) => (v ? panelSize([v / 1000, panelOf(x).short]) : null)), "", "Each panel's long side, in mm"),
-          ...num("Short", mm(panel.short), "1", (v) => setPanel("Panel width", (x) => (v ? panelSize([panelOf(x).long, v / 1000]) : null)), "", "Each panel's short side, in mm"),
+          ...num(t("editor.roofItem.long"), mm(panel.long), "1", (v) => setPanel(t("editor.roofItem.panelLength"), (x) => (v ? panelSize([v / 1000, panelOf(x).short]) : null)), "", t("editor.roofItem.eachPanelsLongSide")),
+          ...num(t("editor.roofItem.short"), mm(panel.short), "1", (v) => setPanel(t("editor.roofItem.panelWidth"), (x) => (v ? panelSize([panelOf(x).long, v / 1000]) : null)), "", t("editor.roofItem.eachPanelsShortSide")),
         ),
-        h("p", { class: "ed-hint" }, `The size and power are on the label on the back of a panel, or on its datasheet.${arrays > 1 ? ` A new size changes all ${arrays} arrays of these panels.` : ""}`),
-        h("div", { class: "ed-row" }, ...num("Each (W)", it.watts, "5", (v) => upd("Panel power", (x) => (x.watts = v && v > 0 ? Math.min(1000, v) : null)), String(PANEL.watts), "Each panel's peak power")),
-        flat ? h("div", { class: "ed-row" }, ...num("Tilt °", it.tilt, "5", (v) => upd("Panel tilt", (x) => (x.tilt = v ? Math.max(0, Math.min(60, v)) : null)), "flat", "Frames tilting the panels up on a flat roof")) : null,
-        flat ? this.turnRow((deg) => upd("Turn solar panels", (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))) : null,
-        h("div", { class: "ed-row" }, h("label", {}, "Shines with"), this.dropdown(power, it.entity ?? "", (v) => upd("Panels' sensor", (x) => (x.entity = v || null)), "The house's solar")),
-        h("p", { class: "ed-hint" }, "Link the power sensor of this string of panels (PV1, PV2…), and they shine with what it makes."),
+        h("p", { class: "ed-hint" }, t("editor.roofItem.theSizeAndPower", { x: arrays > 1 ? ` ${t("editor.roofItem.aNewSizeChanges", { arrays })}` : "" })),
+        h("div", { class: "ed-row" }, ...num(t("editor.roofItem.eachW"), it.watts, "5", (v) => upd(t("editor.roofItem.panelPower"), (x) => (x.watts = v && v > 0 ? Math.min(1000, v) : null)), String(PANEL.watts), t("editor.roofItem.eachPanelsPeakPower"))),
+        flat ? h("div", { class: "ed-row" }, ...num(t("editor.roofItem.tilt"), it.tilt, "5", (v) => upd(t("editor.roofItem.panelTilt"), (x) => (x.tilt = v ? Math.max(0, Math.min(60, v)) : null)), "flat", t("editor.roofItem.framesTiltingThePanels"))) : null,
+        flat ? this.turnRow((deg) => upd(t("editor.roofItem.turnSolarPanels"), (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))) : null,
+        h("div", { class: "ed-row" }, h("label", {}, t("editor.roofItem.shinesWith")), this.dropdown(power, it.entity ?? "", (v) => upd(t("editor.roofItem.panelsSensor"), (x) => (x.entity = v || null)), t("editor.roofItem.theHousesSolar"))),
+        h("p", { class: "ed-hint" }, t("editor.roofItem.linkThePowerSensor")),
         m && fr ? h("button", { class: "ed-btn ghost", onclick: () => {
           const fit = fitPanels(m, fr.face, it.portrait !== false, panel);
-          if (!fit) return this.toastInDrawer("No panel fits on this slope.");
-          upd("Fill the slope with panels", (x) => Object.assign(x, { cols: fit.cols, rows: fit.rows, x: fit.x, z: fit.z }));
-        } }, "Fill the slope") : null,
+          if (!fit) return this.toastInDrawer(t("editor.roofItem.noPanelFitsOn"));
+          upd(t("editor.roofItem.fillTheSlopeWith"), (x) => Object.assign(x, { cols: fit.cols, rows: fit.rows, x: fit.x, z: fit.z }));
+        } }, t("editor.roofItem.fillTheSlope")) : null,
       );
     } else if (it.kind === "window") {
       const contacts = this.entities((id, st) => domainOf(id) === "binary_sensor" && ["window", "opening"].includes(String(st.attributes.device_class)));
       const sizes: [string, number, number][] = [["55 × 78", 0.55, 0.78], ["55 × 98", 0.55, 0.98], ["78 × 98", 0.78, 0.98], ["78 × 118", 0.78, 1.18], ["78 × 140", 0.78, 1.4], ["94 × 118", 0.94, 1.18], ["114 × 118", 1.14, 1.18]];
       rows.push(
         h("div", { class: "ed-row" },
-          chip("Centre-pivot", it.style !== "conservation", () => upd("Centre-pivot roof window", (x) => (x.style = "pivot"))),
-          chip("Conservation", it.style === "conservation", () => upd("Conservation roof window", (x) => (x.style = "conservation")), "Black, flush with the roof, with a glazing bar")),
-        h("div", { class: "ed-sub" }, "Size (cm)"),
-        h("div", { class: "ed-chips" }, ...sizes.map(([label, w, d]) => chip(label, Math.abs(it.w - w) < 0.005 && Math.abs(it.d - d) < 0.005, () => upd(`Roof window ${label}`, (x) => {
+          chip(t("editor.roofItem.centrePivot"), it.style !== "conservation", () => upd(t("editor.roofItem.centrePivotRoofWindow"), (x) => (x.style = "pivot"))),
+          chip(t("editor.roofItem.conservation"), it.style === "conservation", () => upd(t("editor.roofItem.conservationRoofWindow"), (x) => (x.style = "conservation")), t("editor.roofItem.blackFlushWithThe"))),
+        h("div", { class: "ed-sub" }, t("editor.roofItem.sizeCm")),
+        h("div", { class: "ed-chips" }, ...sizes.map(([label, w, d]) => chip(label, Math.abs(it.w - w) < 0.005 && Math.abs(it.d - d) < 0.005, () => upd(t("editor.roofItem.roofWindowLabel", { label }), (x) => {
           x.w = w;
           x.d = d;
         })))),
-        h("div", { class: "ed-row" }, ...num("Width", it.w, "0.01", (v) => v && upd("Roof window width", (x) => (x.w = Math.max(0.3, v)))), ...num("Length", it.d, "0.01", (v) => v && upd("Roof window length", (x) => (x.d = Math.max(0.3, v))))),
-        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd("Roof window colour", (x) => (x.color = c)), "Grey"),
-        h("div", { class: "ed-row" }, h("label", {}, "Sensor"), this.dropdown(contacts, it.entity ?? "", (v) => upd("Roof window sensor", (x) => (x.entity = v || null)), "None")),
-        h("p", { class: "ed-hint" }, "Lit from the room under it at night; warm when its sensor says it is open."),
+        h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), it.w, "0.01", (v) => v && upd(t("editor.roofItem.roofWindowWidth"), (x) => (x.w = Math.max(0.3, v)))), ...num(t("editor.length"), it.d, "0.01", (v) => v && upd(t("editor.roofItem.roofWindowLength"), (x) => (x.d = Math.max(0.3, v))))),
+        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd(t("editor.roofItem.roofWindowColour"), (x) => (x.color = c)), t("editor.roofItem.grey")),
+        h("div", { class: "ed-row" }, h("label", {}, t("editor.sensor")), this.dropdown(contacts, it.entity ?? "", (v) => upd(t("editor.roofItem.roofWindowSensor"), (x) => (x.entity = v || null)), t("editor.none"))),
+        h("p", { class: "ed-hint" }, t("editor.roofItem.litFromTheRoom")),
       );
     } else if (it.kind === "chimney") {
       rows.push(
         h("div", { class: "ed-row" },
-          chip("Brick", !it.style || it.style === "brick", () => upd("Brick chimney", (x) => (x.style = "brick"))),
-          chip("Render", it.style === "render", () => upd("Rendered chimney", (x) => (x.style = "render"))),
-          chip("Stone", it.style === "stone", () => upd("Stone chimney", (x) => (x.style = "stone")))),
-        it.style === "render" ? this.colourPicker(PAINT_SWATCHES, it.color, (c) => upd("Chimney colour", (x) => (x.color = c))) : null,
-        h("div", { class: "ed-row" }, ...num("Width", it.w, "0.05", (v) => v && upd("Chimney width", (x) => (x.w = Math.max(0.3, v)))), ...num("Depth", it.d, "0.05", (v) => v && upd("Chimney depth", (x) => (x.d = Math.max(0.3, v))))),
+          chip(t("editor.roofItem.brick"), !it.style || it.style === "brick", () => upd(t("editor.roofItem.brickChimney"), (x) => (x.style = "brick"))),
+          chip(t("editor.roofItem.render"), it.style === "render", () => upd(t("editor.roofItem.renderedChimney"), (x) => (x.style = "render"))),
+          chip(t("editor.roofItem.stone"), it.style === "stone", () => upd(t("editor.roofItem.stoneChimney"), (x) => (x.style = "stone")))),
+        it.style === "render" ? this.colourPicker(PAINT_SWATCHES, it.color, (c) => upd(t("editor.roofItem.chimneyColour"), (x) => (x.color = c))) : null,
+        h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), it.w, "0.05", (v) => v && upd(t("editor.roofItem.chimneyWidth"), (x) => (x.w = Math.max(0.3, v)))), ...num(t("editor.houses.depth"), it.d, "0.05", (v) => v && upd(t("editor.roofItem.chimneyDepth"), (x) => (x.d = Math.max(0.3, v))))),
         h("div", { class: "ed-row" },
-          ...num("Above roof", it.h, "0.05", (v) => upd("Chimney height", (x) => (x.h = v === null ? null : Math.max(0.3, Math.min(4, v)))), "1.0"),
-          ...num("Pots", it.pots, "1", (v) => upd("Chimney pots", (x) => (x.pots = v === null ? null : Math.max(0, Math.min(6, Math.round(v))))), "2")),
-        this.turnRow((deg) => upd("Turn a chimney", (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))),
+          ...num(t("editor.roofItem.aboveRoof"), it.h, "0.05", (v) => upd(t("editor.roofItem.chimneyHeight"), (x) => (x.h = v === null ? null : Math.max(0.3, Math.min(4, v)))), "1.0"),
+          ...num(t("editor.roofItem.pots"), it.pots, "1", (v) => upd(t("editor.roofItem.chimneyPots"), (x) => (x.pots = v === null ? null : Math.max(0, Math.min(6, Math.round(v))))), "2")),
+        this.turnRow((deg) => upd(t("editor.roofItem.turnAChimney"), (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))),
       );
     } else if (it.kind === "dormer") {
       rows.push(
         h("div", { class: "ed-row" },
-          chip("Box", it.style === "box", () => upd("Box dormer", (x) => (x.style = "box")), "Flat-roofed, as most loft conversions"),
-          chip("Gable", it.style !== "box" && it.style !== "hipped", () => upd("Gable dormer", (x) => (x.style = "gable"))),
-          chip("Hipped", it.style === "hipped", () => upd("Hipped dormer", (x) => (x.style = "hipped")))),
-        h("div", { class: "ed-row" }, ...num("Width", it.w, "0.05", (v) => v && upd("Dormer width", (x) => (x.w = Math.max(0.8, v)))), ...num("Front wall", it.h, "0.05", (v) => upd("Dormer height", (x) => (x.h = v)), "auto")),
-        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd("Dormer colour", (x) => (x.color = c)), "White"),
-        h("p", { class: "ed-hint" }, "Its cheeks are hung with the roof's covering; its front and window frame take the colour."),
+          chip(t("editor.box"), it.style === "box", () => upd(t("editor.roofItem.boxDormer"), (x) => (x.style = "box")), t("editor.roofItem.flatRoofedAsMost")),
+          chip(t("editor.gable"), it.style !== "box" && it.style !== "hipped", () => upd(t("editor.roofItem.gableDormer"), (x) => (x.style = "gable"))),
+          chip(t("editor.hipped"), it.style === "hipped", () => upd(t("editor.roofItem.hippedDormer"), (x) => (x.style = "hipped")))),
+        h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), it.w, "0.05", (v) => v && upd(t("editor.roofItem.dormerWidth"), (x) => (x.w = Math.max(0.8, v)))), ...num(t("editor.roofItem.frontWall"), it.h, "0.05", (v) => upd(t("editor.roofItem.dormerHeight"), (x) => (x.h = v)), "auto")),
+        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd(t("editor.roofItem.dormerColour"), (x) => (x.color = c)), t("editor.white")),
+        h("p", { class: "ed-hint" }, t("editor.roofItem.itsCheeksAreHung")),
       );
     } else if (it.kind === "lantern") {
       rows.push(
-        h("div", { class: "ed-row" }, ...num("Width", it.w, "0.05", (v) => v && upd("Lantern width", (x) => (x.w = Math.max(0.6, v)))), ...num("Length", it.d, "0.05", (v) => v && upd("Lantern length", (x) => (x.d = Math.max(0.6, v))))),
-        h("div", { class: "ed-row" }, ...num("Rise", it.h, "0.05", (v) => upd("Lantern rise", (x) => (x.h = v === null ? null : Math.max(0.2, Math.min(1.5, v)))), "0.5")),
-        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd("Lantern colour", (x) => (x.color = c)), "Anthracite"),
-        this.turnRow((deg) => upd("Turn a lantern", (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))),
+        h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), it.w, "0.05", (v) => v && upd(t("editor.roofItem.lanternWidth"), (x) => (x.w = Math.max(0.6, v)))), ...num(t("editor.length"), it.d, "0.05", (v) => v && upd(t("editor.roofItem.lanternLength"), (x) => (x.d = Math.max(0.6, v))))),
+        h("div", { class: "ed-row" }, ...num(t("editor.roofItem.rise"), it.h, "0.05", (v) => upd(t("editor.roofItem.lanternRise"), (x) => (x.h = v === null ? null : Math.max(0.2, Math.min(1.5, v)))), "0.5")),
+        this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd(t("editor.roofItem.lanternColour"), (x) => (x.color = c)), t("editor.roofItem.anthracite")),
+        this.turnRow((deg) => upd(t("editor.roofItem.turnALantern"), (x) => (x.rotation = (((x.rotation ?? roof.rotation) + deg) % 360 + 360) % 360))),
       );
     }
     rows.push(h("div", { class: "ed-row" },
-      h("button", { class: "ed-btn ghost", onclick: () => this.select({ floor: fi, kind: "roof", id: roof.id }) }, "The roof"),
+      h("button", { class: "ed-btn ghost", onclick: () => this.select({ floor: fi, kind: "roof", id: roof.id }) }, t("editor.roofItem.theRoof")),
       h("button", { class: "ed-btn ghost", onclick: () => {
         const id = newId("ri");
         this.change((p) => {
           const r = this.roofOf(p, roof.id)?.roof;
           if (r) r.items = [...(r.items ?? []), { ...structuredClone(it), id, x: it.x + 0.5, z: it.z + 0.5 }];
-        }, false, `Duplicate ${name.toLowerCase()}`);
+        }, false, t("editor.duplicateName", { name: name.toLowerCase() }));
         this.select({ floor: fi, kind: "roofitem", id });
-      } }, "Duplicate"),
+      } }, t("editor.duplicate")),
       h("button", { class: "ed-btn danger", onclick: () => {
         this.change((p) => {
           const r = this.roofOf(p, roof.id)?.roof;
           if (r) r.items = (r.items ?? []).filter((x) => x.id !== it.id);
-        }, false, `Remove ${name.toLowerCase()}`);
+        }, false, t("editor.removeName", { name: name.toLowerCase() }));
         this.select(null);
-      } }, "Remove"),
+      } }, t("editor.remove")),
     ));
     return h("div", {}, ...rows.filter((e): e is HTMLElement => !!e));
   }
@@ -2769,7 +2774,7 @@ export class Editor {
     this.roofDrag = null;
     if (this.dragStart) {
       if (JSON.stringify(this.dragStart) !== JSON.stringify(this.plan)) {
-        this.undo.push({ plan: this.dragStart, label: kind === "roofitem" ? `Move ${this.roofItemName(this.roofItemOf(this.plan, ref)?.item ?? ({ kind: "window" } as RoofItem)).toLowerCase()}` : kind === "roof" ? "Move a roof" : "Size a roof" });
+        this.undo.push({ plan: this.dragStart, label: kind === "roofitem" ? t("editor.drag.moveName", { name: this.roofItemName(this.roofItemOf(this.plan, ref)?.item ?? ({ kind: "window" } as RoofItem)).toLowerCase() }) : kind === "roof" ? t("editor.drag.moveARoof") : t("editor.drag.sizeARoof") });
         this.redo = [];
         this.changed();
       }
@@ -2818,11 +2823,11 @@ export class Editor {
       const front = manifest?.rooms.find((r) => /hall|entrance|porch|front/i.test(r.name))?.name;
       const { plan, report } = importRoomPlan(house as never, manifest, { frontDoorRoom: front, detections });
       // a new scan faces its own way: the phone's compass, or unknown (north up) until set
-      this.replaceWithImport(plan, report.north?.bearing ?? 0, "a scan", [
-        `${report.rooms} rooms on ${report.floors} floor${report.floors === 1 ? "" : "s"}, ${report.openings} doors and windows, ${report.furniture} pieces of furniture${report.decor ? `, ${report.decor} decorations` : ""}.`,
+      this.replaceWithImport(plan, report.north?.bearing ?? 0, t("editor.import.aScan"), [
+        t("editor.import.brought", { rooms: report.rooms, n: report.floors, openings: report.openings, furniture: report.furniture, decor: report.decor ? t("editor.import.decorations", { n: report.decor }) : "" }),
         report.north
-          ? `North from the phone's compass: the top of the plan faces ${Math.round(report.north.bearing)}° (${compassName(report.north.bearing)})${report.north.spread !== null ? `, readings within ±${Math.round(report.north.spread)}°` : ""}${report.north.magnetic ? ", magnetic north" : ""}. Indoors a compass can be off: check it under Sun and weather.`
-          : "The scan has no compass reading: set north under Sun and weather for the sun's shadows.",
+          ? t("editor.import.northFromThePhones", { bearing: Math.round(report.north.bearing), compassName: compassName(report.north.bearing), x: report.north.spread !== null ? t("editor.import.readingsWithinSpread", { spread: Math.round(report.north.spread) }) : "", x2: report.north.magnetic ? t("editor.import.magneticNorth") : "" })
+          : t("editor.import.theScanHasNo"),
         ...report.warnings,
       ]);
       return;
@@ -2832,16 +2837,16 @@ export class Editor {
         const { buildPlan } = await import("../import/draft");
         const draft = sh3d ? await (await import("../import/sh3d")).importSh3d(sh3d) : importSimple(other);
         const { plan, summary } = buildPlan(draft);
-        this.replaceWithImport(plan, summary.north ?? 0, sh3d ? "a Sweet Home 3D home" : "a plan", importLines(summary));
+        this.replaceWithImport(plan, summary.north ?? 0, sh3d ? t("editor.import.aSweetHome3dHome") : t("editor.import.aPlan"), importLines(summary));
       } catch (e) {
-        this.toastInDrawer(`Can't import it: ${(e as Error).message}`);
+        this.toastInDrawer(t("editor.import.cantImportItMessage", { message: (e as Error).message }));
       }
       return;
     }
     const plan = other as Partial<Plan> | null;
     this.toastInDrawer(plan?.version === 1 && plan.settings
-      ? "That is a VirtuHome plan file: load it with Plan file → Load…"
-      : "None of the files is a scan or a plan VirtuHome can import.");
+      ? t("editor.import.thatIsAVirtuhome")
+      : t("editor.import.noneOfTheFiles"));
   }
 
   /** Puts an imported plan in place of this one (after asking, if this one has rooms) as one undo step, with Smart Setup. */
@@ -2851,15 +2856,15 @@ export class Editor {
       next.settings = { ...next.settings, wall_exterior: plan.settings.wall_exterior, wall_interior: plan.settings.wall_interior, north };
       const placed = autoPlace(next, this.hass);
       // quiet: the report says what comes next, not the first-room hint
-      this.change((p) => Object.assign(p, placed.plan), true, `Import ${what}`);
+      this.change((p) => Object.assign(p, placed.plan), true, t("editor.import.importWhat", { what }));
       this.host.view.viewer.setMode("house");
       this.showReport([
         ...lines,
-        `${placed.report.placed.length} devices placed, ${placed.report.linked.length} linked to doors, windows and TVs, ${placed.report.roomsLinked.length} rooms linked to areas.`,
+        t("editor.nDevicesPlacedN2", { n: placed.report.placed.length, n2: placed.report.linked.length, n3: placed.report.roomsLinked.length }),
       ], ".ed-scan");
     };
     if (this.plan.floors.some((f) => f.rooms.length)) {
-      this.confirm("Replace the whole plan with the imported one? Until you save, Undo or closing without saving brings yours back; after saving, Restore points does.", "Replace", go);
+      this.confirm(t("editor.import.replaceTheWholePlan"), t("editor.replace"), go);
     } else go();
   }
 
@@ -2867,8 +2872,8 @@ export class Editor {
     const { plan, report } = autoPlace(this.plan, this.hass);
     this.change((p) => Object.assign(p, plan));
     this.showReport([
-      `${report.placed.length} devices placed, ${report.linked.length} linked, ${report.roomsLinked.length} rooms linked to areas.`,
-      ...(report.unplaced.length ? [`${report.unplaced.length} devices are in areas without a room in the plan.`] : []),
+      t("editor.autoPlace.nDevicesPlacedN2", { n: report.placed.length, n2: report.linked.length, n3: report.roomsLinked.length }),
+      ...(report.unplaced.length ? [t("editor.nDevicesAreIn", { n: report.unplaced.length })] : []),
       ...report.placed.slice(0, 30),
     ]);
   }
@@ -2904,7 +2909,7 @@ export class Editor {
       const placed = autoPlace(next, this.hass);
       this.houseTypes = null;
       this.starting = true;
-      this.change((p) => Object.assign(p, placed.plan), false, `Start from ${name.toLowerCase()}`);
+      this.change((p) => Object.assign(p, placed.plan), false, t("editor.houseType.startFromName", { name: name.toLowerCase() }));
       this.starting = false;
       this.select(null);
       this.host.view.viewer.setMode("house");
@@ -2912,15 +2917,15 @@ export class Editor {
       const openings = floors.reduce((n, f) => n + f.openings.filter((o) => o.kind !== "passage").length, 0);
       const r = placed.report;
       this.showReport([
-        `${name}: ${rooms} rooms on ${floors.length} floor${floors.length === 1 ? "" : "s"}, ${openings} doors and windows. Drag the walls in the 2D plan to match your rooms.`,
-        `${r.placed.length} devices placed, ${r.linked.length} linked to doors, windows and TVs, ${r.roomsLinked.length} rooms linked to areas.`,
-        ...(r.unplaced.length ? [`${r.unplaced.length} devices are in areas without a room in the plan.`] : []),
+        t("editor.houseType.summary", { name, rooms, n: floors.length, openings }),
+        t("editor.nDevicesPlacedN2", { n: r.placed.length, n2: r.linked.length, n3: r.roomsLinked.length }),
+        ...(r.unplaced.length ? [t("editor.nDevicesAreIn", { n: r.unplaced.length })] : []),
         ...r.roomsLinked.slice(0, 20),
       ]);
       const report = this.body.querySelector<HTMLElement>(".ed-report");
       if (report) this.scrollDrawerTo(report);
     };
-    if (this.plan.floors.some((f) => f.rooms.length)) this.confirm("Replace the current plan with this house type?", "Replace", go);
+    if (this.plan.floors.some((f) => f.rooms.length)) this.confirm(t("editor.houseType.replaceTheCurrentPlan"), t("editor.replace"), go);
     else go();
   }
 
@@ -2938,9 +2943,9 @@ export class Editor {
     const floors = this.plan.floors;
     const top = floors.reduce<Floor | null>((a, f) => (!a || f.elevation >= a.elevation ? f : a), null);
     const n = floors.length;
-    const names = ["Ground Floor", "First Floor", "Second Floor", "Third Floor", "Fourth Floor", "Fifth Floor"];
+    const names = [t("editor.floor.groundFloor"), t("editor.floor.firstFloor"), t("editor.floor.secondFloor"), t("editor.floor.thirdFloor"), t("editor.floor.fourthFloor"), t("editor.floor.fifthFloor")];
     const taken = new Set(floors.map((f) => f.name.toLowerCase()));
-    const name = [names[n] ?? `Floor ${n}`, `Floor ${n}`, `Floor ${n + 1}`].find((x) => !taken.has(x.toLowerCase())) ?? `Floor ${n + 1}`;
+    const name = [names[n] ?? t("editor.floor.floorN", { n }), t("editor.floor.floorN", { n }), t("editor.floor.floorX", { x: n + 1 })].find((x) => !taken.has(x.toLowerCase())) ?? t("editor.floor.floorX", { x: n + 1 });
     const used = new Set(floors.map((f) => f.ha_floor).filter(Boolean));
     const ha = Object.values(this.hass.floors ?? {}).find((x) => x.level === n && !used.has(x.floor_id));
     const floor: Floor = {
@@ -2948,7 +2953,7 @@ export class Editor {
       elevation: top ? Math.round((top.elevation + top.height) * 100) / 100 : 0, height: top?.height ?? 2.6,
       rooms: [], openings: [], furniture: [], devices: [], walls: [], outdoor: [], fences: [], roofs: [],
     };
-    this.change((p) => p.floors.push(floor), false, `Add ${name}`);
+    this.change((p) => p.floors.push(floor), false, t("editor.addName", { name }));
     this.select(null);
     this.host.view.showFloor(this.plan.floors.length - 1);
   }
@@ -2958,16 +2963,16 @@ export class Editor {
     const f = this.plan.floors[i];
     if (!f || this.plan.floors.length < 2) return;
     const n = f.rooms.length;
-    const what = n ? ` with its ${n > 1 ? `${n} rooms` : "room"} and everything in ${n > 1 ? "them" : "it"}` : "";
-    this.confirm(`Remove ${f.name}${what}?`, "Remove", () => {
-      this.change((p) => p.floors.splice(i, 1), false, `Remove ${f.name}`);
+    const what = n ? ` ${t("editor.floor.withRooms", { n })}` : "";
+    this.confirm(t("editor.floor.removeNameWhat", { name: f.name, what }), t("editor.remove"), () => {
+      this.change((p) => p.floors.splice(i, 1), false, t("editor.removeName", { name: f.name }));
       this.select(null);
       this.host.view.showHouse();
     });
   }
 
   /** A 3 x 3 m room beside the house on the current floor. */
-  private addRoom(name = "New room", area: string | null = null): void {
+  private addRoom(name = t("editor.add.newRoom"), area: string | null = null): void {
     // a room for an area goes on its floor
     const haFloor = area ? this.hass.areas?.[area]?.floor_id : null;
     const onFloor = haFloor ? this.plan.floors.findIndex((x) => x.ha_floor === haFloor) : -1;
@@ -2978,7 +2983,7 @@ export class Editor {
     const b = all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 0, maxZ: 3 };
     const x0 = b.maxX;
     const room: Room = { id: newId("room"), name, area_id: area, floor: "wood", points: [[x0, b.minZ], [x0 + 3, b.minZ], [x0 + 3, b.minZ + 3], [x0, b.minZ + 3]] };
-    this.change((p) => p.floors[fi].rooms.push(room), false, `Add ${name}`);
+    this.change((p) => p.floors[fi].rooms.push(room), false, t("editor.addName", { name }));
     if (!area) this.select({ floor: fi, kind: "room", id: room.id });
   }
 
@@ -3001,7 +3006,7 @@ export class Editor {
     const z1 = where === "back" ? b.minZ - half : b.maxZ + half + depth;
     const area = Object.values(this.hass.areas ?? {}).find((a) => /garden|yard|outside|patio/i.test(a.name));
     const o: OutdoorArea = {
-      id: newId("out"), name: where === "back" ? "Garden" : "Front", kind: where === "back" ? "lawn" : "driveway",
+      id: newId("out"), name: where === "back" ? t("editor.add.garden") : t("editor.add.front"), kind: where === "back" ? "lawn" : "driveway",
       area_id: where === "back" ? area?.area_id ?? null : null,
       points: [[b.minX - half, z0], [b.maxX + half, z0], [b.maxX + half, z1], [b.minX - half, z1]],
     };
@@ -3032,7 +3037,7 @@ export class Editor {
     const o = newArea(f, kind, points);
     this.change((p) => {
       p.floors[0].outdoor = [...(p.floors[0].outdoor ?? []), o];
-    }, false, `Add ${o.name.toLowerCase()}`);
+    }, false, t("editor.addName", { name: o.name.toLowerCase() }));
     this.select({ floor: 0, kind: "outdoor", id: o.id });
   }
 
@@ -3080,7 +3085,7 @@ export class Editor {
     this.change((p) => {
       p.floors[fi].furniture.push(item);
       settle(p, fi, item.id);
-    }, false, `Add ${t(def.label)}`);
+    }, false, t("editor.addName", { name: t(def.label) }));
     this.select({ floor: fi, kind: "furniture", id: item.id });
   }
 
@@ -3094,7 +3099,7 @@ export class Editor {
   private async loadPlanFile(file: File | undefined): Promise<void> {
     if (!file) return;
     const plan = normalizePlan(JSON.parse(await file.text()));
-    this.confirm("Replace the current plan with this file?", "Replace", () => {
+    this.confirm(t("editor.planFile.replaceTheCurrentPlan"), t("editor.replace"), () => {
       this.change((p) => Object.assign(p, plan));
       // its entities may have been renamed since, or be missing here
       this.registryChanged();
@@ -3107,7 +3112,7 @@ export class Editor {
     const states = this.hass.states;
     return Object.keys(states)
       .filter((id) => filter(id, states[id]))
-      .map((id) => [id, String(states[id].attributes.friendly_name ?? id)] as [string, string])
+      .map((id) => [id, String(states[id].attributes.friendly_name ?? id)] as Swatch)
       .sort((a, b) => a[1].localeCompare(b[1]));
   }
 
@@ -3133,7 +3138,7 @@ export class Editor {
     const box = h("div", { class: "ed-confirm" },
       h("p", {}, text),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost", onclick: () => box.remove() }, "Cancel"),
+        h("button", { class: "ed-btn ghost", onclick: () => box.remove() }, t("editor.main.cancel")),
         h("button", { class: "ed-btn danger", onclick: async () => {
           box.remove();
           await onYes();

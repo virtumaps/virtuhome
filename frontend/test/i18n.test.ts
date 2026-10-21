@@ -174,11 +174,23 @@ describe("loading", () => {
 /** The files whose text has moved into the table: text written straight into them is caught here. */
 const SCANNED = [
   "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/demo.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
-  "editor/house-types.ts",
+  "editor/background.ts", "editor/editor.ts", "editor/house-types.ts", "editor/north.ts", "editor/plan2d.ts", "editor/roomfind-apply.ts", "editor/roomfind-client.ts",
+  "import/draft.ts", "import/names.ts", "import/roomplan.ts", "import/sh3d.ts", "import/simple.ts", "import/xml.ts", "import/zip.ts",
+  "live/ev.ts", "starters/houses.ts",
+  "scene/bins.ts", "scene/fences.ts", "scene/finishes.ts", "scene/garden.ts", "scene/paving.ts", "scene/roofs.ts",
 ];
 
 /** Strings in them that look like text but aren't shown to users. */
 const NOT_TEXT: Record<string, string[]> = {
+  // class lists and key names
+  "editor/editor.ts": ['"ed-btn ghost small"', 'e.key === "Backspace"'],
+  "editor/plan2d.ts": ['"ed-btn ghost small"', 'e.key === "Enter"', 'e.key === "Escape"', 'e.key === "Delete"'],
+  "editor/roomfind-client.ts": ['new DOMException("Stopped", "AbortError")'],
+  "editor/north.ts": ['method: "POST"'],
+  "import/sh3d.ts": ['"Home.xml"'],
+  "import/names.ts": ["export const plain ="],
+  // a mistake in a house type's drawing, for whoever draws them
+  "starters/houses.ts": ["no wall of ${"],
   // what Copy details copies and the error reports say: read by whoever fixes the bug, in English
   "ui/errors.ts": ["(\\d+)", "const SYSTEMS", "Another browser", "graphics, ${browserName(ua)}", "`In: ${info.where}`", "the details could not be worked out"],
 };

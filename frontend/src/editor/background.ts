@@ -3,6 +3,7 @@
 // from, and the sums for placing and scaling it.
 import type { Hass } from "../live/hass";
 import type { FloorBackground, Vec2 } from "../model/plan";
+import { t } from "../i18n/editor";
 
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const PIECE_BYTES = 1024 * 1024;
@@ -25,7 +26,7 @@ export async function prepareImage(file: Blob): Promise<PreparedImage> {
   try {
     bitmap = await createImageBitmap(file);
   } catch {
-    throw new Error("That file isn't a picture this browser can open. Use a JPEG or PNG.");
+    throw new Error(t("editor.picture.thatFileIsntA"));
   }
   const { width, height } = bitmap;
   if ((file.type === "image/png" || file.type === "image/jpeg") && file.size <= MAX_IMAGE_BYTES && Math.max(width, height) <= MAX_SIDE) {
@@ -44,7 +45,7 @@ export async function prepareImage(file: Blob): Promise<PreparedImage> {
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
   const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/jpeg", 0.9));
-  if (!blob || blob.size > MAX_IMAGE_BYTES) throw new Error("The picture is too large. Try a smaller one.");
+  if (!blob || blob.size > MAX_IMAGE_BYTES) throw new Error(t("editor.picture.thePictureIsToo"));
   return { blob, width: w, height: h };
 }
 
@@ -67,7 +68,7 @@ export async function uploadImage(hass: Pick<Hass, "callWS">, floorId: string, b
     });
     progress?.(blob.size ? Math.min(1, (at + piece.size) / blob.size) : 1);
     if (last) {
-      if (!res.file) throw new Error("Home Assistant didn't store the picture.");
+      if (!res.file) throw new Error(t("editor.picture.homeAssistantDidntStore"));
       return res.file;
     }
     uploadId = res.upload_id;
@@ -136,7 +137,7 @@ export function rescale(bg: FloorBackground, a: Vec2, b: Vec2, length: number): 
 /** The picture's pixels as grey levels, at most `maxSide` a side: what the room finder looks at. */
 export async function greyPixels(url: string, maxSide: number): Promise<{ grey: Uint8Array; width: number; height: number }> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error("The picture can't be loaded.");
+  if (!res.ok) throw new Error(t("editor.picture.thePictureCantBe"));
   const bitmap = await createImageBitmap(await res.blob());
   const k = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
   const width = Math.max(1, Math.round(bitmap.width * k)), height = Math.max(1, Math.round(bitmap.height * k));

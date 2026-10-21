@@ -4,12 +4,13 @@
 // their sensor says there is post. Made of simple solids like the rest of the garden (scene/garden.ts).
 import type { Furniture } from "../model/plan";
 import type { FurnitureType, Part, Role } from "./furniture-lib";
+import type { PlainKey } from "../i18n";
 
 /** What a bin is for, so a bin can be matched to its collection sensor. */
 export type WasteKind = "general" | "recycling" | "garden" | "food" | "glass";
 
-export const WASTE_NAMES: Record<WasteKind, string> = {
-  general: "General waste", recycling: "Recycling", garden: "Garden waste", food: "Food waste", glass: "Glass",
+export const WASTE_NAMES: Record<WasteKind, PlainKey> = {
+  general: "waste.general", recycling: "waste.recycling", garden: "waste.garden", food: "waste.food", glass: "waste.glass",
 };
 
 /** The waste each bin type can hold; the first is what it holds unless picked. */

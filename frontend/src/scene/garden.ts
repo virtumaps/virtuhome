@@ -8,6 +8,7 @@
 import type { Furniture } from "../model/plan";
 import { BIN_FURNITURE, BIN_WASTES, POST_TYPES, wasteKind, type WasteKind } from "./bins";
 import type { FurnitureType, Part, Role } from "./furniture-lib";
+import type { PlainKey } from "../i18n";
 
 /** What a pergola is covered with. */
 export type Canopy = "open" | "slats" | "louvres" | "glass" | "canvas" | "plants";
@@ -18,28 +19,28 @@ export type ShedDoor = "left" | "centre" | "right" | "double";
 export type PlanterMaterial = "timber" | "sleepers" | "painted" | "corten" | "galvanised" | "fibreclay" | "terracotta" | "brick" | "stone" | "rattan";
 export type Planting = "flowers" | "shrubs" | "grasses" | "lavender" | "herbs" | "vegetables" | "topiary" | "tree" | "none";
 
-export const CANOPY_NAMES: Record<Canopy, string> = {
-  open: "Open", slats: "Slats", louvres: "Louvres", glass: "Glass roof", canvas: "Canvas sail", plants: "Climbing plants",
+export const CANOPY_NAMES: Record<Canopy, PlainKey> = {
+  open: "canopy.open", slats: "canopy.slats", louvres: "canopy.louvres", glass: "canopy.glass", canvas: "canopy.canvas", plants: "canopy.plants",
 };
-export const ROOFING_NAMES: Record<GardenRoofing, string> = {
-  felt: "Felt", shingles: "Shingles", epdm: "Rubber (EPDM)", corrugated: "Corrugated sheet", sedum: "Green roof (sedum)",
+export const ROOFING_NAMES: Record<GardenRoofing, PlainKey> = {
+  felt: "gardenRoof.felt", shingles: "gardenRoof.shingles", epdm: "gardenRoof.epdm", corrugated: "gardenRoof.corrugated", sedum: "gardenRoof.sedum",
 };
-export const DOOR_NAMES: Record<ShedDoor, string> = { left: "Left", centre: "Middle", right: "Right", double: "Double doors" };
-export const PLANTER_MATERIALS: Record<PlanterMaterial, { name: string; role: Role }> = {
-  timber: { name: "Timber", role: "softwood" },
-  sleepers: { name: "Sleepers", role: "sleeper" },
-  painted: { name: "Painted wood", role: "primed" },
-  corten: { name: "Corten steel", role: "corten" },
-  galvanised: { name: "Galvanised steel", role: "galvanised" },
-  fibreclay: { name: "Fibreclay", role: "concrete" },
-  terracotta: { name: "Terracotta", role: "pot" },
-  brick: { name: "Brick", role: "brick" },
-  stone: { name: "Stone", role: "stone" },
-  rattan: { name: "Rattan", role: "rattan" },
+export const DOOR_NAMES: Record<ShedDoor, PlainKey> = { left: "shedDoor.left", centre: "shedDoor.centre", right: "shedDoor.right", double: "shedDoor.double" };
+export const PLANTER_MATERIALS: Record<PlanterMaterial, { label: PlainKey; role: Role }> = {
+  timber: { label: "planter.timber", role: "softwood" },
+  sleepers: { label: "planter.sleepers", role: "sleeper" },
+  painted: { label: "planter.painted", role: "primed" },
+  corten: { label: "planter.corten", role: "corten" },
+  galvanised: { label: "planter.galvanised", role: "galvanised" },
+  fibreclay: { label: "planter.fibreclay", role: "concrete" },
+  terracotta: { label: "planter.terracotta", role: "pot" },
+  brick: { label: "planter.brick", role: "brick" },
+  stone: { label: "planter.stone", role: "stone" },
+  rattan: { label: "planter.rattan", role: "rattan" },
 };
-export const PLANTING_NAMES: Record<Planting, string> = {
-  flowers: "Flowers", shrubs: "Shrubs", grasses: "Grasses", lavender: "Lavender", herbs: "Herbs",
-  vegetables: "Vegetables", topiary: "Topiary ball", tree: "Small tree", none: "Just soil",
+export const PLANTING_NAMES: Record<Planting, PlainKey> = {
+  flowers: "planting.flowers", shrubs: "planting.shrubs", grasses: "planting.grasses", lavender: "planting.lavender", herbs: "planting.herbs",
+  vegetables: "planting.vegetables", topiary: "planting.topiary", tree: "planting.tree", none: "planting.none",
 };
 
 /** What the editor offers for each garden type, and what each has unless picked (the first of a list). */

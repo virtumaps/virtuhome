@@ -5,6 +5,7 @@ import type { Plan } from "../model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../live/hass";
 import { sunPosition } from "../live/sun";
 import { demoHistory, storyState } from "./history";
+import { t } from "../i18n";
 
 /**
  * Changes to the pretend registry, to try relinking (window.demo in the harness):
@@ -198,7 +199,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
         return { path: demoImages.get(file) } as T;
       }
       // the rest (saving, restore points, licences) needs the integration
-      throw new Error("Not in the demo");
+      throw new Error(t("demo.notInDemo"));
     },
     connection: {
       async subscribeMessage() {

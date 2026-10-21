@@ -3,6 +3,7 @@
 import { bounds, pointInPolygon, segmentDistance } from "../model/geom";
 import { newId, type Floor, type Opening, type Room, type Vec2 } from "../model/plan";
 import type { FindResult } from "./roomfind";
+import { t } from "../i18n/editor";
 
 /** Rooms found at least this surely start ticked. */
 export const SURE = 0.6;
@@ -43,7 +44,7 @@ export function foundToPlan(floor: Floor | undefined, res: FindResult, keep: boo
   const made = new Map<number, Room>();
   res.rooms.forEach((r, i) => {
     if (!keep[i]) return;
-    made.set(i, { id: newId("room"), name: `Room ${++n}`, area_id: null, floor: "wood", wall_finish: "paint", points: r.points.map(([x, z]): Vec2 => [r2(x), r2(z)]) });
+    made.set(i, { id: newId("room"), name: t("editor.findRooms.roomX", { x: ++n }), area_id: null, floor: "wood", wall_finish: "paint", points: r.points.map(([x, z]): Vec2 => [r2(x), r2(z)]) });
   });
   const openings: Opening[] = [];
   for (const g of res.gaps) {
