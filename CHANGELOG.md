@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- At night in the Standard and Tablet looks, a garden with someone in it (or a camera seeing a
+  person) turned khaki, with brown fences, as if a dim yellow lamp lit all of it. A room's soft glow
+  for someone there, heating, cooling or an alert now tints what it covers without lighting it up,
+  so the lawn stays green and dark things stay dark.
+
 ## 0.13.0
 
 ### New
