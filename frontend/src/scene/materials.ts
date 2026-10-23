@@ -84,11 +84,23 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vTint.rgb, vTint.a);
 diffuseColor.rgb *= uDim;
 `;
 
+// The model look's colours come already lit, so a tint brighter than the colour under it would
+// shine on it like a lamp: at night a garden with someone in it turned khaki and its fences brown.
+// Here a tint is at most three times as bright as what it covers, which by day is nearly always
+// the whole tint.
+const MODEL_FRAG_BODY = /* glsl */ `
+diffuseColor.rgb = mix(diffuseColor.rgb, uCutColor, vCapCut);
+float vhLit = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+float vhTint = max(dot(vTint.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0001);
+diffuseColor.rgb = mix(diffuseColor.rgb, vTint.rgb * min(1.0, 3.0 * vhLit / vhTint), vTint.a);
+diffuseColor.rgb *= uDim;
+`;
+
 function inject(mat: MeshBasicMaterial, u: FloorUniforms, key: string): MeshBasicMaterial {
   mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     Object.assign(shader.uniforms, u);
     shader.vertexShader = VERT_HEAD + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n" + VERT_BODY);
-    shader.fragmentShader = FRAG_HEAD + shader.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n" + FRAG_BODY);
+    shader.fragmentShader = FRAG_HEAD + shader.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n" + MODEL_FRAG_BODY);
   };
   mat.customProgramCacheKey = () => key;
   return mat;
