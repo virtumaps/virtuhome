@@ -68,6 +68,8 @@ The same view is in the sidebar and in every VirtuHome card.
 - **House** shows every storey; a button for each floor shows that floor alone.
 - The alarm chip (**Disarmed**, **Armed home**, **Armed away**…) shows your alarm panel. Tap it for
   its dialog.
+- Values you chose to keep in sight, such as the outside temperature or the price now (Edit → **Home**
+  → **Top bar**, or a card's `chips`). Tap one for its dialog.
 - **Edit** (sidebar only, administrators only) opens the editor. A red dot on it means
   [Check my setup](#troubleshooting) found something that doesn't work.
 
@@ -93,7 +95,9 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Graphics** | Picks the graphics on this device (below) |
 
 **Room labels**
-- Under each room's name: its temperature and humidity, and on the driveway the car's charge.
+- Under each room's name: its temperature and humidity, and on the driveway the car's charge. You
+  can choose what each room's and garden area's label shows (see [Labels and readings](#labels-and-readings)),
+  and a value on it opens its dialog when tapped.
 - A room with a thermostat or radiator valve shows what it reads and its setpoint, **20.5° → 21°**
   (the warmest setpoint if it has several), in orange while it heats. Tap the numbers for the
   thermostat's dialog; tap the room's name to open the room.
@@ -103,6 +107,10 @@ The same view is in the sidebar and in every VirtuHome card.
   [People in their rooms](#people-in-their-rooms)), and the room glows softly amber, as it does
   while a motion or presence sensor in it is on. Tap a face for that person's dialog. In the house
   view, faces float over the rooms they are in.
+
+**Readings**: a sensor's value in a small label where it was placed, such as the garden's temperature
+(see [Labels and readings](#labels-and-readings)). Readings show on their floor, not in the
+whole-house view. Tap one for its dialog.
 
 **Gestures**
 - **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead.
@@ -355,6 +363,34 @@ did, and how many devices are in areas without a room in the plan.
   place them in. One you don't place counts for the rooms of its area, so the zones of an Aqara FP2
   count for the areas you gave them in Home Assistant.
 
+### Labels and readings
+
+**Readings** put a sensor's value on the plan, with an icon for what it measures: the garden's
+temperature, the pond, the water tank, a weather station, the soil's moisture.
+- Edit → **Devices** → **Add a reading**: pick the **Sensor**. It goes into the room or garden area
+  selected, else the room of the sensor's area, else the first room of the floor shown. Drag it where
+  it goes, and set its **Height** like any device.
+- A sensor placed as a device shows its value this way. **Show** (on a selected device) picks
+  **Its value** or **An icon** for any device: a door contact can say "Open", a sensor can be a pin.
+- Numbers follow the sensor's display precision and unit (set them in the entity's settings in Home
+  Assistant). A sensor that is unavailable shows "–".
+- In the editor, readings show as pins so you can drag them.
+
+**On its label** (Edit → **Selected**, with a room or garden area selected) chooses what shows under
+its name:
+- Tap a value to show it, or tap it again to hide it. They show in the order you pick them.
+- **Temperature** and **Humidity** are a room's own; both show until you hide them. The **Temperature
+  sensor** and **Humidity sensor** below pick which sensors they are (and what the temperature map
+  reads); **auto** finds one in the room's area.
+- The area's other sensors are offered next; **Add another** takes any entity.
+- A garden area's label shows nothing but a car that is here until you add a value. A label shows up
+  to 8 values.
+
+**Top bar** (Edit → **Home**) keeps up to 6 values at the top of the view, beside the floor buttons:
+the outside temperature, the electricity price now, the next bin day. **Add a value** takes any
+entity, and the bin removes one. Cards show the same values unless they pick their own with
+`chips` (see [The card and its options](#the-card-and-its-options)).
+
 ### People in their rooms
 
 VirtuHome shows who is in which room when a room tracker in Home Assistant knows it:
@@ -593,6 +629,7 @@ height: 440
 | `energy` | Show solar, battery and grid | `true` / `false` | `true` |
 | `roof` | Show the roofs (each device can change it) | `true` / `false` | `true` |
 | `alarm` | Alarm panel in the top bar | an `alarm_control_panel` entity, or `none` | the first alarm panel |
+| `chips` | Values in the top bar | a list of entities (up to 6); `[]` shows none | the home's own (Edit → Home → Top bar) |
 | `stats` | (YAML only) | `true` shows the frame rate and graphics level in a corner, for reporting a slow device | `false` |
 
 Extensions add their own sections to the visual editor (below).

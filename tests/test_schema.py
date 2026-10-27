@@ -33,3 +33,28 @@ def test_bad_links_are_refused():
     for links in ({"light.kitchen": {"id": "x" * 65}}, {"light.kitchen": "abc"}, {"x": {"id": "abc"}}, ["light.kitchen"]):
         with pytest.raises(vol.Invalid):
             schema.PLAN({"version": 1, "floors": [FLOOR], "links": links})
+
+
+ROOM = {"id": "k", "name": "Kitchen", "points": [[0, 0], [3, 0], [3, 3]]}
+READING = {"id": "d1", "entity": "sensor.pond_temperature", "x": 1, "z": 1}
+
+
+def test_labels_and_readings_are_kept():
+    floor = {**FLOOR, "rooms": [{**ROOM, "label": ["humidity", "sensor.kitchen_co2"]}], "devices": [{**READING, "show": "value"}]}
+    out = schema.PLAN({"version": 1, "floors": [floor]})
+    assert out["floors"][0]["rooms"][0]["label"] == ["humidity", "sensor.kitchen_co2"]
+    assert out["floors"][0]["devices"][0]["show"] == "value"
+
+
+def test_plans_without_labels_gain_none():
+    out = schema.PLAN({"version": 1, "floors": [{**FLOOR, "rooms": [ROOM], "devices": [READING]}]})
+    assert "label" not in out["floors"][0]["rooms"][0]
+    assert "show" not in out["floors"][0]["devices"][0]
+
+
+def test_bad_labels_and_shows_are_refused():
+    for room in ({**ROOM, "label": "temperature"}, {**ROOM, "label": [""]}, {**ROOM, "label": ["sensor.x"] * 9}):
+        with pytest.raises(vol.Invalid):
+            schema.PLAN({"version": 1, "floors": [{**FLOOR, "rooms": [room]}]})
+    with pytest.raises(vol.Invalid):
+        schema.PLAN({"version": 1, "floors": [{**FLOOR, "devices": [{**READING, "show": "graph"}]}]})

@@ -21,6 +21,8 @@ _COORD = vol.All(vol.Coerce(float), vol.Range(min=-2000, max=2000))
 _LENGTH = vol.All(vol.Coerce(float), vol.Range(min=0, max=200))
 _POINT = vol.All([_COORD], vol.Length(min=2, max=2))
 _ENTITY = vol.Any(None, vol.All(str, vol.Length(max=255)))
+# what a room's label shows: "temperature", "humidity" or entity ids, in order
+_LABEL = vol.Any(None, vol.All([vol.All(str, vol.Length(min=1, max=255))], vol.Length(max=8)))
 
 ROOM = vol.Schema(
     {
@@ -31,6 +33,7 @@ ROOM = vol.Schema(
         vol.Optional("floor", default="wood"): vol.All(str, vol.Length(max=32)),
         vol.Optional("temperature", default=None): _ENTITY,
         vol.Optional("humidity", default=None): _ENTITY,
+        vol.Optional("label"): _LABEL,
     },
     extra=vol.ALLOW_EXTRA,
 )
@@ -77,6 +80,8 @@ DEVICE = vol.Schema(
         vol.Optional("y", default=None): vol.Any(None, _LENGTH),
         vol.Optional("mount", default=None): vol.Any(None, vol.In(["ceiling", "wall", "floor", "table"])),
         vol.Optional("rotation", default=None): vol.Any(None, vol.Coerce(float)),
+        # a reading shows its value in a label; null: the value for sensors and numbers
+        vol.Optional("show"): vol.Any(None, vol.In(["value", "icon"])),
     },
     extra=vol.ALLOW_EXTRA,
 )

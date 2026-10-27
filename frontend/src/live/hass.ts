@@ -26,6 +26,8 @@ export interface HassEntityReg {
   hidden?: boolean;
   name?: string | null;
   platform?: string;
+  /** Decimals the user (or the integration) picked for a sensor's value. */
+  display_precision?: number;
 }
 
 export interface HassDeviceReg {
@@ -62,6 +64,8 @@ export interface Hass {
   language?: string;
   /** The home's location and time zone (Settings → System → General). */
   config?: { latitude?: number; longitude?: number; elevation?: number; time_zone?: string };
+  /** A state as Home Assistant's frontend writes it: precision, unit, number format, translated states. */
+  formatEntityState?(stateObj: HassEntity, state?: string): string;
   callService(domain: string, service: string, data?: Record<string, unknown>, target?: Record<string, unknown>): Promise<unknown>;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
   /** A path on Home Assistant as a full address (Home Assistant's frontend has it, and so does the dev harness). */

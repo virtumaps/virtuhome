@@ -1,11 +1,13 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
 import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
-import { normalizePlan, spaces, type Plan, type Repair, type ThemeName } from "../model/plan";
+import { barChips, normalizePlan, spaces, type Plan, type Repair, type ThemeName } from "../model/plan";
 import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
 import { HassLive, initials, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
 import { EnergyLive, type EnergyNow } from "../live/energy";
 import { hereText } from "../live/presence";
+import { readingIcon, valueText } from "../live/readings";
+import { ICONS } from "../scene/markers";
 import { extensionFailures, loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
 import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveTier, setDeviceTier, tierHint, tierName, tierNameEn, TIERS, type Tier, type TierSetting } from "../scene/tier";
@@ -39,6 +41,8 @@ export interface ViewConfig {
   energy?: boolean;
   /** Roofs over the house (default on; the roof button turns them off on this device). */
   roof?: boolean;
+  /** Values in the top bar, by entity (default: the plan's; an empty list shows none). */
+  chips?: string[];
   /** Dev harness: extension modules to load without the integration. */
   dev_extensions?: string[];
   /** Options of extensions (e.g. Wall Tablet's popup, idle_return) live in the same config. */
@@ -141,6 +145,7 @@ export class VhView {
   private tierAuto = true;
   private menu: HTMLDivElement;
   private alertEl: HTMLButtonElement;
+  private tools: HTMLDivElement;
   private statusEl: HTMLDivElement;
   private statusKey = "";
   readonly energy = new EnergyLive();
@@ -216,10 +221,12 @@ export class VhView {
     this.menu = this.root.querySelector(".vh-menu")!;
     this.alertEl = this.root.querySelector(".vh-alert")!;
     this.statusEl = this.root.querySelector(".vh-status")!;
+    this.tools = this.root.querySelector(".vh-tools")!;
     // the status row and the alert sit under the top bar, however many lines its chips take
     if (typeof ResizeObserver !== "undefined") {
       this.barWatch = new ResizeObserver(() => this.placeUnderBar());
       this.barWatch.observe(this.chips);
+      this.barWatch.observe(this.statusEl);
     }
     this.alertEl.onclick = () => {
       const first = this.live.alerts()[0];
@@ -255,7 +262,11 @@ export class VhView {
       if (!el) return;
       const floor = Number(el.dataset.floor);
       const opens = (e.target as HTMLElement).closest<HTMLElement>("[data-entity]")?.dataset.entity;
-      if (el.dataset.room === undefined) this.showFloor(floor);
+      // a reading opens its entity (in a replay, the replay hears of it as of a device)
+      if (el.dataset.reading !== undefined) {
+        if (this.replayed) this.replayed.options.onHit?.({ floor, room: -1, entity: el.dataset.entity ?? null }, "tap");
+        else if (opens && !this.editor) this.dialog(opens);
+      } else if (el.dataset.room === undefined) this.showFloor(floor);
       // the room's heating opens its thermostat; the rest of the label opens the room
       else if (opens && !this.replayed && !this.editor) this.dialog(opens);
       else if (this.replayed) this.replayed.options.onHit?.({ floor, room: Number(el.dataset.room), entity: null }, "tap");
@@ -384,6 +395,7 @@ export class VhView {
     this.updateSky();
     if (this.plan && this.plan.floors.length) this.apply(changes);
     this.updateAlarm(h);
+    this.updateBarValues(h);
   }
 
   /** The states the view shows: a replay's, else the live ones. */
@@ -627,6 +639,7 @@ export class VhView {
     if (changes.has("markers")) this.viewer.refreshMarkers();
     if (changes.has("tints")) this.viewer.refreshTints();
     if (changes.has("labels")) this.viewer.refreshLabels();
+    if (changes.has("readings")) this.viewer.refreshReadings();
     if (changes.has("status") || changes.has("lighting")) this.renderStatus();
     if (this.sheetRoom && changes.size) this.renderSheet();
   }
@@ -636,10 +649,14 @@ export class VhView {
   /** The alert banner, the lights-on chip and who is home (only redrawn when something shown changed). */
   private renderStatus(): void {
     const alerts = this.live.alerts();
-    this.alertEl.hidden = !alerts.length;
-    if (alerts.length) {
-      this.alertEl.innerHTML = `${svg(mdiAlert)}<span></span>`;
-      this.alertEl.querySelector("span")!.textContent = alerts.length > 1 ? t("view.alerts.more", { alert: alerts[0].text, n: alerts.length - 1 }) : alerts[0].text;
+    const alertText = alerts.length > 1 ? t("view.alerts.more", { alert: alerts[0].text, n: alerts.length - 1 }) : alerts[0]?.text ?? "";
+    if (alertText !== (this.alertEl.hidden ? "" : this.alertEl.textContent)) {
+      this.alertEl.hidden = !alerts.length;
+      if (alerts.length) {
+        this.alertEl.innerHTML = `${svg(mdiAlert)}<span></span>`;
+        this.alertEl.querySelector("span")!.textContent = alertText;
+      }
+      this.placeUnderBar();
     }
     const floor = this.viewer.mode === "floor" ? this.viewer.activeFloor : null;
     // a replay shows who was home then; the lights chip (a switch) and today's energy would be about now
@@ -681,10 +698,25 @@ export class VhView {
     }
   }
 
+  /**
+   * The status row under the top bar, however many lines its chips take; the alert beside it, or
+   * under it where they would overlap (a phone); the buttons on the right below both (a short view
+   * wraps them into a second column).
+   */
   private placeUnderBar(): void {
     const top = this.chips.offsetTop + this.chips.offsetHeight + 10;
     this.statusEl.style.top = `${top}px`;
+    let below = top + this.statusEl.offsetHeight;
     this.alertEl.style.top = `${top - 2}px`;
+    if (!this.alertEl.hidden) {
+      const a = this.alertEl.getBoundingClientRect();
+      const s = this.statusEl.getBoundingClientRect();
+      if (s.width && a.right > s.left && a.left < s.right) {
+        this.alertEl.style.top = `${below + 6}px`;
+        below += 6 + this.alertEl.offsetHeight;
+      } else below = Math.max(below, top - 2 + this.alertEl.offsetHeight);
+    }
+    this.tools.style.top = `${below + 10}px`;
   }
 
   // ------------------------------------------------------------------ energy
@@ -973,6 +1005,7 @@ export class VhView {
       this.updateWallsButton();
     }
     this.applyTheme();
+    this.renderChips();
   }
 
   connect(): void {
@@ -1203,6 +1236,7 @@ export class VhView {
     };
     if (!this.plan || !this.plan.floors.length || this.config.floor_chips === false) {
       this.chips.innerHTML = "";
+      this.valueChips();
       edit();
       return;
     }
@@ -1219,7 +1253,40 @@ export class VhView {
       b.onclick = () => (i < 0 ? this.showHouse() : this.showFloor(i));
     });
     this.alarmChip();
+    this.valueChips();
     edit();
+  }
+
+  /** The chosen values (the card's `chips`, else the plan's): each opens its dialog. */
+  private valueChips(): void {
+    const h = this.shown;
+    for (const id of barChips(this.config.chips, this.plan)) {
+      const b = document.createElement("button");
+      b.className = "vh-chip vh-value";
+      b.dataset.entity = id;
+      b.onclick = () => this.dialog(id);
+      this.chips.append(b);
+      if (h) this.drawValueChip(b, h);
+    }
+  }
+
+  /** A value chip's icon, value and name, redrawn only when they change. */
+  private drawValueChip(b: HTMLElement, h: Hass): void {
+    const id = b.dataset.entity!;
+    const text = valueText(h, id);
+    const icon = readingIcon(h, id);
+    if (b.dataset.text === text && b.dataset.icon === icon) return;
+    b.dataset.text = text;
+    b.dataset.icon = icon;
+    const path = (ICONS.find(([n]) => n === icon) ?? ICONS[0])[1];
+    b.innerHTML = `${svg(path).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span></span>`;
+    b.querySelector("span")!.textContent = text;
+    b.title = String(h.states[id]?.attributes.friendly_name ?? id);
+  }
+
+  /** The top bar's values follow their states without redrawing the bar (a press on it is never lost). */
+  private updateBarValues(h: Hass): void {
+    this.chips.querySelectorAll<HTMLElement>(".vh-value").forEach((b) => this.drawValueChip(b, h));
   }
 
   private alarmChip(): void {

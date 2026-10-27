@@ -2,7 +2,7 @@
 // to refresh when states change. Home Assistant replaces a state object whenever it changes, so
 // spotting changes is a cheap identity comparison over the entities the plan uses.
 import { pointInPolygon } from "../model/geom";
-import { spaces, type Device, type Floor, type Furniture, type Plan, type Room, type Space } from "../model/plan";
+import { DEFAULT_LABEL, showsValue, spaces, type Device, type Floor, type Furniture, type LabelPart, type Plan, type Room, type Space } from "../model/plan";
 import type { GlowSlot, LampInfo } from "../scene/build";
 import { lin } from "../scene/build";
 import type { V3 } from "../scene/geo";
@@ -15,9 +15,10 @@ import type { EnergyLive } from "./energy";
 import { chargerEntities, type EvNow } from "./ev";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
 import { roomOf, roomTrackers, slug, sourcesOf } from "./presence";
+import { readingIcon, valueText } from "./readings";
 import { t } from "../i18n";
 
-export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status";
+export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status" | "readings";
 
 export type RGBA = [number, number, number, number];
 /** An extension's colour for a room (null leaves it to the core), and its text under the room's name. */
@@ -29,6 +30,12 @@ export interface RoomPart {
   entity?: string;
   /** The room's heating is on: the piece shows warm. */
   heating?: boolean;
+}
+
+/** A device shown by its value: the text and the icon of its label. */
+export interface Reading {
+  text: string;
+  icon: string;
 }
 
 /** Something that needs attention now: a leak, smoke, a triggered alarm. */
@@ -58,6 +65,8 @@ interface RoomWatch {
   climates: string[];
   /** What warms the room: its own climates, else the house's one thermostat. */
   heating: string[];
+  /** What its label shows, in order. */
+  label: readonly LabelPart[];
 }
 
 /** Sensors whose "on" is an alert, by device class (each has its name in the table: alert.smoke…). */
@@ -141,7 +150,7 @@ export class HassLive implements LiveSource {
       this.regRef = hass.entities;
       this.indexedWithStates = hasStates;
       this.reindex(hass);
-      for (const c of ["lighting", "openings", "markers", "tints", "labels", "status"] as Change[]) changes.add(c);
+      for (const c of ["lighting", "openings", "markers", "tints", "labels", "status", "readings"] as Change[]) changes.add(c);
       for (const id of this.kinds.keys()) this.seen.set(id, hass.states[id]);
       for (const id of this.presenceIds) this.presenceSeen.set(id, hass.states[id]);
       this.locate();
@@ -238,8 +247,10 @@ export class HassLive implements LiveSource {
           lights: ids.filter((id) => domainOf(id) === "light"),
           climates,
           heating: climates,
+          label: space.label ?? (space.outdoor ? [] : DEFAULT_LABEL),
         };
         this.rooms.set(`${floor.id}/${room.id}`, w);
+        for (const id of w.label) if (id !== "temperature" && id !== "humidity") this.watch(id, "labels");
         for (const id of w.climates) this.watch(id, "labels", "tints");
         this.watch(w.temperature, "labels", "tints");
         this.watch(w.humidity, "labels");
@@ -249,8 +260,10 @@ export class HassLive implements LiveSource {
       }
       for (const d of floor.devices) {
         const dom = domainOf(d.entity);
-        if (dom === "light" || dom === "switch") this.watch(d.entity, "lighting", "markers", "status");
-        else this.watch(d.entity, "markers");
+        // a reading's pin (only the editor shows it) looks the same whatever the value
+        const reading = showsValue(d);
+        if (dom === "light" || dom === "switch") this.watch(d.entity, "lighting", "markers", "status", ...(reading ? ["readings" as const] : []));
+        else this.watch(d.entity, reading ? "readings" : "markers");
         if (dom === "camera") {
           const dev = hass.entities?.[d.entity]?.device_id;
           const motion = dev ? Object.values(hass.entities ?? {})
@@ -596,17 +609,27 @@ export class HassLive implements LiveSource {
     return parts.length ? parts.map((p) => p.text).join(" · ") : null;
   }
 
-  /** The line under a room's name in pieces: "20.5° → 21°" opens the room's thermostat. */
+  /**
+   * The line under a room's name in pieces, as its label lists them: "20.5° → 21°" opens the room's
+   * thermostat, any other value its entity.
+   */
   roomLine(floor: Floor, room: { id: string }): RoomPart[] {
     const w = this.rooms.get(`${floor.id}/${room.id}`);
     if (!w) return [];
     const parts: RoomPart[] = [];
-    const c = shownClimate(w.climates.map((id) => this.state(id)));
-    // what the thermostat reads goes with its setpoint, as its dialog shows them
-    const text = heatText(c?.current ?? this.roomTemperature(w), c?.target ?? null);
-    if (text) parts.push(c ? { text, entity: c.entity, heating: w.climates.some((id) => this.state(id)?.attributes.hvac_action === "heating") } : { text });
-    const h = this.state(w.humidity);
-    if (h && !isUnavailable(h) && !isNaN(parseFloat(h.state))) parts.push({ text: `${Math.round(parseFloat(h.state))} %` });
+    for (const what of w.label) {
+      if (what === "temperature") {
+        const c = shownClimate(w.climates.map((id) => this.state(id)));
+        // what the thermostat reads goes with its setpoint, as its dialog shows them
+        const text = heatText(c?.current ?? this.roomTemperature(w), c?.target ?? null);
+        if (text) parts.push(c ? { text, entity: c.entity, heating: w.climates.some((id) => this.state(id)?.attributes.hvac_action === "heating") } : { text });
+      } else if (what === "humidity") {
+        const h = this.state(w.humidity);
+        if (h && !isUnavailable(h) && !isNaN(parseFloat(h.state))) parts.push({ text: `${Math.round(parseFloat(h.state))} %` });
+      } else if (this.hass) {
+        parts.push({ text: valueText(this.hass, what), entity: what });
+      }
+    }
     // a car that is here, or a charger with a car plugged in
     const cars = new Set((this.evSpaces.get(`${floor.id}/${room.id}`) ?? [])
       .filter((f) => (CAR_TYPES.has(f.type) ? this.carHere(f) : !["unplugged", "unknown"].includes(this.ev(f.entity ?? null)?.state ?? "unknown")))
@@ -618,6 +641,12 @@ export class HassLive implements LiveSource {
       if (extra) parts.push({ text: extra });
     }
     return parts;
+  }
+
+  /** A device shown by its value (a reading): its text and icon, or null while there are no states. */
+  reading(d: Device): Reading | null {
+    if (!this.hass) return null;
+    return { text: valueText(this.hass, d.entity), icon: readingIcon(this.hass, d.entity) };
   }
 
   /** The charger a car or charger of the plan is linked to (any of its entities), else the house's first. */
