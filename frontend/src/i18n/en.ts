@@ -139,6 +139,7 @@ export const EN = {
   "links.temperature": "{room} temperature",
   "links.humidity": "{room} humidity",
   "links.label": "A value on {room}'s label",
+  "links.chip": "A value in the top bar",
   "links.sensor.door": "Door sensor",
   "links.sensor.window": "Window sensor",
   "links.sensor.passage": "Opening sensor",
@@ -548,6 +549,7 @@ export const EN = {
   "card.alarm": "Alarm panel in the top bar",
   "card.energy": "Show solar, battery and grid",
   "card.roof": "Show the roofs (each device can change it)",
+  "card.chips": "Values in the top bar (none picked: the home's own)",
 
   // ---------------------------------------------------------------- first run
   "start.title": "Let's get your home in",

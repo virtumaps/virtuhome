@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { HassLive } from "../src/live/live";
 import { readingIcon, valueText } from "../src/live/readings";
 import { entityUses, replaceEntity } from "../src/model/links";
-import { normalizePlan, showsValue, type Device, type Floor, type Plan } from "../src/model/plan";
+import { barChips, normalizePlan, showsValue, type Device, type Floor, type Plan } from "../src/model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../src/live/hass";
 
 const rect = (x0: number, z0: number, x1: number, z1: number): [number, number][] => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
@@ -153,5 +153,31 @@ describe("labels in the plan", () => {
     expect(p.floors[0].rooms[0].label).toEqual(["temperature", "sensor.kitchen_carbon_dioxide"]);
     replaceEntity(p, "sensor.pond_temperature", null);
     expect(p.floors[0].outdoor![0].label).toEqual([]);
+  });
+});
+
+describe("values in the top bar", () => {
+  const withChips = (chips: unknown) => normalizePlan({ version: 1, settings: { chips }, floors: [] });
+
+  it("shows a card's own values, else the home's", () => {
+    const p = withChips(["sensor.outside_temperature", "sensor.octopus_price"]);
+    expect(barChips(undefined, p)).toEqual(["sensor.outside_temperature", "sensor.octopus_price"]);
+    expect(barChips(["sensor.water_tank"], p)).toEqual(["sensor.water_tank"]);
+    // a card that lists none shows none
+    expect(barChips([], p)).toEqual([]);
+    expect(barChips(undefined, null)).toEqual([]);
+  });
+
+  it("leaves out what isn't an entity, and shows six at most", () => {
+    expect(barChips(["sensor.a", 3, "", "nonsense"], null)).toEqual(["sensor.a"]);
+    expect(barChips(Array.from({ length: 9 }, (_, i) => `sensor.s${i}`), null)).toHaveLength(6);
+  });
+
+  it("follows a renamed entity, and drops one that is unlinked", () => {
+    const p = withChips(["sensor.outside_temperature", "sensor.octopus_price"]);
+    replaceEntity(p, "sensor.outside_temperature", "sensor.garden_temperature");
+    expect(p.settings.chips).toEqual(["sensor.garden_temperature", "sensor.octopus_price"]);
+    replaceEntity(p, "sensor.octopus_price", null);
+    expect(p.settings.chips).toEqual(["sensor.garden_temperature"]);
   });
 });

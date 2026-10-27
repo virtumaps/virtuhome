@@ -13,6 +13,10 @@
   its name and in what order. Temperature and humidity are still there by default and can be hidden;
   any of the area's sensors, or any other entity, can be added. The **Temperature sensor** and
   **Humidity sensor** a room's label (and the temperature map) read can now be picked too.
+- Values in the top bar: Edit → Home → **Top bar** keeps up to 6 entities' values beside the floor
+  buttons (the outside temperature, the price now, the next bin day), and a tap opens one. Cards show
+  them too, or their own with the new `chips` option (in the visual editor as **Values in the top
+  bar**).
 
 ### Fixed
 - At night in the Standard and Tablet looks, a garden with someone in it (or a camera seeing a
