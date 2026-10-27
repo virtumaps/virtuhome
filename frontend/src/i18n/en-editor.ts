@@ -289,7 +289,7 @@ export const EN_EDITOR = {
   "editor.extensions.checking": "Checking…",
   "editor.extensions.upToDateReload": "Up to date. Reload the page to use new versions.",
   "editor.extensions.checkForUpdates": "Check for updates",
-  "editor.extensions.removeTheLicenceFrom": "Remove the licence from this Home Assistant? Its extensions stop working here, and the activation is freed for another one.",
+  "editor.extensions.removeTheLicenceFrom": "Remove the licence from this Home Assistant? Its extensions stop working here, the automations they added are removed, and the activation is freed for another one.",
   "editor.extensions.licenceRemoved": "Licence removed.",
   "editor.extensions.removeLicence": "Remove licence",
   "editor.extensions.extensionsAddFeaturesSuch": "Extensions add features such as the wall tablet mode. Enter the licence key you got from VirtuMaps.",

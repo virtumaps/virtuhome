@@ -23,7 +23,7 @@ from homeassistant.util.yaml import dump, load_yaml, parse_yaml
 
 from .automations import (
     EXT_ID, FOLDER, ID_PREFIX, BlueprintError, blueprint_path, blueprints_in_use, check_inputs, describe, listed,
-    new_automation, remove_from, signed_blueprint,
+    new_automation, notify_targets, remove_from, signed_blueprint,
 )
 from .licensing import verify_bundle
 
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 AUTOMATION = "automation"
+WHAT_IT_DOES = ("triggers", "trigger", "conditions", "condition", "actions", "action")
 
 
 class AutomationStore:
@@ -91,6 +92,21 @@ class AutomationStore:
         except Exception as err:  # noqa: BLE001 - Home Assistant's own reasons, shown as they are
             raise BlueprintError(str(err)) from err
         return {"blueprint": blueprint, "text": text, "info": info, "config": config, "resolved": resolved}
+
+    async def async_preview(self, ext_id: str, bp_id: str, given: dict[str, Any], alias: str = "", description: str = "") -> dict[str, Any]:
+        """What add() would create, for the agreement dialog. Nothing is written."""
+        p = await self._prepare(ext_id, bp_id, given, alias, description)
+        info, config, resolved = p["info"], p["config"], p["resolved"]
+        return {
+            "alias": config["alias"],
+            "description": config.get("description", ""),
+            "blueprint": {"id": bp_id, "path": config["use_blueprint"]["path"], "name": info["name"],
+                          "description": info["description"], "yaml": p["text"]},
+            "inputs": [{"key": k, "name": info["inputs"][k]["name"], "value": v} for k, v in config["use_blueprint"]["input"].items()],
+            "notify": notify_targets(resolved),
+            # the triggers, conditions and actions with the inputs filled in, as YAML
+            "yaml": dump({k: resolved[k] for k in WHAT_IT_DOES if k in resolved}),
+        }
 
     async def async_add(self, ext_id: str, bp_id: str, given: dict[str, Any], alias: str = "", description: str = "") -> dict[str, Any]:
         """Writes the blueprint and adds the automation (call only after the user agreed)."""
