@@ -23,6 +23,8 @@
   pushed the whole view up off the screen).
 - A card in a panel view was 440 pixels high instead of filling the view (unless **Fill the
   screen** was on): it didn't see the panel view it was in. It fills it, as the guide says.
+- The 2D plan's hint for a home with no floors yet ran off both sides on a phone, or a tablet held
+  upright beside the editor. It is in lines that fit now.
 
 ## 0.13.0
 
