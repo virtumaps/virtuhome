@@ -43,7 +43,7 @@ class FakeManager:
     instance = INSTANCE
 
     def summary(self):
-        return {"status": "active", "error": None, "key_hint": f"{KEY[:4]}…{KEY[-4:]}",
+        return {"status": "active", "kind": "paid", "error": None, "key_hint": f"{KEY[:4]}…{KEY[-4:]}",
                 "extensions": [{k: e[k] for k in ("id", "name", "version")} for e in self.data["extensions"]],
                 "checked": self.data["checked"], "server": "https://licence.example"}
 
@@ -80,7 +80,7 @@ def test_counts_per_floor_and_totals():
 
 def test_licence_and_extensions():
     lic = report()["licence"]
-    assert lic["status"] == "active" and lic["key_entered"]
+    assert lic["status"] == "active" and lic["kind"] == "paid" and lic["key_entered"]
     assert lic["extensions"] == [
         {"id": "security", "version": "1.0.2", "loaded": True},
         {"id": "energy", "version": "1.0.0", "loaded": False},

@@ -66,3 +66,75 @@ def test_bundle_signature():
         lic.verify_bundle("wall_tablet", "1.0.0", data + b" ", sha, sig, public_key_b64=PUB)
     with pytest.raises(lic.LicenceError):
         lic.verify_bundle("wall_tablet", "1.0.1", data, sha, sig, public_key_b64=PUB)
+
+
+# ---------------------------------------------------------------- what keeps working (perpetual licences)
+
+NOW = 1_900_000_000
+PAST = NOW - 86400  # the renewal date went by yesterday
+SECURITY_1 = {"id": "security", "name": "Security", "version": "1.0.0", "file": "security-1.0.0.js"}
+SECURITY_2 = {"id": "security", "name": "Security", "version": "1.1.0", "sha256": "ab", "sig": "cd"}
+
+
+def state(**payload):
+    """The licence a stored token holds, read as the integration reads it (signature checked)."""
+    t = token({"v": 1, "ext": ["security"], "inst": INST, "iat": 0, "exp": PAST, **payload})
+    return lic.licence_state(lic.read_token(t, INST, public_key_b64=PUB), now=NOW)
+
+
+def test_expired_paid_licence_still_loads():
+    paid = state(kind="paid")
+    assert (paid.status, paid.loads, paid.updates) == ("lapsed", True, False)
+    assert lic.loadable([SECURITY_1], paid) == [SECURITY_1]
+    # a renewal brings a current token again, and with it new versions
+    renewed = state(kind="paid", exp=NOW + 365 * 86400)
+    assert renewed.updates and lic.to_keep([SECURITY_1], [SECURITY_2], renewed) == [SECURITY_2]
+
+
+def test_ended_installer_licence_keeps_its_installed_versions():
+    ended = state(kind="installer", ended=PAST, exp=NOW + 365 * 86400)
+    assert (ended.status, ended.loads, ended.updates) == ("ended", True, False)
+    assert lic.loadable([SECURITY_1], ended) == [SECURITY_1]
+    # what the server offers is not downloaded: the installed version stays
+    assert lic.to_keep([SECURITY_1], [SECURITY_2], ended) == [SECURITY_1]
+
+
+def test_expired_trial_stops():
+    trial = state(kind="trial")
+    assert (trial.status, trial.loads) == ("expired", False)
+    assert lic.loadable([SECURITY_1], trial) == []
+    assert lic.loadable([SECURITY_1], state(kind="trial", exp=NOW + 86400)) == [SECURITY_1]
+    # a kind this version doesn't know lasts only until its date, like a trial
+    assert not state(kind="rental").loads
+    # unless the token says it is perpetual; and the server can make any kind time-limited
+    assert state(kind="rental", perpetual=True).loads
+    assert not state(kind="paid", perpetual=False).loads
+
+
+def test_revoked_licence_stops_at_the_next_renewal():
+    paid = state(kind="paid")
+    assert lic.loadable([SECURITY_1], paid) == [SECURITY_1]
+    # the server's answers to a renewal: these end the licence here (the manager deletes what it unlocked)
+    for answer in ("This licence was revoked", "Licence key not found", "This order was refunded"):
+        assert lic.ends_licence(answer)
+    # these don't: the installed versions keep working
+    for answer in ("licence server answered 500", "could not reach the licence server", "licence expired"):
+        assert not lic.ends_licence(answer)
+
+
+def test_tokens_without_a_kind_are_perpetual():
+    """Tokens the server issued before licences had a kind: installer keys and paid keys, both kept."""
+    installer = state(act="installer-" + INST)
+    paid = state(act="5f1c0d2e-activation")
+    assert (installer.kind, installer.status, installer.loads) == ("installer", "lapsed", True)
+    assert (paid.kind, paid.status, paid.loads) == ("paid", "lapsed", True)
+    assert state(act="installer-" + INST, exp=NOW + 1).status == "active"
+
+
+def test_read_token_ignores_dates_but_not_the_installation():
+    t = token({"v": 1, "ext": [], "inst": INST, "iat": 0, "exp": PAST})
+    assert lic.read_token(t, INST, public_key_b64=PUB)["exp"] == PAST
+    with pytest.raises(lic.LicenceError):
+        lic.read_token(t, lic.installation_hash("home-2"), public_key_b64=PUB)
+    with pytest.raises(lic.LicenceError):
+        lic.verify_token(t, INST, now=NOW, public_key_b64=PUB)
