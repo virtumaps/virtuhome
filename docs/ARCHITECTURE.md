@@ -4,7 +4,7 @@
 
 | Path | What |
 |---|---|
-| `custom_components/virtuhome/` | Home Assistant integration: stores the plan (`.storage/virtuhome.plan` + restore points), WebSocket API (`virtuhome/plan/get|save|subscribe`, `virtuhome/history/*`, `virtuhome/info`, `virtuhome/background/upload`), sidebar panel, serves the frontend. Floor plan images to trace over sit in `.virtuhome/backgrounds/` and are served to signed-in users at `/api/virtuhome/background/<file>`; a save that stops using one deletes it. |
+| `custom_components/virtuhome/` | Home Assistant integration: stores the plan (`.storage/virtuhome.plan` + restore points), WebSocket API (`virtuhome/plan/get|save|subscribe`, `virtuhome/history/*`, `virtuhome/info`, `virtuhome/background/upload`, `virtuhome/licence/*`, `virtuhome/automations/*`), sidebar panel, serves the frontend. Floor plan images to trace over sit in `.virtuhome/backgrounds/` and are served to signed-in users at `/api/virtuhome/background/<file>`; a save that stops using one deletes it. |
 | `frontend/src/loader.ts` | ~2 KB, loaded on every HA page. Defines `virtuhome-card` and `virtuhome-panel`; imports the engine only when one is shown. |
 | `frontend/src/model/` | The plan format (`plan.ts`), 2D geometry, and wall layout derived from room outlines (`walls.ts`). |
 | `frontend/src/scene/` | The 3D engine: mesh building, CPU lighting, materials, markers, the `Viewer`. |
@@ -31,6 +31,43 @@ their own. Roofs are built into two meshes of their own per floor (opaque and gl
 the floor (`roofKey`), so dragging a panel along a roof rebuilds only the roofs. `auto/roof.ts` works
 roofs out from the plan; `scene/roof-info.ts` hands their slopes, panels and shading geometry to
 extensions.
+
+## Extensions and what they may do in Home Assistant
+
+Extensions (VirtuHome Pro) are ES modules signed by the licence server's Ed25519 key; the
+integration holds only the public key (`licensing.py`). It downloads them for a licence, checks
+each file against the checksum and signature from the server, keeps both beside it, and serves it to
+the browser, where the core loads it (`frontend/src/ext/api.ts`). Paid and installer licences keep
+loading what is installed after their renewal date; a trial stops at its end.
+
+**No extension code runs inside Home Assistant.** For what has to happen with no screen open (an
+alert when the garage is left open), an extension ships automation blueprints: plain YAML in its
+bundle's last line, `//# virtuhome-blueprints=<base64 of JSON {"<id>": "<yaml>"}>`, so the bundle's
+signature covers them. The integration (`automations.py`, `automation_store.py`):
+
+- Uses only blueprints it reads itself from an installed extension's bundle on disk, after checking
+  the file against the signature stored with it. The browser names a blueprint and gives its
+  inputs; it never sends YAML. Unknown blueprints, changed bundles and bundles stored without a
+  signature (by an older VirtuHome, until the next renewal) are refused.
+- Checks the inputs against the blueprint's inputs and their selectors: entity, device and area ids
+  that exist (entities of the domains the selector allows), numbers in range, times, durations,
+  choices and short text without templates. Other selectors (actions, objects, templates) are
+  refused, so what an automation does is what the signed blueprint says.
+- Adds an automation only when the user agreed in VirtuHome's own dialog, which shows its name, its
+  triggers, conditions and actions with the inputs filled in, and where its notifications go
+  (Home Assistant's notify services). The WebSocket commands are for admins only. Extensions run in
+  the same page as the core, so the dialog is a rule the core's API keeps, not a wall against
+  extension code: the limit on what an extension can make Home Assistant do is the signed blueprints.
+- Writes through Home Assistant's own code, as its editors do (the same calls from 2025.1 to now):
+  the blueprint to `blueprints/automation/virtuhome/<extension>/<id>.yaml` through the automation
+  blueprints' `DomainBlueprints`, the automation checked with the automation editor's validator,
+  added to `automations.yaml` with Home Assistant's YAML loader and dumper, and reloaded on its own.
+  If Home Assistant doesn't load `automations.yaml`, the automation is taken out again.
+- Tags each automation by its id, `virtuhome-<extension>-<hex>`, and finds them in
+  `automations.yaml` by it. They show in Settings → Automations and can be changed there.
+- Removes an extension's automations, and its blueprints unless another automation uses one, when
+  the extension goes: its licence removed or revoked, the extension no longer in it, or a trial
+  ended (checked at start and daily).
 
 ## Performance rules (Fire HD 8 class tablets)
 
