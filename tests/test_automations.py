@@ -170,3 +170,23 @@ def test_owner_needs_the_tag():
     assert auto.owner({"id": "virtuhome-security-0a1b"}) == "security"
     for other in ({"id": "virtuhome"}, {"id": "virtuhome-security"}, {"id": "1700"}, {"alias": "no id"}, "text"):
         assert auto.owner(other) is None
+
+
+def test_notify_targets():
+    config = {
+        "triggers": [{"trigger": "state", "entity_id": "cover.garage", "to": "open", "action": "notify.not_this_one"}],
+        "actions": [
+            {"action": "notify.mobile_app_kadir", "data": {"message": "Garage open"}},
+            {"choose": [{"conditions": [], "sequence": [{"service": "notify.family"}]}]},
+            {"action": "notify.send_message", "target": {"entity_id": "notify.kitchen_speaker"}},
+            {"domain": "mobile_app", "type": "notify", "device_id": PHONE, "message": "Garage open"},
+            {"action": "notify.mobile_app_kadir", "data": {"message": "Still open"}},
+            {"action": "light.turn_on"},
+        ],
+    }
+    assert auto.notify_targets(config) == [
+        {"service": "notify.mobile_app_kadir"},
+        {"service": "notify.family"},
+        {"service": "notify.send_message", "entity_id": "notify.kitchen_speaker"},
+        {"device_id": PHONE},
+    ]

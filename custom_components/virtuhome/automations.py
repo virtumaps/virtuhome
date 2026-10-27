@@ -224,3 +224,34 @@ def _value(key: str, kind: str, options: dict[str, Any], value: Any, exists: Cal
             raise bad("not a short text")
         return value
     raise bad(f"the {kind} selector isn't supported")
+
+
+def notify_targets(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Where an automation's notifications go (its inputs filled in): notify services and the
+    devices of mobile_app notify actions."""
+    found: list[dict[str, Any]] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            call = node.get("action", node.get("service"))
+            if isinstance(call, str) and call.startswith("notify."):
+                target = node.get("target")
+                entities = target.get("entity_id") if isinstance(target, dict) else None
+                item: dict[str, Any] = {"service": call}
+                if entities:
+                    item["entity_id"] = entities
+                found.append(item)
+            elif node.get("domain") == "mobile_app" and node.get("type") == "notify" and node.get("device_id"):
+                found.append({"device_id": node["device_id"]})
+            for child in node.values():
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk([config.get(k) for k in ("actions", "action")])
+    unique: list[dict[str, Any]] = []
+    for item in found:
+        if item not in unique:
+            unique.append(item)
+    return unique

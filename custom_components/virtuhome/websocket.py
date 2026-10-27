@@ -31,7 +31,7 @@ def async_register(hass: HomeAssistant) -> None:
         ws_info, ws_get, ws_save, ws_subscribe, ws_history_list, ws_history_restore,
         ws_licence_get, ws_licence_activate, ws_licence_refresh, ws_licence_remove, ws_catalog,
         ws_background_upload, ws_checks, ws_checks_fix_card, ws_errors_report,
-        ws_automations_list, ws_automations_add, ws_automations_remove,
+        ws_automations_list, ws_automations_preview, ws_automations_add, ws_automations_remove,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -364,6 +364,14 @@ def _add_args(msg: dict[str, Any]) -> tuple:
 async def ws_automations_list(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """The automations extensions added (one extension's with ext_id), as automations.yaml has them now."""
     await _automations(hass, connection, msg, lambda a: a.async_list(msg.get("ext_id")))
+
+
+@websocket_api.websocket_command({vol.Required("type"): "virtuhome/automations/preview", **ADD})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_automations_preview(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """What add would create (name, inputs, notify services, the automation as YAML), for the user to agree to."""
+    await _automations(hass, connection, msg, lambda a: a.async_preview(*_add_args(msg)))
 
 
 @websocket_api.websocket_command({vol.Required("type"): "virtuhome/automations/add", **ADD})

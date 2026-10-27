@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### New
+- Extensions can add automations to Home Assistant, so alerts such as "the garage is still open"
+  work with no screen open. Nothing is added until you agree in a window that shows what the
+  automation does, its settings and where its notifications go. It then shows in Settings →
+  Automations like any other, and goes when the extension does. Extensions never run their own code
+  in Home Assistant: the automations come from blueprints signed with the extension.
+
 ### Changed
 - What you bought keeps working: a paid extension keeps loading the version you have after the
   licence's renewal date, even if the licence server can't be reached or is gone; only new versions
