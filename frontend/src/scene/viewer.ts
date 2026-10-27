@@ -198,6 +198,8 @@ export class Viewer {
   private fade: HTMLCanvasElement | null = null;
   /** The weather wants frames (rain, snow, wind, lightning): when the next one is due. */
   private fxTimer = 0;
+  /** The next frame of pulsing markers: one at a time, however many other frames come between. */
+  private pulseTimer = 0;
   private slowWatch = { frames: 0, time: 0, fired: false };
   /** Frames that failed in a row, and whether drawing stopped for good. */
   private fails = 0;
@@ -215,6 +217,9 @@ export class Viewer {
     this.pixelRatio = Math.min(window.devicePixelRatio || 1, this.low ? 1 : 2);
     this.renderer = this.createRenderer();
 
+    // off its target from the start: a camera on it (no home yet, nothing framed) looks straight
+    // down, where the controls never settle and ask for a frame every frame
+    this.camera.position.set(0, 10, 14);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.2;
@@ -1109,7 +1114,9 @@ export class Viewer {
     // keep the current direction, come closer
     const dir = new Vector3().subVectors(this.camera.position, this.controls.target).normalize();
     const fov = (this.camera.fov * Math.PI) / 180;
-    const dist = Math.max(4, (size * 0.75) / Math.tan(fov / 2));
+    // a portrait screen is narrower than it is tall: back off until the room fits across it too
+    const aspect = Math.max(0.5, this.width / Math.max(1, this.height));
+    const dist = Math.max(4, (size * 0.75) / Math.tan(fov / 2) / Math.min(1, aspect));
     if (dir.y < 0.55) dir.y = 0.55;
     dir.normalize();
     this.flyTo(target.clone().addScaledVector(dir, dist), target, true);
@@ -1772,7 +1779,12 @@ export class Viewer {
       if (!this.raf) this.raf = requestAnimationFrame(this.tick);
     } else if (pulsing) {
       // only markers pulse: a calm 15 frames per second is plenty
-      window.setTimeout(() => this.invalidate(), this.low ? 90 : 50);
+      if (!this.pulseTimer) {
+        this.pulseTimer = window.setTimeout(() => {
+          this.pulseTimer = 0;
+          this.invalidate();
+        }, this.low ? 90 : 50);
+      }
       if (now - this.lastPulseCheck > 5000) {
         this.lastPulseCheck = now;
         this.refreshMarkers(); // a pulse ends a minute after its change
@@ -2098,6 +2110,7 @@ export class Viewer {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     window.clearTimeout(this.fxTimer);
+    window.clearTimeout(this.pulseTimer);
     window.clearTimeout(this.lostTimer);
     this.fade?.remove();
     this.resizeObs.disconnect();

@@ -24,6 +24,16 @@ import { findRoomsAside } from "./roomfind-client";
 import { Collider, settle } from "./collide";
 import { t } from "../i18n/editor";
 
+/** What an opening of a kind is called: "Garage door". */
+export function openingName(kind: Opening["kind"]): string {
+  return t(({ door: "editor.door", window: "editor.opening.window", passage: "editor.opening.opening", garage: "editor.opening.garageDoor" } as const)[kind]);
+}
+
+/** An opening of a kind, as a step in the undo history names it: "an opening". */
+export function anOpening(kind: Opening["kind"]): string {
+  return t(({ door: "editor.opening.aDoor", window: "editor.opening.aWindow", passage: "editor.opening.anOpening", garage: "editor.opening.aGarageDoor" } as const)[kind]);
+}
+
 export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
 
 export interface Plan2DHost {
@@ -1421,7 +1431,7 @@ export class Plan2D {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       this.host.dragStart();
       this.drag = {
-        kind, label: t("editor.plan.moveAKind", { kind: o.kind }), moved: false,
+        kind, label: t("editor.drag.moveWhat", { what: anOpening(o.kind) }), moved: false,
         apply: (x, z, ev) => {
           const live = this.host.plan().floors[fi].openings.find((y) => y.id === id);
           if (!live) return;

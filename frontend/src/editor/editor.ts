@@ -51,7 +51,7 @@ import { EDITOR_CSS } from "./styles";
 import { HouseTypes } from "./house-types";
 import { Collider, settle } from "./collide";
 import { imageUrl, uploadImage } from "./background";
-import { Plan2D, PLAN2D_CSS } from "./plan2d";
+import { anOpening, openingName, Plan2D, PLAN2D_CSS } from "./plan2d";
 import { fetchBuildings, northFits, pickBuilding, type Footprint, type NorthFit } from "./north";
 import { compassName } from "../live/sun";
 import { location as homeLocation } from "../live/sky";
@@ -743,7 +743,7 @@ export class Editor {
     if (this.dragStart) {
       const moved = JSON.stringify(this.dragStart) !== JSON.stringify(this.plan);
       if (moved) {
-        const what = item.kind === "corner" ? t("editor.drag.aCorner") : item.kind === "opening" ? t("editor.drag.aKind", { kind: f.openings.find((o) => o.id === item.id)?.kind ?? "door" }) : item.kind === "device"
+        const what = item.kind === "corner" ? t("editor.drag.aCorner") : item.kind === "opening" ? anOpening(f.openings.find((o) => o.id === item.id)?.kind ?? "door") : item.kind === "device"
           ? String(this.hass.states[f.devices.find((d) => d.id === item.id)?.entity ?? ""]?.attributes.friendly_name ?? t("editor.aDevice"))
           : furnitureName(f.furniture.find((x) => x.id === item.id)?.type ?? "") ?? "furniture";
         this.undo.push({ plan: this.dragStart, label: item.kind === "edge" ? t("editor.addACorner") : t("editor.drag.moveWhat", { what }) });
@@ -1630,7 +1630,7 @@ export class Editor {
         furnitureName(x.type) ?? x.type))),
       h("h4", {}, t("editor.room.doorsAndWindowsN", { n: openings.length })),
       ...openings.map((o) => h("div", { class: "ed-card" },
-        h("div", { class: "ed-row" }, h("b", {}, o.kind), h("small", {}, t("editor.room.fixedMWide", { fixed: o.width.toFixed(2) })),
+        h("div", { class: "ed-row" }, h("b", {}, openingName(o.kind)), h("small", {}, t("editor.room.fixedMWide", { fixed: o.width.toFixed(2) })),
           h("button", { class: "ed-btn ghost small", onclick: () => this.select({ floor: fi, kind: "opening", id: o.id }) }, t("editor.room.edit"))),
         h("div", { class: "ed-row" },
           h("label", {}, t("editor.sensor")),
@@ -2157,9 +2157,8 @@ export class Editor {
     const covers = this.entities((id) => domainOf(id) === "cover");
     const room = this.plan.floors[fi].rooms.find((r) => r.id === o.room_id);
     const num = (label: string, key: "width" | "height" | "sill" | "offset", step = "0.05") =>
-      [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step, min: "0", value: String(o[key]), onchange: (e: Event) => upd(t("editor.opening.changeKindName", { kind: o.kind, name: label.toLowerCase() }), (x) => (x[key] = Math.max(0, Number((e.target as HTMLInputElement).value)))) })];
-    const names: Record<Opening["kind"], string> = { door: t("editor.door"), window: t("editor.opening.window"), passage: t("editor.opening.opening"), garage: t("editor.opening.garageDoor") };
-    const what = names[o.kind].toLowerCase();
+      [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step, min: "0", value: String(o[key]), onchange: (e: Event) => upd(t("editor.opening.changeKindName", { kind: openingName(o.kind).toLowerCase(), name: label.toLowerCase() }), (x) => (x[key] = Math.max(0, Number((e.target as HTMLInputElement).value)))) })];
+    const what = openingName(o.kind).toLowerCase();
     const styles = stylesFor(o.kind);
     const style = styleOf(o);
     const ctl = controlsFor(o);
@@ -2167,9 +2166,9 @@ export class Editor {
     const def: FinishDef = JOINERY_FINISHES[finish];
     const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
     return h("div", {},
-      h("h4", {}, `${names[o.kind]}${room ? ` · ${room.name}` : ""}`),
+      h("h4", {}, `${openingName(o.kind)}${room ? ` · ${room.name}` : ""}`),
       h("div", { class: "ed-chips" }, ...(["door", "window", "passage", "garage"] as Opening["kind"][]).map((k) =>
-        chip(names[k], o.kind === k, () => upd(t("editor.opening.makeItAName", { name: names[k].toLowerCase() }), (x) => {
+        chip(openingName(k), o.kind === k, () => upd(t("editor.opening.makeItName", { name: anOpening(k) }), (x) => {
           x.kind = k;
           x.style = null; // styles differ between kinds
           if (k === "window" && x.sill < 0.3) x.sill = 0.9;

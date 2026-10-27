@@ -1514,7 +1514,7 @@ export class VhView {
     }
     this.sheet.dataset.key = key;
     this.sheet.innerHTML = `
-      <h3><span class="t"></span><button class="vh-icon vh-close" style="width:32px;height:32px">${svg(mdiClose)}</button></h3>
+      <h3><span class="t"></span><button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button></h3>
       <div class="sub"></div>
       <div class="actions"></div>
       <div class="vh-tiles"></div>`;
@@ -1546,7 +1546,7 @@ export class VhView {
       });
     } else {
       for (const id of ids) {
-        const row = document.createElement("div");
+        const row = document.createElement("button");
         row.className = "vh-row";
         row.dataset.row = id;
         row.innerHTML = `<span class="n"></span><span class="state"></span>`;
