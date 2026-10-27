@@ -95,6 +95,15 @@ describe("check my setup", () => {
     expect(checkExtensions(SERVER.licence, [])).toMatchObject({ level: "ok", count: 0 });
   });
 
+  it("extensions: what was bought keeps working past the renewal date; a trial stops", () => {
+    const paid = { status: "lapsed", kind: "paid", error: null, extensions: [{ id: "security", name: "Security" }] };
+    expect(checkExtensions(paid, [])).toMatchObject({ level: "note", fixes: ["renew"], text: expect.stringContaining("installed extensions keep working") });
+    expect(checkExtensions({ ...paid, status: "ended", kind: "installer" }, [])).toMatchObject({ level: "ok", fixes: [], text: expect.stringContaining("keep working") });
+    expect(checkExtensions({ ...paid, status: "expired", kind: "trial" }, [])).toMatchObject({
+      level: "problem", text: "The trial has ended, so its extensions have stopped.",
+    });
+  });
+
   it("repairs: normalizePlan says what it put right, and returns the same plan", () => {
     const raw = {
       version: 1,

@@ -92,6 +92,7 @@ def licence_summary(summary: dict[str, Any] | None, loaded: list[dict[str, Any]]
     loaded_ids = {e.get("id") for e in loaded}
     return {
         "status": summary.get("status"),
+        "kind": summary.get("kind"),
         "error": summary.get("error"),
         "server": summary.get("server"),
         "key_entered": bool(summary.get("key_hint")),

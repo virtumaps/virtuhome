@@ -1459,7 +1459,15 @@ export class Editor {
   private extensionsTab(): HTMLElement {
     const box = h("div", {}, h("p", { class: "ed-hint" }, t("editor.loading")));
     const hass = this.hass;
-    type Summary = { status: string; error: string | null; key_hint: string | null; extensions: { id: string; name: string; version: string }[] };
+    type Summary = { status: string; kind?: string | null; error: string | null; key_hint: string | null; extensions: { id: string; name: string; version: string }[] };
+    const trial = (s: Summary) => s.kind === "trial";
+    // paid and installer licences keep what is installed past their renewal date (lapsed) or once ended
+    const statusText = (s: Summary) => ({
+      active: trial(s) ? t("editor.extensions.trial") : t("editor.extensions.active"),
+      lapsed: t("editor.extensions.lapsed"),
+      ended: t("editor.extensions.ended"),
+      expired: trial(s) ? t("editor.extensions.trialEnded") : t("editor.extensions.expiredRenewsOnline"),
+    } as Record<string, string>)[s.status] ?? t("editor.extensions.notValid");
     type Catalog = { id: string; name: string; description?: string; price?: string; checkout_url?: string }[];
     const render = (s: Summary | null, catalog: Catalog, note = "", reload = false) => {
       const installed = new Set(s?.extensions.map((x) => x.id));
@@ -1473,7 +1481,7 @@ export class Editor {
         h("h4", {}, t("editor.extensions.licence")),
         s && s.status !== "none"
           ? h("div", { class: "ed-card" },
-            h("div", { class: "ed-row" }, h("b", {}, s.status === "active" ? t("editor.extensions.active") : s.status === "expired" ? t("editor.extensions.expiredRenewsOnline") : t("editor.extensions.notValid")), h("small", {}, s.key_hint ?? "")),
+            h("div", { class: "ed-row" }, h("b", {}, statusText(s)), h("small", {}, s.key_hint ?? "")),
             s.error ? h("p", { class: "ed-hint" }, s.error) : null,
             ...s.extensions.map((x) => h("div", { class: "ed-item" }, h("span", {}, x.name), h("small", {}, x.version))),
             h("div", { class: "ed-row" },
