@@ -611,6 +611,26 @@ extensions** lists what there is.
 Activating a key sends the key and an anonymous code for this Home Assistant, nothing that names
 your home. The licence is then renewed about once a day while Home Assistant is online. Extensions are checked, stored in Home Assistant and keep working offline.
 
+**What you bought keeps working:** a bought extension keeps working at the version you have, for
+good, even if the licence server can't be reached or goes away. Only new versions need the licence
+to renew. Past its renewal date the licence shows **Yours to keep — new versions once it renews
+online**; **Check for updates** renews it when the server is back. A licence for a VirtuMaps
+installation that has ended shows **Yours to keep — no new versions** and keeps the versions
+installed then. A trial shows **Trial**, and its extensions stop at its end date (**Trial ended**).
+A licence that is refunded or revoked stops at its next renewal, and its extensions are removed.
+
+**Alerts with no screen open:** an extension can add automations to Home Assistant, such as a
+reminder that the garage is still open at night. Home Assistant runs them by itself with no
+dashboard open, and sends notifications through its own notify services (the Companion app).
+Extensions never run their own code in Home Assistant: each automation comes from a blueprint that
+is signed with the extension. Nothing is added until you agree. A window, **Add an automation to
+Home Assistant?**, shows its name, what it does, its settings, where notifications go, and the
+automation and its blueprint in YAML. **Add automation** adds it; **Not now** adds nothing. Only
+Home Assistant administrators can add them. They are in Settings → Automations & scenes (their
+blueprints under Blueprints, in the `virtuhome` folder), where you can change, turn off or delete
+them like any other. They go when their extension does: when you **Remove licence**, when a
+refunded or revoked licence stops, or when a trial ends.
+
 | Extension | What it adds | Card options (visual editor section) |
 |---|---|---|
 | **Wall Tablet** | A camera (the doorbell) takes over the screen while a sensor is on; back to the start view when idle; a slow turn as a screensaver; dimming at night | **Wall tablet**: Camera that takes over the view (`popup_camera`), while any of these is on (`popup_triggers`), and this long after (`popup_hold`, seconds), Back to the start view after (`idle_return`, seconds), Slowly turn the house while idle (`idle_orbit`), Dim at night (`night_dim`: `sun`, or a time range like `22:00-06:30`) |

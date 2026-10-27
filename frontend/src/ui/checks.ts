@@ -33,7 +33,8 @@ export interface ServerChecks {
    * starting and hasn't had the card's resource put right yet.
    */
   dashboard: { mode: string; urls?: string[]; current?: boolean; pending?: boolean };
-  licence: { status: string; error: string | null; extensions: { id: string; name: string }[] } | null;
+  /** status: none, active, lapsed or ended (past renewal or ended, still loading), expired, invalid. */
+  licence: { status: string; kind?: string | null; error: string | null; extensions: { id: string; name: string }[] } | null;
 }
 
 export interface CheckInput {
@@ -120,12 +121,18 @@ export function checkExtensions(licence: ServerChecks["licence"] | undefined, fa
   if (newer.length) found.push(["problem", t("checks.extensions.newer", { n: newer.length, names: newer.join(", ") })]);
   if (broken.length) found.push(["problem", t("checks.extensions.broken", { names: broken.join(", ") })]);
   const error = licence?.error;
-  if (licence?.status === "expired") found.push(["problem", error ? t("checks.extensions.expiredWhy", { error }) : t("checks.extensions.expired")]);
-  else if (licence?.status === "invalid") found.push(["problem", error ? t("checks.extensions.invalidWhy", { error }) : t("checks.extensions.invalid")]);
-  else if (licence?.status === "active" && error) found.push(["note", t("checks.extensions.renewFailed", { error })]);
+  const status = licence?.status;
+  if (status === "expired" && licence?.kind === "trial") found.push(["problem", t("checks.extensions.trialEnded")]);
+  else if (status === "expired") found.push(["problem", error ? t("checks.extensions.expiredWhy", { error }) : t("checks.extensions.expired")]);
+  else if (status === "invalid") found.push(["problem", error ? t("checks.extensions.invalidWhy", { error }) : t("checks.extensions.invalid")]);
+  else if (status === "lapsed") found.push(["note", t("checks.extensions.lapsed")]);
+  else if (status === "active" && error) found.push(["note", t("checks.extensions.renewFailed", { error })]);
   const names = licence?.extensions.map((x) => x.name) ?? [];
-  const renew = licence?.status === "expired" || licence?.status === "invalid" || (licence?.status === "active" && !!licence.error);
-  const ok = licence?.status !== "active" ? t("checks.extensions.none")
+  // paid and installer licences keep loading what is installed after their renewal date, or once ended
+  const loads = status === "active" || status === "lapsed" || status === "ended";
+  const renew = status === "expired" || status === "invalid" || status === "lapsed" || (status === "active" && !!error);
+  const ok = !loads ? t("checks.extensions.none")
+    : status === "ended" ? t("checks.extensions.ended")
     : names.length ? t("checks.extensions.activeWith", { names: names.join(", ") }) : t("checks.extensions.active");
   return check("extensions", t("checks.extensions.title"), found, ok, [renew && "renew"]);
 }

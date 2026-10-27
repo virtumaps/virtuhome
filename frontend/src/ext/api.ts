@@ -11,6 +11,8 @@
 // history, and switches nothing meanwhile), where entities are in the plan, and floor and room moves.
 // API 4 adds the roofs: their slopes and solar panels, what can shade them, the home's place, and
 // colours painted over them (a solar map).
+// API 5 adds automations (ctx.automations): an extension's own blueprints, signed with it, that Home
+// Assistant runs with no screen open. Each is added only after the user agrees in the core's dialog.
 import * as THREE from "three";
 import type { EnergyNow, EnergySources, EnergyToday } from "../live/energy";
 import type { Hass, HassEntity } from "../live/hass";
@@ -19,9 +21,11 @@ import type { Plan } from "../model/plan";
 import type { RoofFaceInfo, SolarArrayInfo } from "../scene/roof-info";
 import type { Viewer } from "../scene/viewer";
 import type { EnergySection } from "../ui/energy";
+import { t } from "../i18n";
+import type { AutomationPreview } from "../ui/automation-dialog";
 import { logError } from "../ui/errors";
 
-export const EXT_API_VERSION = 4;
+export const EXT_API_VERSION = 5;
 
 export type { RoofFaceInfo, SolarArrayInfo };
 
@@ -156,6 +160,37 @@ export interface ViewHandle {
   onPlan(cb: (plan: Plan) => void): () => void;
 }
 
+/** An automation an extension added to Home Assistant from one of its blueprints. */
+export interface ExtAutomation {
+  /** Home Assistant's id of it: virtuhome-<extension id>-<hex>. */
+  id: string;
+  alias: string | null;
+  /** The blueprint's id, or null once the user took it over in the automation editor. */
+  blueprint: string | null;
+  entity_id: string | null;
+  /** on or off (turned off in Home Assistant), null while it doesn't load. */
+  state: string | null;
+}
+
+/**
+ * The extension's automations in Home Assistant, made from the blueprints in its signed bundle (see
+ * docs/ARCHITECTURE.md). They run with no screen open, show in Settings → Automations and go with
+ * the extension. Adding, listing and removing need a Home Assistant administrator.
+ */
+export interface AutomationsHandle {
+  /** This extension's automations, as Home Assistant has them now (the user may have deleted some). */
+  list(): Promise<ExtAutomation[]>;
+  /**
+   * Shows the user what would be added (its name, what triggers it and what it does, where its
+   * notifications go) and adds it only if they agree; null when they don't. `blueprint` is the id
+   * of a blueprint in this extension's bundle, `inputs` its inputs (entity, device and area ids,
+   * numbers, times, choices, text without templates). Rejects with the reason when they don't fit.
+   */
+  add(blueprint: string, inputs: Record<string, unknown>, options?: { name?: string }): Promise<ExtAutomation | null>;
+  /** Removes one of this extension's automations. */
+  remove(id: string): Promise<void>;
+}
+
 export interface ExtensionContext {
   apiVersion: number;
   three: typeof THREE;
@@ -163,6 +198,8 @@ export interface ExtensionContext {
   onView(cb: (view: ViewHandle) => void | (() => void)): void;
   /** A section for the card's visual editor (ha-form schema), shown while the extension is installed. */
   cardSchema(section: Record<string, unknown>, labels?: Record<string, string>): void;
+  // API 5
+  readonly automations: AutomationsHandle;
 }
 
 export interface ExtensionModule {
@@ -213,7 +250,7 @@ function runHook(entry: ViewEntry, hook: (v: ViewHandle) => void | (() => void))
   }
 }
 
-const context: ExtensionContext = {
+const context: Omit<ExtensionContext, "automations"> = {
   apiVersion: EXT_API_VERSION,
   three: THREE,
   onView(cb) {
@@ -225,12 +262,43 @@ const context: ExtensionContext = {
   },
 };
 
+type Ask = (preview: AutomationPreview, extName: string, hass: Hass) => Promise<boolean>;
+const askToAdd: Ask = async (preview, extName, hass) => (await import("../ui/automation-dialog")).askToAdd(preview, extName, hass);
+
+/** One extension's automations; `ask` shows the agreement dialog. */
+export function automationsFor(ext: { id: string; name: string }, getHass: () => Hass | null, ask: Ask = askToAdd): AutomationsHandle {
+  const ws = <T>(msg: Record<string, unknown>): Promise<T> => {
+    const hass = getHass();
+    return hass ? hass.callWS<T>({ ...msg, ext_id: ext.id }) : Promise.reject(new Error("no Home Assistant connection"));
+  };
+  const list = () => ws<ExtAutomation[]>({ type: "virtuhome/automations/list" });
+  return {
+    list,
+    async add(blueprint, inputs, options = {}) {
+      const msg = { blueprint, inputs, alias: options.name ?? "", description: t("automations.description", { name: ext.name }) };
+      const preview = await ws<AutomationPreview>({ type: "virtuhome/automations/preview", ...msg });
+      if (!(await ask(preview, ext.name, getHass()!))) return null;
+      const added = await ws<{ id: string; entity_id: string }>({ type: "virtuhome/automations/add", ...msg });
+      const found = (await list()).find((a) => a.id === added.id);
+      return found ?? { id: added.id, alias: preview.alias, blueprint, entity_id: added.entity_id, state: null };
+    },
+    async remove(id) {
+      await ws({ type: "virtuhome/automations/remove", automation_id: id });
+    },
+  };
+}
+
+/** The Home Assistant connection extensions talk through: a live view's, else the one they loaded with. */
+let loadedWith: Hass | null = null;
+const currentHass = (): Hass | null => [...views].find((v) => v.handle.hass)?.handle.hass ?? loadedWith;
+
 /** Loads the extensions the integration serves (once per page). */
 const failed: { id: string; name: string; newer: boolean }[] = [];
 /** Extensions that could not load on this page; `newer`: they need a newer VirtuHome. */
 export const extensionFailures = (): readonly { id: string; name: string; newer: boolean }[] => failed;
 
 export function loadExtensions(hass: Hass, extra: string[] = []): Promise<void> {
+  loadedWith = hass;
   loading ??= (async () => {
     let list: ExtensionInfo[] = [];
     try {
@@ -246,7 +314,7 @@ export function loadExtensions(hass: Hass, extra: string[] = []): Promise<void> 
         const m = mod.default;
         if (!m || typeof m.setup !== "function") throw new Error("not a VirtuHome extension");
         if (m.apiVersion > EXT_API_VERSION) throw new Error(`needs a newer VirtuHome (API ${m.apiVersion})`);
-        await m.setup(context);
+        await m.setup({ ...context, automations: automationsFor({ id: m.id, name: m.name }, currentHass) });
         loaded.set(m.id, { ...ext, id: m.id, name: m.name });
       } catch (err) {
         logError(err, `extension ${ext.id}`);

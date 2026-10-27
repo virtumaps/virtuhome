@@ -1,6 +1,7 @@
 {
   "domain": "virtuhome",
   "name": "VirtuHome",
+  "after_dependencies": ["automation", "blueprint"],
   "codeowners": ["@k-eker"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
