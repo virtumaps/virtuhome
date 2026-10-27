@@ -16,6 +16,7 @@ from homeassistant.helpers import area_registry as ar, device_registry as dr, fl
 from homeassistant.loader import async_get_integration
 
 from . import card_resource
+from .automations import BLUEPRINT_ID, EXT_ID, BlueprintError
 from .backgrounds import CHUNK_BYTES, MAX_BYTES, BackgroundError
 from .const import DOMAIN
 from .errors import LIMITS, private_strings
@@ -30,6 +31,7 @@ def async_register(hass: HomeAssistant) -> None:
         ws_info, ws_get, ws_save, ws_subscribe, ws_history_list, ws_history_restore,
         ws_licence_get, ws_licence_activate, ws_licence_refresh, ws_licence_remove, ws_catalog,
         ws_background_upload, ws_checks, ws_checks_fix_card, ws_errors_report,
+        ws_automations_list, ws_automations_add, ws_automations_remove,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -327,3 +329,64 @@ async def ws_catalog(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     if (m := _manager(hass, connection, msg)) is None:
         return
     await _run(connection, msg, m.async_catalog())
+
+
+# ---------------------------------------------------------------------------- automations from extensions' blueprints
+
+
+async def _automations(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict, run) -> None:
+    if (m := _manager(hass, connection, msg)) is None:
+        return
+    try:
+        connection.send_result(msg["id"], await run(m.automations))
+    except BlueprintError as err:
+        connection.send_error(msg["id"], "blueprint", str(err))
+
+
+EXTENSION = vol.All(str, vol.Match(EXT_ID))
+ADD = {
+    vol.Required("ext_id"): EXTENSION,
+    vol.Required("blueprint"): vol.All(str, vol.Match(BLUEPRINT_ID)),
+    # checked against the blueprint's inputs and their selectors (automations.check_inputs)
+    vol.Optional("inputs", default={}): vol.Schema({vol.All(str, vol.Length(max=64)): object}),
+    vol.Optional("alias", default=""): vol.All(str, vol.Length(max=100)),
+    vol.Optional("description", default=""): vol.All(str, vol.Length(max=500)),
+}
+
+
+def _add_args(msg: dict[str, Any]) -> tuple:
+    return msg["ext_id"], msg["blueprint"], msg["inputs"], msg["alias"], msg["description"]
+
+
+@websocket_api.websocket_command({vol.Required("type"): "virtuhome/automations/list", vol.Optional("ext_id"): EXTENSION})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_automations_list(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """The automations extensions added (one extension's with ext_id), as automations.yaml has them now."""
+    await _automations(hass, connection, msg, lambda a: a.async_list(msg.get("ext_id")))
+
+
+@websocket_api.websocket_command({vol.Required("type"): "virtuhome/automations/add", **ADD})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_automations_add(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Adds an automation from a blueprint in an installed extension's signed bundle, once the user agreed."""
+    await _automations(hass, connection, msg, lambda a: a.async_add(*_add_args(msg)))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): "virtuhome/automations/remove",
+    vol.Required("ext_id"): EXTENSION,
+    vol.Required("automation_id"): vol.All(str, vol.Length(max=100)),
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_automations_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Removes one of the extension's automations (and its blueprint once no automation uses it)."""
+
+    async def run(a):
+        if not (removed := await a.async_remove(msg["ext_id"], {msg["automation_id"]})):
+            raise BlueprintError("No such automation of this extension")
+        return {"removed": removed}
+
+    await _automations(hass, connection, msg, run)

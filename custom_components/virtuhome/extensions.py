@@ -4,6 +4,7 @@ Nothing here talks to the internet unless a licence key was entered. Once activa
 stored locally and keep working offline; a daily check fetches updates and renews the licence. Paid
 and installer licences keep loading what is installed after their renewal date (licensing.py);
 a trial stops at its end, and a licence the server says was revoked stops at the next renewal.
+Automations an extension added from its blueprints (automation_store.py) go when it goes.
 """
 
 from __future__ import annotations
@@ -20,8 +21,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import instance_id
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 
+from .automation_store import AutomationStore
 from .const import DOMAIN, EXT_URL_BASE, LICENCE_KEY_STORE, STORAGE_VERSION
 from .licensing import (
     Licence, LicenceError, ends_licence, installation_hash, licence_state, loadable, read_token, to_keep,
@@ -44,6 +47,8 @@ class ExtensionManager:
         self.licence: Licence | None = None
         self.error: str | None = None
         self._unsub_timer = None
+        self._unsub_started = None
+        self.automations = AutomationStore(hass, self)
 
     async def async_load(self) -> None:
         self.instance = installation_hash(await instance_id.async_get(self.hass))
@@ -51,12 +56,17 @@ class ExtensionManager:
         self._check()
         if self.data.get("key"):
             self._unsub_timer = async_track_time_interval(self.hass, self._daily, timedelta(hours=24))
+        # automations of extensions that went while Home Assistant was off (a trial that ended)
+        self._unsub_started = async_at_started(self.hass, self._tidy)
 
     @callback
     def async_unload(self) -> None:
         if self._unsub_timer:
             self._unsub_timer()
             self._unsub_timer = None
+        if self._unsub_started:
+            self._unsub_started()
+            self._unsub_started = None
 
     def _check(self) -> Licence | None:
         token = self.data.get("token")
@@ -80,9 +90,26 @@ class ExtensionManager:
         trial) and present on disk."""
         return [
             {"id": ext["id"], "name": ext["name"], "version": ext["version"], "url": f"{EXT_URL_BASE}/{ext['file']}"}
-            for ext in loadable(self.data.get("extensions", []), self._check())
+            for ext in self.installed()
             if (self.folder / ext["file"]).is_file()
         ]
+
+    def installed(self) -> list[dict[str, Any]]:
+        """The installed extensions that load now, as stored (file, checksum and signature)."""
+        return loadable(self.data.get("extensions", []), self._check())
+
+    def _keep(self) -> set[str]:
+        """Extensions whose automations stay: the installed ones, none once a trial has ended."""
+        if self.licence is not None and not self.licence.loads:
+            return set()
+        return {e["id"] for e in self.data.get("extensions", [])}
+
+    async def _tidy(self, _hass: Any = None) -> None:
+        self._check()
+        try:
+            await self.automations.async_sweep(self._keep())
+        except Exception:  # noqa: BLE001 - tidying never stops a licence from working
+            _LOGGER.exception("Could not tidy up the automations of removed extensions")
 
     def summary(self) -> dict[str, Any]:
         key = self.data.get("key") or ""
@@ -180,7 +207,7 @@ class ExtensionManager:
         self.data = {"key": key, "activation": data.get("activation"), "token": token, "extensions": installed, "checked": time.time()}
         self.error = None
         await self._store.async_save(self.data)
-        self._check()
+        await self._tidy()
 
     def _verified(self, ext: dict[str, Any], file: str) -> bool:
         """The bundle is on disk and is the one the server signed."""
@@ -204,7 +231,8 @@ class ExtensionManager:
         self.data = {}
         await self.hass.async_add_executor_job(self._prune, set())
         await self._store.async_remove()
-        self._check()
+        await self._tidy()
 
     async def _daily(self, _now: Any = None) -> None:
         await self.async_refresh()
+        await self._tidy()
