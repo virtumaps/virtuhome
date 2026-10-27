@@ -75,6 +75,14 @@ const hexOf = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const svg = (p: string) => `<svg viewBox="0 0 24 24"><path d="${p}"/></svg>`;
 
 /** House Scan's detections.json (decor found while scanning). */
+/** Sensors (by device class) a room's label offers: what they measure is about the room. */
+const ROOM_SENSORS = new Set([
+  "temperature", "humidity", "carbon_dioxide", "carbon_monoxide", "pm1", "pm25", "pm10", "aqi", "volatile_organic_compounds",
+  "volatile_organic_compounds_parts", "nitrogen_dioxide", "ozone", "illuminance", "pressure", "atmospheric_pressure",
+  "sound_pressure", "moisture",
+]);
+const ROOM_CONTACTS = new Set(["window", "door", "opening", "garage_door", "moisture"]);
+
 function isDetections(data: unknown): data is Detections {
   const d = data as Detections;
   return typeof d?.version === "number" && Array.isArray(d.objects) && d.objects.every((o) => typeof o?.label === "string" && Array.isArray(o.position));
@@ -3140,10 +3148,13 @@ export class Editor {
       set([...shown, v]);
     };
     const own = (v: LabelPart) => v === "temperature" || v === "humidity";
-    // the area's sensors that are worth a look (not its diagnostics)
+    // the area's sensors about the room itself (its air, light and sound, what is open); an
+    // inverter's or a camera's own readings in the same area are left to Add another
     const ofArea = item.area_id ? Object.keys(hass.states).filter((id) => {
       const reg = hass.entities?.[id];
-      return ["sensor", "binary_sensor", "number", "input_number", "counter"].includes(domainOf(id)) && !reg?.hidden && !reg?.entity_category && areaOf(hass, id) === item.area_id;
+      const dc = String(hass.states[id].attributes.device_class ?? "");
+      const about = domainOf(id) === "sensor" ? ROOM_SENSORS.has(dc) : domainOf(id) === "binary_sensor" && ROOM_CONTACTS.has(dc);
+      return about && !reg?.hidden && !reg?.entity_category && areaOf(hass, id) === item.area_id;
     }) : [];
     const room = outdoor ? null : (item as Room);
     // in a room, Temperature and Humidity stand for its temperature and humidity sensors
