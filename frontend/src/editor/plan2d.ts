@@ -24,6 +24,27 @@ import { findRoomsAside } from "./roomfind-client";
 import { Collider, settle } from "./collide";
 import { t } from "../i18n/editor";
 
+/** What an opening of a kind is called: "Garage door". */
+export function openingName(kind: Opening["kind"]): string {
+  return t(({ door: "editor.door", window: "editor.opening.window", passage: "editor.opening.opening", garage: "editor.opening.garageDoor" } as const)[kind]);
+}
+
+/** An opening of a kind, as a step in the undo history names it: "an opening". */
+export function anOpening(kind: Opening["kind"]): string {
+  return t(({ door: "editor.opening.aDoor", window: "editor.opening.aWindow", passage: "editor.opening.anOpening", garage: "editor.opening.aGarageDoor" } as const)[kind]);
+}
+
+/** Text broken into lines of at most `max` characters, at spaces (a longer word gets a line of its own). */
+export function wrapWords(text: string, max: number): string[] {
+  const lines: string[] = [];
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const last = lines.length - 1;
+    if (last >= 0 && lines[last].length + 1 + word.length <= max) lines[last] += ` ${word}`;
+    else lines.push(word);
+  }
+  return lines;
+}
+
 export type Sel = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
 
 export interface Plan2DHost {
@@ -342,7 +363,11 @@ export class Plan2D {
     this.drawBackground(f?.background ?? null, layers.guides);
     this.syncPanel();
     if (!f) {
-      layers.labels.append(el("text", { x: this.w / 2, y: this.h / 2, class: "p2-empty", "text-anchor": "middle" }, t("editor.plan.noFloorsYetDraw")));
+      // in lines that fit across the plan (a phone, a tablet held upright, beside the editor)
+      const lines = wrapWords(t("editor.plan.noFloorsYetDraw"), Math.max(16, Math.floor((this.w - 48) / 7.5)));
+      const hint = el("text", { x: this.w / 2, y: this.h / 2 - (lines.length - 1) * 9, class: "p2-empty", "text-anchor": "middle" });
+      lines.forEach((line, i) => hint.append(el("tspan", { x: this.w / 2, dy: i ? 18 : 0 }, line)));
+      layers.labels.append(hint);
       return;
     }
     // the floor below, faintly, to line things up with
@@ -1421,7 +1446,7 @@ export class Plan2D {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       this.host.dragStart();
       this.drag = {
-        kind, label: t("editor.plan.moveAKind", { kind: o.kind }), moved: false,
+        kind, label: t("editor.drag.moveWhat", { what: anOpening(o.kind) }), moved: false,
         apply: (x, z, ev) => {
           const live = this.host.plan().floors[fi].openings.find((y) => y.id === id);
           if (!live) return;

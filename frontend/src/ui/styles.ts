@@ -78,16 +78,18 @@ export const VIEW_CSS = /* css */ `
   position: absolute; left: 10px; right: 60px; bottom: 10px; max-height: 58%; overflow: auto;
   background: var(--vh-glass); color: var(--vh-text); border-radius: 18px; padding: 12px 14px 14px;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-  transform: translateY(calc(100% + 20px)); transition: transform 0.28s ease; overscroll-behavior: contain;
+  transform: translateY(calc(100% + 20px)); transition: transform 0.28s ease, visibility 0s 0.28s; overscroll-behavior: contain;
+  /* closed, its buttons can't be tabbed to: focus there would scroll the whole view up */
+  visibility: hidden;
 }
-.vh-sheet.open { transform: none; }
+.vh-sheet.open { transform: none; visibility: visible; transition: transform 0.28s ease; }
 .vh-sheet h3 { margin: 0 0 2px; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .vh-sheet .sub { color: var(--vh-dim); font-size: 12px; margin-bottom: 10px; }
 .vh-sheet .actions { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .vh-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
 .vh-row {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--vh-chip);
-  font-size: 13px; cursor: pointer;
+  font: inherit; font-size: 13px; cursor: pointer; border: 0; color: inherit; text-align: left; width: 100%;
 }
 .vh-row .state { margin-left: auto; color: var(--vh-dim); }
 .vh-close { margin-left: auto; }
@@ -123,6 +125,10 @@ export const VIEW_CSS = /* css */ `
 @media (min-width: 601px) {
   .vh-root.editing .vh-canvas, .vh-root.editing .vh-overlay { right: min(380px, 100%); }
   .vh-root.editing .vh-tools { right: calc(min(380px, 100%) + 10px); }
+}
+/* on a phone the editor's drawer takes the bottom: the house shows above it, as the 2D plan does */
+@media (max-width: 600px) {
+  .vh-root.editing .vh-canvas, .vh-root.editing .vh-overlay { bottom: 62%; }
 }
 .vh-root.editing .vh-sheet { display: none; }
 .vh-alarm.armed { box-shadow: inset 0 0 0 1.5px #2bb673; }

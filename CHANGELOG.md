@@ -40,6 +40,24 @@
   person) turned khaki, with brown fences, as if a dim yellow lamp lit all of it. A room's soft glow
   for someone there, heating, cooling or an alert now tints what it covers without lighting it up,
   so the lawn stays green and dark things stay dark.
+- While a motion sensor's marker pulsed, the view could draw up to 60 frames a second instead of
+  a calm 10 to 20, a little faster with every change in the house (a wall tablet's battery and
+  warmth). It draws the pulse at its own pace again.
+- Let's get your home in drew the empty view 60 times a second for as long as it showed. It draws
+  nothing now until there is a house.
+- Tapping a room on a phone, or a tablet held upright, came in so close that the room didn't fit
+  across the screen. It fits now.
+- On a phone, Edit's drawer covered the house in 3D. The house now shows above it, as the 2D plan
+  does.
+- A room's **Doors and windows** in the editor called openings "passage" and garage doors "garage",
+  and the undo history said "Move a passage". They have their names now.
+- The close buttons of the room and energy sheets have a name for screen readers, the demo's rows
+  of devices can be reached with the keyboard, and a closed sheet can't be tabbed to any more (that
+  pushed the whole view up off the screen).
+- A card in a panel view was 440 pixels high instead of filling the view (unless **Fill the
+  screen** was on): it didn't see the panel view it was in. It fills it, as the guide says.
+- The 2D plan's hint for a home with no floors yet ran off both sides on a phone, or a tablet held
+  upright beside the editor. It is in lines that fit now.
 
 ## 0.13.0
 

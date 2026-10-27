@@ -5,6 +5,7 @@ import { EN_EDITOR } from "../src/i18n/en-editor";
 import { format, language, LANGUAGES, pickLanguage, t, th, useLanguage, type Text } from "../src/i18n";
 import { t as te } from "../src/i18n/editor";
 import { FURNITURE } from "../src/scene/furniture-lib";
+import { anOpening, openingName, wrapWords } from "../src/editor/plan2d";
 
 const SRC = new URL("../src/", import.meta.url).pathname;
 const sources = readdirSync(SRC, { recursive: true }).filter((f) => f.endsWith(".ts")).sort();
@@ -26,6 +27,21 @@ describe("t()", () => {
   it("gives the editor both tables", () => {
     expect(te("editor.houses.use")).toBe("Use this house type");
     expect(te("checks.links.title")).toBe("Linked entities");
+  });
+
+  it("names doors and windows in words, never by their kind in the plan", () => {
+    expect(openingName("passage")).toBe("Opening");
+    expect(openingName("garage")).toBe("Garage door");
+    expect(anOpening("passage")).toBe("an opening");
+    expect(te("editor.drag.moveWhat", { what: anOpening("window") })).toBe("Move a window");
+  });
+
+  it("breaks a long text into lines that fit", () => {
+    const lines = wrapWords(te("editor.plan.noFloorsYetDraw"), 40);
+    expect(lines.length).toBeGreaterThan(2);
+    expect(lines.every((l) => l.length <= 40)).toBe(true);
+    expect(lines.join(" ")).toBe(te("editor.plan.noFloorsYetDraw"));
+    expect(wrapWords("a verylongwordindeed b", 5)).toEqual(["a", "verylongwordindeed", "b"]);
   });
 
   it("escapes the text and what fills it in for innerHTML", () => {

@@ -31,6 +31,7 @@ export const EN = {
   "view.graphics.slow": "Switched to {tier} graphics to keep it smooth",
   "view.house": "House",
   "view.edit": "Edit",
+  "view.close": "Close",
   "view.editProblems": "Check my setup found something to fix (Edit → Home)",
   "view.alerts.more": { one: "{alert} · and {n} more", other: "{alert} · and {n} more" },
   "view.lights.on": "{n} on",
