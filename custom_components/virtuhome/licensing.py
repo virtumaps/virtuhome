@@ -5,11 +5,12 @@ The licence server signs with an Ed25519 key; the integration only holds the pub
 Licence token: ``vhl1.<base64url payload JSON>.<base64url signature over the payload bytes>``
   payload: {"v": 1, "key": "<licence id>", "act": "<activation id>", "ext": ["wall_tablet", ...],
             "inst": "<installation hash>", "iat": <unix>, "exp": <unix>,
-            "kind": "trial" | "paid" | "installer", "ended": <unix>}
-  ``exp`` is the renewal date (a trial's end). Paid and installer licences are perpetual for what is
-  installed: past ``exp``, or once the server marks one ``ended``, the stored bundles still load and
-  only newer versions need a current token. A trial stops at ``exp``. Tokens issued before licences
-  had a ``kind`` were all installer keys (activation ``installer-…``) or paid keys.
+            "kind": "trial" | "paid" | "installer", "perpetual": <bool>, "ended": <unix>}
+  ``exp`` is the renewal date (a trial's end). Perpetual licences (paid and installer ones unless
+  ``perpetual`` says otherwise) keep what is installed: past ``exp``, or once the server marks one
+  ``ended``, the stored bundles still load and only newer versions need a current token. Others (a
+  trial) stop at ``exp``. Tokens issued before licences had a ``kind`` were all installer keys
+  (activation ``installer-…``) or paid keys.
 
 Extension bundle: the server publishes ``sha256`` of the file and a signature over
 ``virtuhome-ext:v1:<id>:<version>:<sha256 hex>``.
@@ -109,7 +110,7 @@ def licence_kind(payload: dict[str, Any]) -> str:
 def licence_state(payload: dict[str, Any], *, now: float | None = None) -> Licence:
     now = time.time() if now is None else now
     kind = licence_kind(payload)
-    perpetual = kind in PERPETUAL
+    perpetual = payload["perpetual"] if isinstance(payload.get("perpetual"), bool) else kind in PERPETUAL
     if payload.get("ended"):
         status = "ended" if perpetual else "expired"
     elif payload.get("exp", 0) >= now:

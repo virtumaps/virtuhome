@@ -106,6 +106,9 @@ def test_expired_trial_stops():
     assert lic.loadable([SECURITY_1], state(kind="trial", exp=NOW + 86400)) == [SECURITY_1]
     # a kind this version doesn't know lasts only until its date, like a trial
     assert not state(kind="rental").loads
+    # unless the token says it is perpetual; and the server can make any kind time-limited
+    assert state(kind="rental", perpetual=True).loads
+    assert not state(kind="paid", perpetual=False).loads
 
 
 def test_revoked_licence_stops_at_the_next_renewal():
