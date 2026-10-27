@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+- What you bought keeps working: a paid extension keeps loading the version you have after the
+  licence's renewal date, even if the licence server can't be reached or is gone; only new versions
+  need a renewal. A VirtuMaps installation's licence that has ended keeps its installed versions.
+  Trials stop at their end date, and a refunded or revoked licence at its next renewal. Extras and
+  Check my setup say which it is.
+
 ### Fixed
 - At night in the Standard and Tablet looks, a garden with someone in it (or a camera seeing a
   person) turned khaki, with brown fences, as if a dim yellow lamp lit all of it. A room's soft glow

@@ -1,7 +1,9 @@
 """Paid extensions: activate a licence key, download the extensions it unlocks, keep them updated.
 
 Nothing here talks to the internet unless a licence key was entered. Once activated, extensions are
-stored locally and keep working offline; a daily check fetches updates and renews the licence.
+stored locally and keep working offline; a daily check fetches updates and renews the licence. Paid
+and installer licences keep loading what is installed after their renewal date (licensing.py);
+a trial stops at its end, and a licence the server says was revoked stops at the next renewal.
 """
 
 from __future__ import annotations
@@ -21,7 +23,10 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, EXT_URL_BASE, LICENCE_KEY_STORE, STORAGE_VERSION
-from .licensing import LicenceError, installation_hash, verify_bundle, verify_token
+from .licensing import (
+    Licence, LicenceError, ends_licence, installation_hash, licence_state, loadable, read_token, to_keep,
+    verify_bundle, verify_token,
+)
 
 _LOGGER = logging.getLogger(__name__)
 TIMEOUT = aiohttp.ClientTimeout(total=30)
@@ -35,7 +40,8 @@ class ExtensionManager:
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, LICENCE_KEY_STORE)
         self.data: dict[str, Any] = {}
         self.instance = ""
-        self.status = "none"  # none | active | expired | invalid
+        self.status = "none"  # none | active | lapsed | ended | expired | invalid
+        self.licence: Licence | None = None
         self.error: str | None = None
         self._unsub_timer = None
 
@@ -52,38 +58,37 @@ class ExtensionManager:
             self._unsub_timer()
             self._unsub_timer = None
 
-    def _check(self) -> dict[str, Any] | None:
+    def _check(self) -> Licence | None:
         token = self.data.get("token")
+        self.licence = None
         if not token:
             self.status = "none"
             return None
         try:
-            payload = verify_token(token, self.instance)
+            self.licence = licence_state(read_token(token, self.instance))
         except LicenceError as err:
-            self.status = "expired" if "expired" in str(err) else "invalid"
+            self.status = "invalid"
             self.error = str(err)
             return None
-        self.status = "active"
-        return payload
+        self.status = self.licence.status
+        return self.licence
 
     # ------------------------------------------------------------------ what the frontend loads
 
     def extensions(self) -> list[dict[str, str]]:
-        """Extensions to load now: unlocked by a valid licence and present on disk."""
-        payload = self._check()
-        if not payload:
-            return []
-        unlocked = set(payload.get("ext", []))
-        out = []
-        for ext in self.data.get("extensions", []):
-            if ext["id"] in unlocked and (self.folder / ext["file"]).is_file():
-                out.append({"id": ext["id"], "name": ext["name"], "version": ext["version"], "url": f"{EXT_URL_BASE}/{ext['file']}"})
-        return out
+        """Extensions to load now: unlocked by the licence (also past its renewal date unless it was a
+        trial) and present on disk."""
+        return [
+            {"id": ext["id"], "name": ext["name"], "version": ext["version"], "url": f"{EXT_URL_BASE}/{ext['file']}"}
+            for ext in loadable(self.data.get("extensions", []), self._check())
+            if (self.folder / ext["file"]).is_file()
+        ]
 
     def summary(self) -> dict[str, Any]:
         key = self.data.get("key") or ""
         return {
             "status": self.status,
+            "kind": self.licence.kind if self.licence else None,
             "error": self.error,
             "key_hint": f"{key[:4]}…{key[-4:]}" if len(key) > 8 else None,
             "extensions": [{k: e[k] for k in ("id", "name", "version")} for e in self.data.get("extensions", [])],
@@ -128,7 +133,7 @@ class ExtensionManager:
             self.error = f"could not reach the licence server: {err}"
             return self.summary()
         except LicenceError as err:
-            if "revoked" in str(err) or "not found" in str(err).lower():
+            if ends_licence(str(err)):
                 await self._wipe()
             self.error = str(err)
             return self.summary()
@@ -146,18 +151,18 @@ class ExtensionManager:
         return self.summary()
 
     async def _accept(self, key: str, data: dict[str, Any]) -> None:
-        """Checks the new token, downloads and verifies the unlocked extensions, then stores it all."""
+        """Checks the new token, downloads and verifies the unlocked extensions, then stores it all.
+
+        A licence that gets no updates (marked ended) keeps the installed versions and downloads nothing."""
         token = data["token"]
-        payload = verify_token(token, self.instance)
-        unlocked = set(payload.get("ext", []))
-        catalog = [e for e in data.get("extensions", []) if e["id"] in unlocked]
+        licence = licence_state(verify_token(token, self.instance))
+        keep = to_keep(self.data.get("extensions", []), data.get("extensions", []), licence)
         await self.hass.async_add_executor_job(lambda: self.folder.mkdir(parents=True, exist_ok=True))
         session = async_get_clientsession(self.hass)
         installed = []
-        for ext in catalog:
+        for ext in keep:
             file = f"{ext['id']}-{ext['version']}.js"
-            path = self.folder / file
-            if not await self.hass.async_add_executor_job(path.is_file):
+            if licence.updates and not await self.hass.async_add_executor_job(self._verified, ext, file):
                 async with session.get(
                     f"{self.server}/v1/extensions/{ext['id']}/{ext['version']}",
                     headers={"Authorization": f"Bearer {token}"}, timeout=TIMEOUT,
@@ -165,13 +170,28 @@ class ExtensionManager:
                     resp.raise_for_status()
                     body = await resp.read()
                 verify_bundle(ext["id"], ext["version"], body, ext["sha256"], ext["sig"])
-                await self.hass.async_add_executor_job(path.write_bytes, body)
-            installed.append({"id": ext["id"], "name": ext.get("name", ext["id"]), "version": ext["version"], "file": file})
+                await self.hass.async_add_executor_job((self.folder / file).write_bytes, body)
+            # the checksum and signature stay with it, so the stored bundle can be checked again later
+            installed.append({
+                "id": ext["id"], "name": ext.get("name", ext["id"]), "version": ext["version"], "file": file,
+                **{k: ext[k] for k in ("sha256", "sig") if k in ext},
+            })
         await self.hass.async_add_executor_job(self._prune, {e["file"] for e in installed})
         self.data = {"key": key, "activation": data.get("activation"), "token": token, "extensions": installed, "checked": time.time()}
         self.error = None
         await self._store.async_save(self.data)
         self._check()
+
+    def _verified(self, ext: dict[str, Any], file: str) -> bool:
+        """The bundle is on disk and is the one the server signed."""
+        path = self.folder / file
+        if not path.is_file():
+            return False
+        try:
+            verify_bundle(ext["id"], ext["version"], path.read_bytes(), ext["sha256"], ext["sig"])
+        except LicenceError:
+            return False
+        return True
 
     def _prune(self, keep: set[str]) -> None:
         if not self.folder.is_dir():

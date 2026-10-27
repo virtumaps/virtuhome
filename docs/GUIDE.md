@@ -611,6 +611,14 @@ extensions** lists what there is.
 Activating a key sends the key and an anonymous code for this Home Assistant, nothing that names
 your home. The licence is then renewed about once a day while Home Assistant is online. Extensions are checked, stored in Home Assistant and keep working offline.
 
+**What you bought keeps working:** a bought extension keeps working at the version you have, for
+good, even if the licence server can't be reached or goes away. Only new versions need the licence
+to renew. Past its renewal date the licence shows **Yours to keep — new versions once it renews
+online**; **Check for updates** renews it when the server is back. A licence for a VirtuMaps
+installation that has ended shows **Yours to keep — no new versions** and keeps the versions
+installed then. A trial shows **Trial**, and its extensions stop at its end date (**Trial ended**).
+A licence that is refunded or revoked stops at its next renewal, and its extensions are removed.
+
 | Extension | What it adds | Card options (visual editor section) |
 |---|---|---|
 | **Wall Tablet** | A camera (the doorbell) takes over the screen while a sensor is on; back to the start view when idle; a slow turn as a screensaver; dimming at night | **Wall tablet**: Camera that takes over the view (`popup_camera`), while any of these is on (`popup_triggers`), and this long after (`popup_hold`, seconds), Back to the start view after (`idle_return`, seconds), Slowly turn the house while idle (`idle_orbit`), Dim at night (`night_dim`: `sun`, or a time range like `22:00-06:30`) |
