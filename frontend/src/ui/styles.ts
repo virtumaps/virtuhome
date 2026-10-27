@@ -47,7 +47,8 @@ export const VIEW_CSS = /* css */ `
 .vh-faces { padding: 4px 6px; border-radius: 16px; }
 .vh-faces .vh-who { margin: 0; }
 .vh-bar {
-  position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; align-items: center;
+  /* on a phone the sidebar's menu button sits at the top left (panel.ts sets the room it needs) */
+  position: absolute; top: 10px; left: max(10px, var(--vh-bar-left, 0px)); right: 10px; display: flex; gap: 6px; align-items: center;
   pointer-events: none; flex-wrap: wrap;
 }
 .vh-bar > * { pointer-events: auto; }
@@ -60,7 +61,12 @@ export const VIEW_CSS = /* css */ `
 .vh-edit.dot { position: relative; }
 .vh-edit.dot::after { content: ""; position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--vh-glass); }
 .vh-spacer { flex: 1; }
-.vh-tools { position: absolute; right: 10px; bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+/* from under the status row (view.ts sets top) to the bottom: on a short view they wrap into another column */
+.vh-tools {
+  position: absolute; right: 10px; top: 56px; bottom: 12px; display: flex; flex-direction: column; flex-wrap: wrap-reverse;
+  justify-content: flex-end; align-content: flex-start; gap: 8px; pointer-events: none;
+}
+.vh-tools > * { pointer-events: auto; }
 .vh-icon {
   width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
   background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);

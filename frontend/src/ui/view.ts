@@ -145,6 +145,7 @@ export class VhView {
   private tierAuto = true;
   private menu: HTMLDivElement;
   private alertEl: HTMLButtonElement;
+  private tools: HTMLDivElement;
   private statusEl: HTMLDivElement;
   private statusKey = "";
   readonly energy = new EnergyLive();
@@ -220,10 +221,12 @@ export class VhView {
     this.menu = this.root.querySelector(".vh-menu")!;
     this.alertEl = this.root.querySelector(".vh-alert")!;
     this.statusEl = this.root.querySelector(".vh-status")!;
+    this.tools = this.root.querySelector(".vh-tools")!;
     // the status row and the alert sit under the top bar, however many lines its chips take
     if (typeof ResizeObserver !== "undefined") {
       this.barWatch = new ResizeObserver(() => this.placeUnderBar());
       this.barWatch.observe(this.chips);
+      this.barWatch.observe(this.statusEl);
     }
     this.alertEl.onclick = () => {
       const first = this.live.alerts()[0];
@@ -646,10 +649,14 @@ export class VhView {
   /** The alert banner, the lights-on chip and who is home (only redrawn when something shown changed). */
   private renderStatus(): void {
     const alerts = this.live.alerts();
-    this.alertEl.hidden = !alerts.length;
-    if (alerts.length) {
-      this.alertEl.innerHTML = `${svg(mdiAlert)}<span></span>`;
-      this.alertEl.querySelector("span")!.textContent = alerts.length > 1 ? t("view.alerts.more", { alert: alerts[0].text, n: alerts.length - 1 }) : alerts[0].text;
+    const alertText = alerts.length > 1 ? t("view.alerts.more", { alert: alerts[0].text, n: alerts.length - 1 }) : alerts[0]?.text ?? "";
+    if (alertText !== (this.alertEl.hidden ? "" : this.alertEl.textContent)) {
+      this.alertEl.hidden = !alerts.length;
+      if (alerts.length) {
+        this.alertEl.innerHTML = `${svg(mdiAlert)}<span></span>`;
+        this.alertEl.querySelector("span")!.textContent = alertText;
+      }
+      this.placeUnderBar();
     }
     const floor = this.viewer.mode === "floor" ? this.viewer.activeFloor : null;
     // a replay shows who was home then; the lights chip (a switch) and today's energy would be about now
@@ -691,10 +698,25 @@ export class VhView {
     }
   }
 
+  /**
+   * The status row under the top bar, however many lines its chips take; the alert beside it, or
+   * under it where they would overlap (a phone); the buttons on the right below both (a short view
+   * wraps them into a second column).
+   */
   private placeUnderBar(): void {
     const top = this.chips.offsetTop + this.chips.offsetHeight + 10;
     this.statusEl.style.top = `${top}px`;
+    let below = top + this.statusEl.offsetHeight;
     this.alertEl.style.top = `${top - 2}px`;
+    if (!this.alertEl.hidden) {
+      const a = this.alertEl.getBoundingClientRect();
+      const s = this.statusEl.getBoundingClientRect();
+      if (s.width && a.right > s.left && a.left < s.right) {
+        this.alertEl.style.top = `${below + 6}px`;
+        below += 6 + this.alertEl.offsetHeight;
+      } else below = Math.max(below, top - 2 + this.alertEl.offsetHeight);
+    }
+    this.tools.style.top = `${below + 10}px`;
   }
 
   // ------------------------------------------------------------------ energy
