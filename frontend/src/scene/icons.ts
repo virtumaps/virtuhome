@@ -7,7 +7,7 @@ import {
   mdiPowerPlug, mdiPowerPlugOff, mdiPrinter3d, mdiRadiator, mdiRobotVacuum, mdiServer, mdiShieldHome, mdiShieldOff,
   mdiSmokeDetector, mdiSolarPower, mdiSpeaker, mdiTabletDashboard, mdiTelevision, mdiThermometer, mdiThermostat,
   mdiToggleSwitch, mdiWashingMachine, mdiWater, mdiWaterPercent, mdiWindowClosedVariant, mdiWindowOpenVariant,
-  mdiCellphone, mdiPlus,
+  mdiCellphone, mdiPlus, mdiBrightness5, mdiMoleculeCo2, mdiBlur, mdiWeatherWindy, mdiWeatherPouring, mdiCash,
 } from "@mdi/js";
 
 export const ICON_LIST: [string, string][] = [
@@ -64,4 +64,10 @@ export const ICON_LIST: [string, string][] = [
   ["laptop", mdiLaptop],
   ["gamepad", mdiGamepadVariant],
   ["plus", mdiPlus],
+  ["brightness", mdiBrightness5],
+  ["co2", mdiMoleculeCo2],
+  ["particles", mdiBlur],
+  ["wind", mdiWeatherWindy],
+  ["rain", mdiWeatherPouring],
+  ["money", mdiCash],
 ];

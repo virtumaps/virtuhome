@@ -6,7 +6,7 @@ import {
   type Material,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
+import { showsValue, spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
 import { buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
@@ -16,14 +16,14 @@ import { relight, relightRealistic, roomGlow, roomLights, type LampState, type L
 import { buildOpeningMoving, joineryLook, restOpen, windowFollowsSensor, type OpeningInfo } from "./joinery";
 import { headingDir, type CameraRig } from "./cameras";
 import type { WallSegment } from "../model/walls";
-import { Halos, Markers, type HaloSpec, type MarkerSpec } from "./markers";
+import { Halos, ICONS, Markers, type HaloSpec, type MarkerSpec } from "./markers";
 import { floorUniforms, getCut, glassMaterial, opaqueMaterial, setCut, setTint, WALL_TRIM, type FloorUniforms } from "./materials";
 import { DAY, NIGHT, paletteFor, type Palette } from "./palette";
 import { afterglow, duskColours } from "./dusk";
 import type { RealisticLook } from "./realistic";
 import type { Tier, TierSetting } from "./tier";
 import { quietSky, type Sky } from "../live/sky";
-import { initials, type Person, type RoomPart } from "../live/live";
+import { initials, type Person, type Reading, type RoomPart } from "../live/live";
 
 export { detectLowEnd } from "./tier";
 export type WallMode = "smart" | "low" | "full";
@@ -56,6 +56,8 @@ export interface LiveSource {
   cameraState?(d: Device): "idle" | "active" | "offline";
   /** Who is in a room now: their faces go on its label (in the house view, over the room). */
   roomPeople?(floor: Floor, room: { id: string }): Person[];
+  /** A device shown by its value: what its label says. */
+  reading?(d: Device): Reading | null;
 }
 
 export interface Hit {
@@ -114,6 +116,16 @@ interface FloorView {
   labels: HTMLElement[];
 }
 
+/** A storey without what only its labels and readings show: changing those builds nothing. */
+function unlabelled<F extends Pick<Floor, "rooms" | "devices" | "outdoor">>(f: F): F {
+  return {
+    ...f,
+    rooms: f.rooms.map(({ label: _label, ...r }) => r),
+    outdoor: f.outdoor?.map(({ label: _label, ...o }) => o),
+    devices: f.devices.map(({ show: _show, ...d }) => d),
+  };
+}
+
 /** Doors start where they rest without a sensor (hinged ones ajar). */
 const doorRest = (fb: FloorBuild) => Float32Array.from(fb.doors, (d) => restOpen(d.opening));
 const EXPLODE_GAP = 2.2;
@@ -141,8 +153,17 @@ export class Viewer {
   /** Called after each drawn frame (overlays follow the camera). */
   onFrame: (() => void) | null = null;
   onHit: ((hit: Hit, gesture: "tap" | "long" | "double") => void) | null = null;
-  /** Edit mode: things can be dragged; plan coordinates of the finger while dragging. */
-  editMode = false;
+  private _editMode = false;
+  /** Edit mode: things can be dragged, and readings show as pins to drag; plan coordinates of the finger while dragging. */
+  get editMode(): boolean {
+    return this._editMode;
+  }
+  set editMode(on: boolean) {
+    if (this._editMode === on) return;
+    this._editMode = on;
+    this.refreshMarkers();
+    this.refreshLabels();
+  }
   onDrag: ((hit: Hit, x: number, z: number, phase: DragPhase) => void) | null = null;
   /** Edit mode: whether pressing on this thing grabs it; otherwise the press turns the view. */
   canDrag: ((hit: Hit) => boolean) | null = null;
@@ -496,7 +517,7 @@ export class Viewer {
     const { north: _north, sky: _sky, ...settings } = plan.settings;
     const { background: _background, roofs: _roofs, ...floor } = plan.floors[i];
     // the realistic look builds in day colours and lights the time of day
-    return JSON.stringify([settings, floor, stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.look ? "" : this.pal.name, !!this.look, this.low]);
+    return JSON.stringify([settings, unlabelled(floor), stairwells(plan, i), i === 0, i < plan.floors.length - 1, this.look ? "" : this.pal.name, !!this.look, this.low]);
   }
 
   /** Everything a storey's roofs depend on: they are rebuilt on their own (dragging a panel along one is cheap). */
@@ -504,8 +525,8 @@ export class Viewer {
     const plan = this.plan!;
     const f = plan.floors[i];
     const s = plan.settings;
-    return JSON.stringify([f.roofs ?? [], f.elevation, f.height, f.exterior_finish, f.exterior_color, f.rooms,
-      s.exterior_finish, s.exterior_color, s.wall_exterior, plan.floors.slice(i + 1).map((x) => x.rooms), this.look ? "" : this.pal.name, !!this.look, this.low]);
+    return JSON.stringify([f.roofs ?? [], f.elevation, f.height, f.exterior_finish, f.exterior_color, unlabelled(f).rooms,
+      s.exterior_finish, s.exterior_color, s.wall_exterior, plan.floors.slice(i + 1).map((x) => unlabelled(x).rooms), this.look ? "" : this.pal.name, !!this.look, this.low]);
   }
 
   private buildFloor(i: number): FloorBuild {
@@ -1317,6 +1338,8 @@ export class Viewer {
     this.floors.forEach((f, fi) => {
       if (this.mode === "floor" && fi !== this.activeFloor) return;
       for (const d of f.fb.floor.devices) {
+        // a reading is its label, except in the editor (where its pin is what is dragged)
+        if (!this.editMode && showsValue(d)) continue;
         const look = this.live!.marker(d);
         if (!look) continue;
         // the whole house shows only what wants attention: through the floors above, the rest is noise
@@ -1540,8 +1563,49 @@ export class Viewer {
         this.overlay.appendChild(el);
         f.labels.push(el);
       });
+      if (this.editMode) return;
+      for (const d of f.fb.floor.devices) {
+        if (!showsValue(d)) continue;
+        const el = document.createElement("div");
+        el.className = "vh-label vh-reading";
+        el.dataset.floor = String(fi);
+        el.dataset.reading = d.id;
+        el.dataset.entity = d.entity;
+        this.drawReading(el, d);
+        this.overlay.appendChild(el);
+        f.labels.push(el);
+      }
     });
     this.positionLabels();
+  }
+
+  /** Fills a reading's label: its icon and its value. Returns whether its text changed. */
+  private drawReading(el: HTMLElement, d: Device): boolean {
+    const r = this.live?.reading?.(d) ?? null;
+    const text = r?.text ?? "–";
+    const icon = r?.icon ?? "gauge";
+    if (el.dataset.text === text && el.dataset.icon === icon) return false;
+    el.dataset.text = text;
+    el.dataset.icon = icon;
+    const path = (ICONS.find(([n]) => n === icon) ?? ICONS[0])[1];
+    el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg><span></span>`;
+    (el.lastChild as HTMLElement).textContent = text;
+    return true;
+  }
+
+  /** Readings' values changed: their labels say so, without redrawing the rest. */
+  refreshReadings(): void {
+    let changed = false;
+    for (const f of this.floors) {
+      for (const el of f.labels) {
+        if (el.dataset.reading === undefined) continue;
+        const d = f.fb.floor.devices.find((x) => x.id === el.dataset.reading);
+        if (!d || !this.drawReading(el, d)) continue;
+        this.labelSize.delete(el);
+        changed = true;
+      }
+    }
+    if (changed) this.positionLabels();
   }
 
   /**
@@ -1555,7 +1619,12 @@ export class Viewer {
       f.labels.forEach((el) => {
         let prio = 1e9;
         const i = el.dataset.room === undefined ? -1 : Number(el.dataset.room);
-        if (i < 0) {
+        const reading = el.dataset.reading === undefined ? null : f.fb.floor.devices.find((d) => d.id === el.dataset.reading);
+        if (reading) {
+          // over the room labels around it, but under the selected room's and those with someone in
+          v.set(...this.devicePosition(fi, reading));
+          prio = 5e4;
+        } else if (i < 0) {
           const b = f.fb.bounds;
           v.set(b.maxX + 0.4, f.fb.floor.elevation + f.offset + 0.2, (b.minZ + b.maxZ) / 2);
         } else {

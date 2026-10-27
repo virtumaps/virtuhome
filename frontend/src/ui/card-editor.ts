@@ -24,10 +24,11 @@ const schema = () => [
     { name: "roof", selector: { boolean: {} } },
   ] },
   { name: "alarm", selector: { entity: { domain: "alarm_control_panel" } } },
+  { name: "chips", selector: { entity: { multiple: true } } },
 ];
 
 /** The options the form labels itself. */
-const OPTIONS = ["floor", "theme", "walls", "quality", "people", "height", "room_panel", "floor_chips", "fill", "alarm", "energy", "roof"] as const;
+const OPTIONS = ["floor", "theme", "walls", "quality", "people", "height", "room_panel", "floor_chips", "fill", "alarm", "energy", "roof", "chips"] as const;
 
 type Config = Record<string, unknown>;
 
@@ -69,7 +70,8 @@ export class VirtuHomeCardEditor extends HTMLElement {
 
   private changed(value: Record<string, unknown>): void {
     const next: Config = { type: "custom:virtuhome-card", ...value };
-    for (const k of Object.keys(next)) if (next[k] === "" || next[k] === undefined) delete next[k];
+    // no values picked is the plan's own (an empty `chips: []` in YAML shows none)
+    for (const k of Object.keys(next)) if (next[k] === "" || next[k] === undefined || (k === "chips" && Array.isArray(next[k]) && !(next[k] as unknown[]).length)) delete next[k];
     this.config = next;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
   }

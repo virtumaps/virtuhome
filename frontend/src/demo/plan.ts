@@ -132,6 +132,8 @@ const ground: Floor = {
     dev("climate.thermostat", 1.95, 5.6, { y: 1.5 }),
     dev("binary_sensor.utility_motion", -2.85, 5.1, { y: 2.2 }),
     dev("media_player.office_speaker", 3.5, 2.6, { y: 0.8 }),
+    // a weather station at the end of the garden: its reading shows on the plan
+    dev("sensor.garden_temperature", 1.2, -8.2, { y: 1.2 }),
   ],
   walls: [],
   outdoor: [

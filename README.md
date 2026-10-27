@@ -102,6 +102,9 @@ people: true           # who is home, in the corner and in their rooms
 energy: true           # solar, battery and grid in the corner (when the house has them)
 roof: true             # roofs over the house (the roof button changes it on each device)
 alarm: alarm_control_panel.home   # optional; default: the first alarm panel, "none" hides it
+chips:                 # optional: values in the top bar (default: the home's, Edit → Home → Top bar)
+  - sensor.outside_temperature
+  - sensor.octopus_current_rate
 stats: false        # frame rate and graphics level in a corner (YAML only)
 ```
 

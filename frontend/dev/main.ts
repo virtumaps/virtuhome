@@ -90,6 +90,8 @@ async function main(): Promise<void> {
     idle_return: q.has("idle") ? Number(q.get("idle")) : undefined,
     idle_orbit: q.has("orbit"),
     night_dim: q.get("night_dim") ?? undefined,
+    // ?chip=sensor.garden_temperature&chip=… is the card's `chips`
+    chips: q.has("chip") ? q.getAll("chip") : undefined,
     save: async (p) => {
       // the dev harness keeps saves in the browser
       localStorage.setItem("virtuhome-dev-plan", JSON.stringify(p));
