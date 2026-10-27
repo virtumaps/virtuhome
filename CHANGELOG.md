@@ -13,8 +13,17 @@
   its name and in what order. Temperature and humidity are still there by default and can be hidden;
   any of the area's sensors, or any other entity, can be added. The **Temperature sensor** and
   **Humidity sensor** a room's label (and the temperature map) read can now be picked too.
+- Values in the top bar: Edit → Home → **Top bar** keeps up to 6 entities' values beside the floor
+  buttons (the outside temperature, the price now, the next bin day), and a tap opens one. Cards show
+  them too, or their own with the new `chips` option (in the visual editor as **Values in the top
+  bar**).
 
 ### Fixed
+- On a phone, Home Assistant's menu button covered **House** in the sidebar's top bar, so tapping
+  House opened the sidebar. The top bar now starts after it.
+- On a short view (a dashboard card, a phone on its side) the buttons on the right slid under the
+  people and lights chips; they now stay below them and make a second column when they don't fit.
+  On a phone, a leak or smoke banner covered the people chips; it now sits under them.
 - At night in the Standard and Tablet looks, a garden with someone in it (or a camera seeing a
   person) turned khaki, with brown fences, as if a dim yellow lamp lit all of it. A room's soft glow
   for someone there, heating, cooling or an alert now tints what it covers without lighting it up,

@@ -396,6 +396,17 @@ export interface PlanSettings {
   presence?: PresenceSettings | null;
   /** The getting-started checklist: hidden, and the steps ticked by hand. */
   setup?: SetupSettings | null;
+  /** Values in the top bar (the sidebar's, and cards without their own `chips`), in order. */
+  chips?: string[] | null;
+}
+
+/** The most values the top bar shows. */
+export const MAX_CHIPS = 6;
+
+/** The values a top bar shows: a card's own list, else the plan's. */
+export function barChips(own: unknown, plan: Plan | null): string[] {
+  const list = Array.isArray(own) ? own : plan?.settings.chips ?? [];
+  return list.filter((x): x is string => typeof x === "string" && x.includes(".")).slice(0, MAX_CHIPS);
 }
 
 export interface SetupSettings {

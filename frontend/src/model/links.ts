@@ -138,6 +138,13 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
       });
     }
   }
+  const chips = plan.settings.chips;
+  if (Array.isArray(chips)) {
+    chips.forEach((e, i) => {
+      if (isEntityId(e)) visit({ entity: e, label: t("links.chip"), area: null, device: false }, (to) => (chips[i] = to ?? ""));
+    });
+    if (chips.includes("")) plan.settings.chips = chips.filter(Boolean);
+  }
   const sky = plan.settings.sky;
   if (sky && isEntityId(sky.weather)) visit({ entity: sky.weather, label: t("links.weather"), area: null, device: false }, (to) => (sky.weather = to));
   const people = plan.settings.presence?.people;

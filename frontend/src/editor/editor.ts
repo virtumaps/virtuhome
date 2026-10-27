@@ -12,12 +12,13 @@ import { isZip } from "../import/zip";
 import type { ImportSummary } from "../import/draft";
 import { labelPoint } from "../model/geom";
 import {
-  DEFAULT_LABEL, MAX_LABEL, newId, normalizePlan, PANEL, panelOf, panelSize, showsValue, solarSize, spaces, splitEdge, type Device, type LabelPart, type EnergySettings, type PresenceSettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
+  DEFAULT_LABEL, MAX_CHIPS, MAX_LABEL, newId, normalizePlan, PANEL, panelOf, panelSize, showsValue, solarSize, spaces, splitEdge, type Device, type LabelPart, type EnergySettings, type PresenceSettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
   type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type PartyEnds, type Plan, type Roof, type RoofCovering, type RoofItem, type RoofShape, type Room, type Vec2,
 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, recordLinks, replaceEntity, type Proposal, type RegistryEntry } from "../model/links";
 import { areaOf, domainOf, type Hass } from "../live/hass";
+import { valueText } from "../live/readings";
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, furnitureName, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef, type Swatch } from "../scene/finishes";
@@ -870,6 +871,7 @@ export class Editor {
       ...this.roofSection(),
       ...this.energySection(),
       ...this.peopleSection(),
+      ...this.topBarSection(),
       ...this.skySection(),
       h("h4", {}, t("editor.home.floors")),
       ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
@@ -1246,6 +1248,27 @@ export class Editor {
         : null,
     ];
     return out.filter((e): e is HTMLElement => !!e);
+  }
+
+  /** Values in the top bar of the sidebar, and of cards that don't pick their own. */
+  private topBarSection(): HTMLElement[] {
+    const hass = this.hass;
+    const chips = this.plan.settings.chips ?? [];
+    const set = (next: string[]) => this.change((p) => (p.settings.chips = next.length ? next : null), false, t("editor.topBar.change"));
+    return [
+      h("h4", {}, t("editor.topBar.title")),
+      h("p", { class: "ed-hint" }, t("editor.topBar.hint")),
+      ...chips.map((id) => h("div", { class: "ed-item" },
+        h("span", {}, String(hass.states[id]?.attributes.friendly_name ?? id), h("small", {}, ` · ${valueText(hass, id)}`)),
+        h("button", { class: "ed-ib small", title: t("editor.remove"), html: svg(mdiDelete), onclick: () => set(chips.filter((x) => x !== id)) }),
+      )),
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.topBar.add")), this.entityInput(this.readable(), "", (v) => {
+        if (!v || chips.includes(v)) return;
+        if (!hass.states[v]) return this.toastInDrawer(t("editor.devices.noSuchEntity", { entity: v }));
+        if (chips.length >= MAX_CHIPS) return this.toastInDrawer(t("editor.topBar.full", { n: MAX_CHIPS }));
+        set([...chips, v]);
+      })),
+    ];
   }
 
   /** Which way the house faces (for the sun and the wind) and which weather it shows. */

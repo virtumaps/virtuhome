@@ -68,6 +68,8 @@ The same view is in the sidebar and in every VirtuHome card.
 - **House** shows every storey; a button for each floor shows that floor alone.
 - The alarm chip (**Disarmed**, **Armed home**, **Armed away**…) shows your alarm panel. Tap it for
   its dialog.
+- Values you chose to keep in sight, such as the outside temperature or the price now (Edit → **Home**
+  → **Top bar**, or a card's `chips`). Tap one for its dialog.
 - **Edit** (sidebar only, administrators only) opens the editor. A red dot on it means
   [Check my setup](#troubleshooting) found something that doesn't work.
 
@@ -384,6 +386,11 @@ its name:
 - A garden area's label shows nothing but a car that is here until you add a value. A label shows up
   to 8 values.
 
+**Top bar** (Edit → **Home**) keeps up to 6 values at the top of the view, beside the floor buttons:
+the outside temperature, the electricity price now, the next bin day. **Add a value** takes any
+entity, and the bin removes one. Cards show the same values unless they pick their own with
+`chips` (see [The card and its options](#the-card-and-its-options)).
+
 ### People in their rooms
 
 VirtuHome shows who is in which room when a room tracker in Home Assistant knows it:
@@ -622,6 +629,7 @@ height: 440
 | `energy` | Show solar, battery and grid | `true` / `false` | `true` |
 | `roof` | Show the roofs (each device can change it) | `true` / `false` | `true` |
 | `alarm` | Alarm panel in the top bar | an `alarm_control_panel` entity, or `none` | the first alarm panel |
+| `chips` | Values in the top bar | a list of entities (up to 6); `[]` shows none | the home's own (Edit → Home → Top bar) |
 | `stats` | (YAML only) | `true` shows the frame rate and graphics level in a corner, for reporting a slow device | `false` |
 
 Extensions add their own sections to the visual editor (below).
