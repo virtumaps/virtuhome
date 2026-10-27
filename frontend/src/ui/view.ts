@@ -255,7 +255,11 @@ export class VhView {
       if (!el) return;
       const floor = Number(el.dataset.floor);
       const opens = (e.target as HTMLElement).closest<HTMLElement>("[data-entity]")?.dataset.entity;
-      if (el.dataset.room === undefined) this.showFloor(floor);
+      // a reading opens its entity (in a replay, the replay hears of it as of a device)
+      if (el.dataset.reading !== undefined) {
+        if (this.replayed) this.replayed.options.onHit?.({ floor, room: -1, entity: el.dataset.entity ?? null }, "tap");
+        else if (opens && !this.editor) this.dialog(opens);
+      } else if (el.dataset.room === undefined) this.showFloor(floor);
       // the room's heating opens its thermostat; the rest of the label opens the room
       else if (opens && !this.replayed && !this.editor) this.dialog(opens);
       else if (this.replayed) this.replayed.options.onHit?.({ floor, room: Number(el.dataset.room), entity: null }, "tap");
@@ -627,6 +631,7 @@ export class VhView {
     if (changes.has("markers")) this.viewer.refreshMarkers();
     if (changes.has("tints")) this.viewer.refreshTints();
     if (changes.has("labels")) this.viewer.refreshLabels();
+    if (changes.has("readings")) this.viewer.refreshReadings();
     if (changes.has("status") || changes.has("lighting")) this.renderStatus();
     if (this.sheetRoom && changes.size) this.renderSheet();
   }

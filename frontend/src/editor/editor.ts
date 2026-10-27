@@ -12,12 +12,12 @@ import { isZip } from "../import/zip";
 import type { ImportSummary } from "../import/draft";
 import { labelPoint } from "../model/geom";
 import {
-  newId, normalizePlan, PANEL, panelOf, panelSize, solarSize, spaces, splitEdge, type Device, type EnergySettings, type PresenceSettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
+  DEFAULT_LABEL, MAX_LABEL, newId, normalizePlan, PANEL, panelOf, panelSize, showsValue, solarSize, spaces, splitEdge, type Device, type LabelPart, type EnergySettings, type PresenceSettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
   type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type PartyEnds, type Plan, type Roof, type RoofCovering, type RoofItem, type RoofShape, type Room, type Vec2,
 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, recordLinks, replaceEntity, type Proposal, type RegistryEntry } from "../model/links";
-import { domainOf, type Hass } from "../live/hass";
+import { areaOf, domainOf, type Hass } from "../live/hass";
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, furnitureName, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef, type Swatch } from "../scene/finishes";
@@ -1558,6 +1558,11 @@ export class Editor {
       const target = area ? roomByArea.get(area) : undefined;
       if (target) missing.push({ id, ...target });
     }
+    box.append(
+      h("h4", {}, t("editor.devices.addReading")),
+      h("p", { class: "ed-hint" }, t("editor.devices.readingHint")),
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.devices.readingEntity")), this.entityInput(this.readable(), "", (v) => v && this.addReading(v))),
+    );
     box.append(h("h4", {}, t("editor.devices.notPlacedN", { n: missing.length })));
     if (!missing.length) box.append(h("p", { class: "ed-hint" }, t("editor.devices.everythingInTheLinked")));
     for (const m of missing.slice(0, 80)) {
@@ -1623,6 +1628,7 @@ export class Editor {
           }
         }, false, t("editor.room.wallsInEveryRoom")) }, t("editor.room.useTheseWallsEverywhere")),
       ),
+      ...this.labelRows(room, false, updRoom),
       h("h4", {}, t("editor.room.addFurnitureAndDecor")),
       this.itemPicker((type) => this.addFurniture(fi, room, type)),
       h("h4", {}, t("editor.room.inThisRoomN", { n: inRoom.length })),
@@ -1688,6 +1694,7 @@ export class Editor {
       ...(o.kind === "patio" || o.kind === "deck" ? this.raisedRows(fi, o, upd) : []),
       ...this.areaSizeRows(o, upd),
       h("div", { class: "ed-row" }, h("label", {}, t("editor.area")), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd(t("editor.outdoor.linkAGardenArea"), (x) => (x.area_id = v || null)), t("editor.notLinked"))),
+      ...this.labelRows(o, true, upd),
       lawn ? h("h4", {}, t("editor.outdoor.addToThisGarden")) : null,
       lawn ? h("div", { class: "ed-chips" },
         h("button", { class: "ed-chip", onclick: () => this.addArea("patio", "rect", o) }, t("editor.patio")),
@@ -2000,6 +2007,11 @@ export class Editor {
     return h("div", {},
       h("h4", {}, String(this.hass.states[d.entity]?.attributes.friendly_name ?? d.entity)),
       h("div", { class: "ed-row" }, h("label", {}, t("editor.device.entity")), this.entityInput(all, d.entity, (v) => upd((x) => (x.entity = v)))),
+      rig || domainOf(d.entity) === "light" ? null : h("div", { class: "ed-row" },
+        h("label", {}, t("editor.device.show")),
+        this.dropdown([["value", t("editor.device.showValue")], ["icon", t("editor.device.showIcon")]], d.show ?? "", (v) => upd((x) => (x.show = (v || null) as Device["show"])),
+          t("editor.device.showAuto", { what: (showsValue({ ...d, show: null }) ? t("editor.device.showValue") : t("editor.device.showIcon")).toLowerCase() })),
+      ),
       h("div", { class: "ed-row" },
         h("label", {}, t("editor.device.mount")),
         this.dropdown([["ceiling", "ceiling"], ["wall", "wall"], ["floor", "floor"], ["table", "table"]], d.mount ?? "", (v) => upd((x) => (x.mount = (v || null) as Device["mount"])), "auto"),
@@ -3057,6 +3069,85 @@ export class Editor {
     const a = s?.points[k], b = s && s.points[(k + 1) % s.points.length];
     if (!s || !a || !b) return null;
     return { outdoor: !room, id, k, len: Math.hypot(b[0] - a[0], b[1] - a[1]) };
+  }
+
+  /** Entities worth a reading: sensors and numbers, then anything else with a state. */
+  private readable(): [string, string][] {
+    const first = new Set(["sensor", "binary_sensor", "number", "input_number", "counter"]);
+    const all = this.entities((id) => !["light", "camera", "scene", "script", "automation", "button", "update", "zone"].includes(domainOf(id)));
+    return [...all.filter(([id]) => first.has(domainOf(id))), ...all.filter(([id]) => !first.has(domainOf(id)))];
+  }
+
+  /**
+   * Puts a reading of an entity on the plan: in the selected room or garden area, else in the room
+   * of its area, else in the first room of the floor shown. It goes under the room's label.
+   */
+  private addReading(entity: string): void {
+    if (!this.hass.states[entity]) return this.toastInDrawer(t("editor.devices.noSuchEntity", { entity }));
+    const floors = this.plan.floors;
+    const sel = this.sel;
+    let fi = Math.max(0, Math.min(sel?.floor ?? this.host.view.viewer.activeFloor, floors.length - 1));
+    let space = sel && (sel.kind === "room" || sel.kind === "outdoor") && floors[fi] ? spaces(floors[fi]).find((x) => x.id === sel.id) : undefined;
+    const area = areaOf(this.hass, entity);
+    for (let i = 0; !space && area && i < floors.length; i++) {
+      space = spaces(floors[i]).find((x) => x.area_id === area);
+      if (space) fi = i;
+    }
+    if (!space && floors[fi]) space = spaces(floors[fi])[0];
+    if (!space) return this.toastInDrawer(t("editor.devices.noRoomYet"));
+    // clear of the room's own label, inside the room
+    const [lx, lz] = labelPoint(space.points);
+    const at = ([[0, 1.1], [0, -1.1], [1.2, 0], [-1.2, 0]] as Vec2[]).map(([dx, dz]): Vec2 => [lx + dx, lz + dz]).find((q) => pointInPolygon(q, space!.points)) ?? [lx, lz];
+    const id = newId("d");
+    this.change((p) => p.floors[fi].devices.push({ id, entity, x: at[0], z: at[1], show: "value" }), false, t("editor.devices.addReading"));
+    this.select({ floor: fi, kind: "device", id });
+  }
+
+  /**
+   * What a room's or garden area's label shows: a chip per value (on or off), the temperature and
+   * humidity (rooms) and their sensors, the area's other sensors, and any other entity.
+   */
+  private labelRows<T extends Room | OutdoorArea>(item: T, outdoor: boolean, upd: (label: string, fn: (x: T) => void) => void): HTMLElement[] {
+    const hass = this.hass;
+    const shown: LabelPart[] = item.label ?? (outdoor ? [] : [...DEFAULT_LABEL]);
+    const set = (next: LabelPart[]) => upd(t("editor.label.change", { name: item.name }), (x) => (x.label = next));
+    const toggle = (v: LabelPart) => {
+      if (shown.includes(v)) return set(shown.filter((x) => x !== v));
+      if (shown.length >= MAX_LABEL) return this.toastInDrawer(t("editor.label.full", { n: MAX_LABEL }));
+      set([...shown, v]);
+    };
+    const own = (v: LabelPart) => v === "temperature" || v === "humidity";
+    // the area's sensors that are worth a look (not its diagnostics)
+    const ofArea = item.area_id ? Object.keys(hass.states).filter((id) => {
+      const reg = hass.entities?.[id];
+      return ["sensor", "binary_sensor", "number", "input_number", "counter"].includes(domainOf(id)) && !reg?.hidden && !reg?.entity_category && areaOf(hass, id) === item.area_id;
+    }) : [];
+    const room = outdoor ? null : (item as Room);
+    // in a room, Temperature and Humidity stand for its temperature and humidity sensors
+    const climate = (id: string) => !!room && ["temperature", "humidity"].includes(String(hass.states[id]?.attributes.device_class));
+    const choices: LabelPart[] = [...new Set<LabelPart>([
+      ...(outdoor ? [] : DEFAULT_LABEL),
+      ...shown,
+      ...ofArea.filter((id) => !climate(id)).slice(0, 24),
+    ])];
+    const name = (v: LabelPart) => (v === "temperature" ? t("editor.label.temperature") : v === "humidity" ? t("editor.label.humidity") : String(hass.states[v]?.attributes.friendly_name ?? v));
+    const sensors = (dc: string) => this.entities((id, s) => domainOf(id) === "sensor" && s.attributes.device_class === dc);
+    return [
+      h("h4", {}, t("editor.label.onItsLabel")),
+      h("p", { class: "ed-hint" }, t("editor.label.hint")),
+      h("div", { class: "ed-chips" }, ...choices.map((v) => h("button", { class: `ed-chip${shown.includes(v) ? " on" : ""}`, title: own(v) ? "" : v, onclick: () => toggle(v) }, name(v)))),
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.label.addAnother")), this.entityInput(this.readable(), "", (v) => {
+        if (!v || shown.includes(v)) return;
+        if (!hass.states[v]) return this.toastInDrawer(t("editor.devices.noSuchEntity", { entity: v }));
+        toggle(v);
+      })),
+      ...(room ? [
+        h("div", { class: "ed-row" }, h("label", {}, t("editor.label.temperatureSensor")),
+          this.dropdown(sensors("temperature"), room.temperature ?? "", (v) => upd(t("editor.label.change", { name: item.name }), (x) => ((x as Room).temperature = v || null)), t("editor.auto"))),
+        h("div", { class: "ed-row" }, h("label", {}, t("editor.label.humiditySensor")),
+          this.dropdown(sensors("humidity"), room.humidity ?? "", (v) => upd(t("editor.label.change", { name: item.name }), (x) => ((x as Room).humidity = v || null)), t("editor.auto"))),
+      ] : []),
+    ];
   }
 
   private addDevice(fi: number, room: Room, entity: string): void {

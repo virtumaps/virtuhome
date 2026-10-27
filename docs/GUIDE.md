@@ -93,7 +93,9 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Graphics** | Picks the graphics on this device (below) |
 
 **Room labels**
-- Under each room's name: its temperature and humidity, and on the driveway the car's charge.
+- Under each room's name: its temperature and humidity, and on the driveway the car's charge. You
+  can choose what each room's and garden area's label shows (see [Labels and readings](#labels-and-readings)),
+  and a value on it opens its dialog when tapped.
 - A room with a thermostat or radiator valve shows what it reads and its setpoint, **20.5° → 21°**
   (the warmest setpoint if it has several), in orange while it heats. Tap the numbers for the
   thermostat's dialog; tap the room's name to open the room.
@@ -103,6 +105,10 @@ The same view is in the sidebar and in every VirtuHome card.
   [People in their rooms](#people-in-their-rooms)), and the room glows softly amber, as it does
   while a motion or presence sensor in it is on. Tap a face for that person's dialog. In the house
   view, faces float over the rooms they are in.
+
+**Readings**: a sensor's value in a small label where it was placed, such as the garden's temperature
+(see [Labels and readings](#labels-and-readings)). Readings show on their floor, not in the
+whole-house view. Tap one for its dialog.
 
 **Gestures**
 - **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead.
@@ -354,6 +360,29 @@ did, and how many devices are in areas without a room in the plan.
 - **Thermostats and radiator valves**, and **motion and presence sensors**, count for the room you
   place them in. One you don't place counts for the rooms of its area, so the zones of an Aqara FP2
   count for the areas you gave them in Home Assistant.
+
+### Labels and readings
+
+**Readings** put a sensor's value on the plan, with an icon for what it measures: the garden's
+temperature, the pond, the water tank, a weather station, the soil's moisture.
+- Edit → **Devices** → **Add a reading**: pick the **Sensor**. It goes into the room or garden area
+  selected, else the room of the sensor's area, else the first room of the floor shown. Drag it where
+  it goes, and set its **Height** like any device.
+- A sensor placed as a device shows its value this way. **Show** (on a selected device) picks
+  **Its value** or **An icon** for any device: a door contact can say "Open", a sensor can be a pin.
+- Numbers follow the sensor's display precision and unit (set them in the entity's settings in Home
+  Assistant). A sensor that is unavailable shows "–".
+- In the editor, readings show as pins so you can drag them.
+
+**On its label** (Edit → **Selected**, with a room or garden area selected) chooses what shows under
+its name:
+- Tap a value to show it, or tap it again to hide it. They show in the order you pick them.
+- **Temperature** and **Humidity** are a room's own; both show until you hide them. The **Temperature
+  sensor** and **Humidity sensor** below pick which sensors they are (and what the temperature map
+  reads); **auto** finds one in the room's area.
+- The area's other sensors are offered next; **Add another** takes any entity.
+- A garden area's label shows nothing but a car that is here until you add a value. A label shows up
+  to 8 values.
 
 ### People in their rooms
 

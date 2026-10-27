@@ -36,7 +36,16 @@ export interface Room {
   /** Sensors for the room's climate label (null = picked automatically from the area). */
   temperature?: string | null;
   humidity?: string | null;
+  /** What the label shows under the room's name, in order (null: its temperature and humidity). */
+  label?: LabelPart[] | null;
 }
+
+/**
+ * A value on a room's or garden area's label: "temperature" (the room's own, with its thermostat's
+ * setpoint), "humidity", or any entity's value.
+ */
+export type LabelPart = "temperature" | "humidity" | (string & {});
+export const DEFAULT_LABEL: readonly LabelPart[] = ["temperature", "humidity"];
 
 export interface Opening {
   id: string;
@@ -124,6 +133,16 @@ export interface Device {
   /** Cameras: field of view (degrees) and reach (m). */
   fov?: number | null;
   reach?: number | null;
+  /** In the view: its value as a label (a reading) or an icon; null: the value for sensors and numbers. */
+  show?: "value" | "icon" | null;
+}
+
+/** Domains whose devices show their value rather than an icon, unless set otherwise. */
+const VALUE_DOMAINS = new Set(["sensor", "number", "input_number", "counter"]);
+
+/** Whether a device shows as a reading: its value in a small label instead of an icon. */
+export function showsValue(d: Device): boolean {
+  return d.show ? d.show === "value" : VALUE_DOMAINS.has(d.entity.slice(0, d.entity.indexOf(".")));
 }
 
 export type OutdoorKind = "lawn" | "patio" | "deck" | "path" | "driveway" | "bed" | "gravel";
@@ -167,6 +186,8 @@ export interface OutdoorArea {
   steps?: AreaSteps[];
   /** A balustrade along its open edges, in a fence style; null = none. */
   railing?: FenceStyle | null;
+  /** What the label shows under the area's name, in order (null: nothing but a car that is here). */
+  label?: LabelPart[] | null;
 }
 
 /** Steps down from a raised area: in the middle of an edge (points[edge] -> points[edge + 1]). */
@@ -471,7 +492,7 @@ export function normalizePlan(raw: unknown, repairs?: Repair[]): Plan {
   const floors = (p.floors ?? []).map((f) => ({
     ...f,
     ha_floor: f.ha_floor ?? null,
-    rooms: (f.rooms ?? []).map((r) => ({ ...r, area_id: r.area_id ?? null, floor: r.floor ?? "wood", wall_finish: r.wall_finish ?? "paint" })),
+    rooms: (f.rooms ?? []).map((r) => ({ ...r, area_id: r.area_id ?? null, floor: r.floor ?? "wood", wall_finish: r.wall_finish ?? "paint", ...labelOf(r) })),
     openings: (f.openings ?? []).map((o) => ({ hinge: "left" as const, swing: "in" as const, ...o })),
     furniture: (f.furniture ?? []).map(repairHeight),
     devices: f.devices ?? [],
@@ -522,12 +543,22 @@ function normalizeLinks(raw: unknown): Record<string, EntityLink> | null {
   return Object.keys(out).length ? out : null;
 }
 
+/** A label's values as a list of names (left as it is when unset). */
+function labelOf(x: { label?: unknown }): { label?: LabelPart[] | null } {
+  if (x.label === undefined) return {};
+  return { label: Array.isArray(x.label) ? x.label.filter((v): v is string => typeof v === "string" && v.length > 0).slice(0, MAX_LABEL) : null };
+}
+
+/** The most values a label shows. */
+export const MAX_LABEL = 8;
+
 /** A garden area with its kind and area set, its height in range and its steps on edges it has. */
 function normalizeOutdoor(o: OutdoorArea): OutdoorArea {
   const n = (o.points ?? []).length;
   const height = typeof o.height === "number" && isFinite(o.height) ? Math.max(0, Math.min(3, o.height)) : null;
   return {
     ...o,
+    ...labelOf(o),
     area_id: o.area_id ?? null,
     kind: o.kind ?? "lawn",
     ...(o.height !== undefined ? { height } : {}),
@@ -618,13 +649,14 @@ export interface Space {
   area_id: string | null;
   points: Vec2[];
   outdoor: boolean;
+  label?: LabelPart[] | null;
 }
 
 /** Rooms first, then garden areas (the order the 3D view numbers them in). */
 export function spaces(floor: Floor): Space[] {
   return [
-    ...floor.rooms.map((r) => ({ id: r.id, name: r.name, area_id: r.area_id, points: r.points, outdoor: false })),
-    ...(floor.outdoor ?? []).map((o) => ({ id: o.id, name: o.name, area_id: o.area_id, points: o.points, outdoor: true })),
+    ...floor.rooms.map((r) => ({ id: r.id, name: r.name, area_id: r.area_id, points: r.points, outdoor: false, label: r.label })),
+    ...(floor.outdoor ?? []).map((o) => ({ id: o.id, name: o.name, area_id: o.area_id, points: o.points, outdoor: true, label: o.label })),
   ];
 }
 

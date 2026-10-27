@@ -74,6 +74,15 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
         if (isEntityId(e)) visit({ entity: e, label: t(`links.${k}`, { room: r.name }), area: r.area_id, device: false }, (to) => (r[k] = to));
       }
     }
+    for (const s of [...f.rooms, ...(f.outdoor ?? [])]) {
+      const label = s.label;
+      if (!label) continue;
+      label.forEach((e, i) => {
+        if (isEntityId(e)) visit({ entity: e, label: t("links.label", { room: s.name }), area: s.area_id, device: false }, (to) => (label[i] = to ?? ""));
+      });
+      // what was unlinked leaves the label
+      if (label.includes("")) s.label = label.filter(Boolean);
+    }
     for (const o of f.openings) {
       const room = f.rooms.find((r) => r.id === o.room_id);
       const kind = OPENING_KINDS.find((k) => k === o.kind) ?? "passage";

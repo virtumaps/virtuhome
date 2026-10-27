@@ -31,6 +31,10 @@ export const VIEW_CSS = /* css */ `
 .vh-label .vh-heat.on { color: #ff8a4c; }
 .vh-root.day .vh-label .vh-heat.on { color: #d2501a; }
 .vh-floor-label { font-size: 13px; font-weight: 600; padding: 5px 12px; }
+/* a device shown by its value: icon and value on one line */
+.vh-reading { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 6px; font-weight: 600; }
+.vh-reading svg { width: 14px; height: 14px; fill: var(--vh-accent); flex: none; }
+.vh-reading span { color: inherit; font-size: 12px; }
 /* who is in the room: faces over its name, or alone over the room in the house view */
 .vh-who { display: flex; justify-content: center; margin: 1px 0 3px; }
 .vh-face {

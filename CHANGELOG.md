@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### New
+- **Readings**: any sensor's value in a small label on the plan, with an icon for what it measures:
+  the garden's temperature, the pond, the water tank, a weather station. Edit → Devices → **Add a
+  reading** puts one in the selected room or garden area (else its area's room); drag it where it
+  goes. Sensors placed as devices now show their value this way, and **Show** on any device picks its
+  value or an icon. Numbers follow the sensor's display precision and unit, an unavailable one shows
+  "–", and a tap opens its dialog. Readings show with their floor, never in the whole-house view.
+- **On its label**, for each room and garden area in Edit → Selected: pick which values show under
+  its name and in what order. Temperature and humidity are still there by default and can be hidden;
+  any of the area's sensors, or any other entity, can be added. The **Temperature sensor** and
+  **Humidity sensor** a room's label (and the temperature map) read can now be picked too.
+
 ### Fixed
 - At night in the Standard and Tablet looks, a garden with someone in it (or a camera seeing a
   person) turned khaki, with brown fences, as if a dim yellow lamp lit all of it. A room's soft glow

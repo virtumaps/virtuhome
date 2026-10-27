@@ -138,6 +138,7 @@ export const EN = {
   "links.on": "{what} on {floor}",
   "links.temperature": "{room} temperature",
   "links.humidity": "{room} humidity",
+  "links.label": "A value on {room}'s label",
   "links.sensor.door": "Door sensor",
   "links.sensor.window": "Window sensor",
   "links.sensor.passage": "Opening sensor",

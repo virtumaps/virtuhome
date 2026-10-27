@@ -314,12 +314,26 @@ export const EN_EDITOR = {
   "editor.devices.everythingInTheLinked": "Everything in the linked areas is in the plan.",
   "editor.devices.add": "Add",
   "editor.devices.namePlaced": "{name}: placed",
+  "editor.devices.addReading": "Add a reading",
+  "editor.devices.readingHint": "Any sensor's value in a small label on the plan: the garden's temperature, the pond, the water tank, a weather station. Pick it, then drag it where it goes.",
+  "editor.devices.readingEntity": "Sensor",
+  "editor.devices.noRoomYet": "Draw a room or a garden first.",
+  "editor.devices.noSuchEntity": "Home Assistant has no {entity}.",
 
   // ---------------------------------------------------------------- the editor: selected
   "editor.selected.tapARoomA": "Tap a room, a device or a piece of furniture in 3D. Once it is selected, drag it to move it; dragging anything else turns the view.",
 
   // ---------------------------------------------------------------- the editor: room
   "editor.room.walls": "Walls",
+  "editor.label.onItsLabel": "On its label",
+  "editor.label.hint": "Tap a value to show it under the name, or to hide it. They show in the order you pick them.",
+  "editor.label.temperature": "Temperature",
+  "editor.label.humidity": "Humidity",
+  "editor.label.addAnother": "Add another",
+  "editor.label.temperatureSensor": "Temperature sensor",
+  "editor.label.humiditySensor": "Humidity sensor",
+  "editor.label.change": "{name} label",
+  "editor.label.full": "A label shows up to {n} values.",
   "editor.room.nameWalls": "{name} walls",
   "editor.room.nameWallColour": "{name} wall colour",
   "editor.room.plainWhite": "Plain white",
@@ -447,6 +461,10 @@ export const EN_EDITOR = {
 
   // ---------------------------------------------------------------- the editor: device
   "editor.device.entity": "Entity",
+  "editor.device.show": "Show",
+  "editor.device.showValue": "Its value",
+  "editor.device.showIcon": "An icon",
+  "editor.device.showAuto": "Automatic ({what})",
   "editor.device.mount": "Mount",
   "editor.device.view": "View °",
   "editor.device.fieldOfViewIn": "Field of view in degrees (360: all round)",
