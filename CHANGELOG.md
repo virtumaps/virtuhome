@@ -21,6 +21,8 @@
 - The close buttons of the room and energy sheets have a name for screen readers, the demo's rows
   of devices can be reached with the keyboard, and a closed sheet can't be tabbed to any more (that
   pushed the whole view up off the screen).
+- A card in a panel view was 440 pixels high instead of filling the view (unless **Fill the
+  screen** was on): it didn't see the panel view it was in. It fills it, as the guide says.
 
 ## 0.13.0
 
