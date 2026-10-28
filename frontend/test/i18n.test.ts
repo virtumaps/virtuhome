@@ -193,7 +193,7 @@ const SCANNED = [
   "editor/background.ts", "editor/editor.ts", "editor/house-types.ts", "editor/north.ts", "editor/plan2d.ts", "editor/roomfind-apply.ts", "editor/roomfind-client.ts",
   "import/draft.ts", "import/names.ts", "import/roomplan.ts", "import/sh3d.ts", "import/simple.ts", "import/xml.ts", "import/zip.ts",
   "live/ev.ts", "starters/houses.ts",
-  "scene/bins.ts", "scene/fences.ts", "scene/finishes.ts", "scene/garden.ts", "scene/paving.ts", "scene/roofs.ts",
+  "scene/bins.ts", "scene/devices.ts", "scene/fences.ts", "scene/finishes.ts", "scene/garden.ts", "scene/paving.ts", "scene/roofs.ts",
 ];
 
 /** Strings in them that look like text but aren't shown to users. */

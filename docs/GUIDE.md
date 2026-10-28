@@ -113,7 +113,8 @@ The same view is in the sidebar and in every VirtuHome card.
 whole-house view. Tap one for its dialog.
 
 **Gestures**
-- **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead.
+- **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead. A
+  switch with several gangs shows a small menu of them.
 - **Long-press** a lamp or a device for its Home Assistant dialog.
 - **Tap a room** to open it: in the house view this goes to its floor first. A sheet shows the
   room's temperature, who is here and its devices, with **All lights on** / **All lights off**.
@@ -342,6 +343,9 @@ Edit → **Home** → **Devices** → **Place devices automatically**:
 - gives lights, cameras, motion sensors, thermostats, plugs and speakers a sensible spot in their
   room: ceiling lights spread over the ceiling, cameras in corners looking in, motion sensors high
   in a corner;
+- puts a wall switch (a relay, a dimmer, a "light switch") beside its room's door, on the side away
+  from the door's hinges, and a smart plug on a socket on a wall, with a gang for each of the
+  device's switches;
 - puts a car charger on the house wall at the driveway, with the car in front of it.
 
 It never moves what is already placed, so run it again after adding devices. It reports what it
@@ -359,6 +363,15 @@ did, and how many devices are in areas without a room in the plan.
 - **Doors and windows:** tap one, then pick its **Sensor** (it opens in 3D when the sensor does) and,
   for a window, its **Blind**.
 - **Lamps and TVs** that are furniture: **Linked to** picks the light, switch or media player.
+- **Switches and sockets** (Add furniture and decor → **Devices** → **Light switch** or **Socket**):
+  pick how many **Gangs** (1 to 4; the plate grows with them) and the light, switch, fan or toggle
+  helper of each (**Gang 1**, **Gang 2**…). Each gang lights up while it is on. Tap a one-gang
+  switch to switch it; with several gangs a small menu shows each with its state, and a tap on one
+  switches it (a long press opens their dialogs instead). They sit 1.06 m (switches) and 0.3 m
+  (sockets) up the wall; set **Above floor** for a socket over a worktop.
+- **Wi-Fi access points** (on the ceiling) and **Mesh Wi-Fi points** (on a shelf): **Linked to**
+  picks an entity of the access point: its connectivity sensor, its tracker, or any of its sensors.
+  It glows soft blue while online and red while offline or unavailable. Tap it for its dialog.
 - **Thermostats and radiator valves**, and **motion and presence sensors**, count for the room you
   place them in. One you don't place counts for the rooms of its area, so the zones of an Aqara FP2
   count for the areas you gave them in Home Assistant.

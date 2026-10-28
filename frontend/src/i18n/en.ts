@@ -212,6 +212,7 @@ export const EN = {
   "category.kids": "Kids",
   "category.outdoor": "Garden",
   "category.lights": "Lights",
+  "category.devices": "Devices",
   "category.utility": "Utility",
   "category.structure": "Structure",
   "balustrade.none": "None",
@@ -440,6 +441,10 @@ export const EN = {
   "furniture.led_strip": "LED strip",
   "furniture.lamp_garden": "Garden light",
   "furniture.lamp_post": "Lamp post",
+  "furniture.switch_wall": "Light switch",
+  "furniture.socket_wall": "Socket",
+  "furniture.access_point": "Wi-Fi access point",
+  "furniture.wifi_point": "Mesh Wi-Fi point",
   "furniture.stairs": "Stairs",
   "furniture.column": "Column",
 

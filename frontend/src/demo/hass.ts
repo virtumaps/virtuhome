@@ -74,7 +74,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     };
     const ids: [string, string | null][] = [
       ...floor.devices.map((d) => [d.entity, roomArea(d.x, d.z)] as [string, string | null]),
-      ...floor.furniture.filter((f) => f.entity).map((f) => [f.entity!, roomArea(f.x, f.z)] as [string, string | null]),
+      ...floor.furniture.flatMap((f) => [f.entity, ...(f.gangs ?? [])].filter(Boolean).map((e) => [e!, roomArea(f.x, f.z)] as [string, string | null])),
       ...floor.openings.flatMap((o) => [o.entity, o.cover].filter(Boolean).map((e) => [e!, floor.rooms.find((r) => r.id === o.room_id)?.area_id ?? null] as [string, string | null])),
     ];
     for (const [id, area] of ids) {
@@ -92,6 +92,8 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       else if (dom === "camera") put(id, "idle");
       else if (dom === "climate") put(id, "heat", { hvac_action: "heating", current_temperature: 20.5, temperature: 21 });
       else if (dom === "cover") put(id, "open", { current_position: 60 });
+      else if (dom === "device_tracker") put(id, "home", { source_type: "router" })
+      else if (dom === "switch") put(id, /coffee/.test(id) ? "off" : "on")
       else if (dom === "sensor" && /temperature/.test(id)) put(id, (9 + Math.random() * 5).toFixed(1), { device_class: "temperature", unit_of_measurement: "°C" });
       else put(id, "on");
     }

@@ -17,6 +17,13 @@
   buttons (the outside temperature, the price now, the next bin day), and a tap opens one. Cards show
   them too, or their own with the new `chips` option (in the visual editor as **Values in the top
   bar**).
+- Wall switches and sockets (**Devices** in Add furniture and decor): 1 to 4 **Gangs**, each linked to
+  a light, switch, fan or toggle helper. Each gang lights up while it is on; a tap switches a
+  one-gang switch, and with several a small menu by your finger switches each one. Smart Setup puts
+  a wall switch beside its room's door (on the side away from the hinges) and a smart plug on a
+  socket, a gang for each of the device's switches.
+- Wi-Fi access points (on the ceiling) and mesh Wi-Fi points: linked to an entity of the access
+  point, they glow soft blue while it is online and red while it is offline or unavailable.
 - Extensions can add automations to Home Assistant, so alerts such as "the garage is still open"
   work with no screen open. Nothing is added until you agree in a window that shows what the
   automation does, its settings and where its notifications go. It then shows in Settings →

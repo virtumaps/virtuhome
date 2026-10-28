@@ -9,6 +9,7 @@ import type { V3 } from "../scene/geo";
 import { kelvinToRgb, type LampState } from "../scene/lighting";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { holdsPost, POST_TYPES } from "../scene/bins";
+import { deviceGlow, gangsOf, GANG_TYPES, WIFI_TYPES } from "../scene/devices";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
 import type { EnergyLive } from "./energy";
@@ -284,6 +285,7 @@ export class HassLive implements LiveSource {
         }
         if (f.type === "solar_panels" && f.entity && domainOf(f.entity) === "sensor") continue;
         this.watch(f.entity, "lighting", "markers");
+        if (GANG_TYPES.has(f.type)) for (const id of gangsOf(f)) this.watch(id, "lighting");
       }
       for (const o of floor.openings) {
         this.watch(o.entity, "openings", "lighting");
@@ -381,7 +383,7 @@ export class HassLive implements LiveSource {
       if (d) return { floor: fi, room: at(d.x, d.z) };
       const o = floor.openings.find((x) => x.entity === entity || x.cover === entity);
       if (o) return { floor: fi, room: sp.findIndex((s) => s.id === o.room_id) };
-      const f = floor.furniture.find((x) => x.entity === entity || x.parked === entity);
+      const f = floor.furniture.find((x) => x.entity === entity || x.parked === entity || (GANG_TYPES.has(x.type) && gangsOf(x).includes(entity)));
       if (f) return { floor: fi, room: at(f.x, f.z) };
     }
     for (const [camera, motion] of this.cameraMotion) if (motion.includes(entity)) return this.place(camera);
@@ -418,6 +420,8 @@ export class HassLive implements LiveSource {
   glowColor(g: GlowSlot): V3 | null {
     if (g.type && EV_TYPES.has(g.type)) return evGlow(this.ev(g.entity), this.day);
     if (g.type === "solar_panels" && !g.entity) return solarGlow(this.energy, null, this.day);
+    // an access point is red while offline (unavailable too); a switch's gangs light while on
+    if (g.type && (WIFI_TYPES.has(g.type) || GANG_TYPES.has(g.type))) return g.entity ? deviceGlow(g.type, this.state(g.entity)) : null;
     const s = this.state(g.entity);
     if (!s || isUnavailable(s)) return null;
     // a post box's window glows warm while its sensor says there is post

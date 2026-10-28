@@ -8,7 +8,7 @@ import {
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { showsValue, spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
-import { buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
 import { fromRoofFrame, planeHeight } from "./roofs";
 import { Geo, type V3 } from "./geo";
@@ -65,6 +65,10 @@ export interface Hit {
   floor: number;
   room: number;
   entity: string | null;
+  /** A device with several entities (a switch's gangs): all of them, the first being `entity`. */
+  entities?: string[];
+  /** Where the finger was, in the view's pixels. */
+  at?: [number, number];
   device?: Device;
   /** The plan item under the finger (furniture, or the device behind a marker or lamp). */
   item?: ItemRef;
@@ -2085,6 +2089,22 @@ export class Viewer {
         if (d < 26 && (!camBest || d < camBest.d) && !this.shutIn(fi, [rig.lens[0], wy, rig.lens[1]])) camBest = { d, fi, rig, y: wy };
       }
     }
+    // switches, sockets and access points: as generous targets as lamps (outside the editor, which drags them by their parts)
+    let devBest: { d: number; fi: number; t: DeviceTarget; y: number } | null = null;
+    for (const [fi, f] of this.floors.entries()) {
+      if (this.editMode || !f.group.visible || (this.mode === "floor" && fi !== this.activeFloor)) continue;
+      for (const t of f.fb.targets) {
+        const wy = t.pos[1] + f.offset;
+        v.set(t.pos[0], wy, t.pos[2]).project(this.camera);
+        if (v.z > 1) continue;
+        const d = Math.hypot(((v.x + 1) / 2) * this.width - x, ((1 - v.y) / 2) * this.height - y);
+        if (d < 26 && (!devBest || d < devBest.d) && !this.shutIn(fi, [t.pos[0], wy, t.pos[2]])) devBest = { d, fi, t, y: wy };
+      }
+    }
+    if (devBest && (!lampBest || devBest.d < lampBest.d) && (!camBest || devBest.d < camBest.d)) {
+      const { fi, t } = devBest;
+      return { kind: "entity", floor: fi, room: t.room, entity: t.entities[0], entities: t.entities, at: [x, y], item: this.floors[fi].fb.items[t.item], y: devBest.y };
+    }
     if (camBest && (!lampBest || camBest.d < lampBest.d)) {
       const { fi, rig } = camBest;
       const device = this.floors[fi].fb.floor.devices.find((dd) => dd.id === rig.id);
@@ -2120,6 +2140,8 @@ export class Viewer {
         const room = this.roomAt(fi, [h.point.x, h.point.z]);
         return { kind: room >= 0 ? "room" : "empty", floor: fi, room, entity: null };
       }
+      const target = itemIdx >= 0 && !this.editMode ? f.fb.targets.find((t) => t.item === itemIdx) : undefined;
+      if (target) return { kind: "entity", floor: fi, room: target.room, entity: target.entities[0], entities: target.entities, at: [x, y], item };
       if (slot >= 0 && !this.editMode) {
         const g = f.fb.glows[slot];
         if (g?.entity) return { kind: "entity", floor: fi, room: g.room, entity: g.entity, item };

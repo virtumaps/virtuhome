@@ -144,6 +144,8 @@ export class VhView {
   /** The tier was picked automatically (it may step down when the device struggles). */
   private tierAuto = true;
   private menu: HTMLDivElement;
+  /** A small menu at the finger: a device's entities (a switch's gangs). */
+  private pop: HTMLDivElement;
   private alertEl: HTMLButtonElement;
   private tools: HTMLDivElement;
   private statusEl: HTMLDivElement;
@@ -203,6 +205,7 @@ export class VhView {
       <button class="vh-alert" hidden></button>
       <div class="vh-status"></div>
       <div class="vh-menu" hidden></div>
+      <div class="vh-pop" hidden></div>
       <div class="vh-sheet"></div>
       <div class="vh-empty" hidden></div>
       <div class="vh-toast"></div>
@@ -219,6 +222,7 @@ export class VhView {
     this.roofBtn = this.root.querySelector('[data-act="roof"]')!;
     this.themeBtn = this.root.querySelector('[data-act="theme"]')!;
     this.menu = this.root.querySelector(".vh-menu")!;
+    this.pop = this.root.querySelector(".vh-pop")!;
     this.alertEl = this.root.querySelector(".vh-alert")!;
     this.statusEl = this.root.querySelector(".vh-status")!;
     this.tools = this.root.querySelector(".vh-tools")!;
@@ -288,6 +292,7 @@ export class VhView {
     });
     this.root.addEventListener("pointerdown", (e) => {
       if (!this.menu.hidden && !(e.target as HTMLElement).closest(".vh-menu, [data-act=graphics]")) this.menu.hidden = true;
+      if (!this.pop.hidden && !(e.target as HTMLElement).closest(".vh-pop")) this.pop.hidden = true;
     });
     if (config.stats) {
       this.statsEl.hidden = false;
@@ -1461,6 +1466,8 @@ export class VhView {
       r.options.onHit?.({ floor: hit.floor, room: hit.kind === "empty" ? -1 : hit.room, entity }, gesture);
       return;
     }
+    // a switch with several gangs: a menu of them (a long press opens their dialogs from it)
+    if (hit.entities && hit.entities.length > 1 && gesture !== "double") return this.entityMenu(hit.entities, hit.at, gesture === "long");
     if (hit.entity && (hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "entity")) {
       if (gesture === "long") return this.dialog(hit.entity);
       if (gesture === "double") return;
@@ -1483,6 +1490,32 @@ export class VhView {
       this.closeSheet();
       if (this.viewer.selectedRoom >= 0) this.viewer.selectRoom(this.viewer.activeFloor, -1, false);
     }
+  }
+
+  /** A small menu by the finger: each entity with its state; a tap switches it (or opens its dialog). */
+  private entityMenu(ids: string[], at: [number, number] | undefined, dialogs: boolean): void {
+    const hass = this._hass;
+    if (!hass) return;
+    const pop = this.pop;
+    pop.replaceChildren(...ids.map((id) => {
+      const b = document.createElement("button");
+      b.className = "vh-menu-row";
+      b.innerHTML = "<span><b></b><small></small></span>";
+      b.querySelector("b")!.textContent = this.nameOf(id);
+      b.querySelector("small")!.textContent = valueText(hass, id);
+      b.onclick = async () => {
+        pop.hidden = true;
+        if (dialogs) return this.dialog(id);
+        if (await toggleEntity(hass, id).catch(() => false)) this.toast(this.nameOf(id));
+        else this.dialog(id);
+      };
+      return b;
+    }));
+    pop.hidden = false;
+    // under the finger, kept inside the view
+    const [x, y] = at ?? [this.root.clientWidth / 2, this.root.clientHeight / 2];
+    pop.style.left = `${Math.max(8, Math.min(this.root.clientWidth - pop.offsetWidth - 8, x - pop.offsetWidth / 2))}px`;
+    pop.style.top = `${Math.max(8, Math.min(this.root.clientHeight - pop.offsetHeight - 8, y + 16))}px`;
   }
 
   private async toggleRoomLights(fi: number, ri: number): Promise<void> {

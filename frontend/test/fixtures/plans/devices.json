@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "Devices",
+  "settings": {"wall_exterior": 0.28, "wall_interior": 0.12, "north": 0, "theme": "auto", "exterior_finish": "brick"},
+  "floors": [
+    {
+      "id": "ground", "name": "Ground Floor", "ha_floor": null, "elevation": 0, "height": 2.5,
+      "rooms": [
+        {"id": "hall", "name": "Hall", "area_id": "hallway", "points": [[0, 0], [2, 0], [2, 4], [0, 4]], "floor": "wood"},
+        {"id": "lounge", "name": "Lounge", "area_id": "living_room", "points": [[2, 0], [6, 0], [6, 4], [2, 4]], "floor": "oak"}
+      ],
+      "openings": [
+        {"id": "o1", "room_id": "lounge", "edge": 3, "offset": 2, "width": 0.8, "height": 2.0, "sill": 0, "kind": "door", "hinge": "left", "swing": "in"}
+      ],
+      "furniture": [
+        {"id": "sw", "type": "switch_wall", "x": 2.066, "z": 2.6, "rotation": -90, "w": 0.146, "d": 0.012, "h": 0.086, "entity": "light.lounge", "gangs": ["light.lounge", null]},
+        {"id": "sock", "type": "socket_wall", "x": 4, "z": 0.146, "rotation": 0, "w": 0.086, "d": 0.012, "h": 0.086, "y": 1.05, "entity": "switch.kettle"},
+        {"id": "ap", "type": "access_point", "x": 1, "z": 2, "rotation": 0, "w": 0.2, "d": 0.2, "h": 0.035, "entity": "binary_sensor.ap_connected"},
+        {"id": "mesh", "type": "wifi_point", "x": 5.5, "z": 3.5, "rotation": 0, "w": 0.11, "d": 0.11, "h": 0.09, "entity": null}
+      ],
+      "devices": [],
+      "walls": []
+    }
+  ]
+}

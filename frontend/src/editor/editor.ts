@@ -34,6 +34,7 @@ import { cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
 import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
 import { binColours, POST_TYPES, WASTE_NAMES, wasteKind } from "../scene/bins";
+import { GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, MAX_GANGS, WIFI_TYPES } from "../scene/devices";
 import { isRaised, outdoorTop } from "../scene/build";
 import { circlePoints, edgeOf, newArea, openEdges, rectSides, resizeRect, roundness, turnOf, type NewAreaKind } from "../scene/areas";
 import {
@@ -2093,7 +2094,10 @@ export class Editor {
         ? chargers.map((c) => [c.status ?? c.power ?? c.level ?? "", c.name] as [string, string]).filter(([id]) => id)
         : POST_TYPES.has(x.type)
           ? this.entities((id) => ["binary_sensor", "sensor", "input_boolean"].includes(domainOf(id)))
-          : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
+          // an access point: anything of its device that goes away or says so when it is offline
+          : WIFI_TYPES.has(x.type)
+            ? this.entities((id) => ["binary_sensor", "device_tracker", "sensor", "update"].includes(domainOf(id)))
+            : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
     // a change of size, height, turn or side keeps the piece out of walls and other pieces
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
       fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
@@ -2127,7 +2131,8 @@ export class Editor {
       isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named(t("editor.furniture.reupholster"))((y) => (y.finish = k as Furniture["finish"]))) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
       ...(garden ? this.gardenRows(x, named) : []),
-      garden && !POST_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : POST_TYPES.has(x.type) ? t("editor.furniture.postSensor") : t("editor.furniture.linkedTo")),
+      ...(GANG_TYPES.has(x.type) ? this.gangRows(x, upd, reshape) : []),
+      (garden && !POST_TYPES.has(x.type)) || GANG_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : POST_TYPES.has(x.type) ? t("editor.furniture.postSensor") : t("editor.furniture.linkedTo")),
         this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? t("editor.furniture.theHousesCharger") : t("editor.furniture.noneFound")) : t("editor.furniture.nothing"))),
       ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
       h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), "w"), ...num(t("editor.houses.depth"), "d")),
@@ -2148,6 +2153,34 @@ export class Editor {
         } }, t("editor.remove")),
       ),
     );
+  }
+
+  /** Switches and sockets: how many gangs, and each gang's entity. */
+  private gangRows(x: Furniture, upd: (fn: (y: Furniture) => void) => void, reshape: (label: string) => (fn: (y: Furniture) => void) => void): HTMLElement[] {
+    const gangs = gangsOf(x);
+    const options = this.entities((id) => GANG_DOMAINS.includes(domainOf(id)));
+    const set = (y: Furniture, list: (string | null)[]) => {
+      y.gangs = list;
+      y.entity = list[0];
+    };
+    return [
+      h("div", { class: "ed-sub" }, t("editor.furniture.gangs")),
+      h("div", { class: "ed-chips" }, ...Array.from({ length: MAX_GANGS }, (_, i) => i + 1).map((n) => h("button", {
+        class: `ed-chip${gangs.length === n ? " on" : ""}`,
+        // the plate grows or shrinks with its gangs
+        onclick: () => n !== gangs.length && reshape(t("editor.furniture.gangsOf"))((y) => {
+          set(y, Array.from({ length: n }, (_, i) => gangs[i] ?? null));
+          y.w = gangWidth(n);
+        }),
+      }, String(n)))),
+      ...gangs.map((e, i) => h("div", { class: "ed-row" },
+        h("label", {}, gangs.length > 1 ? t("editor.furniture.gang", { n: i + 1 }) : t("editor.furniture.linkedTo")),
+        this.dropdown(options, e ?? "", (v) => upd((y) => {
+          const list = gangsOf(y);
+          list[i] = v || null;
+          set(y, list);
+        }), t("editor.furniture.nothing")))),
+    ];
   }
 
   /** Garden buildings and planters: a pergola's top, a shed's roof, door, windows and trim, a planter's material and plants. */

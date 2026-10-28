@@ -6,9 +6,12 @@
 //     room: ceiling lights spread over the ceiling, cameras in corners looking in, motion sensors
 //     high in a corner, floor lamps by a wall
 //   * a car charger goes on the house's wall at the driveway, with a car parked in front of it
+//   * a wall switch goes beside the room's door, on the side away from its hinges; a plug on a socket
 // It never moves what is already placed, so it can run again after new devices were added.
 import { bounds, centroid, labelPoint, outwardNormal, pointInPolygon, segmentDistance } from "../model/geom";
-import { newId, type Device, type Floor, type Mount, type Opening, type OutdoorArea, type Plan, type Room, type Vec2 } from "../model/plan";
+import { newId, type Device, type Floor, type Mount, type Opening, type OutdoorArea, type Plan, type PlanSettings, type Room, type Vec2 } from "../model/plan";
+import { layoutWalls } from "../model/walls";
+import { gangWidth, MAX_GANGS } from "../scene/devices";
 import { domainOf, type Hass, type HassEntity } from "../live/hass";
 import { findChargers, readEv, type EvCharger } from "../live/ev";
 import { CAR_TYPES, carModel, FURNITURE } from "../scene/furniture-lib";
@@ -148,14 +151,14 @@ export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: Placeme
       }
       const room = pickRoom(targets, c.name) ?? target;
       const sp = room === target ? spots : new Spots(room.floor, room.room);
-      const placed = placeOne(c, hass, room.floor, room.room, sp, room === target ? grid : [], report, c === tvPlayer);
+      const placed = placeOne(c, hass, room.floor, room.room, sp, room === target ? grid : [], report, c === tvPlayer, p.settings);
       if (placed) for (const e of c.entities) inPlan.add(e);
     }
   }
   return { plan: p, report };
 }
 
-function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spots, grid: Vec2[], report: PlacementReport, isTv = false): boolean {
+function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spots, grid: Vec2[], report: PlacementReport, isTv: boolean, settings: PlanSettings): boolean {
   const id = c.primary;
   const s = hass.states[id];
   const dom = domainOf(id);
@@ -250,6 +253,19 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
     const w = spots.wall(0.08);
     return add({ entity: id, x: w.at[0], z: w.at[1], y: 1.5, mount: "wall", rotation: w.facing });
   }
+  // a wall switch beside the room's door, a plug on a socket: a gang for each of the device's switches
+  const kind = dom === "switch" && !outdoor ? switchKind(hass, c) : null;
+  if (kind) {
+    const gangs = c.entities.filter((e) => domainOf(e) === "switch" && !/child|lock|led|beep|indicator|auto|backlight|update|power_on|restore/.test(e)).sort().slice(0, MAX_GANGS);
+    const type = kind === "switch" ? "switch_wall" : "socket_wall";
+    const w = gangWidth(gangs.length), d = FURNITURE[type].size[1], h = FURNITURE[type].size[2];
+    const at = kind === "switch" ? byDoor(floor, room, settings, w, d) : onWall(floor, settings, spots.wall(0), d);
+    if (at) {
+      floor.furniture.push({ id: newId("f"), type, x: at.x, z: at.z, rotation: at.rotation, w, d, h, entity: gangs[0] ?? id, ...(gangs.length > 1 ? { gangs } : {}) });
+      report.placed.push(`${c.name} → ${room.name}`);
+      return true;
+    }
+  }
   if (dom === "switch" || dom === "fan") {
     const w = spots.wall(0.15);
     return add({ entity: id, x: w.at[0], z: w.at[1], y: dom === "fan" ? 2.3 : 0.35, mount: dom === "fan" ? "ceiling" : "wall", rotation: w.facing });
@@ -322,6 +338,50 @@ function placeCharger(p: Plan, hass: Hass, c: EvCharger, report: PlacementReport
   report.placed.push(`${model ? car : t("report.car")} → ${spot.name}`);
 }
 
+/** A switch that is a wall switch, or a plug or socket; null for anything else (a heater, a camera's switch). */
+function switchKind(hass: Hass, c: Candidate): "switch" | "socket" | null {
+  const dev = c.device ? hass.devices?.[c.device] : undefined;
+  const text = `${c.primary} ${c.name} ${dev?.model ?? ""}`.toLowerCase();
+  if (hass.states[c.primary]?.attributes.device_class === "outlet" || /plug|socket|outlet/.test(text)) return "socket";
+  if (/wall ?switch|light ?switch|\bgang\b|relay|dimmer|shelly|sonoff/.test(text)) return "switch";
+  return null;
+}
+
+/** Where a piece d deep stands with its back on the wall a spot is on (the spot on the wall's middle line). */
+function onWall(floor: Floor, settings: PlanSettings, spot: { at: Vec2; facing: number }, d: number): { x: number; z: number; rotation: number } {
+  const r = (spot.facing * Math.PI) / 180;
+  const n: Vec2 = [-Math.sin(r), Math.cos(r)];
+  const wall = layoutWalls(floor, settings).walls.find((w) => segmentDistance(spot.at, w.a, w.b).d < 0.05);
+  const k = (wall?.thickness ?? settings.wall_interior) / 2 + d / 2;
+  return { x: spot.at[0] + n[0] * k, z: spot.at[1] + n[1] * k, rotation: spot.facing };
+}
+
+/**
+ * Beside one of the room's doors, inside the room, on the side away from its hinges (where the hand
+ * is when it opens it): doors to the rest of the house first.
+ */
+function byDoor(floor: Floor, room: Room, settings: PlanSettings, w: number, d: number): { x: number; z: number; rotation: number } | null {
+  const ri = floor.rooms.indexOf(room);
+  if (ri < 0) return null;
+  const walls = layoutWalls(floor, settings).walls.filter((x) => x.roomA === ri || x.roomB === ri).sort((a, b) => Number(a.exterior) - Number(b.exterior));
+  for (const wall of walls) {
+    const n: Vec2 = wall.roomA === ri ? wall.normal : [-wall.normal[0], -wall.normal[1]];
+    for (const po of wall.openings) {
+      if (po.opening.kind !== "door") continue;
+      // the hinges are at the wall's start for a door hinged "left"
+      const latchEnd = (po.opening.hinge ?? "left") === "left" ? 1 : -1;
+      for (const side of [latchEnd, -latchEnd]) {
+        const t = (side > 0 ? po.t1 : po.t0) + side * (0.1 + w / 2);
+        const off = wall.thickness / 2 + d / 2;
+        const at: Vec2 = [wall.a[0] + wall.dir[0] * t + n[0] * off, wall.a[1] + wall.dir[1] * t + n[1] * off];
+        if (t - w / 2 < 0 || t + w / 2 > wall.length || !pointInPolygon(at, room.points)) continue;
+        return { x: at[0], z: at[1], rotation: heading(n[0], n[1]) };
+      }
+    }
+  }
+  return null;
+}
+
 /** Garden areas take part like rooms (their lights, cameras and plugs go there). */
 function asRoom(o: OutdoorArea): Room {
   return { id: o.id, name: o.name, area_id: o.area_id, points: o.points, outdoor: true } as Room & { outdoor: boolean };
@@ -342,7 +402,7 @@ function skipEntity(hass: Hass, id: string): boolean {
   }
   if (dom === "switch") {
     const dc = hass.states[id]?.attributes.device_class;
-    return !(dc === "outlet" || /plug|socket|outlet|heater|kettle|coffee|lamp|light|fan|humidif|dehumid|monitor|printer|washing|dryer|tree|diffuser/.test(text));
+    return !(dc === "outlet" || /plug|socket|outlet|heater|kettle|coffee|lamp|light|fan|humidif|dehumid|monitor|printer|washing|dryer|tree|diffuser|wall ?switch|\bgang\b|relay|dimmer|shelly|sonoff/.test(text));
   }
   return false;
 }

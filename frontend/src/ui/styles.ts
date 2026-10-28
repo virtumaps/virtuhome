@@ -159,6 +159,11 @@ export const VIEW_CSS = /* css */ `
   background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 4px 20px rgba(0,0,0,0.25); z-index: 3;
 }
+.vh-pop {
+  position: absolute; min-width: 190px; max-width: min(280px, calc(100% - 16px)); padding: 6px; border-radius: 16px;
+  background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25); z-index: 4;
+}
 .vh-menu-title { font-size: 12px; color: var(--vh-dim); padding: 6px 10px 4px; }
 .vh-menu-row {
   display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; color: inherit; font: inherit;

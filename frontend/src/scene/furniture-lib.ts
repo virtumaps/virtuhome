@@ -9,6 +9,7 @@ import type { Furniture } from "../model/plan";
 import type { Upholstery } from "./finishes";
 import { t, type Key, type PlainKey } from "../i18n";
 import { GARDEN_FURNITURE } from "./garden";
+import { DEVICE_FURNITURE } from "./devices";
 
 export type Role =
   | "wood" | "woodDark" | "fabric" | "fabricDark" | "cushion" | "white" | "metal" | "dark"
@@ -42,6 +43,8 @@ export interface Part {
   d: number;
   role: Role;
   glow?: Glow;
+  /** Which of the piece's glows it lights with (a switch's gangs, each its own entity; default 0). */
+  slot?: number;
   /** Segments around (default 12). */
   seg?: number;
   /** Cylinders: radius at the top end as a fraction of the bottom one (0 = a cone). */
@@ -67,11 +70,11 @@ export interface Part {
 
 export type Category =
   | "living" | "dining" | "kitchen" | "bedroom" | "bath" | "office" | "decor" | "plants" | "fitness"
-  | "kids" | "outdoor" | "lights" | "utility" | "structure";
+  | "kids" | "outdoor" | "lights" | "devices" | "utility" | "structure";
 
 /** The categories in the order the editor lists them; each named category.<id> in the table. */
 export const CATEGORIES: Category[] = [
-  "living", "dining", "kitchen", "bedroom", "bath", "office", "decor", "plants", "fitness", "kids", "outdoor", "lights", "utility", "structure",
+  "living", "dining", "kitchen", "bedroom", "bath", "office", "decor", "plants", "fitness", "kids", "outdoor", "lights", "devices", "utility", "structure",
 ];
 
 export interface FurnitureType {
@@ -1044,6 +1047,9 @@ export const FURNITURE: Record<string, FurnitureType> = {
   lamp_garden: { label: "furniture.lamp_garden", category: "lights", family: "lamp_garden", size: [0.15, 0.15, 0.6], build: (w, d, h) => [cyl(0, 0, 0, w * 0.4, h - 0.15, d * 0.4, "dark", undefined, 6), cyl(0, h - 0.15, 0, w, 0.15, d, "bulb", "lamp", 10)] },
   lamp_post: { label: "furniture.lamp_post", category: "lights", family: "lamp_garden", size: [0.3, 0.3, 2.2], build: (w, d, h) => [cyl(0, 0, 0, w * 0.6, 0.1, d * 0.6, "dark", undefined, 8), cyl(0, 0.1, 0, 0.07, h - 0.45, 0.07, "dark", undefined, 8), cyl(0, h - 0.35, 0, w, 0.3, d, "bulb", "lamp", 8, 0.6), cyl(0, h - 0.06, 0, w * 0.75, 0.06, d * 0.75, "dark", undefined, 8, 0.3)] },
 
+  // ---------------------------------------------------------------- devices: switches, sockets, access points (scene/devices.ts)
+  ...DEVICE_FURNITURE,
+
   // ---------------------------------------------------------------- structure
   stairs: { label: "furniture.stairs", category: "structure", family: "stairs", size: [0.9, 3.0, 2.6], build: steps },
   column: { label: "furniture.column", category: "structure", family: "column", size: [0.3, 0.3, 2.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white")] },
@@ -1093,8 +1099,8 @@ export function carModel(name: string | null | undefined): { type: string; size:
 /** Light fixtures follow a light entity's state. */
 export const LAMP_TYPES = Object.keys(FURNITURE).filter((k) => FURNITURE[k].category === "lights");
 
-/** Fixtures that hang from the ceiling (placed at the ceiling, light below). */
-export const CEILING_LAMPS = new Set(["lamp_ceiling", "lamp_pendant", "lamp_globe", "lamp_chandelier", "lamp_downlight", "lamp_spots"]);
+/** Fixtures that hang from the ceiling (placed at the ceiling, light below): lamps, and access points. */
+export const CEILING_LAMPS = new Set(["lamp_ceiling", "lamp_pendant", "lamp_globe", "lamp_chandelier", "lamp_downlight", "lamp_spots", "access_point"]);
 
 /** A type's name in the user's language; undefined for a type there isn't. */
 export const furnitureName = (type: string): string | undefined => (FURNITURE[type] ? t(FURNITURE[type].label) : undefined);

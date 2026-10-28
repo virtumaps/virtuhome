@@ -12,6 +12,7 @@ import { Geo, ROOM_NONE, ROOM_OUTSIDE, type V3 } from "./geo";
 import { WALL_HANG, WALL_TRIM } from "./materials";
 import { buildOpeningFixed, joineryLook, type OpeningInfo } from "./joinery";
 import { cameraPieces, cameraRig, type CameraRig } from "./cameras";
+import { DEVICE_TYPES, gangsOf, GANG_TYPES } from "./devices";
 import { fencePaint, fencePieces, FENCE_STYLES } from "./fences";
 import { edgeOf, insetPolygon, openEdges, railingRuns, stepBlocks, turnOf } from "./areas";
 import { areaColour, areaPaving, BORDER_MATERIALS, BORDER_UNITS, deckKey, deckLook, isPaved, layingAngle, layingFrame, pavingKey, pavingLook, type PavingMaterial } from "./paving";
@@ -111,6 +112,17 @@ export interface RoomInfo {
   outdoor?: boolean;
 }
 
+/** A device a tap switches or opens as a whole (a switch, an access point): a generous target around its middle. */
+export interface DeviceTarget {
+  /** Index into FloorBuild.items. */
+  item: number;
+  /** Its entities: a switch's gangs, left to right. */
+  entities: string[];
+  /** Its middle (world, before the floor's offset). */
+  pos: V3;
+  room: number;
+}
+
 /** A movable thing of the plan: a piece of furniture, or a device (a light gets a lamp model). */
 export interface ItemRef {
   /**
@@ -137,6 +149,7 @@ export interface FloorBuild {
   windows: WindowInfo[];
   portals: Portal[];
   screens: { furniture: Furniture; glow: number; entity: string | null }[];
+  targets: DeviceTarget[];
   /** Cameras: where each hangs and what it sees (the viewer draws that). */
   cameras: CameraRig[];
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
@@ -190,6 +203,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
   const windows: WindowInfo[] = [];
   const portals: Portal[] = [];
   const screens: FloorBuild["screens"] = [];
+  const targets: DeviceTarget[] = [];
   const items: ItemRef[] = [];
   // doors and windows can be tapped in the editor: one item each
   const openingItems = new Map<string, number>();
@@ -357,7 +371,14 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     let glow = -1;
     if (isLamp || parts.some((p) => p.glow === "screen")) {
       glow = glows.length;
-      glows.push({ kind: isLamp ? "lamp" : "screen", entity: item.entity ?? null, room, type: item.type });
+      // a switch or socket lights each gang with its own entity
+      const gangs = GANG_TYPES.has(item.type) ? gangsOf(item) : [item.entity ?? null];
+      for (const entity of gangs) glows.push({ kind: isLamp ? "lamp" : "screen", entity, room, type: item.type });
+    }
+    if (DEVICE_TYPES.has(item.type)) {
+      const entities = gangsOf(item).filter((e): e is string => !!e);
+      const mid = ceiling ? bottom - item.h / 2 : bottom + item.h / 2;
+      if (entities.length) targets.push({ item: items.length - 1, entities, pos: [item.x, mid, item.z], room });
     }
     // a raised piece (a wall cupboard, a lamp on the wall) shows its underside; one on the floor does not
     const raised = baseHeight(item, floor.height) > 0.05;
@@ -401,7 +422,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
   opaque.currentItem = glass.currentItem = -1;
   const all = floor.rooms.flatMap((r) => r.points);
   const fb: FloorBuild = {
-    floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens, cameras,
+    floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens, targets, cameras,
     bounds: all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 1, maxZ: 1 },
     roof: new Geo(), roofGlass: new Geo(), roofs: [], glowsBase: glows.length, itemsBase: items.length,
   };
@@ -832,7 +853,7 @@ function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, r
     const g = p.role === "glass" && glass ? glass : opaque;
     if (g === opaque) g.useSurface(UPHOLSTERY_ROLES.has(p.role) ? `uph:${finish}` : `role:${p.role}`);
     const col = colourOf(p.role);
-    const gslot = p.glow ? glow : -1;
+    const gslot = p.glow && glow >= 0 ? glow + (p.slot ?? 0) : -1;
     const elevated = p.y > 0.02 || raised;
     if (p.shape === "box") {
       const x0 = p.x - p.w / 2, x1 = p.x + p.w / 2, z0 = p.z - p.d / 2, z1 = p.z + p.d / 2;

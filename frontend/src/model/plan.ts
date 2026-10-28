@@ -118,6 +118,11 @@ export interface Furniture {
   plants?: Planting | null;
   /** Bins (scene/bins.ts): the waste they hold; their lid's colour is `trim`. */
   waste?: WasteKind | null;
+  /**
+   * Switches and sockets (scene/devices.ts): the entity of each gang, left to right; how many there
+   * are is how many gangs it has. The first is also `entity`.
+   */
+  gangs?: (string | null)[] | null;
 }
 
 export interface Device {

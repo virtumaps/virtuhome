@@ -97,10 +97,12 @@ const ground: Floor = {
     f("lamp_downlight", 5.2, 4.4, 0, 0.1, 0.1, 0.02, { entity: "light.living_room_downlights" }),
     f("lamp_downlight", 3.2, 6.4, 0, 0.1, 0.1, 0.02, { entity: "light.living_room_downlights" }),
     f("lamp_downlight", 5.2, 6.4, 0, 0.1, 0.1, 0.02, { entity: "light.living_room_downlights" }),
+    f("switch_wall", 2.216, 6.92, -90, 0.146, 0.012, 0.086, { entity: "light.living_room_ceiling", gangs: ["light.living_room_ceiling", "light.living_room_downlights"] }),
     // hall
     f("stairs", 0.55, 4.75, 0, 0.9, 2.6, 2.6),
     f("tall_cabinet", 1.85, 4.0, -90, 0.6, 0.38, 1.9),
     f("led_strip", 1.02, 4.75, 90, 2.6, 0.02, 0.012, { y: 0.15, entity: "light.stairs" }),
+    f("switch_wall", 1.94, 7.254, 180, 0.086, 0.012, 0.086, { entity: "light.stairs" }),
     // kitchen
     f("kitchen", 0.45, 0.33, 180, 0.6, 0.6, 0.9),
     f("sink", 1.75, 0.33, 180, 1.0, 0.6, 0.9),
@@ -111,12 +113,14 @@ const ground: Floor = {
     f("kitchen_wall", 0.45, 0.2, 180, 0.6, 0.35, 0.7),
     f("kitchen_wall", 2.55, 0.2, 180, 0.6, 0.35, 0.7),
     f("lamp_ceiling", 1.55, 1.6, 0, 0.4, 0.4, 0.1),
+    f("socket_wall", 1.0, 0.146, 0, 0.146, 0.012, 0.086, { y: 1.05, entity: "switch.kettle", gangs: ["switch.kettle", "switch.coffee_machine"] }),
     // dining room as office
     f("desk", 3.75, 1.6, 90, 1.4, 0.7, 0.75),
     f("office_chair", 4.3, 1.6, -90, 0.6, 0.6, 1.1),
     f("monitor", 3.55, 1.6, 90, 0.6, 0.2, 0.45, { y: 0.75 }),
     f("shelf", 5.85, 2.6, -90, 0.9, 0.35, 1.9),
     f("lamp_pendant", 4.6, 1.6, 0, 0.35, 0.35, 0.7, { entity: "light.office_pendant" }),
+    f("socket_wall", 3.116, 2.65, -90, 0.086, 0.012, 0.086, { entity: "switch.desk_plug" }),
     // side extension
     f("wc", -1.55, 0.45, 0, 0.4, 0.62, 0.8),
     f("washbasin", -1.4, 1.65, 180, 0.45, 0.35, 0.85),
@@ -214,6 +218,7 @@ const first: Floor = {
     f("wardrobe", 1.15, 6.95, 180, 2.0, 0.6, 2.1),
     f("lamp_ceiling", 1.15, 5.9, 0, 0.35, 0.35, 0.1, { entity: "light.bedroom_3_ceiling" }),
     f("lamp_ceiling", 1.15, 3.2, 0, 0.35, 0.35, 0.1),
+    f("access_point", 1.15, 4.0, 0, 0.2, 0.2, 0.035, { entity: "device_tracker.landing_access_point" }),
   ],
   devices: [
     dev("binary_sensor.landing_motion", 2.05, 2.2, { y: 2.2 }),

@@ -6,6 +6,7 @@ import { separateFaces } from "../src/scene/build";
 import { BALUSTRADES, FURNITURE, type BalustradeStyle, type Part } from "../src/scene/furniture-lib";
 import { FENCE_ORDER, fencePieces } from "../src/scene/fences";
 import { GARDEN_OPTIONS, PLANTER_MATERIALS, PLANTING_NAMES } from "../src/scene/garden";
+import { GANG_TYPES, gangWidth, MAX_GANGS } from "../src/scene/devices";
 
 /**
  * Flat faces of the parts that lie in one plane, face the same way and overlap: they would flicker.
@@ -73,6 +74,18 @@ describe("flicker-free furniture", () => {
     for (const [type, def] of Object.entries(FURNITURE)) {
       const [w, d, h] = def.size;
       for (const f of fights(separateFaces(def.build(w, d, h)))) bad.push(`${type}: ${f}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("leaves no two parts of a switch or socket sharing a face, whatever its gangs", () => {
+    const bad: string[] = [];
+    for (const type of GANG_TYPES) {
+      const [, d, h] = FURNITURE[type].size;
+      for (let n = 1; n <= MAX_GANGS; n++) {
+        const item = { id: "t", type, x: 0, z: 0, rotation: 0, w: gangWidth(n), d, h, gangs: Array.from({ length: n }, (_, i) => `switch.g${i}`) };
+        for (const f of fights(separateFaces(FURNITURE[type].build(item.w, d, h, item)))) bad.push(`${type} ${n} gangs: ${f}`);
+      }
     }
     expect(bad).toEqual([]);
   });
