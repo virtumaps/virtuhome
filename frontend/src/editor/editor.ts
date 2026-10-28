@@ -34,7 +34,7 @@ import { cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
 import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
 import { binColours, POST_TYPES, WASTE_NAMES, wasteKind } from "../scene/bins";
-import { AC_TYPES, FAN_LIGHTS, FAN_TYPES, GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, HEAT_TYPES, MAX_GANGS, WATER_TYPES, WIFI_TYPES } from "../scene/devices";
+import { AC_TYPES, FAN_LIGHTS, FAN_TYPES, GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, HEAT_TYPES, linkedEntities, MAX_GANGS, WATER_TYPES, WIFI_TYPES } from "../scene/devices";
 import { isRaised, outdoorTop } from "../scene/build";
 import { circlePoints, edgeOf, newArea, openEdges, rectSides, resizeRect, roundness, turnOf, type NewAreaKind } from "../scene/areas";
 import {
@@ -1594,7 +1594,7 @@ export class Editor {
     const box = h("div", {});
     // what is not in the plan yet, by area of a linked room
     const inPlan = new Set(this.plan.floors.flatMap((f) => [
-      ...f.devices.map((d) => d.entity), ...f.furniture.map((x) => x.entity), ...f.openings.flatMap((o) => [o.entity, o.cover]),
+      ...f.devices.map((d) => d.entity), ...f.furniture.flatMap(linkedEntities), ...f.openings.flatMap((o) => [o.entity, o.cover]),
     ]).filter(Boolean) as string[]);
     const roomByArea = new Map<string, { fi: number; room: Room }>();
     this.plan.floors.forEach((f, fi) => [...f.rooms, ...(f.outdoor ?? []) as unknown as Room[]].forEach((r) => r.area_id && !roomByArea.has(r.area_id) && roomByArea.set(r.area_id, { fi, room: r })));

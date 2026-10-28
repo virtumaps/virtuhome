@@ -9,7 +9,7 @@ import type { V3 } from "../scene/geo";
 import { kelvinToRgb, type LampState } from "../scene/lighting";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { holdsPost, POST_TYPES } from "../scene/bins";
-import { AC_TYPES, deviceGlow, fanTurns as turnsOf, gangsOf, GANG_TYPES, GLOW_TYPES, HEAT_TYPES, heats, waterTemperature, WATER_TYPES } from "../scene/devices";
+import { AC_TYPES, deviceGlow, fanTurns as turnsOf, gangsOf, linkedEntities, GANG_TYPES, GLOW_TYPES, HEAT_TYPES, heats, waterTemperature, WATER_TYPES } from "../scene/devices";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
 import type { EnergyLive } from "./energy";
@@ -402,7 +402,7 @@ export class HassLive implements LiveSource {
       if (d) return { floor: fi, room: at(d.x, d.z) };
       const o = floor.openings.find((x) => x.entity === entity || x.cover === entity);
       if (o) return { floor: fi, room: sp.findIndex((s) => s.id === o.room_id) };
-      const f = floor.furniture.find((x) => x.entity === entity || x.parked === entity || (GANG_TYPES.has(x.type) && gangsOf(x).includes(entity)));
+      const f = floor.furniture.find((x) => x.parked === entity || linkedEntities(x).includes(entity));
       if (f) return { floor: fi, room: at(f.x, f.z) };
     }
     for (const [camera, motion] of this.cameraMotion) if (motion.includes(entity)) return this.place(camera);

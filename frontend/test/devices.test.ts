@@ -4,7 +4,8 @@ import { HassLive } from "../src/live/live";
 import type { Hass, HassEntity } from "../src/live/hass";
 import { normalizePlan, type Furniture } from "../src/model/plan";
 import { buildFloor } from "../src/scene/build";
-import { acMode, deviceGlow, fanTurns, gangsOf, gangWidth, heats, waterTemperature, wifiOffline } from "../src/scene/devices";
+import { acMode, deviceGlow, fanTurns, gangsOf, gangWidth, heats, linkedEntities, waterTemperature, wifiOffline } from "../src/scene/devices";
+import { entityUses, replaceEntity } from "../src/model/links";
 import { FURNITURE, styleOptions } from "../src/scene/furniture-lib";
 import { DAY } from "../src/scene/palette";
 
@@ -270,5 +271,15 @@ describe("Smart Setup with fans and air conditioners", () => {
     expect(out.x).toBe(4);
     expect(out.z + out.d / 2).toBeLessThan(-0.14);
     expect(Math.abs(out.rotation)).toBe(180);
+  });
+});
+
+describe("a switch's gangs in the plan's links", () => {
+  it("are followed when renamed and counted as placed", () => {
+    const p = plan([piece("switch_wall", { entity: "light.a", gangs: ["light.a", "light.b"] })]);
+    expect(entityUses(p).map((u) => u.entity)).toEqual(expect.arrayContaining(["light.a", "light.b"]));
+    replaceEntity(p, "light.b", "light.b2");
+    expect(p.floors[0].furniture[0].gangs).toEqual(["light.a", "light.b2"]);
+    expect(linkedEntities(p.floors[0].furniture[0])).toEqual(["light.a", "light.b2"]);
   });
 });

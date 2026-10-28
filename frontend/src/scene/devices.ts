@@ -45,6 +45,11 @@ export function gangsOf(item: Pick<Furniture, "type" | "entity" | "gangs">): (st
   return list.map((e) => (typeof e === "string" && e ? e : null));
 }
 
+/** Every entity a piece is linked to: its own, a switch's other gangs, a fan's light. */
+export function linkedEntities(item: Pick<Furniture, "entity" | "gangs" | "light">): string[] {
+  return [...new Set([item.entity, ...(item.gangs ?? []), item.light].filter((e): e is string => typeof e === "string" && !!e))];
+}
+
 /** A plate's width for n gangs: 86 mm for one, 60 mm more for each further one. */
 export const gangWidth = (n: number): number => Math.round((0.026 + 0.06 * Math.max(1, Math.min(MAX_GANGS, n))) * 1000) / 1000;
 
