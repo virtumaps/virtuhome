@@ -35,6 +35,9 @@ export const VIEW_CSS = /* css */ `
 .vh-reading { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 6px; font-weight: 600; }
 .vh-reading svg { width: 14px; height: 14px; fill: var(--vh-accent); flex: none; }
 .vh-reading span { color: inherit; font-size: 12px; }
+/* an extension's tag over a piece of furniture; lit while there is something to do (a bin to put out) */
+.vh-tag { font-weight: 600; }
+.vh-tag.lit { background: #f2b33a; color: #1d232b; box-shadow: 0 1px 10px rgba(242,179,58,0.5); }
 /* who is in the room: faces over its name, or alone over the room in the house view */
 .vh-who { display: flex; justify-content: center; margin: 1px 0 3px; }
 .vh-face {

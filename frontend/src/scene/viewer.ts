@@ -6,9 +6,9 @@ import {
   type Material,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { showsValue, spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
+import { showsValue, spaces, type Device, type Floor, type Furniture, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
-import { buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { buildFloor, buildRoofs, clipToRect, groundAt, lin, outdoorAt, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
 import { fromRoofFrame, planeHeight } from "./roofs";
 import { Geo, type V3 } from "./geo";
@@ -58,6 +58,8 @@ export interface LiveSource {
   roomPeople?(floor: Floor, room: { id: string }): Person[];
   /** A device shown by its value: what its label says. */
   reading?(d: Device): Reading | null;
+  /** A tag an extension puts over a piece of furniture (lit: in the accent of something to do). */
+  itemTag?(item: Furniture): { text: string; lit: boolean } | null;
 }
 
 export interface Hit {
@@ -1542,6 +1544,7 @@ export class Viewer {
           this.overlay.appendChild(who);
           f.labels.push(who);
         });
+        this.addTags(f, fi);
         return;
       }
       f.fb.rooms.forEach((r, ri) => {
@@ -1582,8 +1585,32 @@ export class Viewer {
         this.overlay.appendChild(el);
         f.labels.push(el);
       }
+      this.addTags(f, fi);
     });
     this.positionLabels();
+  }
+
+  /** Extensions' tags over furniture (a bin due out tonight), with the floor's other labels. */
+  private addTags(f: FloorView, fi: number): void {
+    if (this.editMode || !this.live?.itemTag) return;
+    for (const item of f.fb.floor.furniture) {
+      const tag = this.live.itemTag(item);
+      if (!tag) continue;
+      const el = document.createElement("div");
+      el.className = tag.lit ? "vh-label vh-tag lit" : "vh-label vh-tag";
+      el.dataset.floor = String(fi);
+      el.dataset.item = item.id;
+      el.textContent = tag.text;
+      this.overlay.appendChild(el);
+      f.labels.push(el);
+    }
+  }
+
+  /** Where a tag goes: just over the piece. */
+  private tagPosition(fi: number, item: Furniture): V3 {
+    const f = this.floors[fi];
+    const floor = f.fb.floor;
+    return [item.x, floor.elevation + f.offset + Math.max(0, groundAt(floor, [item.x, item.z])) + (item.y ?? 0) + item.h + 0.5, item.z];
   }
 
   /** Fills a reading's label: its icon and its value. Returns whether its text changed. */
@@ -1627,7 +1654,12 @@ export class Viewer {
         let prio = 1e9;
         const i = el.dataset.room === undefined ? -1 : Number(el.dataset.room);
         const reading = el.dataset.reading === undefined ? null : f.fb.floor.devices.find((d) => d.id === el.dataset.reading);
-        if (reading) {
+        const tagged = el.dataset.item === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.item);
+        if (tagged) {
+          // over the rooms' labels, even the selected room's: it is there because something needs doing
+          v.set(...this.tagPosition(fi, tagged));
+          prio = 2e6;
+        } else if (reading) {
           // over the room labels around it, but under the selected room's and those with someone in
           v.set(...this.devicePosition(fi, reading));
           prio = 5e4;
@@ -2143,7 +2175,8 @@ export class Viewer {
         return { kind: "furniture", floor: fi, room: this.roomAt(fi, [h.point.x, h.point.z]), entity: null, item, y: f.fb.floor.elevation + f.offset };
       }
       const room = this.roomAt(fi, [h.point.x, h.point.z]);
-      return { kind: room >= 0 ? "room" : "empty", floor: fi, room, entity: null };
+      // the piece tapped comes along (an extension's mark on it may answer the tap)
+      return { kind: room >= 0 ? "room" : "empty", floor: fi, room, entity: null, item: item?.kind === "furniture" ? item : undefined };
     }
     return { kind: "empty", floor: this.activeFloor, room: -1, entity: null };
   }

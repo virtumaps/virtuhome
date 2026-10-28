@@ -22,6 +22,8 @@
   automation does, its settings and where its notifications go. It then shows in Settings →
   Automations like any other, and goes when the extension does. Extensions never run their own code
   in Home Assistant: the automations come from blueprints signed with the extension.
+- Extensions can light up a piece of furniture and put a tag over it, such as a bin on the evening
+  before it is collected; a tap on the tag or the piece goes to the extension.
 
 ### Changed
 - What you bought keeps working: a paid extension keeps loading the version you have after the

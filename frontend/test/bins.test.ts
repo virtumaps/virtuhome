@@ -5,6 +5,8 @@ import { GARDEN_OPTIONS } from "../src/scene/garden";
 import { HassLive } from "../src/live/live";
 import { normalizePlan } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
+import { buildFloor } from "../src/scene/build";
+import { NIGHT } from "../src/scene/palette";
 
 describe("bins and post boxes", () => {
   it("are garden pieces, bins swapping for bins and post boxes for post boxes", () => {
@@ -61,5 +63,35 @@ describe("bins and post boxes", () => {
     expect(glow("postbox_wall", "2")).not.toBeNull();
     expect(glow("parcel_box", "0")).toBeNull();
     expect(glow("parcel_box", "unavailable")).toBeNull();
+  });
+
+  it("give every bin a part an extension's mark can light, and that mark lights only its own piece", () => {
+    for (const type of Object.keys(BIN_WASTES)) {
+      const [w, d, h] = FURNITURE[type].size;
+      expect(FURNITURE[type].build(w, d, h).some((p) => p.glow === "screen"), type).toBe(true);
+    }
+    const plan = normalizePlan({
+      version: 1, settings: {},
+      floors: [{
+        id: "g", name: "Ground Floor", elevation: 0, height: 2.6, rooms: [], openings: [], devices: [], walls: [],
+        outdoor: [{ id: "front", name: "Front garden", kind: "lawn", points: [[0, 0], [6, 0], [6, 4], [0, 4]] }],
+        furniture: [
+          { id: "black", type: "bin_240", x: 1, z: 1, rotation: 0, w: 0.58, d: 0.74, h: 1.07 },
+          { id: "blue", type: "bin_240", x: 2, z: 1, rotation: 0, w: 0.58, d: 0.74, h: 1.07, waste: "recycling" },
+        ],
+      }],
+    });
+    const fb = buildFloor(plan, 0, NIGHT, { low: false });
+    const slots = fb.glows.filter((g) => g.item);
+    expect(slots.map((g) => [g.item, g.type])).toEqual([["black", "bin_240"], ["blue", "bin_240"]]);
+    const l = new HassLive(plan);
+    expect(l.glowColor(slots[0])).toBeNull();
+    l.itemMarks = new Map([["black", { glow: [1, 0.6, 0.2], text: "Black bin tomorrow" }], ["blue", { text: "Blue bin on Monday" }]]);
+    expect(l.glowColor(slots[0])).toEqual([1, 0.6, 0.2]);
+    expect(l.glowColor(slots[1])).toBeNull();
+    expect(l.itemTag(plan.floors[0].furniture[0])).toEqual({ text: "Black bin tomorrow", lit: true });
+    expect(l.itemTag(plan.floors[0].furniture[1])).toEqual({ text: "Blue bin on Monday", lit: false });
+    l.itemMarks = null;
+    expect(l.itemTag(plan.floors[0].furniture[0])).toBeNull();
   });
 });

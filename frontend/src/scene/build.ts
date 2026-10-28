@@ -66,6 +66,8 @@ export interface GlowSlot {
   room: number;
   /** The furniture type it belongs to (solar panels shine with the house's solar power). */
   type?: string;
+  /** The piece of furniture's id (an extension's mark can light it). */
+  item?: string;
 }
 
 export interface LampInfo {
@@ -357,7 +359,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     let glow = -1;
     if (isLamp || parts.some((p) => p.glow === "screen")) {
       glow = glows.length;
-      glows.push({ kind: isLamp ? "lamp" : "screen", entity: item.entity ?? null, room, type: item.type });
+      glows.push({ kind: isLamp ? "lamp" : "screen", entity: item.entity ?? null, room, type: item.type, item: item.id });
     }
     // a raised piece (a wall cupboard, a lamp on the wall) shows its underside; one on the floor does not
     const raised = baseHeight(item, floor.height) > 0.05;

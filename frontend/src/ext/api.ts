@@ -13,10 +13,11 @@
 // colours painted over them (a solar map).
 // API 5 adds automations (ctx.automations): an extension's own blueprints, signed with it, that Home
 // Assistant runs with no screen open. Each is added only after the user agrees in the core's dialog.
+// And marks on furniture: a piece's lit part glows (a bin's lid) and a tag shows over it.
 import * as THREE from "three";
 import type { EnergyNow, EnergySources, EnergyToday } from "../live/energy";
 import type { Hass, HassEntity } from "../live/hass";
-import type { RoomText, RoomTint } from "../live/live";
+import type { ItemMark, ItemMarks, RoomText, RoomTint } from "../live/live";
 import type { Plan } from "../model/plan";
 import type { RoofFaceInfo, SolarArrayInfo } from "../scene/roof-info";
 import type { Viewer } from "../scene/viewer";
@@ -27,7 +28,7 @@ import { logError } from "../ui/errors";
 
 export const EXT_API_VERSION = 5;
 
-export type { RoofFaceInfo, SolarArrayInfo };
+export type { ItemMark, ItemMarks, RoofFaceInfo, SolarArrayInfo };
 
 /** A round button in the view's tool column. */
 export interface Tool {
@@ -158,6 +159,18 @@ export interface ViewHandle {
   showRoofs(on: boolean | null): void;
   /** Called when the plan changes (the roofs or what is on them may have); returns an unsubscribe. */
   onPlan(cb: (plan: Plan) => void): () => void;
+
+  // API 5
+  /**
+   * Marks pieces of furniture, as `fn` says for each (null: no mark): `glow` lights the piece's lit part
+   * (a bin's lid, a recycling box's sides, a post box's window, a lamp's shade, a screen) in that
+   * colour (linear RGB 0..1); `text` is a short tag over it; a tap on the tag or the piece calls
+   * `onTap`. null takes the marks off. Then call refreshItems(). Marks don't show while editing or
+   * during a replay.
+   */
+  markItems(fn: ItemMarks | null): void;
+  /** Works the marks out again and redraws them (call it when what they show changes, not every frame). */
+  refreshItems(): void;
 }
 
 /** An automation an extension added to Home Assistant from one of its blueprints. */

@@ -2,6 +2,8 @@
 // box and a communal bin, each holding a kind of waste whose usual body and lid colours depend on
 // the home's country; and post boxes (on a wall, on a post, a parcel box) whose window glows while
 // their sensor says there is post. Made of simple solids like the rest of the garden (scene/garden.ts).
+// A bin's lid (a recycling box's sides) can glow too: an extension marks it on the evening before its
+// collection (ViewHandle.markItems).
 import type { Furniture } from "../model/plan";
 import type { FurnitureType, Part, Role } from "./furniture-lib";
 import type { PlainKey } from "../i18n";
@@ -60,6 +62,8 @@ export function holdsPost(state: string): boolean {
   return ["on", "true", "yes", "open", "detected", "post", "mail", "full"].includes(state.toLowerCase());
 }
 
+/** What lights up when an extension marks a bin. */
+const LIT: Partial<Part> = { glow: "screen" };
 const box = (x: number, y: number, z: number, w: number, h: number, d: number, role: Role, extra: Partial<Part> = {}): Part => ({ shape: "box", x, y, z, w, h, d, role, ...extra });
 const rod = (x: number, y: number, z: number, w: number, h: number, d: number, role: Role, seg = 10): Part => ({ shape: "cyl", axis: "x", x, y, z, w, h, d, role, seg });
 /** A side outline (along z, up y, in 0..1 of d and h) carried w across x. */
@@ -74,8 +78,8 @@ function wheelieBin(w: number, d: number, h: number): Part[] {
   return [
     hull(0.04, 0, w - 0.04, top - 0.09, d - 0.06, "plastic", [[0.12, 0], [0.92, 0], [1, 1], [0, 1]]),
     box(0, top - 0.05, 0, w, 0.05, d - 0.03, "plastic"),
-    box(0, top, 0.006, w + 0.01, 0.035, d + 0.012, "lid"),
-    box(0, top - 0.035, d / 2 + 0.014, w - 0.08, 0.035, 0.016, "lid"),
+    box(0, top, 0.006, w + 0.01, 0.035, d + 0.012, "lid", LIT),
+    box(0, top - 0.035, d / 2 + 0.014, w - 0.08, 0.035, 0.016, "lid", LIT),
     // the handle across the back, on two arms from the rim
     rod(0, top - 0.07, -d / 2 - 0.035, w - 0.06, 0.035, 0.035, "plastic"),
     ...[-1, 1].map((s) => box(s * (w / 2 - 0.06), top - 0.075, -d / 2 - 0.01, 0.03, 0.045, 0.05, "plastic")),
@@ -91,7 +95,7 @@ function communalBin(w: number, d: number, h: number): Part[] {
   const out: Part[] = [
     hull(foot, 0, w - 0.06, top - foot - 0.06, d - 0.1, "plastic", [[0.06, 0], [0.94, 0], [1, 1], [0, 1]]),
     box(0, top - 0.06, 0, w, 0.06, d - 0.04, "plastic"),
-    hull(top, 0.004, w + 0.012, h - top, d + 0.008, "lid", [[0, 0], [1, 0], [0.96, 0.45], [0.82, 0.82], [0.5, 1], [0.18, 0.82], [0.04, 0.45]]),
+    { ...hull(top, 0.004, w + 0.012, h - top, d + 0.008, "lid", [[0, 0], [1, 0], [0.96, 0.45], [0.82, 0.82], [0.5, 1], [0.18, 0.82], [0.04, 0.45]]), ...LIT },
     rod(0, top - 0.3, d / 2 + 0.01, w - 0.36, 0.035, 0.035, "dark"),
   ];
   for (const sx of [-1, 1]) {
@@ -108,7 +112,7 @@ function communalBin(w: number, d: number, h: number): Part[] {
 function foodCaddy(w: number, d: number, h: number): Part[] {
   return [
     hull(0, 0, w, h - 0.05, d - 0.02, "plastic", [[0.06, 0], [0.94, 0], [1, 1], [0, 1]]),
-    box(0, h - 0.05, 0, w + 0.012, 0.04, d + 0.004, "lid"),
+    box(0, h - 0.05, 0, w + 0.012, 0.04, d + 0.004, "lid", LIT),
     box(0, h - 0.01, d / 2 - 0.05, w - 0.05, 0.012, 0.03, "plastic"),
   ];
 }
@@ -118,10 +122,10 @@ function recyclingBox(w: number, d: number, h: number): Part[] {
   const t = 0.012;
   return [
     box(0, 0, 0, w - 2 * t, 0.02, d - 2 * t, "plastic"),
-    box(0, 0, -d / 2 + t / 2, w, h, t, "plastic"),
-    box(0, 0, d / 2 - t / 2, w, h, t, "plastic"),
-    box(-w / 2 + t / 2, 0, 0, t, h, d - 2 * t, "plastic"),
-    box(w / 2 - t / 2, 0, 0, t, h, d - 2 * t, "plastic"),
+    box(0, 0, -d / 2 + t / 2, w, h, t, "plastic", LIT),
+    box(0, 0, d / 2 - t / 2, w, h, t, "plastic", LIT),
+    box(-w / 2 + t / 2, 0, 0, t, h, d - 2 * t, "plastic", LIT),
+    box(w / 2 - t / 2, 0, 0, t, h, d - 2 * t, "plastic", LIT),
     box(-w * 0.18, 0.02, -d * 0.12, w * 0.4, h * 0.45, d * 0.5, "paper"),
     { shape: "cyl", x: w * 0.2, y: 0.02, z: d * 0.1, w: 0.07, h: h * 0.6, d: 0.07, role: "metal", seg: 10 },
     { shape: "cyl", x: w * 0.28, y: 0.02, z: -d * 0.16, w: 0.08, h: h * 0.75, d: 0.08, role: "leaf", seg: 10, taper: 0.4 },
