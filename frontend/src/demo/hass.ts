@@ -74,7 +74,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     };
     const ids: [string, string | null][] = [
       ...floor.devices.map((d) => [d.entity, roomArea(d.x, d.z)] as [string, string | null]),
-      ...floor.furniture.flatMap((f) => [f.entity, ...(f.gangs ?? [])].filter(Boolean).map((e) => [e!, roomArea(f.x, f.z)] as [string, string | null])),
+      ...floor.furniture.flatMap((f) => [f.entity, f.light, ...(f.gangs ?? [])].filter(Boolean).map((e) => [e!, roomArea(f.x, f.z)] as [string, string | null])),
       ...floor.openings.flatMap((o) => [o.entity, o.cover].filter(Boolean).map((e) => [e!, floor.rooms.find((r) => r.id === o.room_id)?.area_id ?? null] as [string, string | null])),
     ];
     for (const [id, area] of ids) {
@@ -90,7 +90,11 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
         put(id, Math.random() > (dc === "motion" ? 0.6 : 0.75) ? "on" : "off", { device_class: dc });
       } else if (dom === "media_player") put(id, /tv|webos/.test(id) ? "playing" : "idle");
       else if (dom === "camera") put(id, "idle");
+      else if (dom === "climate" && /air_conditioner/.test(id)) put(id, "cool", { hvac_action: "cooling", hvac_modes: ["off", "cool", "heat", "fan_only", "dry"], current_temperature: 23.5, temperature: 21 });
       else if (dom === "climate") put(id, "heat", { hvac_action: "heating", current_temperature: 20.5, temperature: 21 });
+      else if (dom === "fan") put(id, "on", { percentage: 66, percentage_step: 33.33 });
+      else if (dom === "valve") put(id, "open", { current_position: 100 });
+      else if (dom === "water_heater") put(id, "eco", { current_temperature: 52, temperature: 55, min_temp: 40, max_temp: 65, operation_mode: "eco" });
       else if (dom === "cover") put(id, "open", { current_position: 60 });
       else if (dom === "device_tracker") put(id, "home", { source_type: "router" })
       else if (dom === "switch") put(id, /coffee/.test(id) ? "off" : "on")

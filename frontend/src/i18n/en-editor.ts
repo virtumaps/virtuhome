@@ -491,6 +491,7 @@ export const EN_EDITOR = {
   "editor.furniture.gangs": "Gangs",
   "editor.furniture.gangsOf": "Gangs of",
   "editor.furniture.gang": "Gang {n}",
+  "editor.furniture.light": "Light",
   "editor.furniture.theHousesCharger": "The house's charger",
   "editor.furniture.noneFound": "None found",
   "editor.furniture.nothing": "Nothing",

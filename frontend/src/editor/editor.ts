@@ -34,7 +34,7 @@ import { cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
 import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
 import { binColours, POST_TYPES, WASTE_NAMES, wasteKind } from "../scene/bins";
-import { GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, MAX_GANGS, WIFI_TYPES } from "../scene/devices";
+import { AC_TYPES, FAN_LIGHTS, FAN_TYPES, GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, HEAT_TYPES, MAX_GANGS, WATER_TYPES, WIFI_TYPES } from "../scene/devices";
 import { isRaised, outdoorTop } from "../scene/build";
 import { circlePoints, edgeOf, newArea, openEdges, rectSides, resizeRect, roundness, turnOf, type NewAreaKind } from "../scene/areas";
 import {
@@ -60,6 +60,14 @@ import { location as homeLocation } from "../live/sky";
 
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
 type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
+/** What each kind of device can be linked to. */
+const DEVICE_DOMAINS: [Set<string>, string[]][] = [
+  [FAN_TYPES, ["fan", "switch"]],
+  [AC_TYPES, ["climate"]],
+  [HEAT_TYPES, ["climate", "valve", "switch", "input_boolean", "binary_sensor"]],
+  [WATER_TYPES, ["water_heater", "sensor", "climate"]],
+];
+
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 /** Common solar panel sizes (mm), long side first, newest first. */
 const PANEL_SIZES: [number, number, EditorPlainKey][] = [
@@ -2097,7 +2105,7 @@ export class Editor {
           // an access point: anything of its device that goes away or says so when it is offline
           : WIFI_TYPES.has(x.type)
             ? this.entities((id) => ["binary_sensor", "device_tracker", "sensor", "update"].includes(domainOf(id)))
-            : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
+            : this.entities((id) => DEVICE_DOMAINS.find(([types]) => types.has(x.type))?.[1].includes(domainOf(id)) ?? ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
     // a change of size, height, turn or side keeps the piece out of walls and other pieces
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
       fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
@@ -2134,6 +2142,9 @@ export class Editor {
       ...(GANG_TYPES.has(x.type) ? this.gangRows(x, upd, reshape) : []),
       (garden && !POST_TYPES.has(x.type)) || GANG_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : POST_TYPES.has(x.type) ? t("editor.furniture.postSensor") : t("editor.furniture.linkedTo")),
         this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? t("editor.furniture.theHousesCharger") : t("editor.furniture.noneFound")) : t("editor.furniture.nothing"))),
+      // a ceiling fan's light, a lamp of its own
+      FAN_LIGHTS.has(x.type) ? h("div", { class: "ed-row" }, h("label", {}, t("editor.furniture.light")),
+        this.dropdown(this.entities((id) => domainOf(id) === "light"), x.light ?? "", (v) => upd((y) => (y.light = v || null)), t("editor.furniture.nothing"))) : null,
       ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
       h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), "w"), ...num(t("editor.houses.depth"), "d")),
       h("div", { class: "ed-row" }, ...num(t("editor.height"), "h"), ...num(t("editor.furniture.aboveFloor"), "y")),

@@ -716,7 +716,8 @@ export const FURNITURE: Record<string, FurnitureType> = {
     label: "furniture.towel_rail", category: "bath", family: "radiator", size: [0.5, 0.08, 1.2], y: 0.15, paint: ["fabric"],
     build: (w, _d, h) => {
       const n = Math.max(3, Math.round(h / 0.12));
-      const bars = Array.from({ length: n }, (_, i) => rod("x", 0, (h / n) * i + 0.03, 0, w, 0.022, 0.022, "metal", 6));
+      // the bars glow while it heats (linked to a thermostat, valve or switch)
+      const bars = Array.from({ length: n }, (_, i) => ({ ...rod("x", 0, (h / n) * i + 0.03, 0, w, 0.022, 0.022, "metal", 6), glow: "screen" as const }));
       return [box(-w / 2 + 0.02, 0, 0, 0.03, h, 0.03, "metal"), box(w / 2 - 0.02, 0, 0, 0.03, h, 0.03, "metal"), ...bars, box(0, h * 0.55, 0.02, w * 0.75, h * 0.3, 0.03, "fabric")];
     },
   },
@@ -916,13 +917,6 @@ export const FURNITURE: Record<string, FurnitureType> = {
     build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "dark", 16)],
   },
   dryer: { label: "furniture.dryer", category: "utility", family: "washer", size: [0.6, 0.6, 0.85], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "metal", 16)] },
-  radiator: {
-    label: "furniture.radiator", category: "utility", family: "radiator", size: [1.0, 0.1, 0.6], y: 0.12,
-    build: (w, d, h) => {
-      const n = Math.max(3, Math.round(w / 0.08));
-      return [box(0, 0, 0, w, h, d, "white"), ...Array.from({ length: n }, (_, i) => box(-w / 2 + (w / n) * (i + 0.5), 0.02, d / 2, 0.012, h - 0.04, 0.006, "ceramic"))];
-    },
-  },
   boiler: { label: "furniture.boiler", category: "utility", family: "boiler", size: [0.45, 0.35, 0.7], y: 1.2, build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, h * 0.15, d / 2, w * 0.4, h * 0.08, 0.01, "dark")] },
   laundry_basket: { label: "furniture.laundry_basket", category: "utility", family: "basket", size: [0.4, 0.4, 0.55], paint: ["wood"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "wood", undefined, 12, 1.1), ball(0, h - 0.1, 0, w * 0.8, 0.2, d * 0.8, "fabric", 8)] },
   printer_3d: { label: "furniture.printer_3d", category: "utility", family: "printer", size: [0.4, 0.4, 0.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "dark"), box(0, 0.05, d / 2 - 0.004, w * 0.85, h * 0.8, 0.008, "glass", "screen")] },
@@ -1047,7 +1041,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
   lamp_garden: { label: "furniture.lamp_garden", category: "lights", family: "lamp_garden", size: [0.15, 0.15, 0.6], build: (w, d, h) => [cyl(0, 0, 0, w * 0.4, h - 0.15, d * 0.4, "dark", undefined, 6), cyl(0, h - 0.15, 0, w, 0.15, d, "bulb", "lamp", 10)] },
   lamp_post: { label: "furniture.lamp_post", category: "lights", family: "lamp_garden", size: [0.3, 0.3, 2.2], build: (w, d, h) => [cyl(0, 0, 0, w * 0.6, 0.1, d * 0.6, "dark", undefined, 8), cyl(0, 0.1, 0, 0.07, h - 0.45, 0.07, "dark", undefined, 8), cyl(0, h - 0.35, 0, w, 0.3, d, "bulb", "lamp", 8, 0.6), cyl(0, h - 0.06, 0, w * 0.75, 0.06, d * 0.75, "dark", undefined, 8, 0.3)] },
 
-  // ---------------------------------------------------------------- devices: switches, sockets, access points (scene/devices.ts)
+  // ---------------------------------------------------------------- devices: switches, sockets, access points, fans, heating (scene/devices.ts)
   ...DEVICE_FURNITURE,
 
   // ---------------------------------------------------------------- structure
@@ -1099,8 +1093,8 @@ export function carModel(name: string | null | undefined): { type: string; size:
 /** Light fixtures follow a light entity's state. */
 export const LAMP_TYPES = Object.keys(FURNITURE).filter((k) => FURNITURE[k].category === "lights");
 
-/** Fixtures that hang from the ceiling (placed at the ceiling, light below): lamps, and access points. */
-export const CEILING_LAMPS = new Set(["lamp_ceiling", "lamp_pendant", "lamp_globe", "lamp_chandelier", "lamp_downlight", "lamp_spots", "access_point"]);
+/** Fixtures that hang from the ceiling (placed at the ceiling, light below): lamps, access points and fans. */
+export const CEILING_LAMPS = new Set(["lamp_ceiling", "lamp_pendant", "lamp_globe", "lamp_chandelier", "lamp_downlight", "lamp_spots", "access_point", "fan_ceiling", "fan_ceiling_light"]);
 
 /** A type's name in the user's language; undefined for a type there isn't. */
 export const furnitureName = (type: string): string | undefined => (FURNITURE[type] ? t(FURNITURE[type].label) : undefined);

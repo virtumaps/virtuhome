@@ -267,7 +267,7 @@ export class VhView {
       const floor = Number(el.dataset.floor);
       const opens = (e.target as HTMLElement).closest<HTMLElement>("[data-entity]")?.dataset.entity;
       // a reading opens its entity (in a replay, the replay hears of it as of a device)
-      if (el.dataset.reading !== undefined) {
+      if (el.dataset.reading !== undefined || el.dataset.piece !== undefined) {
         if (this.replayed) this.replayed.options.onHit?.({ floor, room: -1, entity: el.dataset.entity ?? null }, "tap");
         else if (opens && !this.editor) this.dialog(opens);
       } else if (el.dataset.room === undefined) this.showFloor(floor);
