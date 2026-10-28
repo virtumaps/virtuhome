@@ -3,20 +3,6 @@
 ## Unreleased
 
 ### New
-- **Readings**: any sensor's value in a small label on the plan, with an icon for what it measures:
-  the garden's temperature, the pond, the water tank, a weather station. Edit → Devices → **Add a
-  reading** puts one in the selected room or garden area (else its area's room); drag it where it
-  goes. Sensors placed as devices now show their value this way, and **Show** on any device picks its
-  value or an icon. Numbers follow the sensor's display precision and unit, an unavailable one shows
-  "–", and a tap opens its dialog. Readings show with their floor, never in the whole-house view.
-- **On its label**, for each room and garden area in Edit → Selected: pick which values show under
-  its name and in what order. Temperature and humidity are still there by default and can be hidden;
-  any of the area's sensors, or any other entity, can be added. The **Temperature sensor** and
-  **Humidity sensor** a room's label (and the temperature map) read can now be picked too.
-- Values in the top bar: Edit → Home → **Top bar** keeps up to 6 entities' values beside the floor
-  buttons (the outside temperature, the price now, the next bin day), and a tap opens one. Cards show
-  them too, or their own with the new `chips` option (in the visual editor as **Values in the top
-  bar**).
 - Wall switches and sockets (**Devices** in Add furniture and decor): 1 to 4 **Gangs**, each linked to
   a light, switch, fan or toggle helper. Each gang lights up while it is on; a tap switches a
   one-gang switch, and with several a small menu by your finger switches each one. Smart Setup puts
@@ -51,6 +37,24 @@
   its dialog. New **Smart speaker**, whose light ring glows softly while it plays.
 - Hot water cylinders and water heaters show their temperature over them (**52.0° → 55°**, what it
   is and what it heats to), from a `water_heater`, a thermostat or a temperature sensor.
+
+## 0.14.0
+
+### New
+- **Readings**: any sensor's value in a small label on the plan, with an icon for what it measures:
+  the garden's temperature, the pond, the water tank, a weather station. Edit → Devices → **Add a
+  reading** puts one in the selected room or garden area (else its area's room); drag it where it
+  goes. Sensors placed as devices now show their value this way, and **Show** on any device picks its
+  value or an icon. Numbers follow the sensor's display precision and unit, an unavailable one shows
+  "–", and a tap opens its dialog. Readings show with their floor, never in the whole-house view.
+- **On its label**, for each room and garden area in Edit → Selected: pick which values show under
+  its name and in what order. Temperature and humidity are still there by default and can be hidden;
+  any of the area's sensors, or any other entity, can be added. The **Temperature sensor** and
+  **Humidity sensor** a room's label (and the temperature map) read can now be picked too.
+- Values in the top bar: Edit → Home → **Top bar** keeps up to 6 entities' values beside the floor
+  buttons (the outside temperature, the price now, the next bin day), and a tap opens one. Cards show
+  them too, or their own with the new `chips` option (in the visual editor as **Values in the top
+  bar**).
 - Extensions can add automations to Home Assistant, so alerts such as "the garage is still open"
   work with no screen open. Nothing is added until you agree in a window that shows what the
   automation does, its settings and where its notifications go. It then shows in Settings →
@@ -65,6 +69,15 @@
   Check my setup say which it is.
 
 ### Fixed
+- Leaving VirtuHome for another dashboard left its 3D house behind in memory: every visit to the
+  panel, and every return to a dashboard with the card, kept another scene and graphics context, so
+  a wall tablet got slower with each page change. Ten seconds after it leaves the page, a view now
+  lets all of it go and is made again when it comes back (not while the editor is open).
+- **Own power** in the energy sheet showed 0% on a day the battery charged from the grid overnight,
+  because all the power bought counted as the house's. It now counts, hour by hour, only what the
+  house itself took from the grid, the way Home Assistant's self-sufficiency gauge does.
+- On a phone, the editor's drawer covered the buttons on the right (walls, graphics and the others);
+  they now stay above it, beside the house.
 - On a phone, Home Assistant's menu button covered **House** in the sidebar's top bar, so tapping
   House opened the sidebar. The top bar now starts after it.
 - On a short view (a dashboard card, a phone on its side) the buttons on the right slid under the

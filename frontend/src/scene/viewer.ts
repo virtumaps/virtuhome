@@ -234,6 +234,8 @@ export class Viewer {
   private flight: { from: [Vector3, Vector3]; to: [Vector3, Vector3]; t: number; dur: number } | null = null;
   private resizeObs: ResizeObserver;
   private interObs: IntersectionObserver;
+  /** Takes the renderer's canvas listeners off. */
+  private unlisten = () => {};
   private width = 1;
   private height = 1;
   private pixelRatio = 1;
@@ -334,17 +336,35 @@ export class Viewer {
     r.setPixelRatio(this.pixelRatio);
     r.domElement.style.display = "block";
     r.domElement.style.touchAction = "none";
-    r.domElement.addEventListener("webglcontextlost", (e) => {
+    const lost = (e: Event) => {
       e.preventDefault();
       if (r !== this.renderer || this.disposed || this.halted) return;
       this.onError?.(new Error("The browser dropped the WebGL context"), false, "graphics");
       // the browser usually gives it back (restored, below); if it doesn't, a new canvas gets a new one
       window.clearTimeout(this.lostTimer);
       this.lostTimer = window.setTimeout(() => this.recover(true), 3000);
-    });
-    r.domElement.addEventListener("webglcontextrestored", () => r === this.renderer && this.recover(false));
+    };
+    const restored = () => r === this.renderer && this.recover(false);
+    r.domElement.addEventListener("webglcontextlost", lost);
+    r.domElement.addEventListener("webglcontextrestored", restored);
+    this.unlisten = () => {
+      r.domElement.removeEventListener("webglcontextlost", lost);
+      r.domElement.removeEventListener("webglcontextrestored", restored);
+    };
     this.container.appendChild(r.domElement);
     return r;
+  }
+
+  /**
+   * A renderer let go, with its WebGL context now rather than when collected: a page may hold only so
+   * many. Its listeners go first: one that asks for the context back makes the browser keep it, and
+   * through them the whole view.
+   */
+  private dropRenderer(r: WebGLRenderer): void {
+    this.unlisten();
+    r.dispose();
+    r.forceContextLoss();
+    r.domElement.remove();
   }
 
   private setupLook(): void {
@@ -379,8 +399,7 @@ export class Viewer {
     this.slowWatch = { frames: 0, time: 0, fired: false };
     if (newRenderer) {
       this.controls.disconnect();
-      this.renderer.dispose();
-      this.renderer.domElement.remove();
+      this.dropRenderer(this.renderer);
       this.renderer = this.createRenderer();
       this.controls.connect(this.renderer.domElement);
     }
@@ -2389,11 +2408,8 @@ export class Viewer {
     this.markers.dispose();
     this.halos.dispose();
     this.controls.dispose();
-    this.renderer.dispose();
-    // its WebGL context goes now, not when collected: a page may hold only so many (the demo home
-    // opens and closes a view of its own)
-    this.renderer.forceContextLoss();
-    this.renderer.domElement.remove();
+    // the demo home opens and closes a view of its own
+    this.dropRenderer(this.renderer);
   }
 }
 

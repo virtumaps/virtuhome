@@ -271,7 +271,7 @@ function renderToday(el: HTMLElement, energy: EnergyLive): void {
     return;
   }
   el.hidden = false;
-  const self = today.home && today.gridIn !== null ? Math.max(0, Math.min(1, 1 - today.gridIn / today.home)) : null;
+  const self = today.own;
   const cells: [string, string][] = [];
   if (today.solar !== null) cells.push([th("energy.solar"), formatEnergy(today.solar)]);
   if (today.home !== null) cells.push([th("energy.house"), formatEnergy(today.home)]);

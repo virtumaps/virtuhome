@@ -145,6 +145,7 @@ export const VIEW_CSS = /* css */ `
 /* on a phone the editor's drawer takes the bottom: the house shows above it, as the 2D plan does */
 @media (max-width: 600px) {
   .vh-root.editing .vh-canvas, .vh-root.editing .vh-overlay { bottom: 62%; }
+  .vh-root.editing .vh-tools, .vh-root.editing .vh-menu { bottom: calc(62% + 10px); }
 }
 .vh-root.editing .vh-sheet { display: none; }
 .vh-alarm.armed { box-shadow: inset 0 0 0 1.5px #2bb673; }

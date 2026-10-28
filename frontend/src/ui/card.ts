@@ -1,6 +1,7 @@
 // The dashboard card: the live view at a fixed height (or filling a panel view).
 import type { Hass } from "../live/hass";
 import { failedView } from "./errors";
+import { ViewHost } from "./host";
 import { VhView, type ViewConfig } from "./view";
 
 export interface CardConfig extends ViewConfig {
@@ -20,13 +21,12 @@ export function inPanelView(node: Node | null): boolean {
   return false;
 }
 
-export class CardImpl {
-  /** Null when the view could not be made (the error box shows instead). */
-  private view: VhView | null;
+export class CardImpl extends ViewHost {
   private frame: HTMLElement;
-  private failed: { hass: Hass | null } | null = null;
+  private root: ShadowRoot;
 
-  constructor(private host: HTMLElement, private config: CardConfig) {
+  constructor(host: HTMLElement, private config: CardConfig) {
+    super(host);
     const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
     shadow.innerHTML = `<style>
       :host { display: block; }
@@ -37,13 +37,20 @@ export class CardImpl {
     this.frame.className = "frame";
     shadow.appendChild(this.frame);
     this.applyHeight();
-    const inner = this.frame.attachShadow({ mode: "open" });
-    try {
-      this.view = new VhView(inner, config);
-    } catch (err) {
-      this.view = null;
-      this.failed = failedView(inner, err, "card", config.quality);
-    }
+    this.root = this.frame.attachShadow({ mode: "open" });
+    this.build();
+  }
+
+  protected get inner(): ShadowRoot {
+    return this.root;
+  }
+
+  protected make(inner: ShadowRoot): VhView {
+    return new VhView(inner, this.config);
+  }
+
+  protected failure(inner: ShadowRoot, err: unknown): { hass: Hass | null } {
+    return failedView(inner, err, "card", this.config.quality);
   }
 
   private applyHeight(): void {
@@ -57,18 +64,9 @@ export class CardImpl {
     this.view?.setConfig(config);
   }
 
-  set hass(h: Hass) {
-    if (this.view) this.view.hass = h;
-    else if (this.failed) this.failed.hass = h;
-  }
-
   connect(): void {
     // put back on a page, maybe in another view
     this.applyHeight();
-    this.view?.connect();
-  }
-
-  disconnect(): void {
-    this.view?.disconnect();
+    super.connect();
   }
 }
