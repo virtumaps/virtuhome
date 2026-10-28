@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findSources, flows, formatPower, formatPrice, formatRate, readNow, type EnergyPrefs } from "../src/live/energy";
+import { findSources, flows, formatPower, formatPrice, formatRate, ownShare, readNow, type EnergyPrefs } from "../src/live/energy";
 import type { Hass, HassEntity, HassEntityReg } from "../src/live/hass";
 
 /** A FoxESS inverter over Modbus with an Octopus tariff, as Home Assistant shows them. */
@@ -137,5 +137,32 @@ describe("formatting", () => {
     expect(formatPrice({ value: 0.31, currency: "EUR" })).toBe("€0.310");
     expect(formatRate(1.5, { value: 0.245, currency: "GBP" })).toBe("37p/h");
     expect(formatRate(0.1, { value: 0.245, currency: "GBP" })).toBe("2.5p/h");
+  });
+});
+
+describe("ownShare", () => {
+  const hour = (h: Partial<Record<"solar" | "gridIn" | "gridOut" | "batteryIn" | "batteryOut", number>>) =>
+    ({ solar: 0, gridIn: 0, gridOut: 0, batteryIn: 0, batteryOut: 0, ...h });
+
+  it("doesn't count the grid power that charged the battery overnight", () => {
+    // 2 kWh for the house and 6 kWh into the battery at night, then the battery and the sun run the house
+    const day = [hour({ gridIn: 8, batteryIn: 6 }), hour({ batteryOut: 5, solar: 3, gridOut: 1 })];
+    // house: 2 at night (all bought) + 7 by day (none bought)
+    expect(ownShare(day)).toBeCloseTo(1 - 2 / 9);
+  });
+
+  it("is nothing when everything came from the grid, and everything when nothing did", () => {
+    expect(ownShare([hour({ gridIn: 3 })])).toBe(0);
+    expect(ownShare([hour({ solar: 4, gridOut: 1 })])).toBe(1);
+  });
+
+  it("takes solar first, then the battery, then the grid within an hour", () => {
+    // house 4: 1 from the sun, 2 from the battery, 1 bought
+    expect(ownShare([hour({ solar: 1, batteryOut: 2, gridIn: 1 })])).toBeCloseTo(0.75);
+  });
+
+  it("has no share when the house used nothing", () => {
+    expect(ownShare([])).toBeNull();
+    expect(ownShare([hour({ gridIn: 2, batteryIn: 2 })])).toBeNull();
   });
 });
