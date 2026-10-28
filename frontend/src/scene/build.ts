@@ -67,6 +67,8 @@ export interface GlowSlot {
   room: number;
   /** The furniture type it belongs to (solar panels shine with the house's solar power). */
   type?: string;
+  /** The piece of furniture's id (an extension's mark can light it). */
+  item?: string;
 }
 
 export interface LampInfo {
@@ -388,7 +390,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
       glow = glows.length;
       // a switch or socket lights each gang with its own entity
       const gangs = GANG_TYPES.has(item.type) ? gangsOf(item) : [(isLamp ? lampEntity : item.entity) ?? null];
-      for (const entity of gangs) glows.push({ kind: isLamp ? "lamp" : "screen", entity, room, type: item.type });
+      for (const entity of gangs) glows.push({ kind: isLamp ? "lamp" : "screen", entity, room, type: item.type, item: item.id });
     }
     if (DEVICE_TYPES.has(item.type)) {
       const entities = deviceEntities(item);

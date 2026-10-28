@@ -27,6 +27,13 @@ export type RGBA = [number, number, number, number];
 /** An extension's colour for a room (null leaves it to the core), and its text under the room's name. */
 export type RoomTint = (floor: Floor, space: Space) => RGBA | null;
 export type RoomText = (floor: Floor, space: Space) => string | null;
+/** An extension's mark on a piece of furniture: its lit part's colour (linear RGB) and a tag over it, which a tap calls onTap of. */
+export interface ItemMark {
+  glow?: V3 | null;
+  text?: string | null;
+  onTap?(): void;
+}
+export type ItemMarks = (floor: Floor, item: Furniture) => ItemMark | null;
 /** A piece of the line under a room's name. A piece with an entity opens it when tapped. */
 export interface RoomPart {
   text: string;
@@ -145,6 +152,8 @@ export class HassLive implements LiveSource {
   /** Set by an extension (the Energy extension's power map). */
   roomTint: RoomTint | null = null;
   roomExtraText: RoomText | null = null;
+  /** Extensions' marks on furniture, by the piece's id (a bin on the evening before its collection). */
+  itemMarks: Map<string, ItemMark> | null = null;
   /** The time the states are from: a replay of the past moves it, so a sensor that just changed still pulses. */
   now: () => number = Date.now;
 
@@ -456,6 +465,8 @@ export class HassLive implements LiveSource {
   }
 
   glowColor(g: GlowSlot): V3 | null {
+    const marked = g.item ? this.itemMarks?.get(g.item)?.glow : null;
+    if (marked) return marked;
     if (g.type && EV_TYPES.has(g.type)) return evGlow(this.ev(g.entity), this.day);
     if (g.type === "solar_panels" && !g.entity) return solarGlow(this.energy, null, this.day);
     // an access point is red while offline (unavailable too), a switch's gangs light while on, an air
@@ -645,6 +656,12 @@ export class HassLive implements LiveSource {
       picture: typeof s.attributes.entity_picture === "string" ? s.attributes.entity_picture : null,
       room: at ? spaces(this.plan.floors[at.floor])[at.room]?.name ?? null : null,
     };
+  }
+
+  /** An extension's tag over a piece of furniture; lit while the piece glows. */
+  itemTag(item: Furniture): { text: string; lit: boolean } | null {
+    const m = this.itemMarks?.get(item.id);
+    return m?.text ? { text: m.text, lit: !!m.glow } : null;
   }
 
   /** The line under a room's name, e.g. "21.4° · 48 %". */

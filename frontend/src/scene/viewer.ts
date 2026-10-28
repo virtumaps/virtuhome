@@ -8,7 +8,7 @@ import {
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { showsValue, spaces, type Device, type Floor, type Furniture, type Opening, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
-import { addFanBlades, buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { addFanBlades, buildFloor, buildRoofs, clipToRect, groundAt, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { FAN_TYPES, WATER_TYPES } from "./devices";
 import { baseHeight, FURNITURE } from "./furniture-lib";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
@@ -60,6 +60,8 @@ export interface LiveSource {
   roomPeople?(floor: Floor, room: { id: string }): Person[];
   /** A device shown by its value: what its label says. */
   reading?(d: Device): Reading | null;
+  /** A tag an extension puts over a piece of furniture (lit: in the accent of something to do). */
+  itemTag?(item: Furniture): { text: string; lit: boolean } | null;
   /** A piece of furniture with a value over it (a hot water cylinder's temperature): what its label says. */
   pieceReading?(f: Furniture): Reading | null;
   /** A door's smart lock, for its badge on the door. */
@@ -1610,6 +1612,7 @@ export class Viewer {
           this.overlay.appendChild(who);
           f.labels.push(who);
         });
+        this.addTags(f, fi);
         return;
       }
       f.fb.rooms.forEach((r, ri) => {
@@ -1672,8 +1675,32 @@ export class Viewer {
       for (const d of f.fb.floor.devices) {
         if (d.entity.startsWith("media_player.") && !showsValue(d)) this.drawMedia(small("vh-reading vh-media", d.entity, "media", `d:${d.id}`), d.entity, null);
       }
+      this.addTags(f, fi);
     });
     this.positionLabels();
+  }
+
+  /** Extensions' tags over furniture (a bin due out tonight), with the floor's other labels. */
+  private addTags(f: FloorView, fi: number): void {
+    if (this.editMode || !this.live?.itemTag) return;
+    for (const item of f.fb.floor.furniture) {
+      const tag = this.live.itemTag(item);
+      if (!tag) continue;
+      const el = document.createElement("div");
+      el.className = tag.lit ? "vh-label vh-tag lit" : "vh-label vh-tag";
+      el.dataset.floor = String(fi);
+      el.dataset.item = item.id;
+      el.textContent = tag.text;
+      this.overlay.appendChild(el);
+      f.labels.push(el);
+    }
+  }
+
+  /** Where a tag goes: just over the piece. */
+  private tagPosition(fi: number, item: Furniture): V3 {
+    const f = this.floors[fi];
+    const floor = f.fb.floor;
+    return [item.x, floor.elevation + f.offset + Math.max(0, groundAt(floor, [item.x, item.z])) + (item.y ?? 0) + item.h + 0.5, item.z];
   }
 
   /** Fills a reading's label: its icon and its value. Returns whether its text changed. */
@@ -1773,10 +1800,15 @@ export class Viewer {
         const i = el.dataset.room === undefined ? -1 : Number(el.dataset.room);
         const reading = el.dataset.reading === undefined ? null : f.fb.floor.devices.find((d) => d.id === el.dataset.reading);
         if (el.hidden) return;
+        const tagged = el.dataset.item === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.item);
         const piece = el.dataset.piece === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.piece);
         const door = el.dataset.lock === undefined ? null : f.fb.doors.find((d) => d.opening.id === el.dataset.lock);
         const media = el.dataset.media;
-        if (door) {
+        if (tagged) {
+          // over the rooms' labels, even the selected room's: it is there because something needs doing
+          v.set(...this.tagPosition(fi, tagged));
+          prio = 2e6;
+        } else if (door) {
           // on the handle side, at the handle's height (the middle of double doors)
           const o = door.opening;
           const k = o.style === "french" ? 0 : ((o.hinge ?? "left") === "left" ? 1 : -1) * Math.max(0, door.width / 2 - 0.12);
@@ -2361,7 +2393,8 @@ export class Viewer {
         return { kind: "furniture", floor: fi, room: this.roomAt(fi, [h.point.x, h.point.z]), entity: null, item, y: f.fb.floor.elevation + f.offset };
       }
       const room = this.roomAt(fi, [h.point.x, h.point.z]);
-      return { kind: room >= 0 ? "room" : "empty", floor: fi, room, entity: null };
+      // the piece tapped comes along (an extension's mark on it may answer the tap)
+      return { kind: room >= 0 ? "room" : "empty", floor: fi, room, entity: null, item: item?.kind === "furniture" ? item : undefined };
     }
     return { kind: "empty", floor: this.activeFloor, room: -1, entity: null };
   }

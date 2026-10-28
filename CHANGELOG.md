@@ -37,6 +37,8 @@
   its dialog. New **Smart speaker**, whose light ring glows softly while it plays.
 - Hot water cylinders and water heaters show their temperature over them (**52.0° → 55°**, what it
   is and what it heats to), from a `water_heater`, a thermostat or a temperature sensor.
+- Extensions can light up a piece of furniture and put a tag over it, such as a bin on the evening
+  before it is collected; a tap on the tag or the piece goes to the extension.
 
 ## 0.14.0
 

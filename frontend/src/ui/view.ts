@@ -3,7 +3,7 @@ import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNigh
 import { barChips, normalizePlan, spaces, type Plan, type Repair, type ThemeName } from "../model/plan";
 import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
-import { HassLive, initials, solarStep, toggleEntity, type Change, type RoomText, type RoomTint } from "../live/live";
+import { HassLive, initials, solarStep, toggleEntity, type Change, type ItemMark, type ItemMarks, type RoomText, type RoomTint } from "../live/live";
 import { EnergyLive, type EnergyNow } from "../live/energy";
 import { hereText } from "../live/presence";
 import { readingIcon, valueText } from "../live/readings";
@@ -174,6 +174,7 @@ export class VhView {
   /** Extensions' room colours and texts, set aside while a replay shows its own. */
   private extTint: RoomTint | null = null;
   private extText: RoomText | null = null;
+  private extMarks: ItemMarks | null = null;
   private themeTimer = 0;
   /** The sky over the house: the sun moves every minute; the weather follows its entity. */
   readonly skyLive = new SkyLive();
@@ -284,6 +285,7 @@ export class VhView {
       if (!el) return;
       const floor = Number(el.dataset.floor);
       const opens = (e.target as HTMLElement).closest<HTMLElement>("[data-entity]")?.dataset.entity;
+      if (el.dataset.item !== undefined) return this.tapMark(el.dataset.item);
       const rect = this.root.getBoundingClientRect();
       const at: [number, number] = [e.clientX - rect.left, e.clientY - rect.top];
       // a lock asks before it locks or unlocks; a TV or speaker plays or pauses
@@ -457,6 +459,8 @@ export class VhView {
     this.replayed = r;
     this.live.roomTint = options.tint ?? null;
     this.live.roomExtraText = options.text ?? null;
+    // marks are about now
+    this.live.itemMarks = null;
     // solar panels, chargers and cars would show what they do now
     this.live.energy = null;
     this.live.now = () => r.time;
@@ -493,6 +497,7 @@ export class VhView {
     this.root.classList.remove("replaying");
     this.live.roomTint = this.extTint;
     this.live.roomExtraText = this.extText;
+    this.markItems();
     this.live.energy = this.energy;
     this.live.now = Date.now;
     this.statusKey = "";
@@ -504,6 +509,28 @@ export class VhView {
       this.checkParked();
     }
     if (r.options.onEnd) callEach([r.options.onEnd], undefined);
+  }
+
+  /** Works out extensions' marks on furniture for the plan now: none while editing or showing the past. */
+  private markItems(): void {
+    const marks = new Map<string, ItemMark>();
+    if (this.extMarks && this.plan && !this.replayed && !this.editor) {
+      for (const floor of this.plan.floors) {
+        for (const item of floor.furniture) {
+          const m = this.extMarks(floor, item);
+          if (m && (m.glow || m.text)) marks.set(item.id, m);
+        }
+      }
+    }
+    this.live.itemMarks = marks.size ? marks : null;
+  }
+
+  /** A tap on a marked piece of furniture, or its tag: the extension's onTap, if it has one. */
+  private tapMark(id: string): boolean {
+    const tap = this.live.itemMarks?.get(id)?.onTap;
+    if (!tap) return false;
+    callEach([() => tap()], undefined);
+    return true;
   }
 
   /** Where an entity is in the plan, with the names of its floor and room. */
@@ -562,6 +589,14 @@ export class VhView {
       },
       refreshRooms: () => {
         this.viewer.refreshTints();
+        this.viewer.refreshLabels();
+      },
+      markItems: (fn) => {
+        this.extMarks = fn && isolate(fn, null);
+      },
+      refreshItems: () => {
+        this.markItems();
+        this.viewer.refreshLighting();
         this.viewer.refreshLabels();
       },
       energy: {
@@ -1006,6 +1041,7 @@ export class VhView {
     // the plan is drawn with the chargers as they are now
     [this.evGlowKey, this.evLabelKey] = evKeys(this.energy.now);
     this.applyTheme();
+    this.markItems();
     this.viewer.setPlan(this.shownPlan(plan), !first);
     if (this._hass) {
       this.viewer.setLive(this.live);
@@ -1519,6 +1555,7 @@ export class VhView {
       else this.toast(this.nameOf(hit.entity));
       return;
     }
+    if (gesture === "tap" && hit.item && this.tapMark(hit.item.id)) return;
     if (hit.kind === "room") {
       if (gesture === "double") return this.toggleRoomLights(hit.floor, hit.room);
       if (this.viewer.mode === "house") {
