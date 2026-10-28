@@ -58,6 +58,7 @@ export const EN_EDITOR = {
   "editor.sensor": "Sensor",
   "editor.none": "None",
   "editor.blind": "Blind",
+  "editor.lock": "Lock",
   "editor.flipHinge": "Flip hinge",
   "editor.patio": "Patio",
   "editor.deck": "Deck",
@@ -565,6 +566,7 @@ export const EN_EDITOR = {
   "editor.opening.linkASensor": "Link a sensor",
   "editor.opening.theWhatOpensIn": "The {what} opens in 3D when its sensor does.",
   "editor.opening.linkABlind": "Link a blind",
+  "editor.opening.linkALock": "Link a lock",
   "editor.opening.removeAWhat": "Remove a {what}",
 
   // ---------------------------------------------------------------- the editor: colour

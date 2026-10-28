@@ -50,6 +50,8 @@ OPENING = vol.Schema(
         vol.Required("kind"): vol.In(["door", "window", "passage", "garage"]),
         vol.Optional("entity", default=None): _ENTITY,
         vol.Optional("cover", default=None): _ENTITY,
+        # doors: the smart lock on it
+        vol.Optional("lock"): _ENTITY,
     },
     extra=vol.ALLOW_EXTRA,
 )

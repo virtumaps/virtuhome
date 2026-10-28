@@ -24,10 +24,12 @@ export const HEAT_TYPES = new Set(["radiator", "radiator_column", "towel_rail", 
 /** Hot water: its temperature shows in a label over it. */
 export const WATER_TYPES = new Set(["hot_water_cylinder", "water_heater"]);
 /** Pieces a tap switches or opens as a whole, however small they are on the screen. */
-export const DEVICE_TYPES = new Set([...GANG_TYPES, ...WIFI_TYPES, ...FAN_TYPES, ...AC_TYPES, ...WATER_TYPES]);
+export const DEVICE_TYPES = new Set([...GANG_TYPES, ...WIFI_TYPES, ...FAN_TYPES, ...AC_TYPES, ...WATER_TYPES, "smart_speaker"]);
 
+/** Smart speakers: their light ring glows softly while they play. */
+export const SPEAKER_TYPES = new Set(["smart_speaker"]);
 /** Pieces lit by their entity's state (scene/devices.ts deviceGlow). */
-export const GLOW_TYPES = new Set([...GANG_TYPES, ...WIFI_TYPES, ...AC_TYPES, ...HEAT_TYPES]);
+export const GLOW_TYPES = new Set([...GANG_TYPES, ...WIFI_TYPES, ...AC_TYPES, ...HEAT_TYPES, ...SPEAKER_TYPES]);
 
 /** What a device piece switches or opens: a switch's gangs, a fan and its light, else its entity. */
 export function deviceEntities(item: Pick<Furniture, "type" | "entity" | "gangs" | "light">): string[] {
@@ -184,6 +186,15 @@ export const DEVICE_FURNITURE: Record<string, FurnitureType> = {
       box(0, h * 0.45, d / 2, 0.08, 0.06, 0.03, "dark"),
     ],
   },
+  smart_speaker: {
+    // a fabric-covered speaker with a light ring on top
+    label: "furniture.smart_speaker", category: "devices", family: "speaker", size: [0.14, 0.14, 0.15], y: 0.75, paint: ["fabricDark"],
+    build: (w, d, h) => [
+      cyl(0, 0, 0, w, h - 0.012, d, "fabricDark", { taper: 0.94 }),
+      cyl(0, h - 0.012, 0, w * 0.94, 0.006, d * 0.94, "screen", { glow: "screen" }),
+      cyl(0, h - 0.006, 0, w * 0.8, 0.006, d * 0.8, "dark"),
+    ],
+  },
   water_heater: {
     label: "furniture.water_heater", category: "devices", family: "water", size: [0.45, 0.45, 0.8], y: 1.2, paint: ["white"],
     build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "white"), box(0, h * 0.15, d / 2, w * 0.3, h * 0.08, 0.02, "dark")],
@@ -208,6 +219,7 @@ export function deviceGlow(type: string, s: HassEntity | undefined): V3 | null {
     const m = acMode(s);
     return m === "cooling" ? [0.3, 0.7, 1.0] : m === "heating" ? [1.0, 0.5, 0.2] : m === "fan" ? [0.85, 0.9, 0.95] : m === "drying" ? [0.35, 0.9, 0.8] : null;
   }
+  if (SPEAKER_TYPES.has(type)) return s?.state === "playing" || s?.state === "buffering" ? [0.5, 0.4, 1.0] : null;
   if (HEAT_TYPES.has(type)) return heats(s) ? (type === "underfloor_heating" ? [0.95, 0.24, 0.06] : [1.0, 0.55, 0.3]) : null;
   if (GANG_TYPES.has(type)) {
     if (gone(s) || s!.state !== "on") return null;

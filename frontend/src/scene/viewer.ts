@@ -6,11 +6,11 @@ import {
   type Material,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { showsValue, spaces, type Device, type Floor, type Furniture, type Plan, type Vec2 } from "../model/plan";
+import { showsValue, spaces, type Device, type Floor, type Furniture, type Opening, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
 import { addFanBlades, buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { FAN_TYPES, WATER_TYPES } from "./devices";
-import { baseHeight } from "./furniture-lib";
+import { baseHeight, FURNITURE } from "./furniture-lib";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
 import { fromRoofFrame, planeHeight } from "./roofs";
 import { Geo, type V3 } from "./geo";
@@ -25,7 +25,7 @@ import { afterglow, duskColours } from "./dusk";
 import type { RealisticLook } from "./realistic";
 import type { Tier, TierSetting } from "./tier";
 import { quietSky, type Sky } from "../live/sky";
-import { initials, type Person, type Reading, type RoomPart } from "../live/live";
+import { initials, type LockBadge, type NowPlaying, type Person, type Reading, type RoomPart } from "../live/live";
 
 export { detectLowEnd } from "./tier";
 export type WallMode = "smart" | "low" | "full";
@@ -62,6 +62,10 @@ export interface LiveSource {
   reading?(d: Device): Reading | null;
   /** A piece of furniture with a value over it (a hot water cylinder's temperature): what its label says. */
   pieceReading?(f: Furniture): Reading | null;
+  /** A door's smart lock, for its badge on the door. */
+  lockBadge?(o: Opening): LockBadge | null;
+  /** What a TV or speaker plays now, for its label. */
+  nowPlaying?(entity: string | null, tv: boolean): NowPlaying | null;
   /** How fast a ceiling fan's blades turn (turns a second; 0 while it is off). */
   fanTurns?(entity: string | null): number;
 }
@@ -1627,17 +1631,27 @@ export class Viewer {
         this.overlay.appendChild(el);
         f.labels.push(el);
       }
-      // hot water: its temperature over it
-      for (const x of f.fb.floor.furniture) {
-        if (!x.entity || !WATER_TYPES.has(x.type)) continue;
+      const small = (cls: string, entity: string, key: string, id: string) => {
         const el = document.createElement("div");
-        el.className = "vh-label vh-reading";
+        el.className = `vh-label ${cls}`;
         el.dataset.floor = String(fi);
-        el.dataset.piece = x.id;
-        el.dataset.entity = x.entity;
-        this.drawLabel(el, this.live?.pieceReading?.(x) ?? null);
+        el.dataset[key] = id;
+        el.dataset.entity = entity;
         this.overlay.appendChild(el);
         f.labels.push(el);
+        return el;
+      };
+      // hot water: its temperature over it
+      for (const x of f.fb.floor.furniture) {
+        if (x.entity && WATER_TYPES.has(x.type)) this.drawLabel(small("vh-reading", x.entity, "piece", x.id), this.live?.pieceReading?.(x) ?? null);
+      }
+      // smart locks on their doors' handle side, and what TVs and speakers play over them
+      for (const d of f.fb.doors) if (d.opening.lock) this.drawLock(small("vh-lock", d.opening.lock, "lock", d.opening.id), d.opening);
+      for (const sc of f.fb.screens) {
+        if (sc.entity?.startsWith("media_player.")) this.drawMedia(small("vh-reading vh-media", sc.entity, "media", sc.furniture.id), sc.entity, sc.furniture.type);
+      }
+      for (const d of f.fb.floor.devices) {
+        if (d.entity.startsWith("media_player.") && !showsValue(d)) this.drawMedia(small("vh-reading vh-media", d.entity, "media", `d:${d.id}`), d.entity, null);
       }
     });
     this.positionLabels();
@@ -1646,6 +1660,44 @@ export class Viewer {
   /** Fills a reading's label: its icon and its value. Returns whether its text changed. */
   private drawReading(el: HTMLElement, d: Device): boolean {
     return this.drawLabel(el, this.live?.reading?.(d) ?? null);
+  }
+
+  /** A lock's badge: its icon in its state's colour, its state in words for screen readers. */
+  private drawLock(el: HTMLElement, o: Opening): boolean {
+    const b = this.live?.lockBadge?.(o) ?? null;
+    const kind = b?.kind ?? "unavailable";
+    if (el.dataset.kind === kind) return false;
+    el.dataset.kind = kind;
+    const icon = kind === "unlocked" || kind === "open" ? "lock-open" : kind === "jammed" || kind === "problem" ? "alert" : "lock";
+    el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${(ICONS.find(([n]) => n === icon) ?? ICONS[0])[1]}"/></svg>`;
+    el.title = b?.text ?? "";
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", b?.text ?? "");
+    return true;
+  }
+
+  /** What a TV (its artwork, or an icon) or a speaker plays, hidden while it plays nothing. */
+  private drawMedia(el: HTMLElement, entity: string, type: string | null): boolean {
+    const tv = type !== null && FURNITURE[type]?.family === "tv";
+    const np = this.live?.nowPlaying?.(entity, tv) ?? null;
+    const key = np ? `${np.text}|${np.picture ?? ""}` : "";
+    if (el.dataset.text === key && el.dataset.text !== undefined) return false;
+    el.dataset.text = key;
+    el.hidden = !np;
+    if (!np) return true;
+    const path = (ICONS.find(([n]) => n === (tv ? "tv" : "speaker")) ?? ICONS[0])[1];
+    el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg><span></span>`;
+    if (np.picture) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = np.picture;
+      // the artwork stands for the icon once it has loaded
+      img.onload = () => el.firstElementChild?.remove();
+      img.onerror = () => img.remove();
+      el.prepend(img);
+    }
+    (el.lastChild as HTMLElement).textContent = np.text;
+    return true;
   }
 
   /** Fills a small label with an icon and a value. Returns whether it changed. */
@@ -1667,8 +1719,14 @@ export class Viewer {
     for (const f of this.floors) {
       for (const el of f.labels) {
         const piece = el.dataset.piece === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.piece);
-        if (piece) {
-          if (!this.drawLabel(el, this.live?.pieceReading?.(piece) ?? null)) continue;
+        const door = el.dataset.lock === undefined ? null : f.fb.floor.openings.find((o) => o.id === el.dataset.lock);
+        const media = el.dataset.media;
+        let redrawn: boolean | null = null;
+        if (piece) redrawn = this.drawLabel(el, this.live?.pieceReading?.(piece) ?? null);
+        else if (door) redrawn = this.drawLock(el, door);
+        else if (media !== undefined) redrawn = this.drawMedia(el, el.dataset.entity ?? "", media.startsWith("d:") ? null : f.fb.floor.furniture.find((x) => x.id === media)?.type ?? null);
+        if (redrawn !== null) {
+          if (!redrawn) continue;
           this.labelSize.delete(el);
           changed = true;
           continue;
@@ -1695,8 +1753,27 @@ export class Viewer {
         let prio = 1e9;
         const i = el.dataset.room === undefined ? -1 : Number(el.dataset.room);
         const reading = el.dataset.reading === undefined ? null : f.fb.floor.devices.find((d) => d.id === el.dataset.reading);
+        if (el.hidden) return;
         const piece = el.dataset.piece === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.piece);
-        if (piece) {
+        const door = el.dataset.lock === undefined ? null : f.fb.doors.find((d) => d.opening.id === el.dataset.lock);
+        const media = el.dataset.media;
+        if (door) {
+          // on the handle side, at the handle's height (the middle of double doors)
+          const o = door.opening;
+          const k = o.style === "french" ? 0 : ((o.hinge ?? "left") === "left" ? 1 : -1) * Math.max(0, door.width / 2 - 0.12);
+          v.set(door.base[0] + door.along[0] * k, door.base[1] + f.offset + 1.05, door.base[2] + door.along[1] * k);
+          prio = 6e4;
+        } else if (media !== undefined) {
+          // over a TV's screen, or just above a speaker
+          const sc = media.startsWith("d:") ? null : f.fb.screens.find((x) => x.furniture.id === media);
+          const dev = media.startsWith("d:") ? f.fb.floor.devices.find((d) => d.id === media.slice(2)) : null;
+          if (sc) v.set(sc.at[0], sc.at[1] + f.offset + (FURNITURE[sc.furniture.type]?.family === "tv" ? 0 : 0.15), sc.at[2]);
+          else if (dev) {
+            v.set(...this.devicePosition(fi, dev));
+            v.y += 0.35;
+          } else return;
+          prio = 5e4;
+        } else if (piece) {
           // just over the piece
           v.set(piece.x, f.fb.floor.elevation + f.offset + baseHeight(piece, f.fb.floor.height) + piece.h + 0.15, piece.z);
           prio = 5e4;

@@ -88,6 +88,7 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
       const kind = OPENING_KINDS.find((k) => k === o.kind) ?? "passage";
       if (isEntityId(o.entity)) visit({ entity: o.entity, label: where(t(`links.sensor.${kind}`), room?.name), area: room?.area_id ?? null, device: false }, (to) => (o.entity = to));
       if (isEntityId(o.cover)) visit({ entity: o.cover, label: where(t("links.blind"), room?.name), area: room?.area_id ?? null, device: false }, (to) => (o.cover = to));
+      if (isEntityId(o.lock)) visit({ entity: o.lock, label: where(t("links.lock"), room?.name), area: room?.area_id ?? null, device: false }, (to) => (o.lock = to));
     }
     for (const x of f.furniture) {
       const s = at(x.x, x.z);
