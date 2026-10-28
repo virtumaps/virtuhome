@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "name": "Devices",
+  "settings": {"wall_exterior": 0.28, "wall_interior": 0.12, "north": 0, "theme": "auto", "exterior_finish": "brick"},
+  "floors": [
+    {
+      "id": "ground", "name": "Ground Floor", "ha_floor": null, "elevation": 0, "height": 2.5,
+      "rooms": [
+        {"id": "hall", "name": "Hall", "area_id": "hallway", "points": [[0, 0], [2, 0], [2, 4], [0, 4]], "floor": "wood"},
+        {"id": "lounge", "name": "Lounge", "area_id": "living_room", "points": [[2, 0], [6, 0], [6, 4], [2, 4]], "floor": "oak"}
+      ],
+      "openings": [
+        {"id": "o1", "room_id": "lounge", "edge": 3, "offset": 2, "width": 0.8, "height": 2.0, "sill": 0, "kind": "door", "hinge": "left", "swing": "in"},
+        {"id": "o2", "room_id": "hall", "edge": 2, "offset": 1, "width": 0.86, "height": 2.0, "sill": 0, "kind": "door", "hinge": "right", "swing": "in", "entity": "binary_sensor.front_door", "lock": "lock.front_door"}
+      ],
+      "furniture": [
+        {"id": "sw", "type": "switch_wall", "x": 2.066, "z": 2.6, "rotation": -90, "w": 0.146, "d": 0.012, "h": 0.086, "entity": "light.lounge", "gangs": ["light.lounge", null]},
+        {"id": "sock", "type": "socket_wall", "x": 4, "z": 0.146, "rotation": 0, "w": 0.086, "d": 0.012, "h": 0.086, "y": 1.05, "entity": "switch.kettle"},
+        {"id": "ap", "type": "access_point", "x": 1, "z": 2, "rotation": 0, "w": 0.2, "d": 0.2, "h": 0.035, "entity": "binary_sensor.ap_connected"},
+        {"id": "mesh", "type": "wifi_point", "x": 5.5, "z": 3.5, "rotation": 0, "w": 0.11, "d": 0.11, "h": 0.09, "entity": null},
+        {"id": "fan", "type": "fan_ceiling_light", "x": 4, "z": 2, "rotation": 0, "w": 1.2, "d": 1.2, "h": 0.45, "entity": "fan.lounge", "light": "light.lounge_fan"},
+        {"id": "ac", "type": "ac_wall", "x": 4, "z": 0.26, "rotation": 0, "w": 0.9, "d": 0.24, "h": 0.3, "entity": "climate.lounge_ac"},
+        {"id": "acout", "type": "ac_outdoor", "x": 4, "z": -0.45, "rotation": 180, "w": 0.8, "d": 0.3, "h": 0.55, "entity": "climate.lounge_ac"},
+        {"id": "rad", "type": "radiator_column", "x": 1, "z": 3.8, "rotation": 180, "w": 0.8, "d": 0.1, "h": 0.6, "entity": "climate.hall_trv"},
+        {"id": "ufh", "type": "underfloor_heating", "x": 4, "z": 2.2, "rotation": 0, "w": 3, "d": 2.5, "h": 0.005, "entity": "valve.lounge_underfloor"},
+        {"id": "hw", "type": "hot_water_cylinder", "x": 0.4, "z": 0.4, "rotation": 0, "w": 0.5, "d": 0.5, "h": 1.25, "entity": "water_heater.hot_water"},
+        {"id": "spk", "type": "smart_speaker", "x": 5.5, "z": 0.3, "rotation": 0, "w": 0.14, "d": 0.14, "h": 0.15, "entity": "media_player.lounge_speaker"}
+      ],
+      "devices": [],
+      "walls": []
+    }
+  ]
+}

@@ -6,9 +6,16 @@
 //     room: ceiling lights spread over the ceiling, cameras in corners looking in, motion sensors
 //     high in a corner, floor lamps by a wall
 //   * a car charger goes on the house's wall at the driveway, with a car parked in front of it
+//   * a wall switch goes beside the room's door, on the side away from its hinges; a plug on a socket
+//   * a smart lock goes on its door: the front door for a "front door" lock, else its room's outside
+//     door; a lock placed as a pin goes on the door nearest it
+//   * a ceiling fan (with its light) on the ceiling; an air conditioner high on an outside wall, its
+//     outdoor unit on the ground outside
 // It never moves what is already placed, so it can run again after new devices were added.
 import { bounds, centroid, labelPoint, outwardNormal, pointInPolygon, segmentDistance } from "../model/geom";
-import { newId, type Device, type Floor, type Mount, type Opening, type OutdoorArea, type Plan, type Room, type Vec2 } from "../model/plan";
+import { newId, type Device, type Floor, type Furniture, type Mount, type Opening, type OutdoorArea, type Plan, type PlanSettings, type Room, type Vec2 } from "../model/plan";
+import { layoutWalls, openingPoint } from "../model/walls";
+import { gangWidth, linkedEntities, MAX_GANGS } from "../scene/devices";
 import { domainOf, type Hass, type HassEntity } from "../live/hass";
 import { findChargers, readEv, type EvCharger } from "../live/ev";
 import { CAR_TYPES, carModel, FURNITURE } from "../scene/furniture-lib";
@@ -69,14 +76,18 @@ export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: Placeme
   });
   report.roomsLinked.push(...linkRoomsByName(p, hass));
 
+  // ---------------------------------------------------------------- locks placed as pins go on their doors
+  report.linked.push(...locksOntoDoors(p, hass));
+
   // ---------------------------------------------------------------- what is already in the plan
   const inPlan = new Set<string>();
   for (const f of p.floors) {
     for (const d of f.devices) inPlan.add(d.entity);
-    for (const x of f.furniture) if (x.entity) inPlan.add(x.entity);
+    for (const x of f.furniture) for (const e of linkedEntities(x)) inPlan.add(e);
     for (const o of f.openings) {
       if (o.entity) inPlan.add(o.entity);
       if (o.cover) inPlan.add(o.cover);
+      if (o.lock) inPlan.add(o.lock);
     }
     for (const r of f.rooms) {
       if (r.temperature) inPlan.add(r.temperature);
@@ -148,14 +159,28 @@ export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: Placeme
       }
       const room = pickRoom(targets, c.name) ?? target;
       const sp = room === target ? spots : new Spots(room.floor, room.room);
-      const placed = placeOne(c, hass, room.floor, room.room, sp, room === target ? grid : [], report, c === tvPlayer);
+      const placed = placeOne(c, hass, room.floor, room.room, sp, room === target ? grid : [], report, c === tvPlayer, p);
       if (placed) for (const e of c.entities) inPlan.add(e);
     }
+  }
+  // a lock in no room of the plan that names its door ("Front door lock") still goes on it
+  for (const [id, reg] of Object.entries(hass.entities ?? {})) {
+    if (domainOf(id) !== "lock" || reg.hidden || reg.entity_category || inPlan.has(id) || !hass.states[id]) continue;
+    const dev = reg.device_id ? hass.devices?.[reg.device_id] : undefined;
+    const name = `${dev?.name_by_user ?? dev?.name ?? ""} ${hass.states[id].attributes.friendly_name ?? ""} ${id}`;
+    const floor = [...p.floors].sort((a, b) => a.elevation - b.elevation)[0];
+    const door = floor ? doorByName(floor, floor.openings.filter((o) => o.kind === "door" && !o.lock), name, true) : null;
+    if (!door) continue;
+    door.lock = id;
+    inPlan.add(id);
+    report.unplaced = report.unplaced.filter((u) => u.entity !== id);
+    report.linked.push(`${String(hass.states[id].attributes.friendly_name ?? id)} → ${t("report.opening.door", { room: floor.rooms.find((r) => r.id === door.room_id)?.name ?? "" })}`);
   }
   return { plan: p, report };
 }
 
-function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spots, grid: Vec2[], report: PlacementReport, isTv = false): boolean {
+function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spots, grid: Vec2[], report: PlacementReport, isTv: boolean, plan: Plan): boolean {
+  const settings = plan.settings;
   const id = c.primary;
   const s = hass.states[id];
   const dom = domainOf(id);
@@ -167,6 +192,30 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
   };
 
   const outdoor = (room as Room & { outdoor?: boolean }).outdoor === true;
+  const piece = (f: Floor, type: string, at: { x: number; z: number; rotation: number }, extra: Partial<Furniture>) => {
+    const [w, d, h] = FURNITURE[type].size;
+    f.furniture.push({ id: newId("f"), type, ...at, w, d, h, ...extra });
+  };
+  // a ceiling fan, with the device's light as its own when it has one
+  const fan = c.entities.find((e) => domainOf(e) === "fan");
+  if (fan && !outdoor && ceilingFan(hass, c)) {
+    const light = c.entities.find((e) => domainOf(e) === "light");
+    const at = (dom === "light" ? grid.shift() : undefined) ?? spots.centre();
+    piece(floor, light ? "fan_ceiling_light" : "fan_ceiling", { x: at[0], z: at[1], rotation: 0 }, { entity: fan, ...(light ? { light } : {}) });
+    report.placed.push(`${c.name} → ${room.name}`);
+    return true;
+  }
+  // an air conditioner (a climate that cools) high on an outside wall, its outdoor unit outside on the ground
+  const modes = s?.attributes.hvac_modes;
+  if (dom === "climate" && !outdoor && Array.isArray(modes) && modes.includes("cool")) {
+    const spot = acSpot(plan, floor, room);
+    if (spot) {
+      piece(floor, "ac_wall", spot.inside, { entity: id });
+      if (spot.outside) piece(plan.floors[0], "ac_outdoor", spot.outside, { entity: id });
+      report.placed.push(`${c.name} → ${room.name}`);
+      return true;
+    }
+  }
   if (dom === "light" && outdoor) {
     // garden lights stand along the edge of their area
     const at = spots.corner(0.35);
@@ -250,6 +299,19 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
     const w = spots.wall(0.08);
     return add({ entity: id, x: w.at[0], z: w.at[1], y: 1.5, mount: "wall", rotation: w.facing });
   }
+  // a wall switch beside the room's door, a plug on a socket: a gang for each of the device's switches
+  const kind = dom === "switch" && !outdoor ? switchKind(hass, c) : null;
+  if (kind) {
+    const gangs = c.entities.filter((e) => domainOf(e) === "switch" && !/child|lock|led|beep|indicator|auto|backlight|update|power_on|restore/.test(e)).sort().slice(0, MAX_GANGS);
+    const type = kind === "switch" ? "switch_wall" : "socket_wall";
+    const w = gangWidth(gangs.length), d = FURNITURE[type].size[1], h = FURNITURE[type].size[2];
+    const at = kind === "switch" ? byDoor(floor, room, settings, w, d) : onWall(floor, settings, spots.wall(0), d);
+    if (at) {
+      floor.furniture.push({ id: newId("f"), type, x: at.x, z: at.z, rotation: at.rotation, w, d, h, entity: gangs[0] ?? id, ...(gangs.length > 1 ? { gangs } : {}) });
+      report.placed.push(`${c.name} → ${room.name}`);
+      return true;
+    }
+  }
   if (dom === "switch" || dom === "fan") {
     const w = spots.wall(0.15);
     return add({ entity: id, x: w.at[0], z: w.at[1], y: dom === "fan" ? 2.3 : 0.35, mount: dom === "fan" ? "ceiling" : "wall", rotation: w.facing });
@@ -257,6 +319,14 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
   if (dom === "vacuum") {
     const at = spots.corner(0.4);
     return add({ entity: id, x: at[0], z: at[1], y: 0.05, mount: "floor" });
+  }
+  if (dom === "lock" && !outdoor) {
+    const door = doorByName(floor, floor.openings.filter((o) => o.kind === "door" && !o.lock && (o.room_id === room.id || touches(floor, o, room))), c.name, false);
+    if (door) {
+      door.lock = id;
+      report.linked.push(`${c.name} → ${t("report.opening.door", { room: room.name })}`);
+      return true;
+    }
   }
   if (dom === "lock" || dom === "alarm_control_panel" || dom === "assist_satellite") {
     const at = spots.corner(0.35);
@@ -322,6 +392,132 @@ function placeCharger(p: Plan, hass: Hass, c: EvCharger, report: PlacementReport
   report.placed.push(`${model ? car : t("report.car")} → ${spot.name}`);
 }
 
+/** Whether a door leads outside (nothing but garden behind it). */
+function outsideDoor(floor: Floor, o: Opening): boolean {
+  const room = floor.rooms.find((r) => r.id === o.room_id);
+  const at = openingPoint(floor, o);
+  if (!room || !at) return false;
+  const n = outwardNormal(room.points, o.edge);
+  const out: Vec2 = [at[0] + n[0] * 0.5, at[1] + n[1] * 0.5];
+  return !floor.rooms.some((r) => pointInPolygon(out, r.points));
+}
+
+/**
+ * The door a lock's name points to among some doors: the front door (lowest on the plan) for a
+ * "front door" lock, the back door (highest) for a "back door" one; else, unless only a named door
+ * will do, the first door outside, or the only door.
+ */
+export function doorByName(floor: Floor, doors: Opening[], name: string, named: boolean): Opening | null {
+  const outside = doors.filter((o) => outsideDoor(floor, o));
+  const z = (o: Opening) => openingPoint(floor, o)?.[1] ?? 0;
+  const n = name.toLowerCase();
+  if (/front|main|entrance/.test(n) && outside.length) return outside.reduce((m, o) => (z(o) > z(m) ? o : m));
+  if (/back|rear|garden|patio/.test(n) && outside.length) return outside.reduce((m, o) => (z(o) < z(m) ? o : m));
+  if (named) return null;
+  return outside[0] ?? (doors.length === 1 ? doors[0] : null);
+}
+
+/** Locks placed as pins (before they went on doors) go on the door nearest them, within 1.5 m. */
+function locksOntoDoors(p: Plan, hass: Hass): string[] {
+  const out: string[] = [];
+  for (const f of p.floors) {
+    f.devices = f.devices.filter((d) => {
+      if (domainOf(d.entity) !== "lock") return true;
+      let best: { o: Opening; d: number } | null = null;
+      for (const o of f.openings) {
+        const at = o.kind === "door" && !o.lock ? openingPoint(f, o) : null;
+        const dist = at ? Math.hypot(at[0] - d.x, at[1] - d.z) : Infinity;
+        if (dist < 1.5 && (!best || dist < best.d)) best = { o, d: dist };
+      }
+      if (!best) return true;
+      best.o.lock = d.entity;
+      const room = f.rooms.find((r) => r.id === best!.o.room_id);
+      out.push(`${String(hass.states[d.entity]?.attributes.friendly_name ?? d.entity)} → ${t("report.opening.door", { room: room?.name ?? "" })}`);
+      return false;
+    });
+  }
+  return out;
+}
+
+/** A fan that hangs from the ceiling: not an air purifier, a 3D printer's fan, an extractor or a desk fan. */
+function ceilingFan(hass: Hass, c: Candidate): boolean {
+  const dev = c.device ? hass.devices?.[c.device] : undefined;
+  const text = `${c.entities.join(" ")} ${c.name} ${dev?.model ?? ""}`.toLowerCase();
+  return !/purif|humidif|dehumid|printer|p1s|bambu|chamber|aux|extract|hood|air ?(clean|filter)|\bac\d{4}|heater|desk|tower|pedestal|bathroom.fan|laptop/.test(text);
+}
+
+/**
+ * An air conditioner's spot: high on the room's longest outside wall, clear of its windows and doors,
+ * and its outdoor unit on the ground outside it (on the lowest storey, when that is not indoors).
+ */
+function acSpot(plan: Plan, floor: Floor, room: Room): { inside: { x: number; z: number; rotation: number }; outside: { x: number; z: number; rotation: number } | null } | null {
+  const ri = floor.rooms.indexOf(room);
+  if (ri < 0) return null;
+  const [w, d] = FURNITURE.ac_wall.size;
+  const od = FURNITURE.ac_outdoor.size[1];
+  const walls = layoutWalls(floor, plan.settings).walls.filter((x) => x.exterior && (x.roomA === ri || x.roomB === ri)).sort((a, b) => b.length - a.length);
+  for (const wall of walls) {
+    const n: Vec2 = wall.roomA === ri ? wall.normal : [-wall.normal[0], -wall.normal[1]];
+    const t = [0.5, 0.3, 0.7, 0.15, 0.85].map((k) => k * wall.length)
+      .find((t) => t - w / 2 > 0.1 && t + w / 2 < wall.length - 0.1 && wall.openings.every((po) => t + w / 2 + 0.05 < po.t0 || t - w / 2 - 0.05 > po.t1));
+    if (t === undefined) continue;
+    const at = (k: number): Vec2 => [wall.a[0] + wall.dir[0] * t + n[0] * k, wall.a[1] + wall.dir[1] * t + n[1] * k];
+    const inside = at(wall.thickness / 2 + d / 2);
+    if (!pointInPolygon(inside, room.points)) continue;
+    const out = at(-(wall.thickness / 2 + 0.1 + od / 2));
+    const ground = plan.floors[0];
+    return {
+      inside: { x: inside[0], z: inside[1], rotation: heading(n[0], n[1]) },
+      outside: ground.rooms.some((r) => pointInPolygon(out, r.points)) ? null : { x: out[0], z: out[1], rotation: heading(-n[0], -n[1]) },
+    };
+  }
+  return null;
+}
+
+/** A switch that is a wall switch, or a plug or socket; null for anything else (a heater, a camera's switch). */
+function switchKind(hass: Hass, c: Candidate): "switch" | "socket" | null {
+  const dev = c.device ? hass.devices?.[c.device] : undefined;
+  const text = `${c.primary} ${c.name} ${dev?.model ?? ""}`.toLowerCase();
+  if (hass.states[c.primary]?.attributes.device_class === "outlet" || /plug|socket|outlet/.test(text)) return "socket";
+  if (/wall ?switch|light ?switch|\bgang\b|relay|dimmer|shelly|sonoff/.test(text)) return "switch";
+  return null;
+}
+
+/** Where a piece d deep stands with its back on the wall a spot is on (the spot on the wall's middle line). */
+function onWall(floor: Floor, settings: PlanSettings, spot: { at: Vec2; facing: number }, d: number): { x: number; z: number; rotation: number } {
+  const r = (spot.facing * Math.PI) / 180;
+  const n: Vec2 = [-Math.sin(r), Math.cos(r)];
+  const wall = layoutWalls(floor, settings).walls.find((w) => segmentDistance(spot.at, w.a, w.b).d < 0.05);
+  const k = (wall?.thickness ?? settings.wall_interior) / 2 + d / 2;
+  return { x: spot.at[0] + n[0] * k, z: spot.at[1] + n[1] * k, rotation: spot.facing };
+}
+
+/**
+ * Beside one of the room's doors, inside the room, on the side away from its hinges (where the hand
+ * is when it opens it): doors to the rest of the house first.
+ */
+function byDoor(floor: Floor, room: Room, settings: PlanSettings, w: number, d: number): { x: number; z: number; rotation: number } | null {
+  const ri = floor.rooms.indexOf(room);
+  if (ri < 0) return null;
+  const walls = layoutWalls(floor, settings).walls.filter((x) => x.roomA === ri || x.roomB === ri).sort((a, b) => Number(a.exterior) - Number(b.exterior));
+  for (const wall of walls) {
+    const n: Vec2 = wall.roomA === ri ? wall.normal : [-wall.normal[0], -wall.normal[1]];
+    for (const po of wall.openings) {
+      if (po.opening.kind !== "door") continue;
+      // the hinges are at the wall's start for a door hinged "left"
+      const latchEnd = (po.opening.hinge ?? "left") === "left" ? 1 : -1;
+      for (const side of [latchEnd, -latchEnd]) {
+        const t = (side > 0 ? po.t1 : po.t0) + side * (0.1 + w / 2);
+        const off = wall.thickness / 2 + d / 2;
+        const at: Vec2 = [wall.a[0] + wall.dir[0] * t + n[0] * off, wall.a[1] + wall.dir[1] * t + n[1] * off];
+        if (t - w / 2 < 0 || t + w / 2 > wall.length || !pointInPolygon(at, room.points)) continue;
+        return { x: at[0], z: at[1], rotation: heading(n[0], n[1]) };
+      }
+    }
+  }
+  return null;
+}
+
 /** Garden areas take part like rooms (their lights, cameras and plugs go there). */
 function asRoom(o: OutdoorArea): Room {
   return { id: o.id, name: o.name, area_id: o.area_id, points: o.points, outdoor: true } as Room & { outdoor: boolean };
@@ -342,7 +538,7 @@ function skipEntity(hass: Hass, id: string): boolean {
   }
   if (dom === "switch") {
     const dc = hass.states[id]?.attributes.device_class;
-    return !(dc === "outlet" || /plug|socket|outlet|heater|kettle|coffee|lamp|light|fan|humidif|dehumid|monitor|printer|washing|dryer|tree|diffuser/.test(text));
+    return !(dc === "outlet" || /plug|socket|outlet|heater|kettle|coffee|lamp|light|fan|humidif|dehumid|monitor|printer|washing|dryer|tree|diffuser|wall ?switch|\bgang\b|relay|dimmer|shelly|sonoff/.test(text));
   }
   return false;
 }

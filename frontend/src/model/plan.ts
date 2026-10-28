@@ -63,6 +63,8 @@ export interface Opening {
   entity?: string | null;
   /** Blind or curtain in front of a window. */
   cover?: string | null;
+  /** Doors: the smart lock on it (its badge shows on the door's handle side). */
+  lock?: string | null;
   /** Doors and casement windows: hinge side seen from the room, and whether they swing into it. */
   hinge?: "left" | "right";
   swing?: "in" | "out";
@@ -118,6 +120,13 @@ export interface Furniture {
   plants?: Planting | null;
   /** Bins (scene/bins.ts): the waste they hold; their lid's colour is `trim`. */
   waste?: WasteKind | null;
+  /**
+   * Switches and sockets (scene/devices.ts): the entity of each gang, left to right; how many there
+   * are is how many gangs it has. The first is also `entity`.
+   */
+  gangs?: (string | null)[] | null;
+  /** Ceiling fans with a light: the light's entity (the fan's is `entity`). */
+  light?: string | null;
 }
 
 export interface Device {

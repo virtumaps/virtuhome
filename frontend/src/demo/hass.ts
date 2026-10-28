@@ -5,6 +5,7 @@ import type { Plan } from "../model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../live/hass";
 import { sunPosition } from "../live/sun";
 import { demoHistory, storyState } from "./history";
+import { linkedEntities } from "../scene/devices";
 import { t } from "../i18n";
 
 /**
@@ -74,8 +75,8 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     };
     const ids: [string, string | null][] = [
       ...floor.devices.map((d) => [d.entity, roomArea(d.x, d.z)] as [string, string | null]),
-      ...floor.furniture.filter((f) => f.entity).map((f) => [f.entity!, roomArea(f.x, f.z)] as [string, string | null]),
-      ...floor.openings.flatMap((o) => [o.entity, o.cover].filter(Boolean).map((e) => [e!, floor.rooms.find((r) => r.id === o.room_id)?.area_id ?? null] as [string, string | null])),
+      ...floor.furniture.flatMap((f) => linkedEntities(f).map((e) => [e, roomArea(f.x, f.z)] as [string, string | null])),
+      ...floor.openings.flatMap((o) => [o.entity, o.cover, o.lock].filter(Boolean).map((e) => [e!, floor.rooms.find((r) => r.id === o.room_id)?.area_id ?? null] as [string, string | null])),
     ];
     for (const [id, area] of ids) {
       if (states[id]) continue;
@@ -88,10 +89,20 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       } else if (dom === "binary_sensor") {
         const dc = /window/.test(id) ? "window" : /door/.test(id) ? "door" : "motion";
         put(id, Math.random() > (dc === "motion" ? 0.6 : 0.75) ? "on" : "off", { device_class: dc });
-      } else if (dom === "media_player") put(id, /tv|webos/.test(id) ? "playing" : "idle");
+      } else if (dom === "media_player" && /tv|webos/.test(id)) {
+        put(id, "playing", { device_class: "tv", media_title: "Planet Earth III", media_series_title: "Ocean", app_name: "BBC iPlayer", source: "BBC iPlayer", media_content_type: "tvshow" });
+      } else if (dom === "media_player") {
+        put(id, /kitchen/.test(id) ? "playing" : "idle", { device_class: "speaker", media_title: "Morning Show", media_artist: "Fresh Radio", media_content_type: "music" });
+      } else if (dom === "lock") put(id, /front/.test(id) ? "locked" : "unlocked", { supported_features: /front/.test(id) ? 1 : 0 });
       else if (dom === "camera") put(id, "idle");
+      else if (dom === "climate" && /air_conditioner/.test(id)) put(id, "cool", { hvac_action: "cooling", hvac_modes: ["off", "cool", "heat", "fan_only", "dry"], current_temperature: 23.5, temperature: 21 });
       else if (dom === "climate") put(id, "heat", { hvac_action: "heating", current_temperature: 20.5, temperature: 21 });
+      else if (dom === "fan") put(id, "on", { percentage: 66, percentage_step: 33.33 });
+      else if (dom === "valve") put(id, "open", { current_position: 100 });
+      else if (dom === "water_heater") put(id, "eco", { current_temperature: 52, temperature: 55, min_temp: 40, max_temp: 65, operation_mode: "eco" });
       else if (dom === "cover") put(id, "open", { current_position: 60 });
+      else if (dom === "device_tracker") put(id, "home", { source_type: "router" })
+      else if (dom === "switch") put(id, /coffee/.test(id) ? "off" : "on")
       else if (dom === "sensor" && /temperature/.test(id)) put(id, (9 + Math.random() * 5).toFixed(1), { device_class: "temperature", unit_of_measurement: "°C" });
       else put(id, "on");
     }
@@ -175,6 +186,8 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
         if (service === "toggle") next = s.state === "on" || s.state === "open" ? (domain === "cover" ? "closed" : "off") : domain === "cover" ? "open" : "on";
         if (service === "turn_on") next = "on";
         if (service === "turn_off") next = "off";
+        if (domain === "lock") next = service === "lock" ? "locked" : service === "open" ? "open" : "unlocked";
+        if (service === "media_play_pause") next = s.state === "playing" ? "paused" : "playing";
         const attrs = { ...s.attributes };
         if (domain === "light" && next === "on" && attrs.brightness === undefined) Object.assign(attrs, { brightness: 220, color_temp_kelvin: 2900 });
         if (domain === "cover") attrs.current_position = next === "open" ? 100 : 0;

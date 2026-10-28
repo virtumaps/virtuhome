@@ -34,6 +34,7 @@ import { cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
 import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
 import { binColours, POST_TYPES, WASTE_NAMES, wasteKind } from "../scene/bins";
+import { AC_TYPES, FAN_LIGHTS, FAN_TYPES, GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, HEAT_TYPES, linkedEntities, MAX_GANGS, WATER_TYPES, WIFI_TYPES } from "../scene/devices";
 import { isRaised, outdoorTop } from "../scene/build";
 import { circlePoints, edgeOf, newArea, openEdges, rectSides, resizeRect, roundness, turnOf, type NewAreaKind } from "../scene/areas";
 import {
@@ -59,6 +60,14 @@ import { location as homeLocation } from "../live/sky";
 
 type Tab = "home" | "rooms" | "devices" | "selected" | "extensions";
 type Selection = { floor: number; kind: "room" | "outdoor" | "device" | "furniture" | "opening" | "fence" | "roof" | "roofitem"; id: string } | null;
+/** What each kind of device can be linked to. */
+const DEVICE_DOMAINS: [Set<string>, string[]][] = [
+  [FAN_TYPES, ["fan", "switch"]],
+  [AC_TYPES, ["climate"]],
+  [HEAT_TYPES, ["climate", "valve", "switch", "input_boolean", "binary_sensor"]],
+  [WATER_TYPES, ["water_heater", "sensor", "climate"]],
+];
+
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 /** Common solar panel sizes (mm), long side first, newest first. */
 const PANEL_SIZES: [number, number, EditorPlainKey][] = [
@@ -1585,7 +1594,7 @@ export class Editor {
     const box = h("div", {});
     // what is not in the plan yet, by area of a linked room
     const inPlan = new Set(this.plan.floors.flatMap((f) => [
-      ...f.devices.map((d) => d.entity), ...f.furniture.map((x) => x.entity), ...f.openings.flatMap((o) => [o.entity, o.cover]),
+      ...f.devices.map((d) => d.entity), ...f.furniture.flatMap(linkedEntities), ...f.openings.flatMap((o) => [o.entity, o.cover, o.lock]),
     ]).filter(Boolean) as string[]);
     const roomByArea = new Map<string, { fi: number; room: Room }>();
     this.plan.floors.forEach((f, fi) => [...f.rooms, ...(f.outdoor ?? []) as unknown as Room[]].forEach((r) => r.area_id && !roomByArea.has(r.area_id) && roomByArea.set(r.area_id, { fi, room: r })));
@@ -1646,6 +1655,7 @@ export class Editor {
     const f = this.plan.floors[fi];
     const contacts = this.entities((id, s) => domainOf(id) === "binary_sensor" && ["door", "window", "opening", "garage_door"].includes(String(s.attributes.device_class)));
     const covers = this.entities((id) => domainOf(id) === "cover");
+    const locks = this.entities((id) => domainOf(id) === "lock");
     const openings = f.openings.filter((o) => o.room_id === room.id);
     const updRoom = (label: string, fn: (r: Room) => void) => this.change((p) => fn(p.floors[fi].rooms.find((r) => r.id === room.id)!), false, label);
     const wallFinish = room.wall_finish ?? "paint";
@@ -1689,6 +1699,13 @@ export class Editor {
           this.dropdown(covers, o.cover ?? "", (v) => this.change((p) => {
             const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
             x.cover = v || null;
+          }), t("editor.none")),
+        ) : null,
+        o.kind === "door" ? h("div", { class: "ed-row" },
+          h("label", {}, t("editor.lock")),
+          this.dropdown(locks, o.lock ?? "", (v) => this.change((p) => {
+            const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
+            x.lock = v || null;
           }), t("editor.none")),
         ) : null,
         o.kind === "door" ? h("div", { class: "ed-row" },
@@ -2093,7 +2110,10 @@ export class Editor {
         ? chargers.map((c) => [c.status ?? c.power ?? c.level ?? "", c.name] as [string, string]).filter(([id]) => id)
         : POST_TYPES.has(x.type)
           ? this.entities((id) => ["binary_sensor", "sensor", "input_boolean"].includes(domainOf(id)))
-          : this.entities((id) => ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
+          // an access point: anything of its device that goes away or says so when it is offline
+          : WIFI_TYPES.has(x.type)
+            ? this.entities((id) => ["binary_sensor", "device_tracker", "sensor", "update"].includes(domainOf(id)))
+            : this.entities((id) => DEVICE_DOMAINS.find(([types]) => types.has(x.type))?.[1].includes(domainOf(id)) ?? ["media_player", "switch", "binary_sensor"].includes(domainOf(id)));
     // a change of size, height, turn or side keeps the piece out of walls and other pieces
     const reshape = (label: string) => (fn: (y: Furniture) => void) => this.change((p) => {
       fn(p.floors[fi].furniture.find((y) => y.id === x.id)!);
@@ -2127,8 +2147,12 @@ export class Editor {
       isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named(t("editor.furniture.reupholster"))((y) => (y.finish = k as Furniture["finish"]))) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
       ...(garden ? this.gardenRows(x, named) : []),
-      garden && !POST_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : POST_TYPES.has(x.type) ? t("editor.furniture.postSensor") : t("editor.furniture.linkedTo")),
+      ...(GANG_TYPES.has(x.type) ? this.gangRows(x, upd, reshape) : []),
+      (garden && !POST_TYPES.has(x.type)) || GANG_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : POST_TYPES.has(x.type) ? t("editor.furniture.postSensor") : t("editor.furniture.linkedTo")),
         this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? t("editor.furniture.theHousesCharger") : t("editor.furniture.noneFound")) : t("editor.furniture.nothing"))),
+      // a ceiling fan's light, a lamp of its own
+      FAN_LIGHTS.has(x.type) ? h("div", { class: "ed-row" }, h("label", {}, t("editor.furniture.light")),
+        this.dropdown(this.entities((id) => domainOf(id) === "light"), x.light ?? "", (v) => upd((y) => (y.light = v || null)), t("editor.furniture.nothing"))) : null,
       ...(CAR_TYPES.has(x.type) ? this.carRows(fi, x, reshape) : []),
       h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), "w"), ...num(t("editor.houses.depth"), "d")),
       h("div", { class: "ed-row" }, ...num(t("editor.height"), "h"), ...num(t("editor.furniture.aboveFloor"), "y")),
@@ -2148,6 +2172,34 @@ export class Editor {
         } }, t("editor.remove")),
       ),
     );
+  }
+
+  /** Switches and sockets: how many gangs, and each gang's entity. */
+  private gangRows(x: Furniture, upd: (fn: (y: Furniture) => void) => void, reshape: (label: string) => (fn: (y: Furniture) => void) => void): HTMLElement[] {
+    const gangs = gangsOf(x);
+    const options = this.entities((id) => GANG_DOMAINS.includes(domainOf(id)));
+    const set = (y: Furniture, list: (string | null)[]) => {
+      y.gangs = list;
+      y.entity = list[0];
+    };
+    return [
+      h("div", { class: "ed-sub" }, t("editor.furniture.gangs")),
+      h("div", { class: "ed-chips" }, ...Array.from({ length: MAX_GANGS }, (_, i) => i + 1).map((n) => h("button", {
+        class: `ed-chip${gangs.length === n ? " on" : ""}`,
+        // the plate grows or shrinks with its gangs
+        onclick: () => n !== gangs.length && reshape(t("editor.furniture.gangsOf"))((y) => {
+          set(y, Array.from({ length: n }, (_, i) => gangs[i] ?? null));
+          y.w = gangWidth(n);
+        }),
+      }, String(n)))),
+      ...gangs.map((e, i) => h("div", { class: "ed-row" },
+        h("label", {}, gangs.length > 1 ? t("editor.furniture.gang", { n: i + 1 }) : t("editor.furniture.linkedTo")),
+        this.dropdown(options, e ?? "", (v) => upd((y) => {
+          const list = gangsOf(y);
+          list[i] = v || null;
+          set(y, list);
+        }), t("editor.furniture.nothing")))),
+    ];
   }
 
   /** Garden buildings and planters: a pergola's top, a shed's roof, door, windows and trim, a planter's material and plants. */
@@ -2206,6 +2258,7 @@ export class Editor {
     const upd = (label: string, fn: (x: Opening) => void) => this.change((p) => fn(p.floors[fi].openings.find((y) => y.id === o.id)!), false, label);
     const contacts = this.entities((id, st) => domainOf(id) === "binary_sensor" && ["door", "window", "opening", "garage_door"].includes(String(st.attributes.device_class)));
     const covers = this.entities((id) => domainOf(id) === "cover");
+    const locks = this.entities((id) => domainOf(id) === "lock");
     const room = this.plan.floors[fi].rooms.find((r) => r.id === o.room_id);
     const num = (label: string, key: "width" | "height" | "sill" | "offset", step = "0.05") =>
       [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step, min: "0", value: String(o[key]), onchange: (e: Event) => upd(t("editor.opening.changeKindName", { kind: openingName(o.kind).toLowerCase(), name: label.toLowerCase() }), (x) => (x[key] = Math.max(0, Number((e.target as HTMLInputElement).value)))) })];
@@ -2266,6 +2319,7 @@ export class Editor {
       h("div", { class: "ed-row" }, h("label", {}, t("editor.sensor")), this.dropdown(contacts, o.entity ?? "", (v) => upd(t("editor.opening.linkASensor"), (x) => (x.entity = v || null)), t("editor.none"))),
       o.kind !== "passage" && style !== "fixed" ? h("p", { class: "ed-hint" }, t("editor.opening.theWhatOpensIn", { what })) : null,
       o.kind === "window" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.blind")), this.dropdown(covers, o.cover ?? "", (v) => upd(t("editor.opening.linkABlind"), (x) => (x.cover = v || null)), t("editor.none"))) : null,
+      o.kind === "door" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.lock")), this.dropdown(locks, o.lock ?? "", (v) => upd(t("editor.opening.linkALock"), (x) => (x.lock = v || null)), t("editor.none"))) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
         this.change((p) => (p.floors[fi].openings = p.floors[fi].openings.filter((x) => x.id !== o.id)), false, t("editor.opening.removeAWhat", { what }));
         this.select(null);

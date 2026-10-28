@@ -88,11 +88,19 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
       const kind = OPENING_KINDS.find((k) => k === o.kind) ?? "passage";
       if (isEntityId(o.entity)) visit({ entity: o.entity, label: where(t(`links.sensor.${kind}`), room?.name), area: room?.area_id ?? null, device: false }, (to) => (o.entity = to));
       if (isEntityId(o.cover)) visit({ entity: o.cover, label: where(t("links.blind"), room?.name), area: room?.area_id ?? null, device: false }, (to) => (o.cover = to));
+      if (isEntityId(o.lock)) visit({ entity: o.lock, label: where(t("links.lock"), room?.name), area: room?.area_id ?? null, device: false }, (to) => (o.lock = to));
     }
     for (const x of f.furniture) {
       const s = at(x.x, x.z);
       const name = furnitureName(x.type) ?? t("links.furniture");
       if (isEntityId(x.entity)) visit({ entity: x.entity, label: where(name, s?.name), area: s?.area_id ?? null, device: false }, (to) => (x.entity = to));
+      // a switch's other gangs (the first is its entity)
+      const gangs = x.gangs;
+      gangs?.forEach((e, i) => {
+        if (i > 0 && isEntityId(e)) visit({ entity: e, label: where(name, s?.name), area: s?.area_id ?? null, device: false }, (to) => (gangs[i] = to));
+      });
+      // a ceiling fan's light
+      if (isEntityId(x.light)) visit({ entity: x.light, label: where(name, s?.name), area: s?.area_id ?? null, device: false }, (to) => (x.light = to));
       if (isEntityId(x.parked)) visit({ entity: x.parked, label: t("links.parked", { name }), area: null, device: false }, (to) => {
         if (to) x.parked = to;
         else delete x.parked;

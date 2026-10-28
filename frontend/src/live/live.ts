@@ -2,13 +2,14 @@
 // to refresh when states change. Home Assistant replaces a state object whenever it changes, so
 // spotting changes is a cheap identity comparison over the entities the plan uses.
 import { pointInPolygon } from "../model/geom";
-import { DEFAULT_LABEL, showsValue, spaces, type Device, type Floor, type Furniture, type LabelPart, type Plan, type Room, type Space } from "../model/plan";
+import { DEFAULT_LABEL, showsValue, spaces, type Device, type Floor, type Furniture, type LabelPart, type Opening, type Plan, type Room, type Space } from "../model/plan";
 import type { GlowSlot, LampInfo } from "../scene/build";
 import { lin } from "../scene/build";
 import type { V3 } from "../scene/geo";
 import { kelvinToRgb, type LampState } from "../scene/lighting";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { holdsPost, POST_TYPES } from "../scene/bins";
+import { AC_TYPES, deviceGlow, fanTurns as turnsOf, gangsOf, linkedEntities, GANG_TYPES, GLOW_TYPES, HEAT_TYPES, heats, waterTemperature, WATER_TYPES } from "../scene/devices";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
 import type { EnergyLive } from "./energy";
@@ -16,6 +17,8 @@ import { chargerEntities, type EvNow } from "./ev";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
 import { roomOf, roomTrackers, slug, sourcesOf } from "./presence";
 import { readingIcon, valueText } from "./readings";
+import { lockKind, type LockKind } from "./locks";
+import { artwork, mediaText } from "./media";
 import { t } from "../i18n";
 
 export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status" | "readings";
@@ -43,6 +46,18 @@ export interface RoomPart {
 export interface Reading {
   text: string;
   icon: string;
+}
+
+/** A smart lock's badge on its door: what it says, in words for its label. */
+export interface LockBadge {
+  kind: LockKind;
+  text: string;
+}
+
+/** What a TV or speaker plays: its line, and the artwork's address (TVs). */
+export interface NowPlaying {
+  text: string;
+  picture: string | null;
 }
 
 /** Something that needs attention now: a leak, smoke, a triggered alarm. */
@@ -102,6 +117,8 @@ const C = {
 
 const TINT_HEAT: RGBA = [1.0, 0.42, 0.16, 0.13];
 const TINT_COOL: RGBA = [0.25, 0.62, 1.0, 0.11];
+/** An air conditioner on fan only. */
+const TINT_FAN: RGBA = [0.75, 0.85, 0.95, 0.08];
 
 const isUnavailable = (s: HassEntity | undefined) => !s || s.state === "unavailable" || s.state === "unknown";
 
@@ -221,20 +238,32 @@ export class HassLive implements LiveSource {
       list.push(id);
     }
     // a thermostat, valve or motion or presence sensor placed in the plan belongs to the room it is
-    // in, else to its area's rooms
+    // in, else to its area's rooms. A radiator linked to a thermostat (a radiator valve) makes it its
+    // room's; linked to one that is placed in another room too (the house's thermostat), or to a valve
+    // or switch, it only warms its room while it heats.
     const isMotion = (id: string) => domainOf(id) === "binary_sensor" && MOTION_CLASSES.has(String(hass.states[id]?.attributes.device_class));
-    const placed = new Map<string, string[]>();
-    const anywhere = new Set<string>();
+    const found: { entity: string; key: string; piece: boolean; heater: boolean }[] = [];
     for (const floor of this.plan.floors) {
       const sp = spaces(floor);
       for (const x of [...floor.devices, ...floor.furniture]) {
+        const piece = "type" in x;
+        const heater = piece && HEAT_TYPES.has(x.type);
         const climate = !!x.entity && domainOf(x.entity) === "climate";
-        if (!x.entity || (!climate && !isMotion(x.entity))) continue;
-        const space = sp.find((s) => (!climate || !s.outdoor) && pointInPolygon([x.x, x.z], s.points));
-        if (!space) continue;
-        anywhere.add(x.entity);
-        placed.set(`${floor.id}/${space.id}`, [...(placed.get(`${floor.id}/${space.id}`) ?? []), x.entity]);
+        if (!x.entity || (!climate && !heater && !isMotion(x.entity))) continue;
+        // an air conditioner's outdoor unit is in no room
+        const space = sp.find((s) => ((!climate && !heater) || !s.outdoor) && pointInPolygon([x.x, x.z], s.points));
+        if (space) found.push({ entity: x.entity, key: `${floor.id}/${space.id}`, piece, heater });
       }
+    }
+    const anywhere = new Set(found.map((x) => x.entity));
+    const roomsOf = new Map<string, Set<string>>();
+    for (const x of found) roomsOf.set(x.entity, (roomsOf.get(x.entity) ?? new Set()).add(x.key));
+    const placed = new Map<string, string[]>();
+    const warms = new Map<string, string[]>();
+    for (const x of found) {
+      const own = (domainOf(x.entity) === "climate" || isMotion(x.entity)) && (!x.piece || roomsOf.get(x.entity)!.size === 1);
+      const to = own ? placed : x.heater ? warms : null;
+      to?.set(x.key, [...(to.get(x.key) ?? []), x.entity]);
     }
     for (const floor of this.plan.floors) {
       for (const space of spaces(floor)) {
@@ -255,12 +284,13 @@ export class HassLive implements LiveSource {
           motion: [...new Set([...here.filter(isMotion), ...ids.filter((id) => isMotion(id) && !anywhere.has(id))])],
           lights: ids.filter((id) => domainOf(id) === "light"),
           climates,
-          heating: climates,
+          heating: [...new Set([...climates, ...(warms.get(`${floor.id}/${room.id}`) ?? [])])],
           label: space.label ?? (space.outdoor ? [] : DEFAULT_LABEL),
         };
         this.rooms.set(`${floor.id}/${room.id}`, w);
         for (const id of w.label) if (id !== "temperature" && id !== "humidity") this.watch(id, "labels");
         for (const id of w.climates) this.watch(id, "labels", "tints");
+        for (const id of w.heating) this.watch(id, "tints");
         this.watch(w.temperature, "labels", "tints");
         this.watch(w.humidity, "labels");
         for (const id of w.lights) this.watch(id, "status");
@@ -273,6 +303,8 @@ export class HassLive implements LiveSource {
         const reading = showsValue(d);
         if (dom === "light" || dom === "switch") this.watch(d.entity, "lighting", "markers", "status", ...(reading ? ["readings" as const] : []));
         else this.watch(d.entity, reading ? "readings" : "markers");
+        // what a speaker plays shows on its label
+        if (dom === "media_player") this.watch(d.entity, "readings");
         if (dom === "camera") {
           const dev = hass.entities?.[d.entity]?.device_id;
           const motion = dev ? Object.values(hass.entities ?? {})
@@ -293,23 +325,31 @@ export class HassLive implements LiveSource {
         }
         if (f.type === "solar_panels" && f.entity && domainOf(f.entity) === "sensor") continue;
         this.watch(f.entity, "lighting", "markers");
+        if (f.entity && domainOf(f.entity) === "media_player") this.watch(f.entity, "readings");
+        if (GANG_TYPES.has(f.type)) for (const id of gangsOf(f)) this.watch(id, "lighting");
+        this.watch(f.light, "lighting");
+        if (WATER_TYPES.has(f.type)) this.watch(f.entity, "readings");
       }
       for (const o of floor.openings) {
         this.watch(o.entity, "openings", "lighting");
         this.watch(o.cover, "openings");
+        // a lock's badge, and its door's sensor (open while locked is a problem)
+        if (o.lock) for (const id of [o.lock, o.entity]) this.watch(id, "readings");
       }
       // a roof window that opens glows warm, like a window in a wall
       for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") this.watch(it.entity, "lighting");
     }
     // one thermostat in the whole home runs the boiler for every room: they all warm while it heats
-    const all = new Set([...this.rooms.values()].flatMap((w) => w.climates));
+    // (an air conditioner is its room's own)
+    const acs = new Set(this.plan.floors.flatMap((f) => f.furniture.filter((x) => AC_TYPES.has(x.type)).map((x) => x.entity)));
+    const all = new Set([...this.rooms.values()].flatMap((w) => w.heating).filter((id) => !acs.has(id) && domainOf(id) === "climate"));
     if (all.size === 1) {
       const [only] = all;
       for (const floor of this.plan.floors) {
         for (const space of spaces(floor)) {
           const w = this.rooms.get(`${floor.id}/${space.id}`);
           if (!w || space.outdoor || w.climates.length) continue;
-          w.heating = [only];
+          w.heating = [...new Set([...w.heating, only])];
           this.watch(only, "tints");
         }
       }
@@ -388,9 +428,9 @@ export class HassLive implements LiveSource {
       const at = (x: number, z: number) => sp.findIndex((s) => pointInPolygon([x, z], s.points));
       const d = floor.devices.find((x) => x.entity === entity);
       if (d) return { floor: fi, room: at(d.x, d.z) };
-      const o = floor.openings.find((x) => x.entity === entity || x.cover === entity);
+      const o = floor.openings.find((x) => x.entity === entity || x.cover === entity || x.lock === entity);
       if (o) return { floor: fi, room: sp.findIndex((s) => s.id === o.room_id) };
-      const f = floor.furniture.find((x) => x.entity === entity || x.parked === entity);
+      const f = floor.furniture.find((x) => x.parked === entity || linkedEntities(x).includes(entity));
       if (f) return { floor: fi, room: at(f.x, f.z) };
     }
     for (const [camera, motion] of this.cameraMotion) if (motion.includes(entity)) return this.place(camera);
@@ -429,6 +469,9 @@ export class HassLive implements LiveSource {
     if (marked) return marked;
     if (g.type && EV_TYPES.has(g.type)) return evGlow(this.ev(g.entity), this.day);
     if (g.type === "solar_panels" && !g.entity) return solarGlow(this.energy, null, this.day);
+    // an access point is red while offline (unavailable too), a switch's gangs light while on, an air
+    // conditioner with its mode, a radiator while it heats
+    if (g.type && GLOW_TYPES.has(g.type)) return g.entity ? deviceGlow(g.type, this.state(g.entity)) : null;
     const s = this.state(g.entity);
     if (!s || isUnavailable(s)) return null;
     // a post box's window glows warm while its sensor says there is post
@@ -529,9 +572,10 @@ export class HassLive implements LiveSource {
     }
     // someone is there: motion, a presence sensor, or a person's room tracker
     if (w.motion.some((id) => this.hass!.states[id]?.state === "on") || this.occupied(floor, room)) return [1.0, 0.72, 0.32, 0.09];
-    if (w.heating.some((id) => this.state(id)?.attributes.hvac_action === "heating")) return TINT_HEAT;
+    if (w.heating.some((id) => heats(this.state(id)))) return TINT_HEAT;
     // cooling is a room's own (an air conditioner), never the whole home's
     if (w.climates.some((id) => this.state(id)?.attributes.hvac_action === "cooling")) return TINT_COOL;
+    if (w.climates.some((id) => this.state(id)?.attributes.hvac_action === "fan")) return TINT_FAN;
     return null;
   }
 
@@ -664,6 +708,33 @@ export class HassLive implements LiveSource {
   reading(d: Device): Reading | null {
     if (!this.hass) return null;
     return { text: valueText(this.hass, d.entity), icon: readingIcon(this.hass, d.entity) };
+  }
+
+  /** A door's smart lock: locked, unlocked, jammed, gone, or a problem (locked while the door is open). */
+  lockBadge(o: Opening): LockBadge | null {
+    if (!o.lock || !this.hass) return null;
+    const kind = lockKind(this.state(o.lock), this.contact(o.entity));
+    return { kind, text: t(`lock.${kind}`) };
+  }
+
+  /** What a TV or speaker plays now, or null (off, idle, nothing named). */
+  nowPlaying(entity: string | null, tv: boolean): NowPlaying | null {
+    const s = this.state(entity);
+    const text = mediaText(s, tv);
+    if (!text || !this.hass) return null;
+    return { text, picture: tv ? artwork(this.hass, s) : null };
+  }
+
+  /** A hot water cylinder's temperature, and what it heats to: "52.0° → 55°". */
+  pieceReading(f: Furniture): Reading | null {
+    if (!this.hass || !WATER_TYPES.has(f.type)) return null;
+    const w = waterTemperature(this.state(f.entity));
+    return { text: (w && heatText(w.current, w.target !== null ? degrees(w.target) : null)) || "–", icon: "water" };
+  }
+
+  /** How fast a ceiling fan's blades turn. */
+  fanTurns(entity: string | null): number {
+    return turnsOf(this.state(entity));
   }
 
   /** The charger a car or charger of the plan is linked to (any of its entities), else the house's first. */

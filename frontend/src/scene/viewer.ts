@@ -6,9 +6,11 @@ import {
   type Material,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { showsValue, spaces, type Device, type Floor, type Furniture, type Plan, type Vec2 } from "../model/plan";
+import { showsValue, spaces, type Device, type Floor, type Furniture, type Opening, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
-import { buildFloor, buildRoofs, clipToRect, groundAt, lin, outdoorAt, SLAB, stairwells, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { addFanBlades, buildFloor, buildRoofs, clipToRect, groundAt, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { FAN_TYPES, WATER_TYPES } from "./devices";
+import { baseHeight, FURNITURE } from "./furniture-lib";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
 import { fromRoofFrame, planeHeight } from "./roofs";
 import { Geo, type V3 } from "./geo";
@@ -23,7 +25,7 @@ import { afterglow, duskColours } from "./dusk";
 import type { RealisticLook } from "./realistic";
 import type { Tier, TierSetting } from "./tier";
 import { quietSky, type Sky } from "../live/sky";
-import { initials, type Person, type Reading, type RoomPart } from "../live/live";
+import { initials, type LockBadge, type NowPlaying, type Person, type Reading, type RoomPart } from "../live/live";
 
 export { detectLowEnd } from "./tier";
 export type WallMode = "smart" | "low" | "full";
@@ -60,6 +62,14 @@ export interface LiveSource {
   reading?(d: Device): Reading | null;
   /** A tag an extension puts over a piece of furniture (lit: in the accent of something to do). */
   itemTag?(item: Furniture): { text: string; lit: boolean } | null;
+  /** A piece of furniture with a value over it (a hot water cylinder's temperature): what its label says. */
+  pieceReading?(f: Furniture): Reading | null;
+  /** A door's smart lock, for its badge on the door. */
+  lockBadge?(o: Opening): LockBadge | null;
+  /** What a TV or speaker plays now, for its label. */
+  nowPlaying?(entity: string | null, tv: boolean): NowPlaying | null;
+  /** How fast a ceiling fan's blades turn (turns a second; 0 while it is off). */
+  fanTurns?(entity: string | null): number;
 }
 
 export interface Hit {
@@ -67,6 +77,10 @@ export interface Hit {
   floor: number;
   room: number;
   entity: string | null;
+  /** A device with several entities (a switch's gangs): all of them, the first being `entity`. */
+  entities?: string[];
+  /** Where the finger was, in the view's pixels. */
+  at?: [number, number];
   device?: Device;
   /** The plan item under the finger (furniture, or the device behind a marker or lamp). */
   item?: ItemRef;
@@ -114,8 +128,32 @@ interface FloorView {
   winTarget: Float32Array;
   coverPos: Float32Array;
   coverTarget: Float32Array;
+  /** Each ceiling fan's blades: their angle, and where they are in the moving parts' mesh (at rest). */
+  fanAngle: Float32Array;
+  fanDraw: FanDraw[];
   roomGlow: number[];
   labels: HTMLElement[];
+}
+
+/** A fan's blades in the mesh of moving parts: their vertices, and those at rest (positions and normals). */
+interface FanDraw {
+  range: [number, number];
+  pos: Float32Array;
+  nrm: Float32Array;
+}
+
+/** Writes a fan's blades turned by `angle` about the upright through (cx, cz) into positions and normals. */
+function turnFan(pos: Float32Array | number[], nrm: Float32Array | number[] | null, d: FanDraw, cx: number, cz: number, angle: number): void {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  for (let v = 0, o = d.range[0] * 3; v < d.pos.length; v += 3, o += 3) {
+    const x = d.pos[v] - cx, z = d.pos[v + 2] - cz;
+    pos[o] = cx + c * x - s * z;
+    pos[o + 2] = cz + s * x + c * z;
+    if (!nrm) continue;
+    const nx = d.nrm[v], nz = d.nrm[v + 2];
+    nrm[o] = c * nx - s * nz;
+    nrm[o + 2] = s * nx + c * nz;
+  }
 }
 
 /** A storey without what only its labels and readings show: changing those builds nothing. */
@@ -198,6 +236,8 @@ export class Viewer {
   private flight: { from: [Vector3, Vector3]; to: [Vector3, Vector3]; t: number; dur: number } | null = null;
   private resizeObs: ResizeObserver;
   private interObs: IntersectionObserver;
+  /** Takes the renderer's canvas listeners off. */
+  private unlisten = () => {};
   private width = 1;
   private height = 1;
   private pixelRatio = 1;
@@ -298,17 +338,35 @@ export class Viewer {
     r.setPixelRatio(this.pixelRatio);
     r.domElement.style.display = "block";
     r.domElement.style.touchAction = "none";
-    r.domElement.addEventListener("webglcontextlost", (e) => {
+    const lost = (e: Event) => {
       e.preventDefault();
       if (r !== this.renderer || this.disposed || this.halted) return;
       this.onError?.(new Error("The browser dropped the WebGL context"), false, "graphics");
       // the browser usually gives it back (restored, below); if it doesn't, a new canvas gets a new one
       window.clearTimeout(this.lostTimer);
       this.lostTimer = window.setTimeout(() => this.recover(true), 3000);
-    });
-    r.domElement.addEventListener("webglcontextrestored", () => r === this.renderer && this.recover(false));
+    };
+    const restored = () => r === this.renderer && this.recover(false);
+    r.domElement.addEventListener("webglcontextlost", lost);
+    r.domElement.addEventListener("webglcontextrestored", restored);
+    this.unlisten = () => {
+      r.domElement.removeEventListener("webglcontextlost", lost);
+      r.domElement.removeEventListener("webglcontextrestored", restored);
+    };
     this.container.appendChild(r.domElement);
     return r;
+  }
+
+  /**
+   * A renderer let go, with its WebGL context now rather than when collected: a page may hold only so
+   * many. Its listeners go first: one that asks for the context back makes the browser keep it, and
+   * through them the whole view.
+   */
+  private dropRenderer(r: WebGLRenderer): void {
+    this.unlisten();
+    r.dispose();
+    r.forceContextLoss();
+    r.domElement.remove();
   }
 
   private setupLook(): void {
@@ -343,8 +401,7 @@ export class Viewer {
     this.slowWatch = { frames: 0, time: 0, fired: false };
     if (newRenderer) {
       this.controls.disconnect();
-      this.renderer.dispose();
-      this.renderer.domElement.remove();
+      this.dropRenderer(this.renderer);
       this.renderer = this.createRenderer();
       this.controls.connect(this.renderer.domElement);
     }
@@ -582,6 +639,8 @@ export class Viewer {
       winTarget: new Float32Array(fb.windows.length),
       coverPos: new Float32Array(fb.windows.length).fill(1),
       coverTarget: new Float32Array(fb.windows.length).fill(1),
+      fanAngle: new Float32Array(fb.fans.length),
+      fanDraw: [],
       roomGlow: [],
       labels: [],
     };
@@ -628,6 +687,7 @@ export class Viewer {
       f.coverPos = new Float32Array(fb.windows.length).fill(1);
       f.coverTarget = new Float32Array(fb.windows.length).fill(1);
     }
+    if (fb.fans.length !== f.fanAngle.length) f.fanAngle = new Float32Array(fb.fans.length);
     this.rebuildDynamic(f);
   }
 
@@ -1319,6 +1379,14 @@ export class Viewer {
       g.quad(P(-half, bot), P(half, bot), P(half, top), P(-half, top), [w.normal[0], 0, w.normal[1]], fabric, w.room, slot, -1, 2, 2);
       g.quad(P(half, bot), P(-half, bot), P(-half, top), P(half, top), [-w.normal[0], 0, -w.normal[1]], fabric, w.room, slot, -1, 2, 2);
     });
+    // ceiling fans' blades, at rest and then turned to where they are
+    f.fanDraw = f.fb.fans.map((fan, i) => {
+      const range = addFanBlades(g, fan, pal, this.low);
+      const d: FanDraw = { range, pos: new Float32Array(g.pos.slice(range[0] * 3, range[1] * 3)), nrm: new Float32Array(g.nrm.slice(range[0] * 3, range[1] * 3)) };
+      turnFan(g.pos, g.nrm, d, fan.furniture.x, fan.furniture.z, f.fanAngle[i]);
+      return d;
+    });
+    g.currentItem = -1;
     f.dynGeo = g;
     f.dynGlassGeo = gl;
     const old = [f.dyn.geometry, f.dynGlass.geometry];
@@ -1585,6 +1653,28 @@ export class Viewer {
         this.overlay.appendChild(el);
         f.labels.push(el);
       }
+      const small = (cls: string, entity: string, key: string, id: string) => {
+        const el = document.createElement("div");
+        el.className = `vh-label ${cls}`;
+        el.dataset.floor = String(fi);
+        el.dataset[key] = id;
+        el.dataset.entity = entity;
+        this.overlay.appendChild(el);
+        f.labels.push(el);
+        return el;
+      };
+      // hot water: its temperature over it
+      for (const x of f.fb.floor.furniture) {
+        if (x.entity && WATER_TYPES.has(x.type)) this.drawLabel(small("vh-reading", x.entity, "piece", x.id), this.live?.pieceReading?.(x) ?? null);
+      }
+      // smart locks on their doors' handle side, and what TVs and speakers play over them
+      for (const d of f.fb.doors) if (d.opening.lock) this.drawLock(small("vh-lock", d.opening.lock, "lock", d.opening.id), d.opening);
+      for (const sc of f.fb.screens) {
+        if (sc.entity?.startsWith("media_player.")) this.drawMedia(small("vh-reading vh-media", sc.entity, "media", sc.furniture.id), sc.entity, sc.furniture.type);
+      }
+      for (const d of f.fb.floor.devices) {
+        if (d.entity.startsWith("media_player.") && !showsValue(d)) this.drawMedia(small("vh-reading vh-media", d.entity, "media", `d:${d.id}`), d.entity, null);
+      }
       this.addTags(f, fi);
     });
     this.positionLabels();
@@ -1615,7 +1705,49 @@ export class Viewer {
 
   /** Fills a reading's label: its icon and its value. Returns whether its text changed. */
   private drawReading(el: HTMLElement, d: Device): boolean {
-    const r = this.live?.reading?.(d) ?? null;
+    return this.drawLabel(el, this.live?.reading?.(d) ?? null);
+  }
+
+  /** A lock's badge: its icon in its state's colour, its state in words for screen readers. */
+  private drawLock(el: HTMLElement, o: Opening): boolean {
+    const b = this.live?.lockBadge?.(o) ?? null;
+    const kind = b?.kind ?? "unavailable";
+    if (el.dataset.kind === kind) return false;
+    el.dataset.kind = kind;
+    const icon = kind === "unlocked" || kind === "open" ? "lock-open" : kind === "jammed" || kind === "problem" ? "alert" : "lock";
+    el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${(ICONS.find(([n]) => n === icon) ?? ICONS[0])[1]}"/></svg>`;
+    el.title = b?.text ?? "";
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", b?.text ?? "");
+    return true;
+  }
+
+  /** What a TV (its artwork, or an icon) or a speaker plays, hidden while it plays nothing. */
+  private drawMedia(el: HTMLElement, entity: string, type: string | null): boolean {
+    const tv = type !== null && FURNITURE[type]?.family === "tv";
+    const np = this.live?.nowPlaying?.(entity, tv) ?? null;
+    const key = np ? `${np.text}|${np.picture ?? ""}` : "";
+    if (el.dataset.text === key && el.dataset.text !== undefined) return false;
+    el.dataset.text = key;
+    el.hidden = !np;
+    if (!np) return true;
+    const path = (ICONS.find(([n]) => n === (tv ? "tv" : "speaker")) ?? ICONS[0])[1];
+    el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg><span></span>`;
+    if (np.picture) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = np.picture;
+      // the artwork stands for the icon once it has loaded
+      img.onload = () => el.firstElementChild?.remove();
+      img.onerror = () => img.remove();
+      el.prepend(img);
+    }
+    (el.lastChild as HTMLElement).textContent = np.text;
+    return true;
+  }
+
+  /** Fills a small label with an icon and a value. Returns whether it changed. */
+  private drawLabel(el: HTMLElement, r: Reading | null): boolean {
     const text = r?.text ?? "–";
     const icon = r?.icon ?? "gauge";
     if (el.dataset.text === text && el.dataset.icon === icon) return false;
@@ -1632,6 +1764,19 @@ export class Viewer {
     let changed = false;
     for (const f of this.floors) {
       for (const el of f.labels) {
+        const piece = el.dataset.piece === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.piece);
+        const door = el.dataset.lock === undefined ? null : f.fb.floor.openings.find((o) => o.id === el.dataset.lock);
+        const media = el.dataset.media;
+        let redrawn: boolean | null = null;
+        if (piece) redrawn = this.drawLabel(el, this.live?.pieceReading?.(piece) ?? null);
+        else if (door) redrawn = this.drawLock(el, door);
+        else if (media !== undefined) redrawn = this.drawMedia(el, el.dataset.entity ?? "", media.startsWith("d:") ? null : f.fb.floor.furniture.find((x) => x.id === media)?.type ?? null);
+        if (redrawn !== null) {
+          if (!redrawn) continue;
+          this.labelSize.delete(el);
+          changed = true;
+          continue;
+        }
         if (el.dataset.reading === undefined) continue;
         const d = f.fb.floor.devices.find((x) => x.id === el.dataset.reading);
         if (!d || !this.drawReading(el, d)) continue;
@@ -1654,11 +1799,35 @@ export class Viewer {
         let prio = 1e9;
         const i = el.dataset.room === undefined ? -1 : Number(el.dataset.room);
         const reading = el.dataset.reading === undefined ? null : f.fb.floor.devices.find((d) => d.id === el.dataset.reading);
+        if (el.hidden) return;
         const tagged = el.dataset.item === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.item);
+        const piece = el.dataset.piece === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.piece);
+        const door = el.dataset.lock === undefined ? null : f.fb.doors.find((d) => d.opening.id === el.dataset.lock);
+        const media = el.dataset.media;
         if (tagged) {
           // over the rooms' labels, even the selected room's: it is there because something needs doing
           v.set(...this.tagPosition(fi, tagged));
           prio = 2e6;
+        } else if (door) {
+          // on the handle side, at the handle's height (the middle of double doors)
+          const o = door.opening;
+          const k = o.style === "french" ? 0 : ((o.hinge ?? "left") === "left" ? 1 : -1) * Math.max(0, door.width / 2 - 0.12);
+          v.set(door.base[0] + door.along[0] * k, door.base[1] + f.offset + 1.05, door.base[2] + door.along[1] * k);
+          prio = 6e4;
+        } else if (media !== undefined) {
+          // over a TV's screen, or just above a speaker
+          const sc = media.startsWith("d:") ? null : f.fb.screens.find((x) => x.furniture.id === media);
+          const dev = media.startsWith("d:") ? f.fb.floor.devices.find((d) => d.id === media.slice(2)) : null;
+          if (sc) v.set(sc.at[0], sc.at[1] + f.offset + (FURNITURE[sc.furniture.type]?.family === "tv" ? 0 : 0.15), sc.at[2]);
+          else if (dev) {
+            v.set(...this.devicePosition(fi, dev));
+            v.y += 0.35;
+          } else return;
+          prio = 5e4;
+        } else if (piece) {
+          // just over the piece
+          v.set(piece.x, f.fb.floor.elevation + f.offset + baseHeight(piece, f.fb.floor.height) + piece.h + 0.15, piece.z);
+          prio = 5e4;
         } else if (reading) {
           // over the room labels around it, but under the selected room's and those with someone in
           v.set(...this.devicePosition(fi, reading));
@@ -1735,6 +1904,34 @@ export class Viewer {
       });
       f.u.uCutY.value = f.fb.floor.elevation + this.cutHeight;
     });
+  }
+
+  /**
+   * Turns the blades of the running ceiling fans on the floor shown, in the moving parts' mesh as it
+   * is (nothing is rebuilt); true while any turns. They hold still with reduced motion, and in the
+   * whole-house view.
+   */
+  private spinFans(dt: number): boolean {
+    const turns = this.live?.fanTurns;
+    if (!turns || this.mode !== "floor" || reducedMotion()) return false;
+    const f = this.floors[this.activeFloor];
+    if (!f?.fanDraw.length || !f.group.visible) return false;
+    const pos = f.dyn.geometry.getAttribute("position") as BufferAttribute | undefined;
+    if (!pos) return false;
+    const nrm = f.dyn.geometry.getAttribute("normal") as BufferAttribute | undefined;
+    let moved = false;
+    f.fb.fans.forEach((fan, i) => {
+      const t = turns.call(this.live, fan.furniture.entity ?? null);
+      if (t <= 0 || !f.fanDraw[i]) return;
+      f.fanAngle[i] = (f.fanAngle[i] + t * Math.PI * 2 * dt) % (Math.PI * 2);
+      turnFan(pos.array as Float32Array, nrm ? (nrm.array as Float32Array) : null, f.fanDraw[i], fan.furniture.x, fan.furniture.z, f.fanAngle[i]);
+      moved = true;
+    });
+    if (moved) {
+      pos.needsUpdate = true;
+      if (nrm) nrm.needsUpdate = true;
+    }
+    return moved;
   }
 
   /** Moves cut amounts, doors and blinds towards their targets; true while anything moves. */
@@ -1836,8 +2033,10 @@ export class Viewer {
     if (moved) again = true;
     const pulsing = this.markers.pulsing;
     if (pulsing) this.markers.setTime(now / 1000);
+    const shown = this.visible && !document.hidden;
+    const spinning = shown && this.spinFans(dt);
 
-    if ((this.dirty || again || pulsing) && this.visible && !document.hidden) {
+    if ((this.dirty || again || pulsing || spinning) && shown) {
       const t0 = performance.now();
       this.fitNearPlane();
       if (this.look) {
@@ -1878,15 +2077,15 @@ export class Viewer {
     // one pending frame at most: OrbitControls' change event may already have asked for it
     if (again) {
       if (!this.raf) this.raf = requestAnimationFrame(this.tick);
-    } else if (pulsing) {
-      // only markers pulse: a calm 15 frames per second is plenty
+    } else if (pulsing || spinning) {
+      // only markers pulse or fans turn: a calm 15 frames a second is plenty (fans about 30, 12 on a tablet)
       if (!this.pulseTimer) {
         this.pulseTimer = window.setTimeout(() => {
           this.pulseTimer = 0;
           this.invalidate();
-        }, this.low ? 90 : 50);
+        }, spinning ? (this.low ? 83 : 25) : this.low ? 90 : 50);
       }
-      if (now - this.lastPulseCheck > 5000) {
+      if (pulsing && now - this.lastPulseCheck > 5000) {
         this.lastPulseCheck = now;
         this.refreshMarkers(); // a pulse ends a minute after its change
       }
@@ -2094,7 +2293,8 @@ export class Viewer {
     for (const [fi, f] of this.floors.entries()) {
       if (!f.group.visible || (this.mode === "floor" && fi !== this.activeFloor)) continue;
       for (const lamp of f.fb.lamps) {
-        if (!lamp.entity && !this.editMode) continue;
+        // a fan's light is in the fan's own menu (outside the editor)
+        if ((!lamp.entity || FAN_TYPES.has(lamp.type)) && !this.editMode) continue;
         v.set(lamp.pos[0], lamp.pos[1] + f.offset, lamp.pos[2]).project(this.camera);
         const sx = ((v.x + 1) / 2) * this.width;
         const sy = ((1 - v.y) / 2) * this.height;
@@ -2116,6 +2316,22 @@ export class Viewer {
         const d = Math.hypot(((v.x + 1) / 2) * this.width - x, ((1 - v.y) / 2) * this.height - y);
         if (d < 26 && (!camBest || d < camBest.d) && !this.shutIn(fi, [rig.lens[0], wy, rig.lens[1]])) camBest = { d, fi, rig, y: wy };
       }
+    }
+    // switches, sockets and access points: as generous targets as lamps (outside the editor, which drags them by their parts)
+    let devBest: { d: number; fi: number; t: DeviceTarget; y: number } | null = null;
+    for (const [fi, f] of this.floors.entries()) {
+      if (this.editMode || !f.group.visible || (this.mode === "floor" && fi !== this.activeFloor)) continue;
+      for (const t of f.fb.targets) {
+        const wy = t.pos[1] + f.offset;
+        v.set(t.pos[0], wy, t.pos[2]).project(this.camera);
+        if (v.z > 1) continue;
+        const d = Math.hypot(((v.x + 1) / 2) * this.width - x, ((1 - v.y) / 2) * this.height - y);
+        if (d < 26 && (!devBest || d < devBest.d) && !this.shutIn(fi, [t.pos[0], wy, t.pos[2]])) devBest = { d, fi, t, y: wy };
+      }
+    }
+    if (devBest && (!lampBest || devBest.d < lampBest.d) && (!camBest || devBest.d < camBest.d)) {
+      const { fi, t } = devBest;
+      return { kind: "entity", floor: fi, room: t.room, entity: t.entities[0], entities: t.entities, at: [x, y], item: this.floors[fi].fb.items[t.item], y: devBest.y };
     }
     if (camBest && (!lampBest || camBest.d < lampBest.d)) {
       const { fi, rig } = camBest;
@@ -2152,6 +2368,8 @@ export class Viewer {
         const room = this.roomAt(fi, [h.point.x, h.point.z]);
         return { kind: room >= 0 ? "room" : "empty", floor: fi, room, entity: null };
       }
+      const target = itemIdx >= 0 && !this.editMode ? f.fb.targets.find((t) => t.item === itemIdx) : undefined;
+      if (target) return { kind: "entity", floor: fi, room: target.room, entity: target.entities[0], entities: target.entities, at: [x, y], item };
       if (slot >= 0 && !this.editMode) {
         const g = f.fb.glows[slot];
         if (g?.entity) return { kind: "entity", floor: fi, room: g.room, entity: g.entity, item };
@@ -2223,11 +2441,8 @@ export class Viewer {
     this.markers.dispose();
     this.halos.dispose();
     this.controls.dispose();
-    this.renderer.dispose();
-    // its WebGL context goes now, not when collected: a page may hold only so many (the demo home
-    // opens and closes a view of its own)
-    this.renderer.forceContextLoss();
-    this.renderer.domElement.remove();
+    // the demo home opens and closes a view of its own
+    this.dropRenderer(this.renderer);
   }
 }
 
