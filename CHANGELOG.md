@@ -31,6 +31,10 @@
   Check my setup say which it is.
 
 ### Fixed
+- Leaving VirtuHome for another dashboard left its 3D house behind in memory: every visit to the
+  panel, and every return to a dashboard with the card, kept another scene and graphics context, so
+  a wall tablet got slower with each page change. Ten seconds after it leaves the page, a view now
+  lets all of it go and is made again when it comes back (not while the editor is open).
 - **Own power** in the energy sheet showed 0% on a day the battery charged from the grid overnight,
   because all the power bought counted as the house's. It now counts, hour by hour, only what the
   house itself took from the grid, the way Home Assistant's self-sufficiency gauge does.

@@ -2,15 +2,16 @@
 import { mdiMenu } from "@mdi/js";
 import type { Hass } from "../live/hass";
 import { failedView } from "./errors";
+import { ViewHost } from "./host";
 import { VhView } from "./view";
 
-export class PanelImpl {
-  /** Null when the view could not be made (the error box shows instead; the menu button stays). */
-  private view: VhView | null;
+export class PanelImpl extends ViewHost {
   private menu: HTMLButtonElement;
-  private failed: { hass: Hass | null } | null = null;
+  private root: ShadowRoot;
+  private narrow = false;
 
-  constructor(private host: HTMLElement) {
+  constructor(host: HTMLElement) {
+    super(host);
     const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
     shadow.innerHTML = `<style>
       :host { display: block; height: 100%; }
@@ -32,31 +33,32 @@ export class PanelImpl {
     viewHost.style.cssText = "position:absolute;inset:0";
     page.append(viewHost, this.menu);
     shadow.appendChild(page);
-    const inner = viewHost.attachShadow({ mode: "open" });
-    try {
-      this.view = new VhView(inner, { editable: true, stats: new URLSearchParams(location.search).has("stats") });
-    } catch (err) {
-      this.view = null;
-      this.failed = failedView(inner, err, "panel");
-    }
+    this.root = viewHost.attachShadow({ mode: "open" });
+    this.build();
+  }
+
+  protected get inner(): ShadowRoot {
+    return this.root;
+  }
+
+  protected make(inner: ShadowRoot): VhView {
+    const view = new VhView(inner, { editable: true, stats: new URLSearchParams(location.search).has("stats") });
+    this.showNarrow(view);
+    return view;
+  }
+
+  protected failure(inner: ShadowRoot, err: unknown): { hass: Hass | null } {
+    return failedView(inner, err, "panel");
   }
 
   setNarrow(narrow: boolean): void {
+    this.narrow = narrow;
     this.host.shadowRoot?.querySelector(".page")?.classList.toggle("narrow", narrow);
-    this.view?.root.style.setProperty("--vh-bar-left", narrow ? "56px" : "0px");
-    this.view?.root.classList.toggle("narrow", narrow);
+    if (this.view) this.showNarrow(this.view);
   }
 
-  set hass(h: Hass) {
-    if (this.view) this.view.hass = h;
-    else if (this.failed) this.failed.hass = h;
-  }
-
-  connect(): void {
-    this.view?.connect();
-  }
-
-  disconnect(): void {
-    this.view?.disconnect();
+  private showNarrow(view: VhView): void {
+    view.root.style.setProperty("--vh-bar-left", this.narrow ? "56px" : "0px");
+    view.root.classList.toggle("narrow", this.narrow);
   }
 }

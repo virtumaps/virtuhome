@@ -101,6 +101,9 @@ export class VhView {
   private plan: Plan | null = null;
   private unsub: (() => Promise<void>) | null = null;
   private subscribing = false;
+  /** Off the page (Home Assistant keeps it for when it comes back), or let go for good. */
+  private away = false;
+  private destroyed = false;
   private chips: HTMLDivElement;
   private sheet: HTMLDivElement;
   private toastEl: HTMLDivElement;
@@ -829,7 +832,7 @@ export class VhView {
   }
 
   private async subscribe(): Promise<void> {
-    if (this.fixedPlan || this.unsub || this.subscribing || !this._hass) return;
+    if (this.fixedPlan || this.unsub || this.subscribing || !this._hass || this.away || this.destroyed) return;
     this.subscribing = true;
     try {
       this.unsub = await this._hass.connection.subscribeMessage<{ plan: unknown; revision: number }>(
@@ -853,6 +856,8 @@ export class VhView {
         },
         { type: "virtuhome/plan/subscribe" },
       );
+      // it left the page while Home Assistant answered
+      if (this.away || this.destroyed) this.unsubscribe();
     } catch (err) {
       this.firstRun = "";
       this.showEmpty(t("view.notSetUp.title"), t("view.notSetUp.text", { error: String((err as Error).message ?? err) }));
@@ -1008,20 +1013,33 @@ export class VhView {
     this.renderChips();
   }
 
+  /** The editor is open: it may hold changes that aren't saved. */
+  get editing(): boolean {
+    return !!this.editor;
+  }
+
   connect(): void {
+    this.away = false;
     this.subscribe();
     this.viewer.invalidate();
   }
 
   disconnect(): void {
-    const u = this.unsub;
-    this.unsub = null;
-    u?.().catch(() => undefined);
+    this.away = true;
+    this.unsubscribe();
     // leaving the page closes the demo home: its pretend devices stop, its graphics are let go
     this.closeDemo(false);
   }
 
+  private unsubscribe(): void {
+    const u = this.unsub;
+    this.unsub = null;
+    u?.().catch(() => undefined);
+  }
+
+  /** Lets go of everything: its timers, Home Assistant, the extensions, the scene and its WebGL context. */
   destroy(): void {
+    this.destroyed = true;
     this.endReplay();
     window.clearTimeout(this.themeTimer);
     window.clearTimeout(this.serverTimer);
