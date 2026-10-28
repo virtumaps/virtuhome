@@ -11,7 +11,7 @@
 import { bounds, centroid, labelPoint, outwardNormal, pointInPolygon, segmentDistance } from "../model/geom";
 import { newId, type Device, type Floor, type Mount, type Opening, type OutdoorArea, type Plan, type PlanSettings, type Room, type Vec2 } from "../model/plan";
 import { layoutWalls } from "../model/walls";
-import { gangWidth, MAX_GANGS } from "../scene/devices";
+import { gangWidth, linkedEntities, MAX_GANGS } from "../scene/devices";
 import { domainOf, type Hass, type HassEntity } from "../live/hass";
 import { findChargers, readEv, type EvCharger } from "../live/ev";
 import { CAR_TYPES, carModel, FURNITURE } from "../scene/furniture-lib";
@@ -76,7 +76,7 @@ export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: Placeme
   const inPlan = new Set<string>();
   for (const f of p.floors) {
     for (const d of f.devices) inPlan.add(d.entity);
-    for (const x of f.furniture) if (x.entity) inPlan.add(x.entity);
+    for (const x of f.furniture) for (const e of linkedEntities(x)) inPlan.add(e);
     for (const o of f.openings) {
       if (o.entity) inPlan.add(o.entity);
       if (o.cover) inPlan.add(o.cover);

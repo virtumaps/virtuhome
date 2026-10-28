@@ -4,7 +4,8 @@ import { HassLive } from "../src/live/live";
 import type { Hass, HassEntity } from "../src/live/hass";
 import { normalizePlan, type Furniture } from "../src/model/plan";
 import { buildFloor } from "../src/scene/build";
-import { deviceGlow, gangsOf, gangWidth, wifiOffline } from "../src/scene/devices";
+import { deviceGlow, gangsOf, gangWidth, linkedEntities, wifiOffline } from "../src/scene/devices";
+import { entityUses, replaceEntity } from "../src/model/links";
 import { FURNITURE, styleOptions } from "../src/scene/furniture-lib";
 import { DAY } from "../src/scene/palette";
 
@@ -116,5 +117,15 @@ describe("Smart Setup with switches and plugs", () => {
     expect(report.placed).toEqual(expect.arrayContaining(["Shelly Plus 2PM → Living Room", "Christmas Tree Socket → Living Room"]));
     // and leaves them where they are the next time
     expect(autoPlace(p, hass()).plan.floors[0].furniture.length).toBe(2);
+  });
+});
+
+describe("a switch's gangs in the plan's links", () => {
+  it("are followed when renamed and counted as placed", () => {
+    const p = plan([piece("switch_wall", { entity: "light.a", gangs: ["light.a", "light.b"] })]);
+    expect(entityUses(p).map((u) => u.entity)).toEqual(expect.arrayContaining(["light.a", "light.b"]));
+    replaceEntity(p, "light.b", "light.b2");
+    expect(p.floors[0].furniture[0].gangs).toEqual(["light.a", "light.b2"]);
+    expect(linkedEntities(p.floors[0].furniture[0])).toEqual(["light.a", "light.b2"]);
   });
 });

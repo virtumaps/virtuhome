@@ -5,6 +5,7 @@ import type { Plan } from "../model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../live/hass";
 import { sunPosition } from "../live/sun";
 import { demoHistory, storyState } from "./history";
+import { linkedEntities } from "../scene/devices";
 import { t } from "../i18n";
 
 /**
@@ -74,7 +75,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     };
     const ids: [string, string | null][] = [
       ...floor.devices.map((d) => [d.entity, roomArea(d.x, d.z)] as [string, string | null]),
-      ...floor.furniture.flatMap((f) => [f.entity, ...(f.gangs ?? [])].filter(Boolean).map((e) => [e!, roomArea(f.x, f.z)] as [string, string | null])),
+      ...floor.furniture.flatMap((f) => linkedEntities(f).map((e) => [e, roomArea(f.x, f.z)] as [string, string | null])),
       ...floor.openings.flatMap((o) => [o.entity, o.cover].filter(Boolean).map((e) => [e!, floor.rooms.find((r) => r.id === o.room_id)?.area_id ?? null] as [string, string | null])),
     ];
     for (const [id, area] of ids) {
