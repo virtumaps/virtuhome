@@ -15,4 +15,5 @@ export const LOADER_BYTES = 4 * 1024;
  * loads to show the house (app.js and the chunks it imports up front). The test allows 10% over these.
  */
 export const APP_BYTES = 1_555_108;
-export const FIRST_LOAD_BYTES = 1_123_987;
+// raised from 1,123,987 for the devices (switches, fans, air conditioners, heating, hot water: 1,245,350 measured)
+export const FIRST_LOAD_BYTES = 1_160_000;
