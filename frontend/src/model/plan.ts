@@ -123,6 +123,8 @@ export interface Furniture {
    * are is how many gangs it has. The first is also `entity`.
    */
   gangs?: (string | null)[] | null;
+  /** Ceiling fans with a light: the light's entity (the fan's is `entity`). */
+  light?: string | null;
 }
 
 export interface Device {

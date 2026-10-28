@@ -7,9 +7,11 @@
 //     high in a corner, floor lamps by a wall
 //   * a car charger goes on the house's wall at the driveway, with a car parked in front of it
 //   * a wall switch goes beside the room's door, on the side away from its hinges; a plug on a socket
+//   * a ceiling fan (with its light) on the ceiling; an air conditioner high on an outside wall, its
+//     outdoor unit on the ground outside
 // It never moves what is already placed, so it can run again after new devices were added.
 import { bounds, centroid, labelPoint, outwardNormal, pointInPolygon, segmentDistance } from "../model/geom";
-import { newId, type Device, type Floor, type Mount, type Opening, type OutdoorArea, type Plan, type PlanSettings, type Room, type Vec2 } from "../model/plan";
+import { newId, type Device, type Floor, type Furniture, type Mount, type Opening, type OutdoorArea, type Plan, type PlanSettings, type Room, type Vec2 } from "../model/plan";
 import { layoutWalls } from "../model/walls";
 import { gangWidth, linkedEntities, MAX_GANGS } from "../scene/devices";
 import { domainOf, type Hass, type HassEntity } from "../live/hass";
@@ -151,14 +153,15 @@ export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: Placeme
       }
       const room = pickRoom(targets, c.name) ?? target;
       const sp = room === target ? spots : new Spots(room.floor, room.room);
-      const placed = placeOne(c, hass, room.floor, room.room, sp, room === target ? grid : [], report, c === tvPlayer, p.settings);
+      const placed = placeOne(c, hass, room.floor, room.room, sp, room === target ? grid : [], report, c === tvPlayer, p);
       if (placed) for (const e of c.entities) inPlan.add(e);
     }
   }
   return { plan: p, report };
 }
 
-function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spots, grid: Vec2[], report: PlacementReport, isTv: boolean, settings: PlanSettings): boolean {
+function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spots, grid: Vec2[], report: PlacementReport, isTv: boolean, plan: Plan): boolean {
+  const settings = plan.settings;
   const id = c.primary;
   const s = hass.states[id];
   const dom = domainOf(id);
@@ -170,6 +173,30 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
   };
 
   const outdoor = (room as Room & { outdoor?: boolean }).outdoor === true;
+  const piece = (f: Floor, type: string, at: { x: number; z: number; rotation: number }, extra: Partial<Furniture>) => {
+    const [w, d, h] = FURNITURE[type].size;
+    f.furniture.push({ id: newId("f"), type, ...at, w, d, h, ...extra });
+  };
+  // a ceiling fan, with the device's light as its own when it has one
+  const fan = c.entities.find((e) => domainOf(e) === "fan");
+  if (fan && !outdoor && ceilingFan(hass, c)) {
+    const light = c.entities.find((e) => domainOf(e) === "light");
+    const at = (dom === "light" ? grid.shift() : undefined) ?? spots.centre();
+    piece(floor, light ? "fan_ceiling_light" : "fan_ceiling", { x: at[0], z: at[1], rotation: 0 }, { entity: fan, ...(light ? { light } : {}) });
+    report.placed.push(`${c.name} → ${room.name}`);
+    return true;
+  }
+  // an air conditioner (a climate that cools) high on an outside wall, its outdoor unit outside on the ground
+  const modes = s?.attributes.hvac_modes;
+  if (dom === "climate" && !outdoor && Array.isArray(modes) && modes.includes("cool")) {
+    const spot = acSpot(plan, floor, room);
+    if (spot) {
+      piece(floor, "ac_wall", spot.inside, { entity: id });
+      if (spot.outside) piece(plan.floors[0], "ac_outdoor", spot.outside, { entity: id });
+      report.placed.push(`${c.name} → ${room.name}`);
+      return true;
+    }
+  }
   if (dom === "light" && outdoor) {
     // garden lights stand along the edge of their area
     const at = spots.corner(0.35);
@@ -336,6 +363,41 @@ function placeCharger(p: Plan, hass: Hass, c: EvCharger, report: PlacementReport
     color: "#b9bec6", ...(c.status || c.plug ? { parked: "plugged" } : {}),
   });
   report.placed.push(`${model ? car : t("report.car")} → ${spot.name}`);
+}
+
+/** A fan that hangs from the ceiling: not an air purifier, a 3D printer's fan, an extractor or a desk fan. */
+function ceilingFan(hass: Hass, c: Candidate): boolean {
+  const dev = c.device ? hass.devices?.[c.device] : undefined;
+  const text = `${c.entities.join(" ")} ${c.name} ${dev?.model ?? ""}`.toLowerCase();
+  return !/purif|humidif|dehumid|printer|p1s|bambu|chamber|aux|extract|hood|air ?(clean|filter)|\bac\d{4}|heater|desk|tower|pedestal|bathroom.fan|laptop/.test(text);
+}
+
+/**
+ * An air conditioner's spot: high on the room's longest outside wall, clear of its windows and doors,
+ * and its outdoor unit on the ground outside it (on the lowest storey, when that is not indoors).
+ */
+function acSpot(plan: Plan, floor: Floor, room: Room): { inside: { x: number; z: number; rotation: number }; outside: { x: number; z: number; rotation: number } | null } | null {
+  const ri = floor.rooms.indexOf(room);
+  if (ri < 0) return null;
+  const [w, d] = FURNITURE.ac_wall.size;
+  const od = FURNITURE.ac_outdoor.size[1];
+  const walls = layoutWalls(floor, plan.settings).walls.filter((x) => x.exterior && (x.roomA === ri || x.roomB === ri)).sort((a, b) => b.length - a.length);
+  for (const wall of walls) {
+    const n: Vec2 = wall.roomA === ri ? wall.normal : [-wall.normal[0], -wall.normal[1]];
+    const t = [0.5, 0.3, 0.7, 0.15, 0.85].map((k) => k * wall.length)
+      .find((t) => t - w / 2 > 0.1 && t + w / 2 < wall.length - 0.1 && wall.openings.every((po) => t + w / 2 + 0.05 < po.t0 || t - w / 2 - 0.05 > po.t1));
+    if (t === undefined) continue;
+    const at = (k: number): Vec2 => [wall.a[0] + wall.dir[0] * t + n[0] * k, wall.a[1] + wall.dir[1] * t + n[1] * k];
+    const inside = at(wall.thickness / 2 + d / 2);
+    if (!pointInPolygon(inside, room.points)) continue;
+    const out = at(-(wall.thickness / 2 + 0.1 + od / 2));
+    const ground = plan.floors[0];
+    return {
+      inside: { x: inside[0], z: inside[1], rotation: heading(n[0], n[1]) },
+      outside: ground.rooms.some((r) => pointInPolygon(out, r.points)) ? null : { x: out[0], z: out[1], rotation: heading(-n[0], -n[1]) },
+    };
+  }
+  return null;
 }
 
 /** A switch that is a wall switch, or a plug or socket; null for anything else (a heater, a camera's switch). */

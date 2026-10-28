@@ -24,6 +24,22 @@
   socket, a gang for each of the device's switches.
 - Wi-Fi access points (on the ceiling) and mesh Wi-Fi points: linked to an entity of the access
   point, they glow soft blue while it is online and red while it is offline or unavailable.
+- Ceiling fans, with or without a light: linked to a fan (or the switch it is on), their blades turn
+  with its speed while it runs, more slowly drawn at the Tablet level, and hold still while it is off.
+  The light (**Light**) works as a lamp, and a tap offers the fan and its light. Smart Setup hangs a
+  fan on its room's ceiling, with its light when the device has one.
+- Air conditioners: a split unit for the wall and its outdoor unit, linked to a `climate`. The unit's
+  louvre shows what it does (blue cooling, orange heating, white fan, green drying) and its room is
+  tinted while it cools, heats or blows. Smart Setup puts one that cools high on its room's outside
+  wall, with its outdoor unit on the ground outside. An air conditioner never warms the whole home
+  the way the house's one thermostat does.
+- Radiators, column radiators, towel rails and underfloor heating glow while what they are linked to
+  heats: a thermostat or radiator valve that is heating, a valve that is open, a switch that is on.
+  Radiators can now be linked to a thermostat or valve. One linked to a radiator valve makes it the
+  room's thermostat; one linked to the house's thermostat, a valve or a switch warms only its room's
+  glow, and the room's label keeps its own temperature.
+- Hot water cylinders and water heaters show their temperature over them (**52.0° → 55°**, what it
+  is and what it heats to), from a `water_heater`, a thermostat or a temperature sensor.
 - Extensions can add automations to Home Assistant, so alerts such as "the garage is still open"
   work with no screen open. Nothing is added until you agree in a window that shows what the
   automation does, its settings and where its notifications go. It then shows in Settings →

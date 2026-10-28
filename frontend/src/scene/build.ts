@@ -12,7 +12,7 @@ import { Geo, ROOM_NONE, ROOM_OUTSIDE, type V3 } from "./geo";
 import { WALL_HANG, WALL_TRIM } from "./materials";
 import { buildOpeningFixed, joineryLook, type OpeningInfo } from "./joinery";
 import { cameraPieces, cameraRig, type CameraRig } from "./cameras";
-import { DEVICE_TYPES, gangsOf, GANG_TYPES } from "./devices";
+import { deviceEntities, DEVICE_TYPES, fanBlades, FAN_LIGHTS, FAN_TYPES, gangsOf, GANG_TYPES } from "./devices";
 import { fencePaint, fencePieces, FENCE_STYLES } from "./fences";
 import { edgeOf, insetPolygon, openEdges, railingRuns, stepBlocks, turnOf } from "./areas";
 import { areaColour, areaPaving, BORDER_MATERIALS, BORDER_UNITS, deckKey, deckLook, isPaved, layingAngle, layingFrame, pavingKey, pavingLook, type PavingMaterial } from "./paving";
@@ -123,6 +123,16 @@ export interface DeviceTarget {
   room: number;
 }
 
+/** A ceiling fan: its blades are drawn with the floor's moving parts, turned about its middle. */
+export interface FanInfo {
+  furniture: Furniture;
+  /** Index into FloorBuild.items. */
+  item: number;
+  /** The ceiling it hangs from (world, before the floor's offset). */
+  bottom: number;
+  room: number;
+}
+
 /** A movable thing of the plan: a piece of furniture, or a device (a light gets a lamp model). */
 export interface ItemRef {
   /**
@@ -150,6 +160,7 @@ export interface FloorBuild {
   portals: Portal[];
   screens: { furniture: Furniture; glow: number; entity: string | null }[];
   targets: DeviceTarget[];
+  fans: FanInfo[];
   /** Cameras: where each hangs and what it sees (the viewer draws that). */
   cameras: CameraRig[];
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
@@ -204,6 +215,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
   const portals: Portal[] = [];
   const screens: FloorBuild["screens"] = [];
   const targets: DeviceTarget[] = [];
+  const fans: FanInfo[] = [];
   const items: ItemRef[] = [];
   // doors and windows can be tapped in the editor: one item each
   const openingItems = new Map<string, number>();
@@ -363,7 +375,9 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     items.push({ kind: fromDevice ? "device" : "furniture", id: fromDevice ? item.id.slice(4) : item.id });
     const def = furnitureType(item.type);
     const room = roomAt([item.x, item.z]);
-    const isLamp = def.category === "lights";
+    // a ceiling fan's light works as a lamp
+    const isLamp = def.category === "lights" || FAN_LIGHTS.has(item.type);
+    const lampEntity = def.category === "lights" ? item.entity : item.light;
     const ceiling = CEILING_LAMPS.has(item.type);
     const onGround = room >= floor.rooms.length;
     const bottom = y0 + baseHeight(item, floor.height) + (onGround ? groundAt(floor, [item.x, item.z]) : 0);
@@ -372,23 +386,24 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     if (isLamp || parts.some((p) => p.glow === "screen")) {
       glow = glows.length;
       // a switch or socket lights each gang with its own entity
-      const gangs = GANG_TYPES.has(item.type) ? gangsOf(item) : [item.entity ?? null];
+      const gangs = GANG_TYPES.has(item.type) ? gangsOf(item) : [(isLamp ? lampEntity : item.entity) ?? null];
       for (const entity of gangs) glows.push({ kind: isLamp ? "lamp" : "screen", entity, room, type: item.type });
     }
     if (DEVICE_TYPES.has(item.type)) {
-      const entities = gangsOf(item).filter((e): e is string => !!e);
+      const entities = deviceEntities(item);
       const mid = ceiling ? bottom - item.h / 2 : bottom + item.h / 2;
       if (entities.length) targets.push({ item: items.length - 1, entities, pos: [item.x, mid, item.z], room });
     }
     // a raised piece (a wall cupboard, a lamp on the wall) shows its underside; one on the floor does not
     const raised = baseHeight(item, floor.height) > 0.05;
     addParts(opaque, parts, item, bottom, raised, room, glow, pal, opt.low, glass);
+    if (FAN_TYPES.has(item.type)) fans.push({ furniture: item, item: items.length - 1, bottom, room });
     if (isLamp) {
       const top = parts.reduce((m, p) => Math.max(m, p.y + p.h), -10);
       const low = parts.reduce((m, p) => Math.min(m, p.y), 10);
       const ly = ceiling ? bottom + low : bottom + top - 0.1;
       lamps.push({
-        id: item.id, entity: item.entity ?? null, room, pos: [item.x, ly, item.z], type: item.type, glow,
+        id: item.id, entity: lampEntity ?? null, room, pos: [item.x, ly, item.z], type: item.type, glow,
         radius: LAMP_RADIUS[item.type] ?? 3.2,
       });
     } else if (glow >= 0) {
@@ -422,7 +437,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
   opaque.currentItem = glass.currentItem = -1;
   const all = floor.rooms.flatMap((r) => r.points);
   const fb: FloorBuild = {
-    floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens, targets, cameras,
+    floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens, targets, fans, cameras,
     bounds: all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 1, maxZ: 1 },
     roof: new Geo(), roofGlass: new Geo(), roofs: [], glowsBase: glows.length, itemsBase: items.length,
   };
@@ -809,6 +824,15 @@ export function separateFaces(parts: Part[], raised = false): Part[] {
       z: p.z + (g(5) - g(4)) / 2, d: p.d + g(4) + g(5),
     };
   });
+}
+
+/** A ceiling fan's blades at rest, into a mesh of moving parts; returns the range of vertices they take. */
+export function addFanBlades(g: Geo, fan: FanInfo, pal: Palette, low: boolean): [number, number] {
+  const start = g.vertexCount;
+  const f = fan.furniture;
+  g.currentItem = fan.item;
+  addParts(g, fanBlades(f.w, f.h), f, fan.bottom, true, fan.room, -1, pal, low);
+  return [start, g.vertexCount];
 }
 
 /** A piece's parts, into the floor's mesh; its glass into the glass mesh when one is given. */

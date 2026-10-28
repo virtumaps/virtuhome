@@ -346,6 +346,9 @@ Edit → **Home** → **Devices** → **Place devices automatically**:
 - puts a wall switch (a relay, a dimmer, a "light switch") beside its room's door, on the side away
   from the door's hinges, and a smart plug on a socket on a wall, with a gang for each of the
   device's switches;
+- hangs a ceiling fan on its room's ceiling (with its light, when the fan's device has one; air
+  purifiers and the like stay pins), and puts an air conditioner (a thermostat that can cool) high
+  on its room's outside wall, with its outdoor unit on the ground outside;
 - puts a car charger on the house wall at the driveway, with the car in front of it.
 
 It never moves what is already placed, so run it again after adding devices. It reports what it
@@ -372,6 +375,24 @@ did, and how many devices are in areas without a room in the plan.
 - **Wi-Fi access points** (on the ceiling) and **Mesh Wi-Fi points** (on a shelf): **Linked to**
   picks an entity of the access point: its connectivity sensor, its tracker, or any of its sensors.
   It glows soft blue while online and red while offline or unavailable. Tap it for its dialog.
+- **Ceiling fans** (**Ceiling fan**, **Ceiling fan with light**): **Linked to** picks the fan, or the
+  switch it is on, and **Light** the light of a fan that has one; the light works like any lamp. The
+  blades turn with the fan's speed while it runs (on the floor shown, not in the whole-house view; at
+  the Tablet level they are drawn fewer times a second), and stand still while it is off. A tap
+  switches the fan, or offers the fan and its light.
+- **Air conditioners** (**Air conditioner** for the wall, and its **Air conditioner outdoor unit**):
+  link both to the air conditioner's thermostat. The unit's louvre shows what it does (blue cooling,
+  orange heating, white fan only, green drying), and its room is tinted while it cools, heats or
+  blows. Tap it for its dialog.
+- **Radiators** (**Radiator**, **Column radiator**, **Towel radiator**) and **Underfloor heating**
+  (a zone you size to the room): **Linked to** picks a thermostat, a radiator valve, a valve or a
+  switch. They glow while it heats: a thermostat or valve that is heating, a valve that is open, a
+  switch that is on, and their room glows warm with them. A radiator valve linked to one counts as
+  the room's thermostat (its label shows what it reads); the house's thermostat linked to radiators
+  in several rooms stays the thermostat of the room it is placed in.
+- **Hot water** (**Hot water cylinder**, **Water heater**): **Linked to** picks the water heater, or
+  a thermostat or temperature sensor of the cylinder. Its temperature shows over it, with what it
+  heats to (**52.0° → 55°**). Tap the label or the cylinder for its dialog.
 - **Thermostats and radiator valves**, and **motion and presence sensors**, count for the room you
   place them in. One you don't place counts for the rooms of its area, so the zones of an Aqara FP2
   count for the areas you gave them in Home Assistant.

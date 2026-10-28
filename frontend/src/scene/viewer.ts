@@ -6,9 +6,11 @@ import {
   type Material,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { showsValue, spaces, type Device, type Floor, type Plan, type Vec2 } from "../model/plan";
+import { showsValue, spaces, type Device, type Floor, type Furniture, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
-import { buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { addFanBlades, buildFloor, buildRoofs, clipToRect, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { FAN_TYPES, WATER_TYPES } from "./devices";
+import { baseHeight } from "./furniture-lib";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
 import { fromRoofFrame, planeHeight } from "./roofs";
 import { Geo, type V3 } from "./geo";
@@ -58,6 +60,10 @@ export interface LiveSource {
   roomPeople?(floor: Floor, room: { id: string }): Person[];
   /** A device shown by its value: what its label says. */
   reading?(d: Device): Reading | null;
+  /** A piece of furniture with a value over it (a hot water cylinder's temperature): what its label says. */
+  pieceReading?(f: Furniture): Reading | null;
+  /** How fast a ceiling fan's blades turn (turns a second; 0 while it is off). */
+  fanTurns?(entity: string | null): number;
 }
 
 export interface Hit {
@@ -116,8 +122,32 @@ interface FloorView {
   winTarget: Float32Array;
   coverPos: Float32Array;
   coverTarget: Float32Array;
+  /** Each ceiling fan's blades: their angle, and where they are in the moving parts' mesh (at rest). */
+  fanAngle: Float32Array;
+  fanDraw: FanDraw[];
   roomGlow: number[];
   labels: HTMLElement[];
+}
+
+/** A fan's blades in the mesh of moving parts: their vertices, and those at rest (positions and normals). */
+interface FanDraw {
+  range: [number, number];
+  pos: Float32Array;
+  nrm: Float32Array;
+}
+
+/** Writes a fan's blades turned by `angle` about the upright through (cx, cz) into positions and normals. */
+function turnFan(pos: Float32Array | number[], nrm: Float32Array | number[] | null, d: FanDraw, cx: number, cz: number, angle: number): void {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  for (let v = 0, o = d.range[0] * 3; v < d.pos.length; v += 3, o += 3) {
+    const x = d.pos[v] - cx, z = d.pos[v + 2] - cz;
+    pos[o] = cx + c * x - s * z;
+    pos[o + 2] = cz + s * x + c * z;
+    if (!nrm) continue;
+    const nx = d.nrm[v], nz = d.nrm[v + 2];
+    nrm[o] = c * nx - s * nz;
+    nrm[o + 2] = s * nx + c * nz;
+  }
 }
 
 /** A storey without what only its labels and readings show: changing those builds nothing. */
@@ -584,6 +614,8 @@ export class Viewer {
       winTarget: new Float32Array(fb.windows.length),
       coverPos: new Float32Array(fb.windows.length).fill(1),
       coverTarget: new Float32Array(fb.windows.length).fill(1),
+      fanAngle: new Float32Array(fb.fans.length),
+      fanDraw: [],
       roomGlow: [],
       labels: [],
     };
@@ -630,6 +662,7 @@ export class Viewer {
       f.coverPos = new Float32Array(fb.windows.length).fill(1);
       f.coverTarget = new Float32Array(fb.windows.length).fill(1);
     }
+    if (fb.fans.length !== f.fanAngle.length) f.fanAngle = new Float32Array(fb.fans.length);
     this.rebuildDynamic(f);
   }
 
@@ -1321,6 +1354,14 @@ export class Viewer {
       g.quad(P(-half, bot), P(half, bot), P(half, top), P(-half, top), [w.normal[0], 0, w.normal[1]], fabric, w.room, slot, -1, 2, 2);
       g.quad(P(half, bot), P(-half, bot), P(-half, top), P(half, top), [-w.normal[0], 0, -w.normal[1]], fabric, w.room, slot, -1, 2, 2);
     });
+    // ceiling fans' blades, at rest and then turned to where they are
+    f.fanDraw = f.fb.fans.map((fan, i) => {
+      const range = addFanBlades(g, fan, pal, this.low);
+      const d: FanDraw = { range, pos: new Float32Array(g.pos.slice(range[0] * 3, range[1] * 3)), nrm: new Float32Array(g.nrm.slice(range[0] * 3, range[1] * 3)) };
+      turnFan(g.pos, g.nrm, d, fan.furniture.x, fan.furniture.z, f.fanAngle[i]);
+      return d;
+    });
+    g.currentItem = -1;
     f.dynGeo = g;
     f.dynGlassGeo = gl;
     const old = [f.dyn.geometry, f.dynGlass.geometry];
@@ -1586,13 +1627,29 @@ export class Viewer {
         this.overlay.appendChild(el);
         f.labels.push(el);
       }
+      // hot water: its temperature over it
+      for (const x of f.fb.floor.furniture) {
+        if (!x.entity || !WATER_TYPES.has(x.type)) continue;
+        const el = document.createElement("div");
+        el.className = "vh-label vh-reading";
+        el.dataset.floor = String(fi);
+        el.dataset.piece = x.id;
+        el.dataset.entity = x.entity;
+        this.drawLabel(el, this.live?.pieceReading?.(x) ?? null);
+        this.overlay.appendChild(el);
+        f.labels.push(el);
+      }
     });
     this.positionLabels();
   }
 
   /** Fills a reading's label: its icon and its value. Returns whether its text changed. */
   private drawReading(el: HTMLElement, d: Device): boolean {
-    const r = this.live?.reading?.(d) ?? null;
+    return this.drawLabel(el, this.live?.reading?.(d) ?? null);
+  }
+
+  /** Fills a small label with an icon and a value. Returns whether it changed. */
+  private drawLabel(el: HTMLElement, r: Reading | null): boolean {
     const text = r?.text ?? "–";
     const icon = r?.icon ?? "gauge";
     if (el.dataset.text === text && el.dataset.icon === icon) return false;
@@ -1609,6 +1666,13 @@ export class Viewer {
     let changed = false;
     for (const f of this.floors) {
       for (const el of f.labels) {
+        const piece = el.dataset.piece === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.piece);
+        if (piece) {
+          if (!this.drawLabel(el, this.live?.pieceReading?.(piece) ?? null)) continue;
+          this.labelSize.delete(el);
+          changed = true;
+          continue;
+        }
         if (el.dataset.reading === undefined) continue;
         const d = f.fb.floor.devices.find((x) => x.id === el.dataset.reading);
         if (!d || !this.drawReading(el, d)) continue;
@@ -1631,7 +1695,12 @@ export class Viewer {
         let prio = 1e9;
         const i = el.dataset.room === undefined ? -1 : Number(el.dataset.room);
         const reading = el.dataset.reading === undefined ? null : f.fb.floor.devices.find((d) => d.id === el.dataset.reading);
-        if (reading) {
+        const piece = el.dataset.piece === undefined ? null : f.fb.floor.furniture.find((x) => x.id === el.dataset.piece);
+        if (piece) {
+          // just over the piece
+          v.set(piece.x, f.fb.floor.elevation + f.offset + baseHeight(piece, f.fb.floor.height) + piece.h + 0.15, piece.z);
+          prio = 5e4;
+        } else if (reading) {
           // over the room labels around it, but under the selected room's and those with someone in
           v.set(...this.devicePosition(fi, reading));
           prio = 5e4;
@@ -1707,6 +1776,34 @@ export class Viewer {
       });
       f.u.uCutY.value = f.fb.floor.elevation + this.cutHeight;
     });
+  }
+
+  /**
+   * Turns the blades of the running ceiling fans on the floor shown, in the moving parts' mesh as it
+   * is (nothing is rebuilt); true while any turns. They hold still with reduced motion, and in the
+   * whole-house view.
+   */
+  private spinFans(dt: number): boolean {
+    const turns = this.live?.fanTurns;
+    if (!turns || this.mode !== "floor" || reducedMotion()) return false;
+    const f = this.floors[this.activeFloor];
+    if (!f?.fanDraw.length || !f.group.visible) return false;
+    const pos = f.dyn.geometry.getAttribute("position") as BufferAttribute | undefined;
+    if (!pos) return false;
+    const nrm = f.dyn.geometry.getAttribute("normal") as BufferAttribute | undefined;
+    let moved = false;
+    f.fb.fans.forEach((fan, i) => {
+      const t = turns.call(this.live, fan.furniture.entity ?? null);
+      if (t <= 0 || !f.fanDraw[i]) return;
+      f.fanAngle[i] = (f.fanAngle[i] + t * Math.PI * 2 * dt) % (Math.PI * 2);
+      turnFan(pos.array as Float32Array, nrm ? (nrm.array as Float32Array) : null, f.fanDraw[i], fan.furniture.x, fan.furniture.z, f.fanAngle[i]);
+      moved = true;
+    });
+    if (moved) {
+      pos.needsUpdate = true;
+      if (nrm) nrm.needsUpdate = true;
+    }
+    return moved;
   }
 
   /** Moves cut amounts, doors and blinds towards their targets; true while anything moves. */
@@ -1808,8 +1905,10 @@ export class Viewer {
     if (moved) again = true;
     const pulsing = this.markers.pulsing;
     if (pulsing) this.markers.setTime(now / 1000);
+    const shown = this.visible && !document.hidden;
+    const spinning = shown && this.spinFans(dt);
 
-    if ((this.dirty || again || pulsing) && this.visible && !document.hidden) {
+    if ((this.dirty || again || pulsing || spinning) && shown) {
       const t0 = performance.now();
       this.fitNearPlane();
       if (this.look) {
@@ -1850,15 +1949,15 @@ export class Viewer {
     // one pending frame at most: OrbitControls' change event may already have asked for it
     if (again) {
       if (!this.raf) this.raf = requestAnimationFrame(this.tick);
-    } else if (pulsing) {
-      // only markers pulse: a calm 15 frames per second is plenty
+    } else if (pulsing || spinning) {
+      // only markers pulse or fans turn: a calm 15 frames a second is plenty (fans about 30, 12 on a tablet)
       if (!this.pulseTimer) {
         this.pulseTimer = window.setTimeout(() => {
           this.pulseTimer = 0;
           this.invalidate();
-        }, this.low ? 90 : 50);
+        }, spinning ? (this.low ? 83 : 25) : this.low ? 90 : 50);
       }
-      if (now - this.lastPulseCheck > 5000) {
+      if (pulsing && now - this.lastPulseCheck > 5000) {
         this.lastPulseCheck = now;
         this.refreshMarkers(); // a pulse ends a minute after its change
       }
@@ -2066,7 +2165,8 @@ export class Viewer {
     for (const [fi, f] of this.floors.entries()) {
       if (!f.group.visible || (this.mode === "floor" && fi !== this.activeFloor)) continue;
       for (const lamp of f.fb.lamps) {
-        if (!lamp.entity && !this.editMode) continue;
+        // a fan's light is in the fan's own menu (outside the editor)
+        if ((!lamp.entity || FAN_TYPES.has(lamp.type)) && !this.editMode) continue;
         v.set(lamp.pos[0], lamp.pos[1] + f.offset, lamp.pos[2]).project(this.camera);
         const sx = ((v.x + 1) / 2) * this.width;
         const sy = ((1 - v.y) / 2) * this.height;
