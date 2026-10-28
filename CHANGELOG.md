@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0
 
 ### New
 - **Readings**: any sensor's value in a small label on the plan, with an icon for what it measures:
