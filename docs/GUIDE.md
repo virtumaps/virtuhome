@@ -113,8 +113,11 @@ The same view is in the sidebar and in every VirtuHome card.
 whole-house view. Tap one for its dialog.
 
 **Gestures**
-- **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead.
+- **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead. A
+  switch with several gangs shows a small menu of them.
 - **Long-press** a lamp or a device for its Home Assistant dialog.
+- **Tap a lock's badge** on its door to lock or unlock it: it asks first (see
+  [By hand](#by-hand)). Tap what a TV or speaker plays to play or pause it.
 - **Tap a room** to open it: in the house view this goes to its floor first. A sheet shows the
   room's temperature, who is here and its devices, with **All lights on** / **All lights off**.
 - **Double-tap a room** to switch all its lights.
@@ -339,9 +342,18 @@ Edit → **Home** → **Devices** → **Place devices automatically**:
   as your areas, or link them in **Rooms** first;
 - attaches door and window contacts, curtains and blinds to the doors and windows of their room,
   and a TV's media player to the TV;
+- puts a smart lock on its door: a "front door" lock on the front door (the outside door lowest on
+  the plan), a "back door" lock on the back door, any other on its room's outside door; a lock
+  placed as a device moves onto the door nearest it;
 - gives lights, cameras, motion sensors, thermostats, plugs and speakers a sensible spot in their
   room: ceiling lights spread over the ceiling, cameras in corners looking in, motion sensors high
   in a corner;
+- puts a wall switch (a relay, a dimmer, a "light switch") beside its room's door, on the side away
+  from the door's hinges, and a smart plug on a socket on a wall, with a gang for each of the
+  device's switches;
+- hangs a ceiling fan on its room's ceiling (with its light, when the fan's device has one; air
+  purifiers and the like stay pins), and puts an air conditioner (a thermostat that can cool) high
+  on its room's outside wall, with its outdoor unit on the ground outside;
 - puts a car charger on the house wall at the driveway, with the car in front of it.
 
 It never moves what is already placed, so run it again after adding devices. It reports what it
@@ -357,8 +369,48 @@ did, and how many devices are in areas without a room in the plan.
   on a stand) with what they see lit up to the first walls: red on motion, grey while offline. Set
   **View °** and **Reach m** if the usual view is wrong.
 - **Doors and windows:** tap one, then pick its **Sensor** (it opens in 3D when the sensor does) and,
-  for a window, its **Blind**.
+  for a window, its **Blind**, for a door, its **Lock**.
+- **Smart locks** (Yale, Nuki, Ultion, Aqara, any `lock` in Home Assistant) go on their door with
+  **Lock**. A badge on the door's handle side shows the lock: green while locked, orange while
+  unlocked, red while jammed or when the door is open but its lock says locked (a deadbolt thrown
+  with the door open), grey while unavailable. Tap the badge: it asks first, with **Lock** or
+  **Unlock** (both while jammed), a **Code** box when the lock needs a code, **Open the door** when
+  the lock can pull the latch, and **Details** for its dialog. Badges show on their floor, not in
+  the whole-house view.
+- **TVs and speakers**: a TV linked to its media player (**Linked to**) shows what it plays over its
+  screen: the title, with the series or artist and the artwork when Home Assistant has them, or the
+  app or source while it is on (**Netflix**, **HDMI 1**). A speaker (a **Smart speaker**, a floor
+  speaker, or a media player placed as a device) shows the title and artist while it plays, and a
+  **Smart speaker**'s light ring glows softly. Tap one, or its label, to play or pause; long-press
+  for its dialog.
 - **Lamps and TVs** that are furniture: **Linked to** picks the light, switch or media player.
+- **Switches and sockets** (Add furniture and decor → **Devices** → **Light switch** or **Socket**):
+  pick how many **Gangs** (1 to 4; the plate grows with them) and the light, switch, fan or toggle
+  helper of each (**Gang 1**, **Gang 2**…). Each gang lights up while it is on. Tap a one-gang
+  switch to switch it; with several gangs a small menu shows each with its state, and a tap on one
+  switches it (a long press opens their dialogs instead). They sit 1.06 m (switches) and 0.3 m
+  (sockets) up the wall; set **Above floor** for a socket over a worktop.
+- **Wi-Fi access points** (on the ceiling) and **Mesh Wi-Fi points** (on a shelf): **Linked to**
+  picks an entity of the access point: its connectivity sensor, its tracker, or any of its sensors.
+  It glows soft blue while online and red while offline or unavailable. Tap it for its dialog.
+- **Ceiling fans** (**Ceiling fan**, **Ceiling fan with light**): **Linked to** picks the fan, or the
+  switch it is on, and **Light** the light of a fan that has one; the light works like any lamp. The
+  blades turn with the fan's speed while it runs (on the floor shown, not in the whole-house view; at
+  the Tablet level they are drawn fewer times a second), and stand still while it is off. A tap
+  switches the fan, or offers the fan and its light.
+- **Air conditioners** (**Air conditioner** for the wall, and its **Air conditioner outdoor unit**):
+  link both to the air conditioner's thermostat. The unit's louvre shows what it does (blue cooling,
+  orange heating, white fan only, green drying), and its room is tinted while it cools, heats or
+  blows. Tap it for its dialog.
+- **Radiators** (**Radiator**, **Column radiator**, **Towel radiator**) and **Underfloor heating**
+  (a zone you size to the room): **Linked to** picks a thermostat, a radiator valve, a valve or a
+  switch. They glow while it heats: a thermostat or valve that is heating, a valve that is open, a
+  switch that is on, and their room glows warm with them. A radiator valve linked to one counts as
+  the room's thermostat (its label shows what it reads); the house's thermostat linked to radiators
+  in several rooms stays the thermostat of the room it is placed in.
+- **Hot water** (**Hot water cylinder**, **Water heater**): **Linked to** picks the water heater, or
+  a thermostat or temperature sensor of the cylinder. Its temperature shows over it, with what it
+  heats to (**52.0° → 55°**). Tap the label or the cylinder for its dialog.
 - **Thermostats and radiator valves**, and **motion and presence sensors**, count for the room you
   place them in. One you don't place counts for the rooms of its area, so the zones of an Aqara FP2
   count for the areas you gave them in Home Assistant.

@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Wall switches and sockets (**Devices** in Add furniture and decor): 1 to 4 **Gangs**, each linked to
+  a light, switch, fan or toggle helper. Each gang lights up while it is on; a tap switches a
+  one-gang switch, and with several a small menu by your finger switches each one. Smart Setup puts
+  a wall switch beside its room's door (on the side away from the hinges) and a smart plug on a
+  socket, a gang for each of the device's switches.
+- Wi-Fi access points (on the ceiling) and mesh Wi-Fi points: linked to an entity of the access
+  point, they glow soft blue while it is online and red while it is offline or unavailable.
+- Ceiling fans, with or without a light: linked to a fan (or the switch it is on), their blades turn
+  with its speed while it runs, more slowly drawn at the Tablet level, and hold still while it is off.
+  The light (**Light**) works as a lamp, and a tap offers the fan and its light. Smart Setup hangs a
+  fan on its room's ceiling, with its light when the device has one.
+- Air conditioners: a split unit for the wall and its outdoor unit, linked to a `climate`. The unit's
+  louvre shows what it does (blue cooling, orange heating, white fan, green drying) and its room is
+  tinted while it cools, heats or blows. Smart Setup puts one that cools high on its room's outside
+  wall, with its outdoor unit on the ground outside. An air conditioner never warms the whole home
+  the way the house's one thermostat does.
+- Radiators, column radiators, towel rails and underfloor heating glow while what they are linked to
+  heats: a thermostat or radiator valve that is heating, a valve that is open, a switch that is on.
+  Radiators can now be linked to a thermostat or valve. One linked to a radiator valve makes it the
+  room's thermostat; one linked to the house's thermostat, a valve or a switch warms only its room's
+  glow, and the room's label keeps its own temperature.
+- Smart locks on their doors: pick a door's **Lock** (Yale, Nuki, Ultion, Aqara or any other `lock`)
+  and a small badge on the door's handle side shows it locked (green), unlocked (orange), jammed or
+  unavailable. A door that is open while its lock says locked shows as a problem in red. A tap on the
+  badge asks first, then locks or unlocks, asks for the code when the lock needs one, and offers
+  **Open the door** where the lock can pull the latch. Smart Setup puts a "front door" or "back door"
+  lock on that door, another lock on its room's outside door, and moves a lock placed as a pin onto
+  the door nearest it.
+- What TVs and speakers play: a TV shows the title (and series or artist) of what it plays over its
+  screen, with the artwork when Home Assistant has it, or its app or source while it is on; a
+  speaker shows the title and artist while it plays. A tap on it plays or pauses, a long press opens
+  its dialog. New **Smart speaker**, whose light ring glows softly while it plays.
+- Hot water cylinders and water heaters show their temperature over them (**52.0° → 55°**, what it
+  is and what it heats to), from a `water_heater`, a thermostat or a temperature sensor.
+
 ## 0.14.0
 
 ### New

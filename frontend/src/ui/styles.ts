@@ -35,6 +35,22 @@ export const VIEW_CSS = /* css */ `
 .vh-reading { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 6px; font-weight: 600; }
 .vh-reading svg { width: 14px; height: 14px; fill: var(--vh-accent); flex: none; }
 .vh-reading span { color: inherit; font-size: 12px; }
+.vh-label[hidden] { display: none; }
+/* what a TV or speaker plays: its artwork or icon, and the title */
+.vh-media span { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.vh-media img { width: 26px; height: 26px; border-radius: 4px; object-fit: cover; flex: none; margin: -1px 0; }
+/* a smart lock on its door: an icon in its state's colour */
+.vh-lock { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 50%; }
+.vh-lock svg { width: 16px; height: 16px; fill: #8a94a3; }
+.vh-lock[data-kind="locked"] svg { fill: #2bb673; }
+.vh-lock[data-kind="unlocked"] svg, .vh-lock[data-kind="open"] svg { fill: #f07a3a; }
+.vh-lock[data-kind="moving"] svg { fill: #f2a33a; }
+.vh-lock[data-kind="jammed"], .vh-lock[data-kind="problem"] { box-shadow: 0 0 0 2px #e5484d, 0 1px 6px rgba(0,0,0,0.18); }
+.vh-lock[data-kind="jammed"] svg, .vh-lock[data-kind="problem"] svg { fill: #e5484d; }
+.vh-pop-head { padding: 6px 10px 4px; }
+.vh-pop-head b { display: block; font-size: 13px; font-weight: 600; }
+.vh-pop-head small { display: block; font-size: 11px; color: var(--vh-dim); }
+.vh-pop input { box-sizing: border-box; width: calc(100% - 12px); margin: 4px 6px; padding: 7px 9px; border-radius: 10px; border: 1px solid var(--vh-chip); background: transparent; color: inherit; font: inherit; }
 /* who is in the room: faces over its name, or alone over the room in the house view */
 .vh-who { display: flex; justify-content: center; margin: 1px 0 3px; }
 .vh-face {
@@ -159,6 +175,11 @@ export const VIEW_CSS = /* css */ `
   position: absolute; right: 60px; bottom: 12px; width: 250px; padding: 6px; border-radius: 16px;
   background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 4px 20px rgba(0,0,0,0.25); z-index: 3;
+}
+.vh-pop {
+  position: absolute; min-width: 190px; max-width: min(280px, calc(100% - 16px)); padding: 6px; border-radius: 16px;
+  background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25); z-index: 4;
 }
 .vh-menu-title { font-size: 12px; color: var(--vh-dim); padding: 6px 10px 4px; }
 .vh-menu-row {

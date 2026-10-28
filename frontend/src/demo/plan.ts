@@ -64,14 +64,14 @@ const ground: Floor = {
   roofs: [leanTo(-2.05, 0, 0, 2.95), leanTo(-3.1, 2.95, 0, 5.3)],
   rooms: [kitchen, dining, living, hall, side, wc, store, shed],
   openings: [
-    on(hall, "door", 1.35, 7.4, 0.86, { entity: "binary_sensor.front_door" }),
+    on(hall, "door", 1.35, 7.4, 0.86, { entity: "binary_sensor.front_door", lock: "lock.front_door" }),
     on(living, "window", 4.2, 7.4, 1.8, { entity: "binary_sensor.living_room_window" }),
     on(hall, "window", 0, 6.5, 0.55, { entity: "binary_sensor.hall_window" }),
     on(living, "door", 2.15, 6.4, 0.76, { hinge: "right" }),
     on(hall, "passage", 1.45, 3.15, 0.85),
     on(kitchen, "passage", 3.05, 1.75, 1.0),
     on(living, "passage", 5.4, 3.15, 1.25),
-    on(dining, "door", 4.65, 0, 1.4, { entity: "binary_sensor.garden_door", swing: "out" }),
+    on(dining, "door", 4.65, 0, 1.4, { entity: "binary_sensor.garden_door", swing: "out", lock: "lock.garden_door" }),
     on(kitchen, "window", 1.75, 0, 1.3, { entity: "binary_sensor.kitchen_window", sill: 1.05, height: 1.0 }),
     on(kitchen, "door", 0, 2.55, 0.76),
     on(wc, "door", -1.05, 1.3, 0.66),
@@ -97,10 +97,13 @@ const ground: Floor = {
     f("lamp_downlight", 5.2, 4.4, 0, 0.1, 0.1, 0.02, { entity: "light.living_room_downlights" }),
     f("lamp_downlight", 3.2, 6.4, 0, 0.1, 0.1, 0.02, { entity: "light.living_room_downlights" }),
     f("lamp_downlight", 5.2, 6.4, 0, 0.1, 0.1, 0.02, { entity: "light.living_room_downlights" }),
+    f("radiator", 4.2, 7.21, 180, 1.4, 0.1, 0.6, { entity: "climate.thermostat" }),
+    f("switch_wall", 2.216, 6.92, -90, 0.146, 0.012, 0.086, { entity: "light.living_room_ceiling", gangs: ["light.living_room_ceiling", "light.living_room_downlights"] }),
     // hall
     f("stairs", 0.55, 4.75, 0, 0.9, 2.6, 2.6),
     f("tall_cabinet", 1.85, 4.0, -90, 0.6, 0.38, 1.9),
     f("led_strip", 1.02, 4.75, 90, 2.6, 0.02, 0.012, { y: 0.15, entity: "light.stairs" }),
+    f("switch_wall", 1.94, 7.254, 180, 0.086, 0.012, 0.086, { entity: "light.stairs" }),
     // kitchen
     f("kitchen", 0.45, 0.33, 180, 0.6, 0.6, 0.9),
     f("sink", 1.75, 0.33, 180, 1.0, 0.6, 0.9),
@@ -111,18 +114,23 @@ const ground: Floor = {
     f("kitchen_wall", 0.45, 0.2, 180, 0.6, 0.35, 0.7),
     f("kitchen_wall", 2.55, 0.2, 180, 0.6, 0.35, 0.7),
     f("lamp_ceiling", 1.55, 1.6, 0, 0.4, 0.4, 0.1),
+    f("smart_speaker", 2.7, 0.3, 0, 0.14, 0.14, 0.15, { y: 0.85, entity: "media_player.kitchen_speaker" }),
+    f("underfloor_heating", 1.6, 1.85, 0, 1.6, 1.4, 0.005, { entity: "valve.kitchen_underfloor" }),
+    f("socket_wall", 1.0, 0.146, 0, 0.146, 0.012, 0.086, { y: 1.05, entity: "switch.kettle", gangs: ["switch.kettle", "switch.coffee_machine"] }),
     // dining room as office
     f("desk", 3.75, 1.6, 90, 1.4, 0.7, 0.75),
     f("office_chair", 4.3, 1.6, -90, 0.6, 0.6, 1.1),
     f("monitor", 3.55, 1.6, 90, 0.6, 0.2, 0.45, { y: 0.75 }),
     f("shelf", 5.85, 2.6, -90, 0.9, 0.35, 1.9),
     f("lamp_pendant", 4.6, 1.6, 0, 0.35, 0.35, 0.7, { entity: "light.office_pendant" }),
+    f("socket_wall", 3.116, 2.65, -90, 0.086, 0.012, 0.086, { entity: "switch.desk_plug" }),
     // side extension
     f("wc", -1.55, 0.45, 0, 0.4, 0.62, 0.8),
     f("washbasin", -1.4, 1.65, 180, 0.45, 0.35, 0.85),
     f("printer_3d", -2.75, 3.3, 0, 0.4, 0.42, 0.5),
     f("washer", -1.4, 5.0, 180, 0.6, 0.6, 0.85),
     f("tall_cabinet", -2.3, 5.0, 180, 0.8, 0.45, 1.9),
+    f("hot_water_cylinder", -2.68, 4.25, 0, 0.5, 0.5, 1.25, { entity: "water_heater.hot_water" }),
   ],
   devices: [
     dev("camera.living_room", 6.05, 7.2, { mount: "wall", y: 2.1, rotation: 135 }),
@@ -149,8 +157,10 @@ const ground: Floor = {
   ],
 };
 
-// garden lights on the ground floor (lamps on smart plugs and a Tapo bulb)
+// garden lights on the ground floor (lamps on smart plugs and a Tapo bulb), and the outdoor unit of the
+// air conditioner upstairs
 ground.furniture.push(
+  f("ac_outdoor", 2.55, -0.45, 180, 0.8, 0.3, 0.55, { entity: "climate.bedroom_2_air_conditioner" }),
   f("lamp_garden", -2.7, -9.4, 0, 0.15, 0.15, 0.6, { entity: "switch.garden_spot_lights" }),
   f("lamp_garden", 5.9, -9.4, 0, 0.15, 0.15, 0.6, { entity: "switch.deck_lights" }),
   f("lamp_garden", 3.3, -0.6, 0, 0.15, 0.15, 0.6, { entity: "switch.deck_lights" }),
@@ -208,12 +218,15 @@ const first: Floor = {
     f("lamp_table", 5.35, 6.95, 0, 0.25, 0.25, 0.42, { y: 0.5, entity: "light.bedside_right" }),
     f("wardrobe", 4.3, 3.4, 0, 2.2, 0.6, 2.1),
     f("tv_wall", 6.17, 5.4, -90, 1.45, 0.06, 0.84, { y: 1.0 }),
-    f("lamp_ceiling", 4.3, 5.1, 0, 0.45, 0.45, 0.1, { entity: "light.bedroom_ceiling" }),
+    f("fan_ceiling_light", 4.3, 5.1, 0, 1.2, 1.2, 0.45, { entity: "fan.bedroom_ceiling_fan", light: "light.bedroom_ceiling" }),
+    f("ac_wall", 3.2, 0.26, 0, 0.9, 0.24, 0.3, { entity: "climate.bedroom_2_air_conditioner" }),
+    f("towel_rail", 1.04, 1.85, 180, 0.5, 0.08, 1.0, { y: 0.15, entity: "climate.thermostat" }),
     f("bench", 4.3, 1.5, 0, 1.4, 0.4, 0.45),
     f("rug", 4.3, 1.6, 0, 2.2, 1.4, 0.01),
     f("wardrobe", 1.15, 6.95, 180, 2.0, 0.6, 2.1),
     f("lamp_ceiling", 1.15, 5.9, 0, 0.35, 0.35, 0.1, { entity: "light.bedroom_3_ceiling" }),
     f("lamp_ceiling", 1.15, 3.2, 0, 0.35, 0.35, 0.1),
+    f("access_point", 1.15, 4.0, 0, 0.2, 0.2, 0.035, { entity: "device_tracker.landing_access_point" }),
   ],
   devices: [
     dev("binary_sensor.landing_motion", 2.05, 2.2, { y: 2.2 }),

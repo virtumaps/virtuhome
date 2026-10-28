@@ -7,6 +7,7 @@ import { HassLive, initials, solarStep, toggleEntity, type Change, type RoomText
 import { EnergyLive, type EnergyNow } from "../live/energy";
 import { hereText } from "../live/presence";
 import { readingIcon, valueText } from "../live/readings";
+import { lockActions, needsCode } from "../live/locks";
 import { ICONS } from "../scene/markers";
 import { extensionFailures, loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
@@ -147,6 +148,8 @@ export class VhView {
   /** The tier was picked automatically (it may step down when the device struggles). */
   private tierAuto = true;
   private menu: HTMLDivElement;
+  /** A small menu at the finger: a device's entities (a switch's gangs). */
+  private pop: HTMLDivElement;
   private alertEl: HTMLButtonElement;
   private tools: HTMLDivElement;
   private statusEl: HTMLDivElement;
@@ -206,6 +209,7 @@ export class VhView {
       <button class="vh-alert" hidden></button>
       <div class="vh-status"></div>
       <div class="vh-menu" hidden></div>
+      <div class="vh-pop" hidden></div>
       <div class="vh-sheet"></div>
       <div class="vh-empty" hidden></div>
       <div class="vh-toast"></div>
@@ -222,6 +226,7 @@ export class VhView {
     this.roofBtn = this.root.querySelector('[data-act="roof"]')!;
     this.themeBtn = this.root.querySelector('[data-act="theme"]')!;
     this.menu = this.root.querySelector(".vh-menu")!;
+    this.pop = this.root.querySelector(".vh-pop")!;
     this.alertEl = this.root.querySelector(".vh-alert")!;
     this.statusEl = this.root.querySelector(".vh-status")!;
     this.tools = this.root.querySelector(".vh-tools")!;
@@ -260,13 +265,37 @@ export class VhView {
     this.viewer.onHit = (hit, gesture) => this.onHit(hit, gesture);
     this.root.addEventListener("pointerdown", () => callEach(this.touchListeners, undefined), { passive: true });
 
+    // a long press on what a TV or speaker plays opens its dialog (a tap plays or pauses)
+    let held = false;
+    let holdTimer = 0;
+    overlay.addEventListener("pointerdown", (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>(".vh-media");
+      held = false;
+      window.clearTimeout(holdTimer);
+      if (!el || this.replayed || this.editor) return;
+      holdTimer = window.setTimeout(() => {
+        held = true;
+        if (el.dataset.entity) this.dialog(el.dataset.entity);
+      }, 520);
+    });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) overlay.addEventListener(ev, () => window.clearTimeout(holdTimer));
     overlay.addEventListener("click", (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>(".vh-label");
       if (!el) return;
       const floor = Number(el.dataset.floor);
       const opens = (e.target as HTMLElement).closest<HTMLElement>("[data-entity]")?.dataset.entity;
+      const rect = this.root.getBoundingClientRect();
+      const at: [number, number] = [e.clientX - rect.left, e.clientY - rect.top];
+      // a lock asks before it locks or unlocks; a TV or speaker plays or pauses
+      if (el.dataset.lock !== undefined || el.dataset.media !== undefined) {
+        if (held) return void (held = false);
+        if (this.replayed) this.replayed.options.onHit?.({ floor, room: -1, entity: opens ?? null }, "tap");
+        else if (opens && !this.editor && el.dataset.lock !== undefined) this.lockMenu(floor, el.dataset.lock, at);
+        else if (opens && !this.editor) void this.playPause(opens);
+        return;
+      }
       // a reading opens its entity (in a replay, the replay hears of it as of a device)
-      if (el.dataset.reading !== undefined) {
+      if (el.dataset.reading !== undefined || el.dataset.piece !== undefined) {
         if (this.replayed) this.replayed.options.onHit?.({ floor, room: -1, entity: el.dataset.entity ?? null }, "tap");
         else if (opens && !this.editor) this.dialog(opens);
       } else if (el.dataset.room === undefined) this.showFloor(floor);
@@ -291,6 +320,7 @@ export class VhView {
     });
     this.root.addEventListener("pointerdown", (e) => {
       if (!this.menu.hidden && !(e.target as HTMLElement).closest(".vh-menu, [data-act=graphics]")) this.menu.hidden = true;
+      if (!this.pop.hidden && !(e.target as HTMLElement).closest(".vh-pop")) this.pop.hidden = true;
     });
     if (config.stats) {
       this.statsEl.hidden = false;
@@ -1479,6 +1509,8 @@ export class VhView {
       r.options.onHit?.({ floor: hit.floor, room: hit.kind === "empty" ? -1 : hit.room, entity }, gesture);
       return;
     }
+    // a switch with several gangs: a menu of them (a long press opens their dialogs from it)
+    if (hit.entities && hit.entities.length > 1 && gesture !== "double") return this.entityMenu(hit.entities, hit.at, gesture === "long");
     if (hit.entity && (hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "entity")) {
       if (gesture === "long") return this.dialog(hit.entity);
       if (gesture === "double") return;
@@ -1501,6 +1533,99 @@ export class VhView {
       this.closeSheet();
       if (this.viewer.selectedRoom >= 0) this.viewer.selectRoom(this.viewer.activeFloor, -1, false);
     }
+  }
+
+  /** A small menu by the finger: each entity with its state; a tap switches it (or opens its dialog). */
+  private entityMenu(ids: string[], at: [number, number] | undefined, dialogs: boolean): void {
+    const hass = this._hass;
+    if (!hass) return;
+    const pop = this.pop;
+    this.showPop(ids.map((id) => {
+      const b = document.createElement("button");
+      b.className = "vh-menu-row";
+      b.innerHTML = "<span><b></b><small></small></span>";
+      b.querySelector("b")!.textContent = this.nameOf(id);
+      b.querySelector("small")!.textContent = valueText(hass, id);
+      b.onclick = async () => {
+        pop.hidden = true;
+        if (dialogs) return this.dialog(id);
+        if (await toggleEntity(hass, id).catch(() => false)) this.toast(this.nameOf(id));
+        else this.dialog(id);
+      };
+      return b;
+    }), at);
+  }
+
+  /** Plays or pauses a TV or speaker; its dialog when it can't. */
+  private async playPause(id: string): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+    if (await toggleEntity(hass, id).catch(() => false)) this.toast(this.nameOf(id));
+    else this.dialog(id);
+  }
+
+  /**
+   * A door's smart lock, asked first: its state, a code when the lock needs one, and what it can do
+   * (lock, unlock, open the door), with its dialog under Details.
+   */
+  private lockMenu(fi: number, openingId: string, at: [number, number]): void {
+    const hass = this._hass;
+    const o = this.plan?.floors[fi]?.openings.find((x) => x.id === openingId);
+    if (!hass || !o?.lock) return;
+    const id = o.lock;
+    const s = hass.states[id];
+    const badge = this.live.lockBadge(o);
+    const pop = this.pop;
+    const head = document.createElement("div");
+    head.className = "vh-pop-head";
+    head.innerHTML = "<b></b><small></small>";
+    head.querySelector("b")!.textContent = this.nameOf(id);
+    head.querySelector("small")!.textContent = badge?.text ?? "";
+    const rows: HTMLElement[] = [head];
+    let code: HTMLInputElement | null = null;
+    const actions = lockActions(s, badge?.kind ?? "unavailable");
+    if (actions.length && needsCode(s)) {
+      code = document.createElement("input");
+      code.type = "password";
+      code.inputMode = "numeric";
+      code.autocomplete = "off";
+      code.placeholder = t("lock.code");
+      code.setAttribute("aria-label", t("lock.code"));
+      rows.push(code);
+    }
+    const row = (text: string, run: () => void) => {
+      const b = document.createElement("button");
+      b.className = "vh-menu-row";
+      b.innerHTML = "<span><b></b></span>";
+      b.querySelector("b")!.textContent = text;
+      b.onclick = run;
+      rows.push(b);
+    };
+    for (const act of actions) {
+      row(t(`lock.do.${act}`), () => {
+        const given = code?.value.trim() ?? "";
+        if (code && !given) return code.focus();
+        pop.hidden = true;
+        this.toast(t(`lock.doing.${act}`, { name: this.nameOf(id) }));
+        hass.callService("lock", act, given ? { code: given } : {}, { entity_id: id })
+          .catch((err: unknown) => this.toast(t("lock.failed", { error: err instanceof Error ? err.message : String((err as { message?: string })?.message ?? err) })));
+      });
+    }
+    row(t("lock.details"), () => {
+      pop.hidden = true;
+      this.dialog(id);
+    });
+    this.showPop(rows, at);
+  }
+
+  /** The small menu by the finger, kept inside the view. */
+  private showPop(rows: HTMLElement[], at: [number, number] | undefined): void {
+    const pop = this.pop;
+    pop.replaceChildren(...rows);
+    pop.hidden = false;
+    const [x, y] = at ?? [this.root.clientWidth / 2, this.root.clientHeight / 2];
+    pop.style.left = `${Math.max(8, Math.min(this.root.clientWidth - pop.offsetWidth - 8, x - pop.offsetWidth / 2))}px`;
+    pop.style.top = `${Math.max(8, Math.min(this.root.clientHeight - pop.offsetHeight - 8, y + 16))}px`;
   }
 
   private async toggleRoomLights(fi: number, ri: number): Promise<void> {

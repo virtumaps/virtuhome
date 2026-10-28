@@ -50,6 +50,8 @@ OPENING = vol.Schema(
         vol.Required("kind"): vol.In(["door", "window", "passage", "garage"]),
         vol.Optional("entity", default=None): _ENTITY,
         vol.Optional("cover", default=None): _ENTITY,
+        # doors: the smart lock on it
+        vol.Optional("lock"): _ENTITY,
     },
     extra=vol.ALLOW_EXTRA,
 )
@@ -67,6 +69,8 @@ FURNITURE = vol.Schema(
         # unset means the type's usual height (a wall cupboard's, a ceiling lamp's), so no default of 0
         vol.Optional("y"): vol.Any(None, _LENGTH),
         vol.Optional("entity", default=None): _ENTITY,
+        # switches and sockets: the entity of each gang, left to right
+        vol.Optional("gangs"): vol.Any(None, vol.All([_ENTITY], vol.Length(max=4))),
     },
     extra=vol.ALLOW_EXTRA,
 )
