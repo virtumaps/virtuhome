@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.0
 
 ### New
 - Wall switches and sockets (**Devices** in Add furniture and decor): 1 to 4 **Gangs**, each linked to
