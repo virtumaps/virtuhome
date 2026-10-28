@@ -2,7 +2,7 @@
 // to refresh when states change. Home Assistant replaces a state object whenever it changes, so
 // spotting changes is a cheap identity comparison over the entities the plan uses.
 import { pointInPolygon } from "../model/geom";
-import { DEFAULT_LABEL, showsValue, spaces, type Device, type Floor, type Furniture, type LabelPart, type Plan, type Room, type Space } from "../model/plan";
+import { DEFAULT_LABEL, showsValue, spaces, type Device, type Floor, type Furniture, type LabelPart, type Opening, type Plan, type Room, type Space } from "../model/plan";
 import type { GlowSlot, LampInfo } from "../scene/build";
 import { lin } from "../scene/build";
 import type { V3 } from "../scene/geo";
@@ -17,6 +17,8 @@ import { chargerEntities, type EvNow } from "./ev";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
 import { roomOf, roomTrackers, slug, sourcesOf } from "./presence";
 import { readingIcon, valueText } from "./readings";
+import { lockKind, type LockKind } from "./locks";
+import { artwork, mediaText } from "./media";
 import { t } from "../i18n";
 
 export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status" | "readings";
@@ -37,6 +39,18 @@ export interface RoomPart {
 export interface Reading {
   text: string;
   icon: string;
+}
+
+/** A smart lock's badge on its door: what it says, in words for its label. */
+export interface LockBadge {
+  kind: LockKind;
+  text: string;
+}
+
+/** What a TV or speaker plays: its line, and the artwork's address (TVs). */
+export interface NowPlaying {
+  text: string;
+  picture: string | null;
 }
 
 /** Something that needs attention now: a leak, smoke, a triggered alarm. */
@@ -280,6 +294,8 @@ export class HassLive implements LiveSource {
         const reading = showsValue(d);
         if (dom === "light" || dom === "switch") this.watch(d.entity, "lighting", "markers", "status", ...(reading ? ["readings" as const] : []));
         else this.watch(d.entity, reading ? "readings" : "markers");
+        // what a speaker plays shows on its label
+        if (dom === "media_player") this.watch(d.entity, "readings");
         if (dom === "camera") {
           const dev = hass.entities?.[d.entity]?.device_id;
           const motion = dev ? Object.values(hass.entities ?? {})
@@ -300,6 +316,7 @@ export class HassLive implements LiveSource {
         }
         if (f.type === "solar_panels" && f.entity && domainOf(f.entity) === "sensor") continue;
         this.watch(f.entity, "lighting", "markers");
+        if (f.entity && domainOf(f.entity) === "media_player") this.watch(f.entity, "readings");
         if (GANG_TYPES.has(f.type)) for (const id of gangsOf(f)) this.watch(id, "lighting");
         this.watch(f.light, "lighting");
         if (WATER_TYPES.has(f.type)) this.watch(f.entity, "readings");
@@ -307,6 +324,8 @@ export class HassLive implements LiveSource {
       for (const o of floor.openings) {
         this.watch(o.entity, "openings", "lighting");
         this.watch(o.cover, "openings");
+        // a lock's badge, and its door's sensor (open while locked is a problem)
+        if (o.lock) for (const id of [o.lock, o.entity]) this.watch(id, "readings");
       }
       // a roof window that opens glows warm, like a window in a wall
       for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") this.watch(it.entity, "lighting");
@@ -400,7 +419,7 @@ export class HassLive implements LiveSource {
       const at = (x: number, z: number) => sp.findIndex((s) => pointInPolygon([x, z], s.points));
       const d = floor.devices.find((x) => x.entity === entity);
       if (d) return { floor: fi, room: at(d.x, d.z) };
-      const o = floor.openings.find((x) => x.entity === entity || x.cover === entity);
+      const o = floor.openings.find((x) => x.entity === entity || x.cover === entity || x.lock === entity);
       if (o) return { floor: fi, room: sp.findIndex((s) => s.id === o.room_id) };
       const f = floor.furniture.find((x) => x.parked === entity || linkedEntities(x).includes(entity));
       if (f) return { floor: fi, room: at(f.x, f.z) };
@@ -672,6 +691,21 @@ export class HassLive implements LiveSource {
   reading(d: Device): Reading | null {
     if (!this.hass) return null;
     return { text: valueText(this.hass, d.entity), icon: readingIcon(this.hass, d.entity) };
+  }
+
+  /** A door's smart lock: locked, unlocked, jammed, gone, or a problem (locked while the door is open). */
+  lockBadge(o: Opening): LockBadge | null {
+    if (!o.lock || !this.hass) return null;
+    const kind = lockKind(this.state(o.lock), this.contact(o.entity));
+    return { kind, text: t(`lock.${kind}`) };
+  }
+
+  /** What a TV or speaker plays now, or null (off, idle, nothing named). */
+  nowPlaying(entity: string | null, tv: boolean): NowPlaying | null {
+    const s = this.state(entity);
+    const text = mediaText(s, tv);
+    if (!text || !this.hass) return null;
+    return { text, picture: tv ? artwork(this.hass, s) : null };
   }
 
   /** A hot water cylinder's temperature, and what it heats to: "52.0° → 55°". */

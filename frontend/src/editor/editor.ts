@@ -1594,7 +1594,7 @@ export class Editor {
     const box = h("div", {});
     // what is not in the plan yet, by area of a linked room
     const inPlan = new Set(this.plan.floors.flatMap((f) => [
-      ...f.devices.map((d) => d.entity), ...f.furniture.flatMap(linkedEntities), ...f.openings.flatMap((o) => [o.entity, o.cover]),
+      ...f.devices.map((d) => d.entity), ...f.furniture.flatMap(linkedEntities), ...f.openings.flatMap((o) => [o.entity, o.cover, o.lock]),
     ]).filter(Boolean) as string[]);
     const roomByArea = new Map<string, { fi: number; room: Room }>();
     this.plan.floors.forEach((f, fi) => [...f.rooms, ...(f.outdoor ?? []) as unknown as Room[]].forEach((r) => r.area_id && !roomByArea.has(r.area_id) && roomByArea.set(r.area_id, { fi, room: r })));
@@ -1655,6 +1655,7 @@ export class Editor {
     const f = this.plan.floors[fi];
     const contacts = this.entities((id, s) => domainOf(id) === "binary_sensor" && ["door", "window", "opening", "garage_door"].includes(String(s.attributes.device_class)));
     const covers = this.entities((id) => domainOf(id) === "cover");
+    const locks = this.entities((id) => domainOf(id) === "lock");
     const openings = f.openings.filter((o) => o.room_id === room.id);
     const updRoom = (label: string, fn: (r: Room) => void) => this.change((p) => fn(p.floors[fi].rooms.find((r) => r.id === room.id)!), false, label);
     const wallFinish = room.wall_finish ?? "paint";
@@ -1698,6 +1699,13 @@ export class Editor {
           this.dropdown(covers, o.cover ?? "", (v) => this.change((p) => {
             const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
             x.cover = v || null;
+          }), t("editor.none")),
+        ) : null,
+        o.kind === "door" ? h("div", { class: "ed-row" },
+          h("label", {}, t("editor.lock")),
+          this.dropdown(locks, o.lock ?? "", (v) => this.change((p) => {
+            const x = p.floors[fi].openings.find((y) => y.id === o.id)!;
+            x.lock = v || null;
           }), t("editor.none")),
         ) : null,
         o.kind === "door" ? h("div", { class: "ed-row" },
@@ -2250,6 +2258,7 @@ export class Editor {
     const upd = (label: string, fn: (x: Opening) => void) => this.change((p) => fn(p.floors[fi].openings.find((y) => y.id === o.id)!), false, label);
     const contacts = this.entities((id, st) => domainOf(id) === "binary_sensor" && ["door", "window", "opening", "garage_door"].includes(String(st.attributes.device_class)));
     const covers = this.entities((id) => domainOf(id) === "cover");
+    const locks = this.entities((id) => domainOf(id) === "lock");
     const room = this.plan.floors[fi].rooms.find((r) => r.id === o.room_id);
     const num = (label: string, key: "width" | "height" | "sill" | "offset", step = "0.05") =>
       [h("label", {}, label), h("input", { class: "ed-in num", type: "number", step, min: "0", value: String(o[key]), onchange: (e: Event) => upd(t("editor.opening.changeKindName", { kind: openingName(o.kind).toLowerCase(), name: label.toLowerCase() }), (x) => (x[key] = Math.max(0, Number((e.target as HTMLInputElement).value)))) })];
@@ -2310,6 +2319,7 @@ export class Editor {
       h("div", { class: "ed-row" }, h("label", {}, t("editor.sensor")), this.dropdown(contacts, o.entity ?? "", (v) => upd(t("editor.opening.linkASensor"), (x) => (x.entity = v || null)), t("editor.none"))),
       o.kind !== "passage" && style !== "fixed" ? h("p", { class: "ed-hint" }, t("editor.opening.theWhatOpensIn", { what })) : null,
       o.kind === "window" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.blind")), this.dropdown(covers, o.cover ?? "", (v) => upd(t("editor.opening.linkABlind"), (x) => (x.cover = v || null)), t("editor.none"))) : null,
+      o.kind === "door" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.lock")), this.dropdown(locks, o.lock ?? "", (v) => upd(t("editor.opening.linkALock"), (x) => (x.lock = v || null)), t("editor.none"))) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
         this.change((p) => (p.floors[fi].openings = p.floors[fi].openings.filter((x) => x.id !== o.id)), false, t("editor.opening.removeAWhat", { what }));
         this.select(null);

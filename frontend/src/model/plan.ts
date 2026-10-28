@@ -63,6 +63,8 @@ export interface Opening {
   entity?: string | null;
   /** Blind or curtain in front of a window. */
   cover?: string | null;
+  /** Doors: the smart lock on it (its badge shows on the door's handle side). */
+  lock?: string | null;
   /** Doors and casement windows: hinge side seen from the room, and whether they swing into it. */
   hinge?: "left" | "right";
   swing?: "in" | "out";

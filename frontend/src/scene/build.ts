@@ -158,7 +158,8 @@ export interface FloorBuild {
   doors: DoorInfo[];
   windows: WindowInfo[];
   portals: Portal[];
-  screens: { furniture: Furniture; glow: number; entity: string | null }[];
+  /** Pieces with a screen or a light that shows their entity; `at` is the middle of what glows (world). */
+  screens: { furniture: Furniture; glow: number; entity: string | null; at: V3 }[];
   targets: DeviceTarget[];
   fans: FanInfo[];
   /** Cameras: where each hangs and what it sees (the viewer draws that). */
@@ -407,7 +408,12 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
         radius: LAMP_RADIUS[item.type] ?? 3.2,
       });
     } else if (glow >= 0) {
-      screens.push({ furniture: item, glow, entity: item.entity ?? null });
+      // the middle of what glows, turned with the piece: a TV's screen
+      const lit = parts.filter((p) => p.glow);
+      const [lx, ly, lz] = [0, 1, 2].map((k) => lit.reduce((n, p) => n + [p.x, p.y + p.h / 2, p.z][k], 0) / lit.length);
+      const r = (item.rotation * Math.PI) / 180, mx = item.mirror ? -1 : 1;
+      const at: V3 = [item.x + Math.cos(r) * lx * mx - Math.sin(r) * lz, bottom + ly, item.z + Math.sin(r) * lx * mx + Math.cos(r) * lz];
+      screens.push({ furniture: item, glow, entity: item.entity ?? null, at });
     }
   }
 

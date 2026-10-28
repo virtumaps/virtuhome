@@ -116,6 +116,8 @@ whole-house view. Tap one for its dialog.
 - **Tap a lamp or a device** to switch it. Things that can't be switched open their dialog instead. A
   switch with several gangs shows a small menu of them.
 - **Long-press** a lamp or a device for its Home Assistant dialog.
+- **Tap a lock's badge** on its door to lock or unlock it: it asks first (see
+  [By hand](#by-hand)). Tap what a TV or speaker plays to play or pause it.
 - **Tap a room** to open it: in the house view this goes to its floor first. A sheet shows the
   room's temperature, who is here and its devices, with **All lights on** / **All lights off**.
 - **Double-tap a room** to switch all its lights.
@@ -340,6 +342,9 @@ Edit → **Home** → **Devices** → **Place devices automatically**:
   as your areas, or link them in **Rooms** first;
 - attaches door and window contacts, curtains and blinds to the doors and windows of their room,
   and a TV's media player to the TV;
+- puts a smart lock on its door: a "front door" lock on the front door (the outside door lowest on
+  the plan), a "back door" lock on the back door, any other on its room's outside door; a lock
+  placed as a device moves onto the door nearest it;
 - gives lights, cameras, motion sensors, thermostats, plugs and speakers a sensible spot in their
   room: ceiling lights spread over the ceiling, cameras in corners looking in, motion sensors high
   in a corner;
@@ -364,7 +369,20 @@ did, and how many devices are in areas without a room in the plan.
   on a stand) with what they see lit up to the first walls: red on motion, grey while offline. Set
   **View °** and **Reach m** if the usual view is wrong.
 - **Doors and windows:** tap one, then pick its **Sensor** (it opens in 3D when the sensor does) and,
-  for a window, its **Blind**.
+  for a window, its **Blind**, for a door, its **Lock**.
+- **Smart locks** (Yale, Nuki, Ultion, Aqara, any `lock` in Home Assistant) go on their door with
+  **Lock**. A badge on the door's handle side shows the lock: green while locked, orange while
+  unlocked, red while jammed or when the door is open but its lock says locked (a deadbolt thrown
+  with the door open), grey while unavailable. Tap the badge: it asks first, with **Lock** or
+  **Unlock** (both while jammed), a **Code** box when the lock needs a code, **Open the door** when
+  the lock can pull the latch, and **Details** for its dialog. Badges show on their floor, not in
+  the whole-house view.
+- **TVs and speakers**: a TV linked to its media player (**Linked to**) shows what it plays over its
+  screen: the title, with the series or artist and the artwork when Home Assistant has them, or the
+  app or source while it is on (**Netflix**, **HDMI 1**). A speaker (a **Smart speaker**, a floor
+  speaker, or a media player placed as a device) shows the title and artist while it plays, and a
+  **Smart speaker**'s light ring glows softly. Tap one, or its label, to play or pause; long-press
+  for its dialog.
 - **Lamps and TVs** that are furniture: **Linked to** picks the light, switch or media player.
 - **Switches and sockets** (Add furniture and decor → **Devices** → **Light switch** or **Socket**):
   pick how many **Gangs** (1 to 4; the plate grows with them) and the light, switch, fan or toggle
