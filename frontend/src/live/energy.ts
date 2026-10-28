@@ -82,6 +82,34 @@ export interface EnergyToday {
   home: number | null;
   /** Into the cars (part of the house's). */
   car: number | null;
+  /** The share (0..1) of the house's use that didn't come from the grid, hour by hour as the energy
+   * dashboard's self-sufficiency gauge works it out: grid power that charged the battery isn't the house's. */
+  own: number | null;
+}
+
+/** One stretch's energy (kWh) for `ownShare`. */
+export interface EnergyHour {
+  solar: number;
+  gridIn: number;
+  gridOut: number;
+  batteryIn: number;
+  batteryOut: number;
+}
+
+/**
+ * The share of the house's use covered by its own solar and battery. Each hour the house takes solar
+ * first, then the battery, then the grid; grid power beyond that went into the battery. Null when the
+ * house used nothing or there is no grid reading.
+ */
+export function ownShare(hours: EnergyHour[]): number | null {
+  let used = 0, bought = 0;
+  for (const h of hours) {
+    const home = Math.max(0, h.solar + h.gridIn + h.batteryOut - h.gridOut - h.batteryIn);
+    const fromGrid = Math.min(h.gridIn, Math.max(0, home - h.solar - h.batteryOut));
+    used += home;
+    bought += fromGrid;
+  }
+  return used > 0 ? Math.max(0, Math.min(1, 1 - bought / used)) : null;
 }
 
 /** The parts of Home Assistant's energy settings (energy/get_prefs) this reads. */
@@ -392,16 +420,40 @@ export async function readToday(hass: Hass, stats: EnergyStats): Promise<EnergyT
     }
     return any ? kwh : null;
   };
-  const [solar, gridIn, gridOut, batteryIn, batteryOut, carStats, carPower] = await Promise.all([
+  // each finished hour's change, for the own share (the totals above also count the hour under way)
+  const hourly = async (): Promise<EnergyHour[] | null> => {
+    if (!stats.gridIn.length) return null;
+    const groups = { solar: stats.solar, gridIn: stats.gridIn, gridOut: stats.gridOut, batteryIn: stats.batteryIn, batteryOut: stats.batteryOut };
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    type Row = { start: number | string; change?: number | null };
+    const r = await hass.callWS<Record<string, Row[]>>({
+      type: "recorder/statistics_during_period", start_time: midnight.toISOString(), statistic_ids: Object.values(groups).flat(),
+      period: "hour", types: ["change"], units: { energy: "kWh" },
+    }).catch(() => null);
+    if (!r) return null;
+    const hours = new Map<number, EnergyHour>();
+    for (const [part, ids] of Object.entries(groups) as [keyof EnergyHour, string[]][]) {
+      for (const row of ids.flatMap((id) => r[id] ?? [])) {
+        if (typeof row.change !== "number") continue;
+        const at = new Date(row.start).getTime();
+        const h = hours.get(at) ?? { solar: 0, gridIn: 0, gridOut: 0, batteryIn: 0, batteryOut: 0 };
+        h[part] += Math.max(0, row.change);
+        hours.set(at, h);
+      }
+    }
+    return [...hours.values()];
+  };
+  const [solar, gridIn, gridOut, batteryIn, batteryOut, carStats, carPower, hours] = await Promise.all([
     change(stats.solar), change(stats.gridIn), change(stats.gridOut), change(stats.batteryIn), change(stats.batteryOut),
-    change(stats.ev), integrate(stats.evPower),
+    change(stats.ev), integrate(stats.evPower), hourly(),
   ]);
   const parts = [solar, gridIn, gridOut, batteryIn, batteryOut];
   const home = parts.some((x) => x !== null)
     ? Math.max(0, (solar ?? 0) + (gridIn ?? 0) - (gridOut ?? 0) + (batteryOut ?? 0) - (batteryIn ?? 0))
     : null;
   const car = carStats === null && carPower === null ? null : (carStats ?? 0) + (carPower ?? 0);
-  return { solar, gridIn, gridOut, batteryIn, batteryOut, home, car };
+  return { solar, gridIn, gridOut, batteryIn, batteryOut, home, car, own: hours ? ownShare(hours) : null };
 }
 
 /**

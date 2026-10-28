@@ -31,6 +31,11 @@
   Check my setup say which it is.
 
 ### Fixed
+- **Own power** in the energy sheet showed 0% on a day the battery charged from the grid overnight,
+  because all the power bought counted as the house's. It now counts, hour by hour, only what the
+  house itself took from the grid, the way Home Assistant's self-sufficiency gauge does.
+- On a phone, the editor's drawer covered the buttons on the right (walls, graphics and the others);
+  they now stay above it, beside the house.
 - On a phone, Home Assistant's menu button covered **House** in the sidebar's top bar, so tapping
   House opened the sidebar. The top bar now starts after it.
 - On a short view (a dashboard card, a phone on its side) the buttons on the right slid under the

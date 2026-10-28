@@ -534,7 +534,9 @@ roof a **Roof lantern**). Drag them along the roof once selected.
 
 When Home Assistant's energy dashboard has solar, a battery or the grid, VirtuHome shows what the
 panels make in the corner. Tap it for the energy sheet: the power flowing between solar, battery,
-grid and the house, the price now, and today's totals.
+grid and the house, the price now, and today's totals. **Own power** is how much of the house's use
+today came from its own solar and battery rather than the grid (grid power that charged the battery
+doesn't count against it).
 
 Edit → **Home** → **Energy** shows which sensors were found. Pick another only where one is wrong:
 **Solar**, **House**, **Battery in**, **Battery out**, **Battery level**, **Grid import**, **Grid
