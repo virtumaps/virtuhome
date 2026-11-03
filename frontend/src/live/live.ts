@@ -19,6 +19,7 @@ import { roomOf, roomTrackers, slug, sourcesOf } from "./presence";
 import { readingIcon, valueText } from "./readings";
 import { lockKind, type LockKind } from "./locks";
 import { artwork, mediaText } from "./media";
+import { attributeFix, grow, isRunning, mirrored, ROBOT_DOMAINS, robotSources, robotToPlan, sourceKind, valetudoMap, type RobotSource } from "./robots";
 import { AIR, airBand, BAND_COLOURS, needsDoing, readsAir, type Air, type MapKind } from "./air";
 import { t } from "../i18n";
 
@@ -127,6 +128,21 @@ const TINT_FAN: RGBA = [0.75, 0.85, 0.95, 0.08];
 
 const isUnavailable = (s: HassEntity | undefined) => !s || s.state === "unavailable" || s.state === "unknown";
 
+/** A robot vacuum or mower: what says where it is, its map lined up with the plan, and where it went. */
+interface RobotLive {
+  device: Device;
+  src: RobotSource | null;
+  toPlan: ((p: [number, number]) => [number, number]) | null;
+  /** Where it is on its own map, as last read. */
+  fix: [number, number] | null;
+  /** Where it is on the plan, and the way it went this run. */
+  at: [number, number] | null;
+  trail: [number, number][];
+  running: boolean;
+  /** When Valetudo's map picture was last fetched. */
+  fetched: number;
+}
+
 export class HassLive implements LiveSource {
   hass: Hass | null = null;
   private plan: Plan;
@@ -159,6 +175,12 @@ export class HassLive implements LiveSource {
   roomExtraText: RoomText | null = null;
   /** Extensions' marks on furniture, by the piece's id (a bin on the evening before its collection). */
   itemMarks: Map<string, ItemMark> | null = null;
+  /** Robot vacuums and mowers, by device id. */
+  private robots = new Map<string, RobotLive>();
+  /** Fetches a map picture (Valetudo's) from Home Assistant; set by the view. */
+  fetchPicture: ((path: string) => Promise<ArrayBuffer>) | null = null;
+  /** Robots move on the plan (not while a replay of the past shows). */
+  robotsShown = true;
   /** The time the states are from: a replay of the past moves it, so a sensor that just changed still pulses. */
   now: () => number = Date.now;
 
@@ -362,6 +384,21 @@ export class HassLive implements LiveSource {
       // a roof window that opens glows warm, like a window in a wall
       for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") this.watch(it.entity, "lighting");
     }
+    // robots keep what they had seen when the registry changes, unless what says where they are changed
+    const robots = new Map<string, RobotLive>();
+    for (const floor of this.plan.floors) {
+      for (const d of floor.devices) {
+        if (!ROBOT_DOMAINS.has(domainOf(d.entity))) continue;
+        const own = d.robot?.source;
+        const kind = own ? sourceKind(hass.states[own]) : null;
+        const src = own ? (kind ? { entity: own, kind } : null) : robotSources(hass, d.entity)[0] ?? null;
+        const mirror = d.robot?.mirror ?? (src ? mirrored(hass.states[src.entity], src.kind) : false);
+        const old = this.robots.get(d.id);
+        const same = !!old && old.src?.entity === src?.entity && JSON.stringify(old.device.robot) === JSON.stringify(d.robot);
+        robots.set(d.id, { device: d, src, toPlan: robotToPlan(d.robot, mirror), fix: same ? old.fix : null, at: same ? old.at : null, trail: same ? old.trail : [], running: same ? old.running : false, fetched: same ? old.fetched : 0 });
+      }
+    }
+    this.robots = robots;
     // one thermostat in the whole home runs the boiler for every room: they all warm while it heats
     // (an air conditioner is its room's own)
     const acs = new Set(this.plan.floors.flatMap((f) => f.furniture.filter((x) => AC_TYPES.has(x.type)).map((x) => x.entity)));
@@ -567,7 +604,10 @@ export class HassLive implements LiveSource {
         if (s.state === "triggered") return look("alarm", C.alert, 1);
         return look(s.state.startsWith("armed") ? "alarm" : "alarm-off", s.state.startsWith("armed") ? C.secure : C.off, s.state === "pending" || s.state === "arming" ? 0.6 : 0);
       case "vacuum":
-        return look("vacuum", s.state === "cleaning" ? C.camera : C.idle, s.state === "cleaning" ? 0.4 : 0);
+      case "lawn_mower": {
+        const busy = s.state === "cleaning" || s.state === "mowing";
+        return look(dom === "vacuum" ? "vacuum" : "mower", s.state === "error" ? C.alert : busy ? C.camera : C.idle, busy ? 0.4 : 0);
+      }
       case "cover":
         return look(dc === "blind" || dc === "shutter" ? "blinds" : "curtains", (coverLevel(s) ?? 0) > 0.05 ? C.on : C.idle);
       case "fan":
@@ -616,6 +656,71 @@ export class HassLive implements LiveSource {
   mapSensor(kind: Air): HassEntity | undefined {
     for (const w of this.rooms.values()) if (w.air[kind]) return this.state(w.air[kind]);
     return undefined;
+  }
+
+  /** Where a robot is on the plan now, once its map is lined up (else its pin stays put). */
+  robotAt(d: Device): [number, number] | null {
+    return this.robotsShown ? this.robots.get(d.id)?.at ?? null : null;
+  }
+
+  /** The way a robot went this run, while it runs. */
+  robotTrail(d: Device): readonly [number, number][] {
+    const r = this.robots.get(d.id);
+    return this.robotsShown && r && isRunning(this.state(r.device.entity)) ? r.trail : [];
+  }
+
+  /** What says where a robot is, if anything does. */
+  robotSource(d: Device): RobotSource | null {
+    return this.robots.get(d.id)?.src ?? null;
+  }
+
+  /** Whether a lined-up robot is out working: then its position is read every couple of seconds. */
+  robotsRunning(): boolean {
+    for (const r of this.robots.values()) if (r.toPlan && r.src && isRunning(this.state(r.device.entity))) return true;
+    return false;
+  }
+
+  /**
+   * Reads where each robot is: from its source's attributes, or Valetudo's map picture (fetched at
+   * most every 4 s, and while it rests once a minute). True when one moved on the plan. `fresh`
+   * fetches Valetudo's at once (the editor lining a map up).
+   */
+  async tickRobots(now: number, fresh = false): Promise<boolean> {
+    const hass = this.hass;
+    if (!hass) return false;
+    let moved = false;
+    for (const r of this.robots.values()) {
+      if (!r.src) continue;
+      const running = isRunning(this.state(r.device.entity));
+      if (running && !r.running) r.trail = [];
+      r.running = running;
+      let fix = r.fix;
+      let path: [number, number][] | null = null;
+      if (r.src.kind !== "valetudo") fix = attributeFix(hass, r.src);
+      else if (this.fetchPicture && (fresh || now - r.fetched >= (running ? 4000 : 60_000))) {
+        r.fetched = now;
+        const pic = hass.states[r.src.entity]?.attributes.entity_picture;
+        const map = typeof pic === "string" ? await this.fetchPicture(pic).then(valetudoMap).catch(() => null) : null;
+        if (map?.robot) {
+          fix = map.robot;
+          path = map.path;
+        }
+      }
+      r.fix = fix;
+      if (!r.toPlan || !fix) continue;
+      const at = r.toPlan(fix);
+      if (r.at && Math.hypot(at[0] - r.at[0], at[1] - r.at[1]) < 0.02 && !path) continue;
+      r.at = at;
+      if (running) r.trail = path ? path.map(r.toPlan).reduce(grow, [] as [number, number][]) : grow(r.trail, at);
+      moved = true;
+    }
+    return moved;
+  }
+
+  /** Where a robot is on its own map right now (the editor lines its map up with it). */
+  async robotFix(d: Device): Promise<[number, number] | null> {
+    await this.tickRobots(Date.now(), true);
+    return this.robots.get(d.id)?.fix ?? null;
   }
 
   /** The room's temperature: its sensor's, else what its thermostat or valve reads. */

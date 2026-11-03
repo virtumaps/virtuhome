@@ -58,3 +58,21 @@ def test_bad_labels_and_shows_are_refused():
             schema.PLAN({"version": 1, "floors": [{**FLOOR, "rooms": [room]}]})
     with pytest.raises(vol.Invalid):
         schema.PLAN({"version": 1, "floors": [{**FLOOR, "devices": [{**READING, "show": "graph"}]}]})
+
+
+ROBOT = {"id": "r1", "entity": "vacuum.robbie", "x": 1, "z": 1, "mount": "floor"}
+
+
+def test_robot_maps_are_kept():
+    robot = {"source": "camera.robbie_map", "spots": [{"robot": [25500, 25700], "plan": [1.2, 3.4]}, {"robot": [31000, 22000], "plan": [5.5, 0.4]}], "mirror": None}
+    out = schema.PLAN({"version": 1, "floors": [{**FLOOR, "devices": [{**ROBOT, "robot": robot}]}]})
+    assert out["floors"][0]["devices"][0]["robot"] == robot
+    # a mower's GPS spots, in metres from home
+    gps = {"source": None, "spots": [{"robot": [-12.5, 40.1], "plan": [0, -8]}]}
+    assert schema.PLAN({"version": 1, "floors": [{**FLOOR, "devices": [{**ROBOT, "robot": gps}]}]})["floors"][0]["devices"][0]["robot"] == gps
+
+
+def test_bad_robot_maps_are_refused():
+    for robot in ({"spots": [{"robot": [1, 2]}]}, {"spots": [{"robot": [1, 2], "plan": [0, 0]}] * 3}, {"mirror": "yes"}, {"spots": [{"robot": [1, 2, 3], "plan": [0, 0]}]}):
+        with pytest.raises(vol.Invalid):
+            schema.PLAN({"version": 1, "floors": [{**FLOOR, "devices": [{**ROBOT, "robot": robot}]}]})

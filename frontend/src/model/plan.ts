@@ -144,6 +144,35 @@ export interface Device {
   reach?: number | null;
   /** In the view: its value as a label (a reading) or an icon; null: the value for sensors and numbers. */
   show?: "value" | "icon" | null;
+  /** A robot vacuum or mower: its own map lined up with the plan, so it moves on it. */
+  robot?: RobotMap | null;
+}
+
+/** A spot seen both on a robot's own map (its coordinates) and on the plan: two line the maps up. */
+export interface RobotSpot {
+  robot: Vec2;
+  plan: Vec2;
+}
+
+/** How a robot vacuum's or mower's own map lines up with the plan (live/robots.ts). */
+export interface RobotMap {
+  /** What says where it is (its map camera, Valetudo's map data, a GPS tracker); null: found by itself. */
+  source?: string | null;
+  /** Up to two spots seen in both maps; with two, the robot moves on the plan. */
+  spots?: RobotSpot[];
+  /** Its map is a mirror image of the plan; null: worked out from the source. */
+  mirror?: boolean | null;
+}
+
+const isVec2 = (v: unknown): v is Vec2 => Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number" && isFinite(n));
+
+/** A device as saved, with a robot's map kept only as far as it makes sense. */
+function normalizeDevice(d: Device): Device {
+  if (d.robot === undefined) return d;
+  const r = d.robot && typeof d.robot === "object" ? d.robot : null;
+  if (!r) return { ...d, robot: null };
+  const spots = (Array.isArray(r.spots) ? r.spots : []).filter((x) => x && isVec2(x.robot) && isVec2(x.plan)).slice(0, 2);
+  return { ...d, robot: { source: typeof r.source === "string" && r.source ? r.source : null, spots, mirror: typeof r.mirror === "boolean" ? r.mirror : null } };
 }
 
 /** Domains whose devices show their value rather than an icon, unless set otherwise. */
@@ -515,7 +544,7 @@ export function normalizePlan(raw: unknown, repairs?: Repair[]): Plan {
     rooms: (f.rooms ?? []).map((r) => ({ ...r, area_id: r.area_id ?? null, floor: r.floor ?? "wood", wall_finish: r.wall_finish ?? "paint", ...labelOf(r) })),
     openings: (f.openings ?? []).map((o) => ({ hinge: "left" as const, swing: "in" as const, ...o })),
     furniture: (f.furniture ?? []).map(repairHeight),
-    devices: f.devices ?? [],
+    devices: (f.devices ?? []).map(normalizeDevice),
     walls: f.walls ?? [],
     outdoor: (f.outdoor ?? []).map(normalizeOutdoor),
     fences: (f.fences ?? []).filter((x) => (x.points ?? []).length >= 2).map((x) => ({ ...x, gates: x.gates ?? [] })),

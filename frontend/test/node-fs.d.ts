@@ -5,3 +5,8 @@ declare module "node:fs" {
   export function readdirSync(path: string, options: { recursive: true }): string[];
   export function statSync(path: string): { size: number };
 }
+
+// zlib for the robots test's pretend Valetudo map picture
+declare module "node:zlib" {
+  export function deflateSync(data: string): Uint8Array;
+}

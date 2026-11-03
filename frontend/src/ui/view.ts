@@ -114,6 +114,8 @@ export class VhView {
   private toastEl: HTMLDivElement;
   /** What the map button and the legend show now. */
   private mapsKey = "";
+  /** Reads where the robots are while one is out working. */
+  private robotTimer = 0;
   private empty: HTMLDivElement;
   private statsEl: HTMLDivElement;
   private wallsBtn: HTMLButtonElement;
@@ -268,6 +270,13 @@ export class VhView {
     this.viewer.walls = config.walls ?? "smart";
     this.viewer.roofOn = roofSetting() ?? config.roof ?? true;
     this.live = new HassLive(normalizePlan({ version: 1, floors: [] }));
+    // Valetudo's map picture, for where its robot is
+    this.live.fetchPicture = async (path) => {
+      const h = this._hass;
+      const res = await fetch(h?.hassUrl ? h.hassUrl(path) : path);
+      if (!res.ok) throw new Error(`map picture: ${res.status}`);
+      return res.arrayBuffer();
+    };
     this.live.peopleInRooms = config.people !== false;
     this.live.energy = this.energy;
     this.energy.onSources = () => this.onEnergy();
@@ -435,6 +444,8 @@ export class VhView {
     const changes = this.live.update(h);
     for (const c of extra) changes.add(c);
     if (changes.has("tints")) this.renderMaps();
+    // a robot started, stopped or was placed: where it is, and whether to keep reading it
+    if (changes.has("markers") && !this.replayed) this.watchRobots(true);
     this.applyTheme();
     this.updateSky();
     if (this.plan && this.plan.floors.length) this.apply(changes);
@@ -472,6 +483,8 @@ export class VhView {
     this.live.itemMarks = null;
     // solar panels, chargers and cars would show what they do now
     this.live.energy = null;
+    // robots stay at their docks: the past has no positions
+    this.live.robotsShown = false;
     this.live.now = () => r.time;
     this.root.classList.add("replaying");
     this.statusKey = "";
@@ -508,6 +521,7 @@ export class VhView {
     this.live.roomExtraText = this.extText;
     this.markItems();
     this.live.energy = this.energy;
+    this.live.robotsShown = true;
     this.live.now = Date.now;
     this.statusKey = "";
     // a room picked out in the past is not picked now
@@ -907,6 +921,24 @@ export class VhView {
     this.todayTimer = window.setInterval(refresh, 300_000);
   }
 
+  /**
+   * Robot vacuums and mowers lined up with the plan: read now (`now`), and every 2 s while one is
+   * out working; the pins and trails are drawn only when one moved.
+   */
+  private watchRobots(now: boolean): void {
+    const read = () => {
+      if (this.replayed) return;
+      void this.live.tickRobots(Date.now()).then((moved) => moved && this.started && this.viewer.refreshMarkers());
+    };
+    if (now && !this.away && !this.destroyed) read();
+    const want = now && !this.away && !this.destroyed && this.live.robotsRunning();
+    if (want && !this.robotTimer) this.robotTimer = window.setInterval(() => (this.live.robotsRunning() ? read() : this.watchRobots(false)), 2000);
+    else if (!want && this.robotTimer) {
+      window.clearInterval(this.robotTimer);
+      this.robotTimer = 0;
+    }
+  }
+
   /** The map button: off, the temperature map, then each air quality map the home has sensors for, then off. */
   private cycleMap(): void {
     const maps = this.live.maps();
@@ -1152,11 +1184,13 @@ export class VhView {
   connect(): void {
     this.away = false;
     this.subscribe();
+    this.watchRobots(true);
     this.viewer.invalidate();
   }
 
   disconnect(): void {
     this.away = true;
+    this.watchRobots(false);
     this.unsubscribe();
     // leaving the page closes the demo home: its pretend devices stop, its graphics are let go
     this.closeDemo(false);
