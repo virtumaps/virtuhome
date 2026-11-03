@@ -21,7 +21,7 @@ import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky"
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
 import { SkyPanel, SKY_CSS, type SkyPick } from "./sky";
 import { checkCounts, runChecks, type Check, type ServerChecks } from "./checks";
-import { callEach, errorBox, errorDetails, isolate, logError, reportFrom, sendHeld } from "./errors";
+import { callEach, errorBox, errorDetails, isolate, isStaleCode, logError, reportFrom, sendHeld } from "./errors";
 
 export interface ViewConfig {
   /** Floor to open on (id, name or index); otherwise the whole house. */
@@ -214,6 +214,7 @@ export class VhView {
       <div class="vh-sheet"></div>
       <div class="vh-empty" hidden></div>
       <div class="vh-toast"></div>
+      <button class="vh-updated" hidden></button>
       <div class="vh-stats" hidden></div>`;
     shadow.append(style, this.root);
     const canvas = this.root.querySelector<HTMLDivElement>(".vh-canvas")!;
@@ -785,6 +786,15 @@ export class VhView {
       } else below = Math.max(below, top - 2 + this.alertEl.offsetHeight);
     }
     this.tools.style.top = `${below + 10}px`;
+    // the rooms' labels keep clear of the chips
+    const root = this.root.getBoundingClientRect();
+    const keep: number[][] = [];
+    for (const el of [...this.chips.children, ...this.statusEl.children, this.alertEl]) {
+      const r = el.getBoundingClientRect();
+      if (r.width) keep.push([r.left - root.left, r.top - root.top, r.right - root.left, r.bottom - root.top]);
+    }
+    this.viewer.keepOut = keep;
+    this.viewer.invalidate();
   }
 
   // ------------------------------------------------------------------ energy
@@ -1221,6 +1231,7 @@ export class VhView {
         .then((m) => this.viewer.setTier(this.viewer.tier, m))
         .catch((err) => {
           console.warn("VirtuHome: realistic look unavailable", err);
+          if (isStaleCode(err)) this.askReload();
           this.viewer.setTier("medium");
         });
     }
@@ -1395,7 +1406,9 @@ export class VhView {
     this.endReplay();
     this.closeSheet();
     this.hideFirstRun();
-    const { Editor } = await import("../editor/editor");
+    const mod = await this.loadPart(() => import("../editor/editor"), "editor");
+    if (!mod || this.editor || !this._hass) return;
+    const { Editor } = mod;
     const hass = this._hass;
     const editor = new Editor({
       view: this,
@@ -1441,6 +1454,29 @@ export class VhView {
     this.renderChips();
   }
 
+  /**
+   * A piece of the app fetched when first needed (the editor, the demo home), or null when it
+   * can't be. After an update the page may still run the old version, whose pieces have gone: then
+   * it asks for a reload rather than doing nothing.
+   */
+  private async loadPart<T>(load: () => Promise<T>, where: string): Promise<T | null> {
+    try {
+      return await load();
+    } catch (err) {
+      if (isStaleCode(err)) this.askReload();
+      else logError(err, where);
+      return null;
+    }
+  }
+
+  /** The banner that asks for a reload, after VirtuHome was updated under this page. */
+  private askReload(): void {
+    const b = this.root.querySelector<HTMLButtonElement>(".vh-updated")!;
+    b.textContent = t("view.reloadNeeded");
+    b.onclick = () => location.reload();
+    b.hidden = false;
+  }
+
   /** Home Assistant's dialog for an entity. The demos have none: their devices are pretend. */
   private dialog(entityId: string): void {
     if (this.config.demo) this.toast(t("demo.noDialogs"));
@@ -1458,8 +1494,9 @@ export class VhView {
    */
   async openDemo(): Promise<void> {
     if (this.demo || this.config.demo) return;
-    const { openDemo } = await import("./demo");
-    if (this.demo) return;
+    const mod = await this.loadPart(() => import("./demo"), "demo");
+    if (!mod || this.demo) return;
+    const { openDemo } = mod;
     this.closeSheet();
     this.menu.hidden = true;
     if (this.skyPanel.open) this.skyPanel.close();
@@ -1809,9 +1846,7 @@ export class VhView {
 
   private updateRows(hass: Hass): void {
     this.sheet.querySelectorAll<HTMLElement>("[data-row]").forEach((row) => {
-      const s = hass.states[row.dataset.row!];
-      const unit = s?.attributes.unit_of_measurement ? ` ${s.attributes.unit_of_measurement}` : "";
-      row.querySelector(".state")!.textContent = s ? `${s.state}${unit}` : "—";
+      row.querySelector(".state")!.textContent = valueText(hass, row.dataset.row!);
     });
   }
 

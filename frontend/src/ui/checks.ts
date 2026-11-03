@@ -66,10 +66,11 @@ export function checkRooms(plan: Plan, hass: Hass): Check {
   const areas = hass.areas;
   const all = plan.floors.flatMap((f) => [...f.rooms, ...(f.outdoor ?? [])]);
   const gone = areas ? all.filter((r) => r.area_id && !areas[r.area_id]).length : 0;
-  const unlinked = plan.floors.flatMap((f) => f.rooms).filter((r) => !r.area_id).length;
+  const free = plan.floors.flatMap((f) => f.rooms).filter((r) => !r.area_id);
+  const unlinked = free.length;
   const found: [Check["level"], string][] = [];
   if (gone) found.push(["problem", t("checks.rooms.gone", { n: gone })]);
-  if (unlinked) found.push(["note", t("checks.rooms.unlinked", { n: unlinked })]);
+  if (unlinked) found.push(["note", t("checks.rooms.unlinked", { n: unlinked, names: free.map((r) => r.name).join(", ") })]);
   // linking by name helps when an area is named like a room
   const byName = unlinked > 0 && linkRoomsByName(structuredClone(plan), hass).length > 0;
   return { ...check("rooms", t("checks.rooms.title"), found, t("checks.rooms.ok"), [(gone > 0 || byName) && "link-rooms", found.length > 0 && "open-rooms"]), count: gone + unlinked };

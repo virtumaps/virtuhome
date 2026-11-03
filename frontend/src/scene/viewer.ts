@@ -1144,7 +1144,7 @@ export class Viewer {
     const az = 0.32;
     const target = new Vector3(cx, ty, cz);
     const dir = new Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az));
-    // the box of what is shown, from the lowest floor to the top of the highest
+    // what is shown, from the lowest floor to the top of the highest
     let top3 = this.mode === "house" && this.floors.length
       ? this.floors[this.floors.length - 1].fb.floor.elevation + this.floors[this.floors.length - 1].offset + this.floors[this.floors.length - 1].fb.floor.height
       : (this.floors[this.activeFloor]?.fb.floor.elevation ?? 0) + 1.2;
@@ -1154,29 +1154,54 @@ export class Viewer {
       const box = f.roof.geometry.boundingBox ?? (f.roof.geometry.computeBoundingBox(), f.roof.geometry.boundingBox);
       if (box && (this.mode === "house" || fi <= this.activeFloor)) top3 = Math.max(top3, box.max.y + f.offset);
     });
-    const corners: Vector3[] = [];
-    for (const x of [b.minX, b.maxX]) for (const z of [b.minZ, b.maxZ]) for (const y of [bottom, top3]) corners.push(new Vector3(x, y, z));
-    dist = this.fitDistance(target, dir, corners, dist);
+    const pts: Vector3[] = [];
+    for (const x of [b.minX, b.maxX]) for (const z of [b.minZ, b.maxZ]) for (const y of [bottom, top3]) pts.push(new Vector3(x, y, z));
+    // gardens, driveways and their fences too, near the ground, but only so far: a long garden
+    // mustn't shrink the house to a speck
+    const reach = Math.max(3, (this.mode === "house" ? 0.6 : 0.35) * size);
+    for (const f of floors) {
+      const fl = f.fb.floor;
+      const y = fl.elevation + f.offset;
+      for (const p of [...(fl.outdoor ?? []).flatMap((o) => o.points), ...(fl.fences ?? []).flatMap((x) => x.points)]) {
+        const x = Math.min(b.maxX + reach, Math.max(b.minX - reach, p[0]));
+        const z = Math.min(b.maxZ + reach, Math.max(b.minZ - reach, p[1]));
+        pts.push(new Vector3(x, y, z), new Vector3(x, y + 1.2, z));
+      }
+    }
+    dist = this.fitView(target, dir, pts, dist);
     this.flyTo(target.clone().addScaledVector(dir, dist), target, fly);
   }
 
-  /** How far back the camera goes for a set of points to fill most of the view (leaving room for the controls). */
-  private fitDistance(target: Vector3, dir: Vector3, pts: Vector3[], dist: number): number {
+  /**
+   * Moves `target` (in place) across the view until `pts` sit in its middle, and returns how far
+   * back the camera goes for them to fill most of it (leaving room for the controls).
+   */
+  private fitView(target: Vector3, dir: Vector3, pts: Vector3[], dist: number): number {
     const cam = this.camera.clone();
     const v = new Vector3();
-    for (let k = 0; k < 4; k++) {
+    const right = new Vector3();
+    const up = new Vector3();
+    const half = Math.tan((cam.fov * Math.PI) / 360);
+    for (let k = 0; k < 6; k++) {
       cam.position.copy(target).addScaledVector(dir, dist);
       cam.lookAt(target);
       cam.updateMatrixWorld();
-      let ex = 0, ey = 0;
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (const p of pts) {
         v.copy(p).project(cam);
-        ex = Math.max(ex, Math.abs(v.x));
-        ey = Math.max(ey, Math.abs(v.y));
+        x0 = Math.min(x0, v.x);
+        x1 = Math.max(x1, v.x);
+        y0 = Math.min(y0, v.y);
+        y1 = Math.max(y1, v.y);
       }
       // the chips take the top, the tools the right: aim for ~80 % of the view
-      const f = Math.max(ex / 0.8, ey / 0.78);
+      const f = Math.max((x1 - x0) / 2 / 0.8, (y1 - y0) / 2 / 0.78);
       if (!isFinite(f) || f <= 0) break;
+      // the middle of what is shown to the middle of the view (a little low, under the chips)
+      right.setFromMatrixColumn(cam.matrixWorld, 0);
+      up.setFromMatrixColumn(cam.matrixWorld, 1);
+      const h = dist * half;
+      target.addScaledVector(right, ((x0 + x1) / 2) * h * cam.aspect).addScaledVector(up, ((y0 + y1) / 2 + 0.04) * h);
       dist = Math.min(300, Math.max(3, dist * f));
     }
     return dist;
@@ -1791,6 +1816,9 @@ export class Viewer {
    * Puts the labels over their rooms. Where labels would overlap, the bigger room keeps its label
    * (the selected room always does); zooming in brings the others back.
    */
+  /** Where labels don't go (the view's chips): [left, top, right, bottom] in the view's pixels. */
+  keepOut: number[][] = [];
+
   private positionLabels(): void {
     const v = new Vector3();
     const items: { el: HTMLElement; x: number; y: number; hidden: boolean; prio: number }[] = [];
@@ -1847,7 +1875,7 @@ export class Viewer {
       });
     }
     items.sort((a, b) => b.prio - a.prio);
-    const placed: number[][] = [];
+    const placed: number[][] = this.keepOut.slice();
     for (const it of items) {
       let hide = it.hidden;
       if (!hide) {
@@ -1856,8 +1884,14 @@ export class Viewer {
           size = [it.el.offsetWidth, it.el.offsetHeight];
           if (size[0]) this.labelSize.set(it.el, size);
         }
+        // a label whose point is in view stays whole, slid in from the edge; one whose point isn't goes
+        const inView = it.x >= 0 && it.x <= this.width && it.y >= 0 && it.y <= this.height;
+        if (inView) {
+          it.x = Math.round(Math.min(this.width - size[0] / 2 - 4, Math.max(size[0] / 2 + 4, it.x)));
+          it.y = Math.round(Math.min(this.height - size[1] / 2 - 4, Math.max(size[1] / 2 + 4, it.y)));
+        }
         const r = [it.x - size[0] / 2 - 3, it.y - size[1] / 2 - 2, it.x + size[0] / 2 + 3, it.y + size[1] / 2 + 2];
-        if (it.prio < 1e10 && placed.some((p) => r[0] < p[2] && r[2] > p[0] && r[1] < p[3] && r[3] > p[1])) hide = true;
+        if (!inView || (it.prio < 1e10 && placed.some((p) => r[0] < p[2] && r[2] > p[0] && r[1] < p[3] && r[3] > p[1]))) hide = true;
         else placed.push(r);
       }
       const key = hide ? "h" : `${it.x},${it.y}`;

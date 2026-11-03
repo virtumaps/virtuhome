@@ -30,6 +30,15 @@ export function describeError(err: unknown): { message: string; stack: string } 
   return { message: message.slice(0, 1200), stack: lines.slice(0, 12).join("\n").slice(0, 8000) };
 }
 
+/**
+ * Whether an error is the browser failing to fetch a piece of VirtuHome's code (Chrome, Firefox and
+ * Safari word it differently). After an update the page still runs the old version, whose pieces
+ * have gone; a reload fixes it, as it does when the connection dropped.
+ */
+export function isStaleCode(err: unknown): boolean {
+  return /dynamically imported module|Importing a module script failed/i.test(describeError(err).message);
+}
+
 const BROWSERS: [RegExp, string][] = [
   [/Edg\/(\d+)/, "Edge"],
   [/SamsungBrowser\/(\d+)/, "Samsung Internet"],

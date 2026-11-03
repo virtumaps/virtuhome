@@ -48,6 +48,7 @@ describe("check my setup", () => {
   it("rooms: unlinked ones are a note, linked by name when an area is named like them; a gone area is a problem", () => {
     const c = checkRooms(plan(), hass());
     expect([c.level, c.count, c.fixes]).toEqual(["note", 1, ["link-rooms", "open-rooms"]]);
+    expect(c.text).toMatch(/so its devices.*: Study\.$/);
     const p = plan();
     p.floors[0].rooms[1].area_id = "office";
     expect(checkRooms(p, hass())).toMatchObject({ level: "problem", count: 1, fixes: ["link-rooms", "open-rooms"] });

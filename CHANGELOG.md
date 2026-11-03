@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- A page left open while VirtuHome was updated did nothing when Edit was pressed (its editor had
+  gone with the old version). It now says part of VirtuHome didn't load and reloads when tapped; the
+  same for the demo home and the Realistic look.
+- **Show all** and the floor buttons cut the driveway or garden off at the edge of the screen: they
+  now fit the garden, driveway and fences too (only so far beyond the house, so a long garden doesn't
+  shrink it), with what is shown in the middle of the view.
+- Room labels were cut in half at the edge of the screen and could sit over the buttons along the
+  top. They now slide in to stay whole, and hide rather than cover a button.
+- The error reports kept for the diagnostics took a name out of the middle of words (`Failed` became
+  `Fai<name>` when something was called "LED"): names now go only as whole words.
+- Check my setup names the rooms that aren't linked to an area.
+- The room panel of the demo home writes values as Home Assistant does (units, decimals, "–" when
+  unavailable).
+
 ## 0.15.0
 
 ### New

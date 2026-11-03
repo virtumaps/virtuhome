@@ -33,6 +33,7 @@ export const EN = {
   "view.edit": "Edit",
   "view.close": "Close",
   "view.editProblems": "Check my setup found something to fix (Edit → Home)",
+  "view.reloadNeeded": "Part of VirtuHome didn't load, usually after an update. Tap to reload.",
   "view.alerts.more": { one: "{alert} · and {n} more", other: "{alert} · and {n} more" },
   "view.lights.on": "{n} on",
   "view.lights.turnOff": "Turn them off",
@@ -627,8 +628,8 @@ export const EN = {
     other: "{n} rooms are linked to an area Home Assistant no longer has.",
   },
   "checks.rooms.unlinked": {
-    one: "{n} room isn't linked to an area, so their devices, temperature and people don't show.",
-    other: "{n} rooms aren't linked to an area, so their devices, temperature and people don't show.",
+    one: "{n} room isn't linked to an area, so its devices, temperature and people don't show: {names}.",
+    other: "{n} rooms aren't linked to an area, so their devices, temperature and people don't show: {names}.",
   },
   "checks.rooms.ok": "Every room is linked to a Home Assistant area.",
   "checks.areas.title": "Areas without a room",
