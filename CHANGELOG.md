@@ -20,6 +20,11 @@
   goes off, the view goes to what set it off (Alarmo's sensor, or the last to go on before) and tints
   its room red.
 
+- Warnings: a banner when it rains, or rain is forecast within the hour, while windows are open
+  (naming them and tinting their rooms; a window can be marked out of the rain), and on a power cut,
+  with the battery left (from a grid status sensor picked under Energy, a UPS on battery, or the
+  grid's power gone while the battery still reports).
+
 ### Fixed
 - A page left open while VirtuHome was updated did nothing when Edit was pressed (its editor had
   gone with the old version). It now says part of VirtuHome didn't load and reloads when tapped; the

@@ -653,6 +653,13 @@ on the drive while it is plugged in or its tracker says it is home: tap the car 
 (**Always**, **While plugged in**, or a tracker) and **Shape it like the** (your car). **Charger**
 and **Car battery** under **Car charging** fix wrong sensors; **Show the car charger** hides it.
 
+**Power cuts:** when the grid goes down a red banner says **Power cut: the grid is off**, with the
+battery left when there is one ("battery 64%"). It knows from **Grid status (power cuts)** (Edit →
+**Home** → **Energy**: a binary sensor that is off when the grid is, a problem sensor that is on, or
+a status such as "Off Grid" or "Grid lost"), else from a UPS on its battery (Network UPS Tools), else
+from the grid's power sensor going unavailable for 2 minutes while the battery still reports. Shown
+only while Home Assistant itself has power: on a battery, a UPS or a generator.
+
 ## Sun and weather
 
 **Set north first:** Edit → **Home** → **Sun and weather**. Drag the N on the compass to where
@@ -669,6 +676,14 @@ The **Sun and weather** button in the view opens a panel to see the house at any
 **Sunset**, or play the day through), in any weather (**Live**, **Clear**, **Cloudy**, **Rain**,
 **Storm**, **Snow**, **Fog**). Shadows, clouds and rain show with **Realistic** graphics. Close the
 panel to go back to live.
+
+**Rain with windows open:** when it rains, or rain is forecast within the hour, while a window or
+roof window with a sensor is open, a banner names them ("Rain within the hour: Kitchen window open")
+and their rooms are tinted blue; tap it for the first window's sensor. A rain sensor says best (a
+binary sensor named for rain, or one of how hard it rains): when it reads dry, the weather's
+condition isn't believed. Else the weather's condition now, else its hourly forecast (Met.no has
+one). A window out of the rain (under a porch) can be left out: tap it in Edit and tick **Out of the
+rain (no warning when it rains while open)**.
 
 **Dusk and dawn:** while the look follows the sun, **Realistic** and **Ultra** go from day to night
 gradually: the low sun turns golden, the sky goes rose and then blue, the moonlight comes up and

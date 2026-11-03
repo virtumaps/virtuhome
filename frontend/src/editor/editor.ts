@@ -17,7 +17,7 @@ import {
 } from "../model/plan";
 import { bounds } from "../model/geom";
 import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, recordLinks, replaceEntity, type Proposal, type RegistryEntry } from "../model/links";
-import { areaOf, domainOf, type Hass } from "../live/hass";
+import { areaOf, domainOf, isPower, type Hass } from "../live/hass";
 import { valueText } from "../live/readings";
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { canInflate, ROBOT_DOMAINS, robotSources } from "../live/robots";
@@ -1196,6 +1196,10 @@ export class Editor {
       row(t("editor.energy.gridExport"), "grid_export", power, automatic(auto.gridExport ?? auto.grid)),
       row(t("editor.energy.priceToBuy"), "price_import", prices, automatic(auto.priceImport)),
       row(t("editor.energy.priceToSell"), "price_export", prices, automatic(auto.priceExport)),
+      // the power cut warning: a sensor that says whether the grid is up, else the grid's power going away
+      row(t("editor.energy.gridStatus"), "grid_status", Object.keys(hass.states)
+        .filter((id) => ["binary_sensor", "sensor"].includes(domainOf(id)) && /grid|mains|outage|power_?cut|ups/.test(id) && !isPower(hass.states[id]))
+        .map((id) => [id, name(id)] as Swatch).sort((a, b) => a[1].localeCompare(b[1])), t("editor.energy.gridStatusAuto")),
       h("div", { class: "ed-row" },
         h("label", {}, t("editor.energy.panelsPeakKw")),
         h("input", { class: "ed-in num", type: "number", step: "0.1", min: "0", value: set.solar_peak ? String(set.solar_peak) : "", placeholder: t("editor.auto"),
@@ -2371,6 +2375,9 @@ export class Editor {
       h("div", { class: "ed-row" }, h("label", {}, t("editor.sensor")), this.dropdown(contacts, o.entity ?? "", (v) => upd(t("editor.opening.linkASensor"), (x) => (x.entity = v || null)), t("editor.none"))),
       o.kind !== "passage" && style !== "fixed" ? h("p", { class: "ed-hint" }, t("editor.opening.theWhatOpensIn", { what })) : null,
       o.kind === "window" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.blind")), this.dropdown(covers, o.cover ?? "", (v) => upd(t("editor.opening.linkABlind"), (x) => (x.cover = v || null)), t("editor.none"))) : null,
+      o.kind === "window" && o.entity ? h("label", { class: "ed-check" },
+        h("input", { type: "checkbox", checked: !!o.sheltered, onchange: (e: Event) => upd(t("editor.sheltered"), (x) => (x.sheltered = (e.target as HTMLInputElement).checked || null)) }),
+        ` ${t("editor.shelteredWhy")}`) : null,
       o.kind === "door" ? h("div", { class: "ed-row" }, h("label", {}, t("editor.lock")), this.dropdown(locks, o.lock ?? "", (v) => upd(t("editor.opening.linkALock"), (x) => (x.lock = v || null)), t("editor.none"))) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
         this.change((p) => (p.floors[fi].openings = p.floors[fi].openings.filter((x) => x.id !== o.id)), false, t("editor.opening.removeAWhat", { what }));
@@ -2804,6 +2811,9 @@ export class Editor {
         h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), it.w, "0.01", (v) => v && upd(t("editor.roofItem.roofWindowWidth"), (x) => (x.w = Math.max(0.3, v)))), ...num(t("editor.length"), it.d, "0.01", (v) => v && upd(t("editor.roofItem.roofWindowLength"), (x) => (x.d = Math.max(0.3, v))))),
         this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd(t("editor.roofItem.roofWindowColour"), (x) => (x.color = c)), t("editor.roofItem.grey")),
         h("div", { class: "ed-row" }, h("label", {}, t("editor.sensor")), this.dropdown(contacts, it.entity ?? "", (v) => upd(t("editor.roofItem.roofWindowSensor"), (x) => (x.entity = v || null)), t("editor.none"))),
+        it.entity ? h("label", { class: "ed-check" },
+          h("input", { type: "checkbox", checked: !!it.sheltered, onchange: (e: Event) => upd(t("editor.sheltered"), (x) => (x.sheltered = (e.target as HTMLInputElement).checked || null)) }),
+          ` ${t("editor.shelteredWhy")}`) : null,
         h("p", { class: "ed-hint" }, t("editor.roofItem.litFromTheRoom")),
       );
     } else if (it.kind === "chimney") {

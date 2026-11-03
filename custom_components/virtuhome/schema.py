@@ -50,6 +50,8 @@ OPENING = vol.Schema(
         vol.Required("kind"): vol.In(["door", "window", "passage", "garage"]),
         vol.Optional("entity", default=None): _ENTITY,
         vol.Optional("cover", default=None): _ENTITY,
+        # windows out of the rain: no warning when it rains while they are open
+        vol.Optional("sheltered"): vol.Any(None, bool),
         # doors: the smart lock on it
         vol.Optional("lock"): _ENTITY,
     },
@@ -154,6 +156,7 @@ ROOF_ITEM = vol.Schema(
         vol.Optional("panel"): vol.Any(None, vol.All([vol.All(vol.Coerce(float), vol.Range(min=0.3, max=3))], vol.Length(min=2, max=2))),
         vol.Optional("entity"): _ENTITY,
         vol.Optional("cover"): _ENTITY,
+        vol.Optional("sheltered"): vol.Any(None, bool),
         vol.Optional("color"): _COLOR,
     },
     extra=vol.ALLOW_EXTRA,
