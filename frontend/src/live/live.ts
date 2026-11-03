@@ -389,13 +389,10 @@ export class HassLive implements LiveSource {
     for (const floor of this.plan.floors) {
       for (const d of floor.devices) {
         if (!ROBOT_DOMAINS.has(domainOf(d.entity))) continue;
-        const own = d.robot?.source;
-        const kind = own ? sourceKind(hass.states[own]) : null;
-        const src = own ? (kind ? { entity: own, kind } : null) : robotSources(hass, d.entity)[0] ?? null;
-        const mirror = d.robot?.mirror ?? (src ? mirrored(hass.states[src.entity], src.kind) : false);
         const old = this.robots.get(d.id);
-        const same = !!old && old.src?.entity === src?.entity && JSON.stringify(old.device.robot) === JSON.stringify(d.robot);
-        robots.set(d.id, { device: d, src, toPlan: robotToPlan(d.robot, mirror), fix: same ? old.fix : null, at: same ? old.at : null, trail: same ? old.trail : [], running: same ? old.running : false, fetched: same ? old.fetched : 0 });
+        const r = this.robotLive(hass, d);
+        const same = !!old && old.src?.entity === r.src?.entity && JSON.stringify(old.device.robot) === JSON.stringify(d.robot);
+        robots.set(d.id, same ? { ...old, device: d, src: r.src, toPlan: r.toPlan } : r);
       }
     }
     this.robots = robots;
@@ -658,6 +655,15 @@ export class HassLive implements LiveSource {
     return undefined;
   }
 
+  /** A robot as nothing has been read of it yet: what says where it is (its own pick, else the first found), and its map's line-up. */
+  private robotLive(hass: Hass, d: Device): RobotLive {
+    const own = d.robot?.source;
+    const kind = own ? sourceKind(hass.states[own]) : null;
+    const src = own ? (kind ? { entity: own, kind } : null) : robotSources(hass, d.entity)[0] ?? null;
+    const mirror = d.robot?.mirror ?? (src ? mirrored(hass.states[src.entity], src.kind) : false);
+    return { device: d, src, toPlan: robotToPlan(d.robot, mirror), fix: null, at: null, trail: [], running: false, fetched: 0 };
+  }
+
   /** Where a robot is on the plan now, once its map is lined up (else its pin stays put). */
   robotAt(d: Device): [number, number] | null {
     return this.robotsShown ? this.robots.get(d.id)?.at ?? null : null;
@@ -689,7 +695,10 @@ export class HassLive implements LiveSource {
     const hass = this.hass;
     if (!hass) return false;
     let moved = false;
-    for (const r of this.robots.values()) {
+    for (const [id, was] of this.robots) {
+      // what says where it is may have come since (an integration that started later)
+      const r = was.src ? was : this.robotLive(hass, was.device);
+      if (r !== was) this.robots.set(id, r);
       if (!r.src) continue;
       const running = isRunning(this.state(r.device.entity));
       if (running && !r.running) r.trail = [];
