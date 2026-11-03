@@ -25,6 +25,9 @@
   with the battery left (from a grid status sensor picked under Energy, a UPS on battery, or the
   grid's power gone while the battery still reports).
 
+- Guide: the Wall Tablet extension's screen control (on when someone is near, brightness) and
+  screensaver, and Fully Kiosk's JavaScript interface.
+
 ### Fixed
 - A page left open while VirtuHome was updated did nothing when Edit was pressed (its editor had
   gone with the old version). It now says part of VirtuHome didn't load and reloads when tapped; the
