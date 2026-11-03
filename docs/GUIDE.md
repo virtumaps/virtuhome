@@ -90,7 +90,7 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Roof** | Only when the house has a roof: takes the roofs off to look in from above, or puts them back. Each device remembers its own choice |
 | **Day / night** | Switches between the day and night looks. Normally the look follows the sun, and the picture fades from one to the other |
 | **Sun and weather** | Opens the [sun and weather panel](#sun-and-weather) |
-| **Show all** | Fits the whole view on the screen |
+| **Show all** | Fits the house on the screen, with its garden, driveway and fences (a long garden is cut short, so the house stays big) |
 | **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm |
 | **Graphics** | Picks the graphics on this device (below) |
 
@@ -98,6 +98,8 @@ The same view is in the sidebar and in every VirtuHome card.
 - Under each room's name: its temperature and humidity, and on the driveway the car's charge. You
   can choose what each room's and garden area's label shows (see [Labels and readings](#labels-and-readings)),
   and a value on it opens its dialog when tapped.
+- A label slides in from the edge of the screen to stay whole, and hides rather than cover the
+  buttons along the top; where two would overlap, the bigger room's shows.
 - A room with a thermostat or radiator valve shows what it reads and its setpoint, **20.5° → 21°**
   (the warmest setpoint if it has several), in orange while it heats. Tap the numbers for the
   thermostat's dialog; tap the room's name to open the room.
@@ -764,8 +766,8 @@ feet and inches (`11'4"`).
 should, with a fix where there is a safe one. Nothing changes until you press a fix, and
 **Check again** asks Home Assistant again.
 - **Linked entities**: links to entities Home Assistant no longer has (see below).
-- **Rooms and areas**: rooms not linked to an area, or linked to one that is gone. **Link rooms by
-  name** links them to the areas named like them; **Open Rooms** to pick by hand.
+- **Rooms and areas**: rooms not linked to an area (named), or linked to one that is gone. **Link
+  rooms by name** links them to the areas named like them; **Open Rooms** to pick by hand.
 - **Areas without a room**: areas with devices but no room in the plan. **Add a room** puts one,
   named and linked like the area, beside the house, to move where it belongs.
 - **Dashboard card**: the card missing from your dashboards' resources, or an old version there
@@ -785,6 +787,10 @@ should, with a fix where there is a safe one. Nothing changes until you press a 
 - Dashboards with resources in YAML mode: add `/virtuhome_static/virtuhome-loader.js` as a
   `module` resource yourself. In storage mode VirtuHome adds it.
 - After an update, reload the page, or clear the browser's cache on a tablet.
+
+**"Part of VirtuHome didn't load"**: a page left open while VirtuHome was updated still runs the
+old version, and the editor, the demo home or the Realistic look can't load its parts from the new
+one. Tap the message to reload the page. A dropped connection shows it too.
 
 **"Something went wrong drawing the house"**: the card or panel shows this instead of the house when
 it can't draw it.

@@ -43,6 +43,15 @@ def test_strips_names_and_entity_ids():
     assert errors.strip_text("e.floors is undefined", NAMES) == "e.floors is undefined"
 
 
+def test_strips_names_only_as_whole_words():
+    # a light called "LED" and a room called "Store" seen in Home Assistant's error reports
+    short = ["LED", "Store", "Küche"]
+    text = "TypeError: Failed to fetch dynamically imported module: chunk-XOC26GUM.js"
+    assert errors.strip_text(text, short) == text
+    assert errors.strip_text("restored the LED strip, store and led; Küchenlicht", short) == "restored the <name> strip, <name> and <name>; Küchenlicht"
+    assert errors.strip_text("LED-LED (Store)", short) == "<name>-<name> (<name>)"
+
+
 def test_keeps_only_a_scripts_file_and_line_of_an_address():
     stack = ("at tick (http://homeassistant.local:8123/virtuhome_static/app/app.js?v=0.11.0:1:2345)\n"
              "tick@https://abc123.ui.nabu.casa/virtuhome_ext/security-1.1.0.js:12:9\n"

@@ -26,6 +26,8 @@ ENTITY_DOMAINS = (
     "script", "sensor", "siren", "switch", "timer", "vacuum", "valve", "water_heater", "weather", "zone",
 )
 MIN_NAME = 3
+# letters and digits a name never starts or ends next to: "LED" goes from "LED strip", not from "Failed"
+WORD = "A-Za-z0-9\u00C0-\u024F"
 ENTITY_ID = re.compile(r"^[a-z_][a-z0-9_]*\.[a-z0-9_]+$")
 PLAN_KEYS = {"name", "label", "title", "area_id", "ha_floor", "entity", "cover", "temperature", "humidity"}
 
@@ -58,7 +60,7 @@ def strip_text(text: str, names: Iterable[str] = ()) -> str:
     lower = out.lower()
     hits = sorted({n for n in names if n.lower() in lower}, key=len, reverse=True)
     if hits:
-        pattern = re.compile("|".join(re.escape(n) for n in hits), re.I)
+        pattern = re.compile(f"(?<![{WORD}])(?:" + "|".join(re.escape(n) for n in hits) + f")(?![{WORD}])", re.I)
         out = pattern.sub(lambda m: "<entity>" if ENTITY_ID.match(m.group(0).lower()) else "<name>", out)
     for regex, to in _PATTERNS:
         out = regex.sub(to, out)

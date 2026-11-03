@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { privateStrings, stripPrivate } from "../src/live/strip";
-import { browserName, callEach, describeError, errorDetails, isolate } from "../src/ui/errors";
+import { browserName, callEach, describeError, errorDetails, isolate, isStaleCode } from "../src/ui/errors";
 import { extensionFailures, loadExtensions, registerView, type ViewHandle } from "../src/ext/api";
 import { normalizePlan } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
@@ -45,6 +45,15 @@ describe("stripping names and ids", () => {
   it("takes out names, case and all, and entity ids", () => {
     const out = stripPrivate("Cannot light the kitchen (Ceiling Lamp) in THE SNUG for Kadir: select.boiler_mode", names);
     expect(out).toBe("Cannot light the <name> (<name>) in <name> for <name>: <entity>");
+  });
+
+  it("takes out names only as whole words", () => {
+    // a light called "LED" and a room called "Store" seen in Home Assistant's error reports
+    const short = ["LED", "Store", "Küche"];
+    expect(stripPrivate("TypeError: Failed to fetch dynamically imported module: chunk-XOC26GUM.js", short))
+      .toBe("TypeError: Failed to fetch dynamically imported module: chunk-XOC26GUM.js");
+    expect(stripPrivate("restored the LED strip, store and led; Küchenlicht", short)).toBe("restored the <name> strip, <name> and <name>; Küchenlicht");
+    expect(stripPrivate("LED-LED (Store)", short)).toBe("<name>-<name> (<name>)");
   });
 
   it("takes out entity ids Home Assistant doesn't know, whole", () => {
@@ -108,6 +117,14 @@ describe("describing errors", () => {
     expect(describeError("plain text")).toEqual({ message: "plain text", stack: "" });
     expect(describeError(null).message).toBe("null");
     expect(describeError({ message: "x".repeat(5000) }).message).toHaveLength(1200);
+  });
+
+  it("tells an update's missing code from other errors", () => {
+    expect(isStaleCode(new TypeError("Failed to fetch dynamically imported module: https://ha.local/virtuhome_static/app/chunk-XOC26GUM.js"))).toBe(true);
+    expect(isStaleCode(new TypeError("error loading dynamically imported module: https://ha.local/x.js"))).toBe(true);
+    expect(isStaleCode(new TypeError("Importing a module script failed."))).toBe(true);
+    expect(isStaleCode(new TypeError("Failed to fetch"))).toBe(false);
+    expect(isStaleCode(new Error("e.floors is undefined"))).toBe(false);
   });
 
   it("names the browser and system only", () => {

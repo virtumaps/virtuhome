@@ -174,6 +174,11 @@ export const VIEW_CSS = /* css */ `
 .vh-alert svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
 .vh-alert span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vh-root.editing .vh-status, .vh-root.editing .vh-alert { display: none; }
+.vh-updated {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 40px);
+  border: 0; border-radius: 18px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--vh-accent); color: #fff; box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+}
 .vh-menu {
   position: absolute; right: 60px; bottom: 12px; width: 250px; padding: 6px; border-radius: 16px;
   background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);

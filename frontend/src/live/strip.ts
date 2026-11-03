@@ -38,6 +38,11 @@ function shortUrl(url: string): string {
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/**
+ * Letters and digits a name never starts or ends next to: "LED" goes from "LED strip", not from
+ * "Failed". (Safari 15 has no lookbehind, so the letter before is matched and put back.)
+ */
+const WORD = "A-Za-z0-9\\u00C0-\\u024F";
 
 /** `text` without the names, entity ids, addresses, tokens and keys in it. */
 export function stripPrivate(text: string, names: readonly string[] = []): string {
@@ -46,7 +51,8 @@ export function stripPrivate(text: string, names: readonly string[] = []): strin
   const lower = s.toLowerCase();
   const hits = names.filter((n) => lower.includes(n.toLowerCase())).sort((a, b) => b.length - a.length);
   if (hits.length) {
-    s = s.replace(new RegExp(hits.map(escapeRe).join("|"), "gi"), (m) => (ENTITY_ID.test(m.toLowerCase()) ? "<entity>" : "<name>"));
+    const re = new RegExp(`(^|[^${WORD}])(${hits.map(escapeRe).join("|")})(?![${WORD}])`, "gi");
+    s = s.replace(re, (_, before: string, m: string) => before + (ENTITY_ID.test(m.toLowerCase()) ? "<entity>" : "<name>"));
   }
   for (const [re, to] of PATTERNS) s = s.replace(re, to);
   return s;
