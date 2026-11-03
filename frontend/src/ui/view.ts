@@ -1,12 +1,13 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent } from "@mdi/js";
 import { barChips, normalizePlan, spaces, type Plan, type Repair, type ThemeName } from "../model/plan";
 import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
-import { HassLive, initials, solarStep, toggleEntity, type Change, type ItemMark, type ItemMarks, type RoomText, type RoomTint } from "../live/live";
+import { HassLive, heatColour, initials, solarStep, toggleEntity, type Change, type ItemMark, type ItemMarks, type RoomText, type RoomTint } from "../live/live";
 import { EnergyLive, type EnergyNow } from "../live/energy";
 import { hereText } from "../live/presence";
 import { readingIcon, valueText } from "../live/readings";
+import { BAND_COLOURS, BANDS, legendScale, type MapKind } from "../live/air";
 import { lockActions, needsCode } from "../live/locks";
 import { ICONS } from "../scene/markers";
 import { extensionFailures, loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
@@ -15,7 +16,7 @@ import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveT
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { isNewHome, START_CHOICES, type StartKind } from "./setup";
-import { esc, t, th } from "../i18n";
+import { esc, language, t, th } from "../i18n";
 import { VIEW_CSS } from "./styles";
 import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
@@ -62,6 +63,9 @@ export function saveRefused(config: ViewConfig, demoShown: boolean): string | nu
 }
 
 /** The walls button shows its mode: a whole brick wall, one stepped down where it is cut away, or a low one. */
+/** The map button's picture for each map. */
+const MAP_ICONS: Record<MapKind, string> = { temperature: mdiThermometer, co2: mdiMoleculeCo2, humidity: mdiWaterPercent, pm25: mdiBlur, voc: mdiScent };
+
 const WALL_ICONS: Record<WallMode, string> = {
   full: mdiWall,
   smart: "M3,4H11V9H3V4M2,10H8V15H2V10M9,10H15V15H9V10M3,16H12V21H3V16M13,16H21V21H13V16Z",
@@ -108,6 +112,8 @@ export class VhView {
   private chips: HTMLDivElement;
   private sheet: HTMLDivElement;
   private toastEl: HTMLDivElement;
+  /** What the map button and the legend show now. */
+  private mapsKey = "";
   private empty: HTMLDivElement;
   private statsEl: HTMLDivElement;
   private wallsBtn: HTMLButtonElement;
@@ -214,6 +220,7 @@ export class VhView {
       <div class="vh-sheet"></div>
       <div class="vh-empty" hidden></div>
       <div class="vh-toast"></div>
+      <div class="vh-legend" hidden></div>
       <button class="vh-updated" hidden></button>
       <div class="vh-stats" hidden></div>`;
     shadow.append(style, this.root);
@@ -314,7 +321,7 @@ export class VhView {
       if (act === "theme") this.cycleTheme();
       if (act === "frame") this.viewer.frame(true);
       if (act === "graphics") this.toggleGraphicsMenu();
-      if (act === "heat") this.toggleHeatmap();
+      if (act === "heat") this.cycleMap();
       if (act === "sky") this.toggleSkyPanel();
     });
     this.menu.addEventListener("click", (e) => {
@@ -427,6 +434,7 @@ export class VhView {
   private draw(h: Hass, extra: Change[] = []): void {
     const changes = this.live.update(h);
     for (const c of extra) changes.add(c);
+    if (changes.has("tints")) this.renderMaps();
     this.applyTheme();
     this.updateSky();
     if (this.plan && this.plan.floors.length) this.apply(changes);
@@ -899,11 +907,58 @@ export class VhView {
     this.todayTimer = window.setInterval(refresh, 300_000);
   }
 
-  private toggleHeatmap(): void {
-    this.live.heatmap = !this.live.heatmap;
-    this.root.querySelector('[data-act="heat"]')?.classList.toggle("on", this.live.heatmap);
+  /** The map button: off, the temperature map, then each air quality map the home has sensors for, then off. */
+  private cycleMap(): void {
+    const maps = this.live.maps();
+    const i = this.live.map ? maps.indexOf(this.live.map) : -1;
+    const next = i + 1 < maps.length ? maps[i + 1] : null;
+    this.live.map = next;
+    this.renderMaps();
     this.viewer.refreshTints();
-    this.toast(t(this.live.heatmap ? "view.heat.on" : "view.heat.off"));
+    this.toast(next === "temperature" ? t("view.heat.on") : next ? t(`view.map.${next}`) : t(maps.length > 1 ? "view.map.off" : "view.heat.off"));
+  }
+
+  /** The map button's picture and name, and the legend of the map shown (drawn again only when they change). */
+  private renderMaps(): void {
+    const maps = this.live.maps();
+    // a map whose sensors went
+    if (this.live.map && !maps.includes(this.live.map)) {
+      this.live.map = null;
+      this.viewer.refreshTints();
+    }
+    const map = this.live.map;
+    const key = `${maps.join(",")}|${map}|${map && map !== "temperature" ? this.live.mapSensor(map)?.attributes.unit_of_measurement : ""}`;
+    if (key === this.mapsKey) return;
+    this.mapsKey = key;
+    const b = this.root.querySelector<HTMLButtonElement>('[data-act="heat"]')!;
+    b.classList.toggle("on", !!map);
+    b.innerHTML = svg(MAP_ICONS[map ?? "temperature"]);
+    b.title = t(maps.length > 1 ? "view.tool.maps" : "view.tool.heat");
+    const legend = this.root.querySelector<HTMLElement>(".vh-legend")!;
+    legend.hidden = !map;
+    this.root.classList.toggle("mapped", !!map);
+    if (!map) return;
+    if (map === "temperature") {
+      // the temperature map's colours run from 16° to 26°
+      const stops = [16, 18.5, 21, 23.5, 26].map((v) => `rgb(${heatColour(v).map((c) => Math.round(c * 255)).join(",")})`);
+      legend.innerHTML = `<div class="ramp"><span></span><i style="background:linear-gradient(to right,${stops.join(",")})"></i><span></span></div>`;
+      const [lo, hi] = legend.querySelectorAll("span");
+      lo.textContent = `${t("air.cold")} 16°`;
+      hi.textContent = `26° ${t("air.warm")}`;
+      return;
+    }
+    const { limits, unit } = legendScale(map, this.live.mapSensor(map));
+    const n = (v: number) => v.toLocaleString(language());
+    const bands = BANDS[map];
+    legend.replaceChildren(...bands.map((band, i) => {
+      const row = document.createElement("div");
+      const range = i === 0 ? t("air.range.under", { v: `${n(limits[0])} ${unit}` })
+        : i === bands.length - 1 ? t("air.range.over", { v: `${n(limits[2])} ${unit}` })
+        : t("air.range.between", { a: n(limits[i - 1]), b: n(limits[i]) });
+      row.innerHTML = `<i style="background:rgb(${BAND_COLOURS[band].map((c) => Math.round(c * 255)).join(",")})"></i><span></span>`;
+      row.querySelector("span")!.textContent = `${t(`air.band.${map}.${band}` as `air.band.co2.good`)} · ${range}`;
+      return row;
+    }));
   }
 
   private async subscribe(): Promise<void> {

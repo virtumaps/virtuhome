@@ -61,6 +61,15 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       const h = `sensor.${room.area_id}_humidity`;
       put(h, String(Math.round(42 + Math.random() * 15)), { device_class: "humidity", unit_of_measurement: "%" });
       entities[h] = { entity_id: h, area_id: room.area_id };
+      // CO₂ in every room, the main bedroom stuffy after the night; fine particles where the cooking is
+      const co2 = `sensor.${room.area_id}_co2`;
+      put(co2, String(room.area_id === "bedroom" ? 1640 : Math.round(480 + Math.random() * 420)), { device_class: "carbon_dioxide", unit_of_measurement: "ppm" });
+      entities[co2] = { entity_id: co2, area_id: room.area_id };
+      if (room.area_id === "kitchen") {
+        const pm = "sensor.kitchen_pm2_5";
+        put(pm, String(Math.round(18 + Math.random() * 12)), { device_class: "pm25", unit_of_measurement: "µg/m³" });
+        entities[pm] = { entity_id: pm, area_id: room.area_id };
+      }
     }
     const roomArea = (x: number, z: number) => {
       for (const r of floor.rooms) {

@@ -91,8 +91,29 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Day / night** | Switches between the day and night looks. Normally the look follows the sun, and the picture fades from one to the other |
 | **Sun and weather** | Opens the [sun and weather panel](#sun-and-weather) |
 | **Show all** | Fits the house on the screen, with its garden, driveway and fences (a long garden is cut short, so the house stays big) |
-| **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm |
+| **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm. With air quality sensors it is **Maps**, and each tap shows the next map (see **Maps** below) |
 | **Graphics** | Picks the graphics on this device (below) |
+
+**Maps**
+- The **Temperature map** colours each room by its temperature, from blue at 16° to red at 26°.
+- Homes with air quality sensors get more maps, one for each kind a room has a sensor for: the
+  button steps through the temperature, **CO₂**, **Humidity**, **Fine particles (PM2.5)** and
+  **VOC** maps, then off, and its picture shows the map that is on. A legend in the bottom left
+  corner gives the bands.
+- A room's sensor is one placed in the room in the plan, else one of its area. Rooms without one
+  stay as they are.
+- The bands, best first. Their colours are told apart with any kind of colour blindness, and get
+  darker as the air gets worse.
+
+| Map | Bands |
+|---|---|
+| CO₂ | Fresh under 800 ppm, OK to 1,000, Stuffy to 1,500, **Open a window** over 1,500 |
+| Humidity | Dry under 30 %, Good to 60 %, Damp to 70 %, Mould likely over 70 % |
+| Fine particles (PM2.5) | Clean under 15 µg/m³ (the WHO's guideline), Fair to 35, Poor to 55, Unhealthy over 55 |
+| VOC | Clean under 300 µg/m³, Fair to 1,000, Poor to 3,000, Bad over 3,000 (sensors in ppb: 220, 660 and 2,200) |
+
+- Whatever map is on, a room whose air needs something doing (stuffy, damp, too dry or dusty) says
+  so on its label, in amber: "CO₂ 1,640 ppm". A tap on it opens the sensor.
 
 **Room labels**
 - Under each room's name: its temperature and humidity, and on the driveway the car's charge. You

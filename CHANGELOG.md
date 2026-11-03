@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### New
+- Air quality maps beside the temperature map: **CO₂**, **Humidity**, **Fine particles (PM2.5)** and
+  **VOC**, from a sensor placed in each room or of its area. The map button steps through those the
+  home has sensors for, a legend gives the bands, and the colours are safe for colour blindness. A
+  room whose air needs something doing says so on its label ("CO₂ 1,640 ppm").
+- The temperature map has a legend too, from 16° to 26°.
+
 ### Fixed
 - A page left open while VirtuHome was updated did nothing when Edit was pressed (its editor had
   gone with the old version). It now says part of VirtuHome didn't load and reloads when tapped; the

@@ -30,6 +30,8 @@ export const VIEW_CSS = /* css */ `
 .vh-label .vh-heat { display: inline-block; padding: 6px 4px; margin: -6px -4px; }
 .vh-label .vh-heat.on { color: #ff8a4c; }
 .vh-root.day .vh-label .vh-heat.on { color: #d2501a; }
+.vh-label .vh-heat.warn { color: #f0b23c; }
+.vh-root.day .vh-label .vh-heat.warn { color: #a85d00; }
 .vh-floor-label { font-size: 13px; font-weight: 600; padding: 5px 12px; }
 /* a device shown by its value: icon and value on one line */
 .vh-reading { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 6px; font-weight: 600; }
@@ -174,6 +176,16 @@ export const VIEW_CSS = /* css */ `
 .vh-alert svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
 .vh-alert span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vh-root.editing .vh-status, .vh-root.editing .vh-alert { display: none; }
+.vh-legend {
+  position: absolute; left: 10px; bottom: 10px; z-index: 2; display: flex; flex-direction: column; gap: 3px;
+  padding: 8px 10px; border-radius: 12px; background: var(--vh-glass); color: var(--vh-text); font-size: 12px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); pointer-events: none;
+}
+.vh-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.vh-legend .ramp { display: flex; align-items: center; gap: 6px; }
+.vh-legend .ramp i { width: 90px; height: 8px; border-radius: 4px; margin: 0; }
+.vh-root.editing .vh-legend { display: none; }
+@media (max-width: 600px) { .vh-root.mapped .vh-toast { bottom: 112px; } }
 .vh-updated {
   position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 40px);
   border: 0; border-radius: 18px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer;

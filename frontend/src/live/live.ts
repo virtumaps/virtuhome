@@ -19,6 +19,7 @@ import { roomOf, roomTrackers, slug, sourcesOf } from "./presence";
 import { readingIcon, valueText } from "./readings";
 import { lockKind, type LockKind } from "./locks";
 import { artwork, mediaText } from "./media";
+import { AIR, airBand, BAND_COLOURS, needsDoing, readsAir, type Air, type MapKind } from "./air";
 import { t } from "../i18n";
 
 export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status" | "readings";
@@ -40,6 +41,8 @@ export interface RoomPart {
   entity?: string;
   /** The room's heating is on: the piece shows warm. */
   heating?: boolean;
+  /** The air needs something doing (stuffy, damp, dusty): the piece stands out. */
+  warn?: boolean;
 }
 
 /** A device shown by its value: the text and the icon of its label. */
@@ -89,6 +92,8 @@ interface RoomWatch {
   heating: string[];
   /** What its label shows, in order. */
   label: readonly LabelPart[];
+  /** Its air quality sensors: placed in the room in the plan, else of its area. */
+  air: Partial<Record<Air, string>>;
 }
 
 /** Sensors whose "on" is an alert, by device class (each has its name in the table: alert.smoke…). */
@@ -131,8 +136,8 @@ export class HassLive implements LiveSource {
   private regRef: unknown = null;
   /** The index picks sensors by their state attributes, so it is redone once states exist. */
   private indexedWithStates = false;
-  /** Rooms tinted by temperature (blue cold, red warm). */
-  heatmap = false;
+  /** The map the rooms are tinted by (temperature: blue cold, red warm; the air's by its bands), or none. */
+  map: MapKind | null = null;
   /** Everyone, and the trackers that say their room (watched apart: only a move to another room redraws). */
   private presence: { person: string; sources: string[] }[] = [];
   private presenceIds = new Set<string>();
@@ -243,8 +248,15 @@ export class HassLive implements LiveSource {
     // or switch, it only warms its room while it heats.
     const isMotion = (id: string) => domainOf(id) === "binary_sensor" && MOTION_CLASSES.has(String(hass.states[id]?.attributes.device_class));
     const found: { entity: string; key: string; piece: boolean; heater: boolean }[] = [];
+    // air quality sensors placed in a room are its own
+    const airPlaced = new Map<string, string[]>();
     for (const floor of this.plan.floors) {
       const sp = spaces(floor);
+      for (const d of floor.devices) {
+        if (domainOf(d.entity) !== "sensor" || !AIR.some((k) => readsAir(k, hass.states[d.entity]))) continue;
+        const space = sp.find((s) => !s.outdoor && pointInPolygon([d.x, d.z], s.points));
+        if (space) airPlaced.set(`${floor.id}/${space.id}`, [...(airPlaced.get(`${floor.id}/${space.id}`) ?? []), d.entity]);
+      }
       for (const x of [...floor.devices, ...floor.furniture]) {
         const piece = "type" in x;
         const heater = piece && HEAT_TYPES.has(x.type);
@@ -273,26 +285,37 @@ export class HassLive implements LiveSource {
         const pick = (dc: string, unit: RegExp) =>
           ids.find((id) => domainOf(id) === "sensor" && cls(id) === dc && unit.test(String(hass.states[id]?.attributes.unit_of_measurement ?? "")) && !NOT_ROOM_TEMP.test(id)) ?? null;
         const here = placed.get(`${floor.id}/${room.id}`) ?? [];
+        const air: Partial<Record<Air, string>> = {};
+        if (!space.outdoor) {
+          const own = airPlaced.get(`${floor.id}/${room.id}`) ?? [];
+          for (const k of AIR) {
+            const id = own.find((x) => readsAir(k, hass.states[x])) ?? ids.find((x) => domainOf(x) === "sensor" && readsAir(k, hass.states[x]) && !NOT_ROOM_TEMP.test(x));
+            if (id) air[k] = id;
+          }
+        }
         const climates = space.outdoor ? [] : [...new Set([
           ...here.filter((id) => domainOf(id) === "climate"),
           ...ids.filter((id) => domainOf(id) === "climate" && !anywhere.has(id)),
         ])];
         const w: RoomWatch = {
           temperature: room.temperature ?? (space.outdoor ? null : pick("temperature", /°/)),
-          humidity: room.humidity ?? (space.outdoor ? null : pick("humidity", /%/)),
+          humidity: room.humidity ?? (space.outdoor ? null : air.humidity ?? pick("humidity", /%/)),
           alerts: ids.filter((id) => domainOf(id) === "binary_sensor" && ALERT_CLASSES.has(String(cls(id)))),
           motion: [...new Set([...here.filter(isMotion), ...ids.filter((id) => isMotion(id) && !anywhere.has(id))])],
           lights: ids.filter((id) => domainOf(id) === "light"),
           climates,
           heating: [...new Set([...climates, ...(warms.get(`${floor.id}/${room.id}`) ?? [])])],
           label: space.label ?? (space.outdoor ? [] : DEFAULT_LABEL),
+          air,
         };
+        if (w.humidity) air.humidity = w.humidity;
         this.rooms.set(`${floor.id}/${room.id}`, w);
         for (const id of w.label) if (id !== "temperature" && id !== "humidity") this.watch(id, "labels");
         for (const id of w.climates) this.watch(id, "labels", "tints");
         for (const id of w.heating) this.watch(id, "tints");
         this.watch(w.temperature, "labels", "tints");
         this.watch(w.humidity, "labels");
+        for (const id of Object.values(air)) this.watch(id, "labels", "tints");
         for (const id of w.lights) this.watch(id, "status");
         for (const id of w.alerts) this.watch(id, "tints");
         for (const id of w.motion) this.watch(id, "tints");
@@ -565,10 +588,14 @@ export class HassLive implements LiveSource {
       const t = space ? this.roomTint(floor, space) : null;
       if (t) return t;
     }
-    if (this.heatmap) {
+    if (this.map === "temperature") {
       const v = this.roomTemperature(w);
       if (v !== null) return [...heatColour(v), 0.42];
       return null;
+    }
+    if (this.map) {
+      const band = airBand(this.map, this.state(w.air[this.map]));
+      return band ? [...BAND_COLOURS[band], 0.42] : null;
     }
     // someone is there: motion, a presence sensor, or a person's room tracker
     if (w.motion.some((id) => this.hass!.states[id]?.state === "on") || this.occupied(floor, room)) return [1.0, 0.72, 0.32, 0.09];
@@ -577,6 +604,18 @@ export class HassLive implements LiveSource {
     if (w.climates.some((id) => this.state(id)?.attributes.hvac_action === "cooling")) return TINT_COOL;
     if (w.climates.some((id) => this.state(id)?.attributes.hvac_action === "fan")) return TINT_FAN;
     return null;
+  }
+
+  /** The maps the home has sensors for: temperature always, then each of the air's that a room reads. */
+  maps(): MapKind[] {
+    const rooms = [...this.rooms.values()];
+    return ["temperature", ...AIR.filter((k) => rooms.some((w) => w.air[k]))];
+  }
+
+  /** A sensor of the map's air in some room (its unit picks the legend's numbers). */
+  mapSensor(kind: Air): HassEntity | undefined {
+    for (const w of this.rooms.values()) if (w.air[kind]) return this.state(w.air[kind]);
+    return undefined;
   }
 
   /** The room's temperature: its sensor's, else what its thermostat or valve reads. */
@@ -689,6 +728,14 @@ export class HassLive implements LiveSource {
         if (h && !isUnavailable(h) && !isNaN(parseFloat(h.state))) parts.push({ text: `${Math.round(parseFloat(h.state))} %` });
       } else if (this.hass) {
         parts.push({ text: valueText(this.hass, what), entity: what });
+      }
+    }
+    // air that needs something doing: stuffy, damp or dusty (unless the label shows that sensor already)
+    if (this.hass) {
+      for (const k of AIR) {
+        const id = w.air[k];
+        if (!id || w.label.includes(id) || (k === "humidity" && w.label.includes("humidity"))) continue;
+        if (needsDoing(airBand(k, this.state(id)))) parts.push({ text: `${t(`air.short.${k}`)} ${valueText(this.hass, id)}`, entity: id, warn: true });
       }
     }
     // a car that is here, or a charger with a car plugged in
