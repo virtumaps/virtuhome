@@ -1656,7 +1656,7 @@ export class Viewer {
           if (i) line.append(" · ");
           if (!p.entity) return line.append(p.text);
           const s = document.createElement("span");
-          s.className = p.heating ? "vh-heat on" : "vh-heat";
+          s.className = p.heating ? "vh-heat on" : p.warn ? "vh-heat warn" : "vh-heat";
           s.dataset.entity = p.entity;
           s.textContent = p.text;
           line.append(s);

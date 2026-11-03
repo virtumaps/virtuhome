@@ -127,7 +127,8 @@ describe("what a room's label shows", () => {
   it("opens an entity's value when tapped, and redraws when it changes", () => {
     const { l, hass, line } = live(plan({ label: ["sensor.kitchen_co2"] }));
     expect(line("k")).toEqual([{ text: "612 ppm", entity: "sensor.kitchen_co2" }]);
-    expect([...l.update(later(hass, "sensor.kitchen_co2", "700"))]).toEqual(["labels"]);
+    // a CO₂ sensor tints its room on the CO₂ map too
+    expect([...l.update(later(hass, "sensor.kitchen_co2", "700"))]).toEqual(["labels", "tints"]);
     expect(line("k")[0].text).toBe("700 ppm");
   });
 

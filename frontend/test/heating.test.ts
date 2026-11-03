@@ -94,7 +94,7 @@ describe("the label", () => {
     const h = live({ ...sensors, "climate.thermostat": heat("idle", 21.5, 21) }, reg);
     expect(h.text(0, "hall")).toBe("21.5° → 21° · 52 %");
     // the temperature map keeps the room's own sensor
-    h.l.heatmap = true;
+    h.l.map = "temperature";
     expect(h.tint(0, "hall")?.slice(0, 3)).toEqual(heatColour(19.8));
     // a thermostat that reads nothing takes the room's sensor
     expect(live({ ...sensors, "climate.thermostat": heat("idle", null, 21) }, reg).text(0, "hall")).toBe("19.8° → 21° · 52 %");
@@ -175,7 +175,7 @@ describe("the warm glow", () => {
       { "binary_sensor.hall_motion": { area_id: "hallway" } },
     );
     expect(h.tint(0, "hall")).toEqual([1.0, 0.72, 0.32, 0.09]);
-    h.l.heatmap = true;
+    h.l.map = "temperature";
     expect(h.tint(0, "hall")?.[3]).toBe(0.42);
     expect(h.tint(0, "living")).toBeNull();
   });
