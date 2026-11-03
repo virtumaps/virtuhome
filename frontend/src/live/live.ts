@@ -20,6 +20,7 @@ import { readingIcon, valueText } from "./readings";
 import { lockKind, type LockKind } from "./locks";
 import { artwork, mediaText } from "./media";
 import { attributeFix, grow, isRunning, mirrored, ROBOT_DOMAINS, robotSources, robotToPlan, sourceKind, valetudoMap, type RobotSource } from "./robots";
+import { openWindows, powerCut, rainComing, rainSensors, type ForecastHour } from "./warnings";
 import { AIR, airBand, BAND_COLOURS, needsDoing, readsAir, type Air, type MapKind } from "./air";
 import { t } from "../i18n";
 
@@ -175,6 +176,11 @@ export class HassLive implements LiveSource {
   roomExtraText: RoomText | null = null;
   /** Extensions' marks on furniture, by the piece's id (a bin on the evening before its collection). */
   itemMarks: Map<string, ItemMark> | null = null;
+  /** The weather entity followed and its hourly forecast (the view subscribes to it), for the rain warning. */
+  weather: string | null = null;
+  forecast: ForecastHour[] | null = null;
+  /** Rooms with a window open while rain is coming (`floor id/space id`). */
+  private rainRooms = new Set<string>();
   /** Robot vacuums and mowers, by device id. */
   private robots = new Map<string, RobotLive>();
   /** Fetches a map picture (Valetudo's) from Home Assistant; set by the view. */
@@ -248,10 +254,13 @@ export class HassLive implements LiveSource {
       for (const id of Object.keys(hass.states)) if (domainOf(id) === "person") this.presence.push({ person: id, sources: sourcesOf(hass, id, set, trackers) });
     }
     this.presenceIds = new Set(this.presence.flatMap((p) => [p.person, ...p.sources]));
-    // people, and alarms anywhere in the house, feed the top bar
+    // people, and alarms anywhere in the house, feed the top bar; the weather, rain sensors and the
+    // grid's status the warnings
+    for (const id of rainSensors(hass)) this.watch(id, "status");
+    this.watch(this.plan.settings.energy?.grid_status, "status");
     for (const id of Object.keys(hass.states)) {
       const dom = domainOf(id);
-      if (dom === "person" || dom === "alarm_control_panel") this.watch(id, "status");
+      if (dom === "person" || dom === "alarm_control_panel" || dom === "weather") this.watch(id, "status");
       else if (dom === "binary_sensor" && ALERT_CLASSES.has(String(hass.states[id].attributes.device_class))) this.watch(id, "status");
     }
     const byArea = new Map<string, string[]>();
@@ -377,12 +386,14 @@ export class HassLive implements LiveSource {
       }
       for (const o of floor.openings) {
         this.watch(o.entity, "openings", "lighting");
+        // an open window matters when rain is coming
+        if (o.kind === "window") this.watch(o.entity, "status");
         this.watch(o.cover, "openings");
         // a lock's badge, and its door's sensor (open while locked is a problem)
         if (o.lock) for (const id of [o.lock, o.entity]) this.watch(id, "readings");
       }
       // a roof window that opens glows warm, like a window in a wall
-      for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") this.watch(it.entity, "lighting");
+      for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") this.watch(it.entity, "lighting", "status");
     }
     // robots keep what they had seen when the registry changes, unless what says where they are changed
     const robots = new Map<string, RobotLive>();
@@ -639,6 +650,7 @@ export class HassLive implements LiveSource {
     const here = `${floor.id}/${room.id}`;
     if (this.alarmCause.has(here)) return [0.9, 0.12, 0.1, 0.42];
     if (this.alarmOpen.has(here)) return [1.0, 0.5, 0.1, 0.3];
+    if (this.rainRooms.has(here)) return [0.25, 0.55, 1.0, 0.3];
     if (this.roomTint) {
       const space = spaces(floor).find((x) => x.id === room.id);
       const t = space ? this.roomTint(floor, space) : null;
@@ -773,7 +785,52 @@ export class HassLive implements LiveSource {
     return (this.cameraMotion.get(d.entity) ?? []).some((id) => this.hass?.states[id]?.state === "on");
   }
 
-  /** Leaks, smoke, gas anywhere in the house, and a triggered alarm. */
+  /** The windows open while rain is coming (now, or within the hour), and when it comes. */
+  rainCheck(): { when: "now" | "soon"; windows: string[] } | null {
+    const hass = this.hass;
+    if (!hass) return null;
+    const windows = openWindows(this.plan, hass);
+    if (!windows.length) return null;
+    const when = rainComing(hass, this.weather, rainSensors(hass), this.forecast, this.now());
+    return when ? { when, windows } : null;
+  }
+
+  /** Tints the rooms of these windows (the view passes the rain check's). */
+  setRainMarks(windows: string[]): void {
+    this.rainRooms = new Set(windows.map((id) => {
+      const p = this.place(id);
+      const f = p ? this.plan.floors[p.floor] : undefined;
+      const sp = f && p!.room >= 0 ? spaces(f)[p!.room] : undefined;
+      return f && sp ? `${f.id}/${sp.id}` : "";
+    }).filter(Boolean));
+  }
+
+  /** The warnings: rain coming with windows open, and a power cut. */
+  warnings(): Alert[] {
+    const hass = this.hass;
+    if (!hass) return [];
+    const out: Alert[] = [];
+    const rain = this.rainCheck();
+    if (rain) {
+      const names = rain.windows.map((id) => {
+        const p = this.place(id);
+        const room = p && p.room >= 0 ? spaces(this.plan.floors[p.floor])[p.room]?.name : null;
+        return room ? t("warn.window", { room }) : String(hass.states[id]?.attributes.friendly_name ?? id);
+      });
+      out.push({ id: rain.windows[0], text: t(rain.when === "now" ? "warn.rainNow" : "warn.rainSoon", { windows: [...new Set(names)].join(", ") }) });
+    }
+    const src = this.energy?.sources;
+    const status = this.plan.settings.energy?.grid_status ?? null;
+    const grid = src ? src.grid ?? src.gridImport : null;
+    const cut = powerCut(hass, { status, grid, battery: src?.battery ?? src?.batteryDischarge ?? null, batteryLevel: src?.batteryLevel ?? null }, this.now());
+    if (cut) {
+      const id = status ?? grid ?? src?.batteryLevel ?? "";
+      out.push({ id, text: cut.battery !== null ? t("warn.powerBattery", { n: cut.battery }) : t("warn.power") });
+    }
+    return out;
+  }
+
+  /** Leaks, smoke, gas anywhere in the house, a triggered alarm, and the warnings. */
   alerts(): Alert[] {
     const hass = this.hass;
     if (!hass) return [];
@@ -792,7 +849,7 @@ export class HassLive implements LiveSource {
         }
       }
     }
-    return out;
+    return [...out, ...this.warnings()];
   }
 
   /** Lights of the plan that are on, on one floor or (null) in the whole house. */

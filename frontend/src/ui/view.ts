@@ -8,6 +8,7 @@ import { EnergyLive, type EnergyNow } from "../live/energy";
 import { hereText } from "../live/presence";
 import { readingIcon, valueText } from "../live/readings";
 import { BAND_COLOURS, BANDS, legendScale, type MapKind } from "../live/air";
+import type { ForecastHour } from "../live/warnings";
 import { alarmPanels, armModes, numericCode, openSensors, panelArea, wantsCode, whatSetItOff } from "../live/alarm";
 import { lockActions, needsCode } from "../live/locks";
 import { ICONS } from "../scene/markers";
@@ -117,6 +118,11 @@ export class VhView {
   private mapsKey = "";
   /** Reads where the robots are while one is out working. */
   private robotTimer = 0;
+  /** The weather entity whose hourly forecast is followed, and how to stop following it. */
+  private forecastFor: string | null = null;
+  private forecastStop: (() => void) | null = null;
+  /** The windows tinted for rain now. */
+  private rainKey = "";
   private empty: HTMLDivElement;
   private statsEl: HTMLDivElement;
   private wallsBtn: HTMLButtonElement;
@@ -918,6 +924,13 @@ export class VhView {
   /** The alert banner, the lights-on chip and who is home (only redrawn when something shown changed). */
   private renderStatus(): void {
     const alerts = this.live.alerts();
+    // the rooms of windows open while rain is coming
+    const rain = this.replayed ? [] : this.live.rainCheck()?.windows ?? [];
+    if (rain.join(",") !== this.rainKey) {
+      this.rainKey = rain.join(",");
+      this.live.setRainMarks(rain);
+      if (this.started) this.viewer.refreshTints();
+    }
     const alertText = alerts.length > 1 ? t("view.alerts.more", { alert: alerts[0].text, n: alerts.length - 1 }) : alerts[0]?.text ?? "";
     if (alertText !== (this.alertEl.hidden ? "" : this.alertEl.textContent)) {
       this.alertEl.hidden = !alerts.length;
@@ -1116,6 +1129,36 @@ export class VhView {
       window.clearInterval(this.robotTimer);
       this.robotTimer = 0;
     }
+  }
+
+  /**
+   * The weather entity's hourly forecast, for the rain warning: subscribed to while the view is
+   * shown and the entity has one (Met.no's has), dropped when it changes or the view goes.
+   */
+  private followForecast(h: Hass): void {
+    const id = this.away ? null : this.skyLive.weatherEntity(h);
+    this.live.weather = id;
+    if (id === this.forecastFor) return;
+    this.forecastFor = id;
+    this.forecastStop?.();
+    this.forecastStop = null;
+    this.live.forecast = null;
+    const features = id ? h.states[id]?.attributes.supported_features : 0;
+    if (!id || typeof features !== "number" || !(features & 2) || !h.connection?.subscribeMessage) return;
+    let stop: (() => Promise<void>) | null = null;
+    let dropped = false;
+    this.forecastStop = () => {
+      dropped = true;
+      stop?.().catch(() => undefined);
+    };
+    h.connection.subscribeMessage<{ forecast?: ForecastHour[] | null }>((msg) => {
+      this.live.forecast = Array.isArray(msg.forecast) ? msg.forecast : null;
+      this.statusKey = "";
+      this.renderStatus();
+    }, { type: "weather/subscribe_forecast", forecast_type: "hourly", entity_id: id }).then((s) => {
+      stop = s;
+      if (dropped) s().catch(() => undefined);
+    }).catch(() => undefined);
   }
 
   /** The map button: off, the temperature map, then each air quality map the home has sensors for, then off. */
@@ -1370,6 +1413,9 @@ export class VhView {
   disconnect(): void {
     this.away = true;
     this.watchRobots(false);
+    this.forecastStop?.();
+    this.forecastStop = null;
+    this.forecastFor = null;
     this.unsubscribe();
     // leaving the page closes the demo home: its pretend devices stop, its graphics are let go
     this.closeDemo(false);
@@ -1408,6 +1454,7 @@ export class VhView {
   private updateSky(): void {
     const h = this.shown ?? this._hass;
     if (!h) return;
+    if (!this.replayed && this._hass) this.followForecast(this._hass);
     const pick = this.skyPick;
     const past = !!this.replayed && !pick;
     const time = pick?.time ?? (past ? this.replayed!.time : Date.now());

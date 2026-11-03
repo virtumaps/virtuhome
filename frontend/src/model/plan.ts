@@ -75,6 +75,8 @@ export interface Opening {
   color?: string | null;
   /** Glazing bars across the glass (a Georgian grid). */
   bars?: boolean;
+  /** Windows: out of the rain (under a porch), so no warning when it rains while it is open. */
+  sheltered?: boolean | null;
 }
 
 export interface Furniture {
@@ -357,6 +359,8 @@ export interface RoofItem {
   entity?: string | null;
   /** Roof windows: a blind. */
   cover?: string | null;
+  /** Roof windows: out of the rain, so no warning when it rains while it is open. */
+  sheltered?: boolean | null;
   /** Window frames, dormer cheeks, chimney brick ("#rrggbb"). */
   color?: string | null;
 }
@@ -489,6 +493,8 @@ export interface EnergySettings {
   ev_charger?: string | null;
   /** The car's battery (%), when the charger does not know it. */
   ev_level?: string | null;
+  /** Says whether the grid is up (a binary sensor or a status), for the power cut warning; null: worked out. */
+  grid_status?: string | null;
 }
 
 /**
