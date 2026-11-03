@@ -67,7 +67,19 @@ The same view is in the sidebar and in every VirtuHome card.
 **Top bar**
 - **House** shows every storey; a button for each floor shows that floor alone.
 - The alarm chip (**Disarmed**, **Armed home**, **Armed away**…) shows your alarm panel. Tap it for
-  its dialog.
+  the **Alarm** sheet:
+  - each panel with its state and what it covers: the rooms of its area, or **The whole home** for a
+    panel in no area (Alarmo's panel for each of its areas shows there when you give the panel the
+    area in Home Assistant); tap its name for its dialog;
+  - the doors and windows open in what it covers ("Back door is open"), their rooms tinted orange;
+    tap one to go to it;
+  - **Arm home**, **Arm away**, **Arm night**, **Arm vacation** (those the panel has) or **Disarm**.
+    Each asks first ("Arm away? 2 doors or windows are open."), with a **Code** box when the panel
+    wants one, and goes ahead only on **Yes**.
+- While the alarm arms, and after Alarmo couldn't arm, the rooms with a door or window open are
+  tinted orange. When it goes off, the view goes to what set it off and tints its room red, and the
+  sheet says it: **Set off by** Alarmo's sensor, or for other panels the door, window or motion
+  sensor in what it covers that went on last before (up to 10 minutes, for an entry delay).
 - Values you chose to keep in sight, such as the outside temperature or the price now (Edit → **Home**
   → **Top bar**, or a card's `chips`). Tap one for its dialog.
 - **Edit** (sidebar only, administrators only) opens the editor. A red dot on it means
@@ -721,7 +733,7 @@ height: 440
 | `people` | Show who is home, and in which room | `true` / `false` | `true` |
 | `energy` | Show solar, battery and grid | `true` / `false` | `true` |
 | `roof` | Show the roofs (each device can change it) | `true` / `false` | `true` |
-| `alarm` | Alarm panel in the top bar | an `alarm_control_panel` entity, or `none` | the first alarm panel |
+| `alarm` | Alarm panel in the top bar (and the only one in its sheet) | an `alarm_control_panel` entity, or `none` | the first alarm panel (the sheet shows every one) |
 | `chips` | Values in the top bar | a list of entities (up to 6); `[]` shows none | the home's own (Edit → Home → Top bar) |
 | `stats` | (YAML only) | `true` shows the frame rate and graphics level in a corner, for reporting a slow device | `false` |
 

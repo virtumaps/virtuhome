@@ -14,6 +14,12 @@
   robot's map up with the plan from two spots. Robots without one stay at their dock, their pin
   showing what they do (red on an error). Smart Setup places mowers on their lawn.
 
+- The alarm chip opens an **Alarm** sheet: each panel with what it covers, the doors and windows
+  open there, and arming or disarming that asks first, with the code when the panel wants one. Rooms
+  with a door or window open are tinted orange while it arms (and after Alarmo couldn't arm); when it
+  goes off, the view goes to what set it off (Alarmo's sensor, or the last to go on before) and tints
+  its room red.
+
 ### Fixed
 - A page left open while VirtuHome was updated did nothing when Edit was pressed (its editor had
   gone with the old version). It now says part of VirtuHome didn't load and reloads when tapped; the

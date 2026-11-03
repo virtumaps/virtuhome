@@ -113,6 +113,11 @@ export const VIEW_CSS = /* css */ `
   font: inherit; font-size: 13px; cursor: pointer; border: 0; color: inherit; text-align: left; width: 100%;
 }
 .vh-row .state { margin-left: auto; color: var(--vh-dim); }
+.vh-alarm-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.vh-alarm-panel .sub { color: var(--vh-dim); font-size: 12px; padding: 0 4px; }
+.vh-alarm-panel .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vh-alarm-panel .actions .sub { flex-basis: 100%; }
+.vh-code { width: 120px; padding: 7px 10px; border-radius: 12px; border: 0; background: var(--vh-chip); color: inherit; font: inherit; }
 .vh-close { margin-left: auto; }
 .vh-empty {
   position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--vh-text); padding: 24px;
