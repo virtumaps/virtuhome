@@ -1342,6 +1342,9 @@ export class VhView {
     if (this._hass) {
       if (this.energy.update(this._hass)) this.renderStatus();
       this.live.update(this.shown ?? this._hass);
+      // the plan's rooms bring their sensors (the maps the button offers) and its robots
+      this.renderMaps();
+      if (!this.replayed) this.watchRobots(true);
     }
     if (!plan.floors.length) {
       if (this.editor) return;
