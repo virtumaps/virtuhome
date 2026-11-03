@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.16.0
 
 ### New
 - Air quality maps beside the temperature map: **CO₂**, **Humidity**, **Fine particles (PM2.5)** and
