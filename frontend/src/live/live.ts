@@ -616,10 +616,29 @@ export class HassLive implements LiveSource {
     }
   }
 
+  /** The rooms the alarm needs looked at (`floor id/space id`): where what set it off is, and where doors or windows are open. */
+  private alarmCause = new Set<string>();
+  private alarmOpen = new Set<string>();
+
+  /** What set the alarm off and the doors and windows open that matter now (the view works them out). */
+  setAlarmMarks(cause: string | null, open: string[]): void {
+    const key = (id: string) => {
+      const p = this.place(id);
+      const f = p ? this.plan.floors[p.floor] : undefined;
+      const sp = f && p!.room >= 0 ? spaces(f)[p!.room] : undefined;
+      return f && sp ? `${f.id}/${sp.id}` : null;
+    };
+    this.alarmCause = new Set(cause ? [key(cause)].filter((k): k is string => !!k) : []);
+    this.alarmOpen = new Set(open.map(key).filter((k): k is string => !!k));
+  }
+
   tint(floor: Floor, room: { id: string }): [number, number, number, number] | null {
     const w = this.rooms.get(`${floor.id}/${room.id}`);
     if (!w || !this.hass) return null;
     if (w.alerts.some((id) => this.hass!.states[id]?.state === "on")) return [0.9, 0.12, 0.1, 0.42];
+    const here = `${floor.id}/${room.id}`;
+    if (this.alarmCause.has(here)) return [0.9, 0.12, 0.1, 0.42];
+    if (this.alarmOpen.has(here)) return [1.0, 0.5, 0.1, 0.3];
     if (this.roomTint) {
       const space = spaces(floor).find((x) => x.id === room.id);
       const t = space ? this.roomTint(floor, space) : null;

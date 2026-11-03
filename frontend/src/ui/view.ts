@@ -8,6 +8,7 @@ import { EnergyLive, type EnergyNow } from "../live/energy";
 import { hereText } from "../live/presence";
 import { readingIcon, valueText } from "../live/readings";
 import { BAND_COLOURS, BANDS, legendScale, type MapKind } from "../live/air";
+import { alarmPanels, armModes, numericCode, openSensors, panelArea, wantsCode, whatSetItOff } from "../live/alarm";
 import { lockActions, needsCode } from "../live/locks";
 import { ICONS } from "../scene/markers";
 import { extensionFailures, loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
@@ -164,6 +165,12 @@ export class VhView {
   private statusKey = "";
   readonly energy = new EnergyLive();
   private sheetEnergy = false;
+  /** The alarm's sheet is open, and what it asks before arming or disarming (a panel and a service). */
+  private sheetAlarm = false;
+  private alarmAsk: { panel: string; service: string } | null = null;
+  /** What the rooms show of the alarm now (open doors and windows, what set it off), and the alarm going off was flown to. */
+  private alarmMarkKey = "";
+  private alarmFlown = "";
   private energySections: EnergySection[] = [];
   private energyListeners = new Set<(now: EnergyNow) => void>();
   private todayTimer = 0;
@@ -705,12 +712,183 @@ export class VhView {
   }
 
   private updateAlarm(h: Hass): void {
+    this.markAlarm(h);
+    if (this.sheetAlarm) this.renderAlarm();
     const id = this.alarmEntity(h);
     const s = id ? h.states[id] : undefined;
     const key = s ? `${id}|${s.state}` : "";
     if (key === this.alarmKey) return;
     this.alarmKey = key;
     this.renderChips();
+  }
+
+  /** The panels the alarm sheet shows: the card's own, else every one (Alarmo has one per area). */
+  private alarmShown(h: Hass): string[] {
+    const own = this.config.alarm;
+    if (own === "none") return [];
+    return own ? (h.states[own] ? [own] : []) : alarmPanels(h);
+  }
+
+  /**
+   * The rooms the alarm needs looked at: red where what set it off is, orange where a door or window
+   * is open while it arms, after arming failed (Alarmo) or with its sheet open. A triggered alarm
+   * flies the view there once. Only worked out while one of those holds: it reads every sensor.
+   */
+  private markAlarm(h: Hass): void {
+    if (this.replayed) return;
+    const panels = this.alarmShown(h);
+    let cause: string | null = null;
+    const open = new Set<string>();
+    for (const id of panels) {
+      const s = h.states[id];
+      const busy = s?.state === "arming" || s?.state === "pending" || s?.state === "triggered";
+      const failed = !!s?.attributes.open_sensors && s.state === "disarmed";
+      if (!busy && !failed && !this.sheetAlarm) continue;
+      cause ??= whatSetItOff(h, id);
+      if (s?.state !== "triggered") for (const x of openSensors(h, id)) open.add(x);
+    }
+    const key = `${cause}|${[...open].join(",")}`;
+    if (key === this.alarmMarkKey) return;
+    this.alarmMarkKey = key;
+    this.live.setAlarmMarks(cause, [...open]);
+    if (this.started) this.viewer.refreshTints();
+    if (cause && cause !== this.alarmFlown) {
+      this.alarmFlown = cause;
+      this.flyToEntity(cause);
+    } else if (!cause) this.alarmFlown = "";
+  }
+
+  /** The view goes to an entity's room (its floor when the room isn't known). */
+  private flyToEntity(id: string): void {
+    const p = this.live.place(id);
+    if (!p || this.editor) return;
+    this.viewer.setMode("floor", p.floor);
+    if (p.room >= 0) this.viewer.selectRoom(p.floor, p.room);
+    this.renderChips();
+  }
+
+  private openAlarm(): void {
+    if (this.editor || !this._hass) return;
+    if (this.skyPanel.open) this.skyPanel.close();
+    this.sheetRoom = null;
+    this.sheetEnergy = false;
+    window.clearInterval(this.todayTimer);
+    this.sheetAlarm = true;
+    this.alarmAsk = null;
+    this.sheet.dataset.key = "";
+    this.markAlarm(this._hass);
+    this.renderAlarm();
+    this.sheet.classList.add("open");
+  }
+
+  /**
+   * The alarm's sheet: each panel with its state and what it covers, what set it off, the doors and
+   * windows open, and arming or disarming, asked first (with the code when the panel wants one).
+   */
+  private renderAlarm(): void {
+    const h = this._hass;
+    if (!h) return;
+    const panels = this.alarmShown(h);
+    const ask = this.alarmAsk;
+    const key = `alarm|${panels.map((id) => `${id}:${h.states[id]?.state}:${whatSetItOff(h, id)}:${openSensors(h, id).join(",")}`).join("|")}|${ask?.panel}:${ask?.service}`;
+    if (this.sheet.dataset.key === key) return;
+    this.sheet.dataset.key = key;
+    const name = (id: string) => String(h.states[id]?.attributes.friendly_name ?? id);
+    const head = document.createElement("h3");
+    head.innerHTML = `<span class="t"></span><button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button>`;
+    head.querySelector(".t")!.textContent = t("alarm.title");
+    head.querySelector<HTMLButtonElement>(".vh-close")!.onclick = () => this.closeSheet();
+    const row = (text: string, onclick: () => void, state = "") => {
+      const b = document.createElement("button");
+      b.className = "vh-row";
+      b.innerHTML = `<span class="n"></span><span class="state"></span>`;
+      b.querySelector(".n")!.textContent = text;
+      b.querySelector(".state")!.textContent = state;
+      b.onclick = onclick;
+      return b;
+    };
+    const chip = (text: string, onclick: () => void, main = false) => {
+      const b = document.createElement("button");
+      b.className = `vh-chip${main ? " on" : ""}`;
+      b.textContent = text;
+      b.onclick = onclick;
+      return b;
+    };
+    const parts: HTMLElement[] = [head];
+    for (const id of panels) {
+      const s = h.states[id];
+      const box = document.createElement("div");
+      box.className = "vh-alarm-panel";
+      const state = ALARM_STATES.find((x) => x === s?.state);
+      box.append(row(name(id), () => this.dialog(id), state ? t(`alarm.${state}`) : s?.state ?? ""));
+      // what it covers: its area's rooms, or the whole home
+      const area = panelArea(h, id);
+      const rooms = area ? (this.plan?.floors ?? []).flatMap((f) => f.rooms.filter((r) => r.area_id === area).map((r) => r.name)) : [];
+      const covers = document.createElement("div");
+      covers.className = "sub";
+      covers.textContent = area ? [h.areas?.[area]?.name ?? area, ...rooms].join(" · ") : t("alarm.wholeHome");
+      box.append(covers);
+      const cause = whatSetItOff(h, id);
+      if (cause) {
+        const where = this.locate(cause)?.roomName;
+        box.append(row(where ? t("alarm.setOffIn", { name: name(cause), room: where }) : t("alarm.setOff", { name: name(cause) }), () => this.flyToEntity(cause)));
+      }
+      const open = s?.state === "triggered" ? [] : openSensors(h, id);
+      for (const x of open) box.append(row(t("alarm.open", { name: name(x) }), () => this.flyToEntity(x), this.locate(x)?.roomName ?? ""));
+      if (!open.length && s?.state !== "triggered") {
+        const shut = document.createElement("div");
+        shut.className = "sub";
+        shut.textContent = t("alarm.allShut");
+        box.append(shut);
+      }
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      if (ask?.panel === id) {
+        // asked first, with the code when it wants one
+        const arming = ask.service !== "alarm_disarm";
+        const q = document.createElement("div");
+        q.className = "sub";
+        q.textContent = [t(`alarm.ask.${ask.service}` as "alarm.ask.alarm_disarm"), arming && open.length ? t("alarm.askOpen", { n: open.length }) : ""].filter(Boolean).join(" ");
+        actions.append(q);
+        let code: HTMLInputElement | null = null;
+        if (wantsCode(s, arming)) {
+          code = document.createElement("input");
+          code.type = "password";
+          code.className = "vh-code";
+          code.autocomplete = "off";
+          if (numericCode(s)) code.inputMode = "numeric";
+          code.placeholder = t("alarm.code");
+          code.setAttribute("aria-label", t("alarm.code"));
+          actions.append(code);
+        }
+        actions.append(
+          chip(t("alarm.yes"), () => {
+            const given = code?.value.trim() ?? "";
+            this.alarmAsk = null;
+            this.sheet.dataset.key = "";
+            this.renderAlarm();
+            this.toast(t(arming ? "alarm.sentArm" : "alarm.sentDisarm", { name: name(id) }));
+            h.callService("alarm_control_panel", ask.service, given ? { code: given } : {}, { entity_id: id })
+              .catch((err: unknown) => this.toast(t("alarm.failed", { error: err instanceof Error ? err.message : String((err as { message?: string })?.message ?? err) })));
+          }, true),
+          chip(t("alarm.no"), () => {
+            this.alarmAsk = null;
+            this.renderAlarm();
+          }),
+        );
+        queueMicrotask(() => code?.focus());
+      } else if (s && s.state !== "unavailable") {
+        const askFor = (service: string) => () => {
+          this.alarmAsk = { panel: id, service };
+          this.renderAlarm();
+        };
+        if (s.state === "disarmed") for (const m of armModes(s)) actions.append(chip(t(`alarm.arm.${m.state}`), askFor(m.service)));
+        else actions.append(chip(t("alarm.disarm"), askFor("alarm_disarm"), s.state === "triggered"));
+      }
+      box.append(actions);
+      parts.push(box);
+    }
+    this.sheet.replaceChildren(...parts);
   }
 
 
@@ -910,6 +1088,7 @@ export class VhView {
   openEnergy(): void {
     if (!this.energy.now || this.editor) return;
     this.sheetRoom = null;
+    this.sheetAlarm = false;
     this.sheetEnergy = true;
     this.renderEnergy();
     this.sheet.classList.add("open");
@@ -1485,7 +1664,7 @@ export class VhView {
     b.innerHTML = `${svg(alert ? mdiShieldAlert : armed ? mdiShieldHome : mdiShieldOffOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span></span>`;
     const state = ALARM_STATES.find((x) => x === s.state);
     b.querySelector("span")!.textContent = state ? t(`alarm.${state}`) : s.state;
-    b.onclick = () => this.dialog(id);
+    b.onclick = () => this.openAlarm();
     this.chips.append(b);
   }
 
@@ -1635,6 +1814,7 @@ export class VhView {
     if (this.config.room_panel !== false) {
       if (this.skyPanel.open) this.skyPanel.close();
       this.sheetEnergy = false;
+      this.sheetAlarm = false;
       window.clearInterval(this.todayTimer);
       this.sheetRoom = { floor, room };
       this.renderSheet();
@@ -1645,6 +1825,11 @@ export class VhView {
   private closeSheet(): void {
     this.sheetRoom = null;
     this.sheetEnergy = false;
+    if (this.sheetAlarm) {
+      this.sheetAlarm = false;
+      this.alarmAsk = null;
+      if (this._hass) this.markAlarm(this._hass);
+    }
     window.clearInterval(this.todayTimer);
     this.sheet.classList.remove("open");
   }
