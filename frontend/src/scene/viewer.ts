@@ -56,6 +56,9 @@ export interface LiveSource {
   roomLine(floor: Floor, room: { id: string }): RoomPart[];
   /** A camera's state: its view turns red while it is live or sees motion, grey while offline. */
   cameraState?(d: Device): "idle" | "active" | "offline";
+  /** A robot vacuum or mower lined up with the plan: where it is now, and the way it went this run. */
+  robotAt?(d: Device): [number, number] | null;
+  robotTrail?(d: Device): readonly [number, number][];
   /** Who is in a room now: their faces go on its label (in the house view, over the room). */
   roomPeople?(floor: Floor, room: { id: string }): Person[];
   /** A device shown by its value: what its label says. */
@@ -1535,6 +1538,32 @@ export class Viewer {
         }
       }
     }
+    // where a robot went this run: a soft band the width of the robot on its floor (in the cones' mesh,
+    // so no draw of its own)
+    if (!this.editMode) {
+      for (const [fi, f] of this.floors.entries()) {
+        if (!f.group.visible || (this.mode === "floor" && fi !== this.activeFloor)) continue;
+        const y = f.fb.floor.elevation + f.offset + 0.025;
+        for (const d of f.fb.floor.devices) {
+          const trail = this.live?.robotTrail?.(d);
+          if (!trail || trail.length < 2) continue;
+          const c = lin(0x3d8bfd);
+          const a = night ? 0.1 : 0.16;
+          const half = d.entity.startsWith("lawn_mower.") ? 0.25 : 0.16;
+          for (let i = 1; i < trail.length; i++) {
+            const [x0, z0] = trail[i - 1], [x1, z1] = trail[i];
+            const len = Math.hypot(x1 - x0, z1 - z0);
+            if (len < 1e-3) continue;
+            const nx = (-(z1 - z0) / len) * half, nz = ((x1 - x0) / len) * half;
+            const q = [[x0 + nx, y, z0 + nz], [x1 + nx, y, z1 + nz], [x1 - nx, y, z1 - nz], [x0 - nx, y, z0 - nz]];
+            for (const v of [0, 1, 2, 0, 2, 3]) {
+              tri.push(q[v][0], q[v][1], q[v][2]);
+              triCol.push(c[0], c[1], c[2], a);
+            }
+          }
+        }
+      }
+    }
     // a glow adds light at night; by day it tints the floor
     const blending = night ? AdditiveBlending : NormalBlending;
     for (const m of [this.cones.material as MeshBasicMaterial, this.coneLines.material as LineBasicMaterial]) {
@@ -1585,7 +1614,9 @@ export class Viewer {
     const domain = d.entity.split(".")[0];
     const usual = d.mount === "ceiling" ? f.fb.floor.height - 0.15 : d.mount === "floor" ? 0.3 : domain === "binary_sensor" ? 2.0 : 1.2;
     const y = f.fb.floor.elevation + f.offset + (d.y ?? usual);
-    return [d.x, y, d.z];
+    // a robot lined up with the plan is where it is now (in the editor, where its pin was put)
+    const live = this.editMode ? null : this.live?.robotAt?.(d);
+    return live ? [live[0], y, live[1]] : [d.x, y, d.z];
   }
 
   refreshTints(): void {

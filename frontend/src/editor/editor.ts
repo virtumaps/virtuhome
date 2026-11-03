@@ -20,6 +20,7 @@ import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, rec
 import { areaOf, domainOf, type Hass } from "../live/hass";
 import { valueText } from "../live/readings";
 import { roomTrackers, sourcesOf } from "../live/presence";
+import { canInflate, ROBOT_DOMAINS, robotSources } from "../live/robots";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, furnitureName, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef, type Swatch } from "../scene/finishes";
 import {
@@ -1601,7 +1602,7 @@ export class Editor {
     const missing: { id: string; fi: number; room: Room }[] = [];
     for (const [id, reg] of Object.entries(hass.entities ?? {})) {
       if (reg.hidden || reg.entity_category || inPlan.has(id) || !hass.states[id]) continue;
-      if (!["light", "camera", "binary_sensor", "climate", "media_player", "switch", "cover", "lock", "fan", "vacuum", "alarm_control_panel"].includes(domainOf(id))) continue;
+      if (!["light", "camera", "binary_sensor", "climate", "media_player", "switch", "cover", "lock", "fan", "vacuum", "lawn_mower", "alarm_control_panel"].includes(domainOf(id))) continue;
       const area = reg.area_id ?? (reg.device_id ? hass.devices?.[reg.device_id]?.area_id : null);
       const target = area ? roomByArea.get(area) : undefined;
       if (target) missing.push({ id, ...target });
@@ -2092,10 +2093,61 @@ export class Editor {
         } }),
       ) : null,
       rig ? h("p", { class: "ed-hint" }, t("editor.device.shownAsNameMount", { name: t(`camera.${rig.kind}`) })) : null,
+      ROBOT_DOMAINS.has(domainOf(d.entity)) ? this.robotRows(fi, d, upd) : null,
       h("button", { class: "ed-btn danger", onclick: () => {
         this.change((p) => (p.floors[fi].devices = p.floors[fi].devices.filter((x) => x.id !== d.id)));
         this.select(null);
       } }, t("editor.removeFromPlan")),
+    );
+  }
+
+  /**
+   * A robot vacuum's or mower's map: what says where it is, and two spots that line its map up with
+   * the plan. Each spot is where the robot is now on its own map and where its pin was put.
+   */
+  private robotRows(fi: number, d: Device, upd: (fn: (x: Device) => void) => void): HTMLElement {
+    const live = this.host.view.live;
+    const src = live.robotSource(d);
+    const found = robotSources(this.hass, d.entity).map((x) => [x.entity, String(this.hass.states[x.entity]?.attributes.friendly_name ?? x.entity)] as [string, string]);
+    const spots = d.robot?.spots ?? [];
+    const status = h("p", { class: "ed-hint" });
+    const robot = (fn: (r: NonNullable<Device["robot"]>) => void) => upd((x) => {
+      const r = { ...(x.robot ?? {}) };
+      fn(r);
+      x.robot = r;
+    });
+    const addSpot = async () => {
+      status.textContent = t("editor.robot.reading");
+      const fix = await live.robotFix(d);
+      if (!fix) {
+        status.textContent = t("editor.robot.noFix");
+        return;
+      }
+      const pin = this.plan.floors[fi].devices.find((x) => x.id === d.id);
+      if (pin) robot((r) => (r.spots = [...(r.spots ?? []), { robot: fix, plan: [pin.x, pin.z] as Vec2 }].slice(-2)));
+    };
+    const why = !src ? t("editor.robot.noSource")
+      : src.kind === "valetudo" && !canInflate() ? t("editor.robot.oldBrowser")
+      : spots.length >= 2 ? t("editor.robot.linedUp")
+      : t(spots.length ? "editor.robot.step2" : "editor.robot.step1");
+    status.textContent = why;
+    return h("div", {},
+      h("h4", {}, t("editor.robot.title")),
+      h("div", { class: "ed-row" },
+        h("label", {}, t("editor.robot.source")),
+        this.dropdown(found, d.robot?.source ?? "", (v) => robot((r) => {
+          r.source = v || null;
+          r.spots = [];
+        }), src && !d.robot?.source ? t("editor.robot.auto", { name: String(this.hass.states[src.entity]?.attributes.friendly_name ?? src.entity) }) : t("editor.robot.none")),
+      ),
+      status,
+      src && spots.length < 2 ? h("button", { class: "ed-btn", onclick: addSpot }, t("editor.robot.spot", { n: spots.length + 1 })) : null,
+      src && spots.length >= 2 ? h("div", { class: "ed-row" },
+        h("label", {}, t("editor.robot.mirror")),
+        this.dropdown([["yes", t("editor.robot.mirrorYes")], ["no", t("editor.robot.mirrorNo")]], d.robot?.mirror === true ? "yes" : d.robot?.mirror === false ? "no" : "",
+          (v) => robot((r) => (r.mirror = v ? v === "yes" : null)), t("editor.auto")),
+      ) : null,
+      spots.length ? h("button", { class: "ed-btn", onclick: () => robot((r) => (r.spots = [])) }, t("editor.robot.again")) : null,
     );
   }
 

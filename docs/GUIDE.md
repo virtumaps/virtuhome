@@ -434,6 +434,22 @@ did, and how many devices are in areas without a room in the plan.
 - **Hot water** (**Hot water cylinder**, **Water heater**): **Linked to** picks the water heater, or
   a thermostat or temperature sensor of the cylinder. Its temperature shows over it, with what it
   heats to (**52.0° → 55°**). Tap the label or the cylinder for its dialog.
+- **Robot vacuums and mowers** go at their dock (Smart Setup puts them in a corner of their room, a
+  mower on its lawn). Their pin shows what they do: blue and pulsing while cleaning or mowing, red
+  on an error. When something says where the robot is, it moves on the plan while it works and
+  leaves a soft trail where it has been this run (gone again once it's back on its dock):
+  - a map camera with the robot's position: the **Xiaomi Cloud Map Extractor**, or **MQTT Vacuum
+    Camera** for Valetudo;
+  - **Valetudo**'s own map data camera (in Chrome 80 or Safari 16.4 and newer);
+  - a mower's own GPS tracker.
+
+  Edit → **Selected** with the robot selected → **Its map**: **Position from** shows what was found
+  (or pick another). To line its map up with the plan: put the robot somewhere easy to find (its
+  dock is easiest), drag its pin to the same spot and press **Spot 1**; then move the robot well
+  away (pause a clean in another room), drag its pin there and press **Spot 2**. Then put its pin
+  back on its dock, where it shows when nothing says where it is. If it moves the wrong way, change
+  **Mirror image**. **Start again** forgets both spots. Its position is read every 2 seconds while
+  it works (Valetudo's map every 4).
 - **Thermostats and radiator valves**, and **motion and presence sensors**, count for the room you
   place them in. One you don't place counts for the rooms of its area, so the zones of an Aqara FP2
   count for the areas you gave them in Home Assistant.

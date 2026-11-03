@@ -75,6 +75,20 @@ FURNITURE = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+# a robot's own coordinates: millimetres on its map, or metres from home for a mower's GPS
+_ROBOT_COORD = vol.All(vol.Coerce(float), vol.Range(min=-1e7, max=1e7))
+ROBOT = vol.Schema(
+    {
+        vol.Optional("source"): _ENTITY,
+        vol.Optional("spots"): vol.All(
+            [vol.Schema({vol.Required("robot"): vol.All([_ROBOT_COORD], vol.Length(min=2, max=2)), vol.Required("plan"): _POINT})],
+            vol.Length(max=2),
+        ),
+        vol.Optional("mirror"): vol.Any(None, bool),
+    },
+    extra=vol.ALLOW_EXTRA,
+)
+
 DEVICE = vol.Schema(
     {
         vol.Required("id"): ID,
@@ -86,6 +100,8 @@ DEVICE = vol.Schema(
         vol.Optional("rotation", default=None): vol.Any(None, vol.Coerce(float)),
         # a reading shows its value in a label; null: the value for sensors and numbers
         vol.Optional("show"): vol.Any(None, vol.In(["value", "icon"])),
+        # robot vacuums and mowers: their own map lined up with the plan
+        vol.Optional("robot"): vol.Any(None, ROBOT),
     },
     extra=vol.ALLOW_EXTRA,
 )

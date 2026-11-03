@@ -8,6 +8,11 @@
   home has sensors for, a legend gives the bands, and the colours are safe for colour blindness. A
   room whose air needs something doing says so on its label ("CO₂ 1,640 ppm").
 - The temperature map has a legend too, from 16° to 26°.
+- Robot vacuums and mowers move on the plan while they work, with a soft trail where they have been
+  this run: from a map camera with the robot's position (Xiaomi Cloud Map Extractor, MQTT Vacuum
+  Camera), Valetudo's map data, or a mower's GPS tracker. **Its map** (Edit → Selected) lines the
+  robot's map up with the plan from two spots. Robots without one stay at their dock, their pin
+  showing what they do (red on an error). Smart Setup places mowers on their lawn.
 
 ### Fixed
 - A page left open while VirtuHome was updated did nothing when Edit was pressed (its editor had

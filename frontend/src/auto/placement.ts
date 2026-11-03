@@ -36,7 +36,7 @@ interface Candidate {
   name: string;
 }
 
-const PRIORITY = ["light", "camera", "media_player", "climate", "cover", "lock", "alarm_control_panel", "vacuum", "fan", "switch", "binary_sensor", "sensor", "assist_satellite"];
+const PRIORITY = ["light", "camera", "media_player", "climate", "cover", "lock", "alarm_control_panel", "vacuum", "lawn_mower", "fan", "switch", "binary_sensor", "sensor", "assist_satellite"];
 const MOTION = new Set(["motion", "occupancy", "presence"]);
 const CONTACT = new Set(["door", "window", "opening", "garage_door"]);
 const ALERT = new Set(["smoke", "gas", "moisture", "carbon_monoxide"]);
@@ -316,7 +316,8 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
     const w = spots.wall(0.15);
     return add({ entity: id, x: w.at[0], z: w.at[1], y: dom === "fan" ? 2.3 : 0.35, mount: dom === "fan" ? "ceiling" : "wall", rotation: w.facing });
   }
-  if (dom === "vacuum") {
+  // a robot at its dock, in a corner (a mower's on its lawn): it moves once its map is lined up
+  if (dom === "vacuum" || dom === "lawn_mower") {
     const at = spots.corner(0.4);
     return add({ entity: id, x: at[0], z: at[1], y: 0.05, mount: "floor" });
   }
