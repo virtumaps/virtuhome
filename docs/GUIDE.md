@@ -846,6 +846,12 @@ only when you use them: **Line up with the map** (your home's location, to OpenS
 **Will it slow down my tablet?** It draws nothing while nothing changes, and each floor is one or two
 draw calls. On slow tablets pick **Tablet** graphics.
 
+**Which languages does it speak?** English, German (Deutsch) and Dutch (Nederlands), following the
+language in your Home Assistant profile (else Home Assistant's own); anything else shows in English.
+Numbers follow the language too ("2,4 kW"). To correct a text or add a language, see
+[Text and translations](https://github.com/virtumaps/virtuhome/blob/main/docs/DEVELOPMENT.md#text-and-translations):
+it's a pull request with a file of texts.
+
 **Which tablets and browsers work?** Anything with WebGL 2 and a browser at least as new as
 **Chrome 87** or **Safari 15**. On Android that includes the Android System WebView, which Fully Kiosk
 and the Home Assistant app use (on a Fire tablet, update it in the Amazon Appstore if it is older). On

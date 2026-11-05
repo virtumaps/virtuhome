@@ -4,6 +4,7 @@
 import type { EnergySettings } from "../model/plan";
 import { chargerEntities, findChargers, readEv, type EvCharger, type EvNow } from "./ev";
 import { domainOf, isPower, kw, type Hass, type HassEntity } from "./hass";
+import { language } from "../i18n";
 
 /** The sensors the house's energy is read from. */
 export interface EnergySources {
@@ -360,18 +361,27 @@ export function sourceEntities(src: EnergySources): string[] {
   ].filter((x): x is string => !!x);
 }
 
+const formats = new Map<string, Intl.NumberFormat>();
+/** A number with `digits` decimals in the language shown ("2.4" in English, "2,4" in German). */
+export function fixed(v: number, digits: number): string {
+  const key = `${language()}|${digits}`;
+  let f = formats.get(key);
+  if (!f) formats.set(key, (f = new Intl.NumberFormat(language(), { minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false })));
+  return f.format(v);
+}
+
 /** kW as people read it: "640 W", "2.4 kW". */
 export function formatPower(v: number | null): string {
   if (v === null) return "—";
   const a = Math.abs(v);
   if (a < 0.0005) return "0 W";
   if (a < 1) return `${Math.round(a * 1000)} W`;
-  return `${a.toFixed(a < 10 ? 1 : 0)} kW`;
+  return `${fixed(a, a < 10 ? 1 : 0)} kW`;
 }
 
 export function formatEnergy(v: number | null): string {
   if (v === null) return "—";
-  return `${v.toFixed(v < 10 ? 1 : 0)} kWh`;
+  return `${fixed(v, v < 10 ? 1 : 0)} kWh`;
 }
 
 const SYMBOL: Record<string, string> = { GBP: "£", EUR: "€", USD: "$", AUD: "$", CAD: "$", NZD: "$", CHF: "CHF ", SEK: "kr ", NOK: "kr ", DKK: "kr " };
@@ -379,8 +389,8 @@ const SYMBOL: Record<string, string> = { GBP: "£", EUR: "€", USD: "$", AUD: "
 /** A price per kWh: "24.5p" in pounds, "€0.245" otherwise. */
 export function formatPrice(p: Price | null): string {
   if (!p) return "—";
-  if (p.currency === "GBP") return `${(p.value * 100).toFixed(1)}p`;
-  return `${SYMBOL[p.currency] ?? (p.currency ? `${p.currency} ` : "")}${p.value.toFixed(3)}`;
+  if (p.currency === "GBP") return `${fixed(p.value * 100, 1)}p`;
+  return `${SYMBOL[p.currency] ?? (p.currency ? `${p.currency} ` : "")}${fixed(p.value, 3)}`;
 }
 
 /** Money per hour at a price: "£0.35/h". */
@@ -388,7 +398,7 @@ export function formatRate(kwNow: number, p: Price | null): string | null {
   if (!p) return null;
   const v = kwNow * p.value;
   const sym = SYMBOL[p.currency] ?? (p.currency ? `${p.currency} ` : "");
-  return p.currency === "GBP" && v < 1 ? `${(v * 100).toFixed(v < 0.1 ? 1 : 0)}p/h` : `${sym}${v.toFixed(2)}/h`;
+  return p.currency === "GBP" && v < 1 ? `${fixed(v * 100, v < 0.1 ? 1 : 0)}p/h` : `${sym}${fixed(v, 2)}/h`;
 }
 
 /** Today's totals from the recorder: the change of each energy statistic since midnight. */

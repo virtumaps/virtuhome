@@ -18,7 +18,7 @@ import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveT
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { isNewHome, START_CHOICES, type StartKind } from "./setup";
-import { esc, language, t, th } from "../i18n";
+import { esc, language, t, th, useEditorLanguage } from "../i18n";
 import { VIEW_CSS } from "./styles";
 import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
 import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
@@ -1743,7 +1743,7 @@ export class VhView {
     this.endReplay();
     this.closeSheet();
     this.hideFirstRun();
-    const mod = await this.loadPart(() => import("../editor/editor"), "editor");
+    const [mod] = await Promise.all([this.loadPart(() => import("../editor/editor"), "editor"), useEditorLanguage()]);
     if (!mod || this.editor || !this._hass) return;
     const { Editor } = mod;
     const hass = this._hass;

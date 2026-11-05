@@ -152,11 +152,20 @@ VirtuHome follows the language in the user's Home Assistant profile, else its ma
 (`de-CH` → `de`), else English. A language is a table of the English keys, loaded the first time it
 is needed, so it adds nothing to what anyone else loads:
 
-1. Add `frontend/src/i18n/<code>.ts` exporting a `Translation` with the keys it translates; a key it
-   lacks shows in English. A text with counts has the forms the language has (`one`, `few`, `many`,
-   `other`, as `Intl.PluralRules` names them).
-2. Register it in `LANGUAGES` in `frontend/src/i18n/index.ts`:
+1. Add `frontend/src/i18n/<code>.ts` exporting a `Translation` of the view's keys (`en.ts`), and
+   `frontend/src/i18n/<code>-editor.ts` of the editor's (`en-editor.ts`, loaded only when the editor
+   opens). A key either lacks shows in English. A text with counts has the forms the language has
+   (`one`, `few`, `many`, `other`, as `Intl.PluralRules` names them).
+2. Register them in `LANGUAGES` and `EDITOR_LANGUAGES` in `frontend/src/i18n/index.ts`:
    `de: () => import("./de").then((m) => m.DE)`.
+3. Add `custom_components/virtuhome/translations/<code>.json` for Home Assistant's own screens (setting
+   up, options, Repairs), with the keys of `strings.json`.
+
+`test/languages.test.ts` fails on a key English doesn't have or a placeholder left out, and
+`tests/test_translations.py` does the same for the integration's texts. German (`de`) and Dutch (`nl`)
+are there; to correct a text or add a language, open a pull request with the files. Numbers in texts
+go through `Intl.NumberFormat` in the language shown (`fixed()` in `live/energy.ts`), so "2.4 kW"
+reads "2,4 kW" in German.
 
 ## Rules
 

@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "VirtuHome",
+        "description": "Voegt de VirtuHome-3D-weergave toe aan de zijbalk en de VirtuHome-kaart aan je dashboards. Open daarna VirtuHome in de zijbalk om een scan te importeren of je huis te tekenen."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "VirtuHome is al ingesteld."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "VirtuHome",
+        "description": "Geavanceerd: de server waar licentiesleutels worden gecontroleerd en waar uitbreidingen vandaan komen. Laat hem zoals hij is, tenzij de support van VirtuMaps vraagt om hem te wijzigen.",
+        "data": {
+          "licence_server": "Licentieserver"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_resource": {
+      "title": "De VirtuHome-kaart ontbreekt in je dashboards",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "De VirtuHome-kaart opnieuw toevoegen",
+            "description": "Dashboards laden de VirtuHome-kaart uit een bron die ontbreekt of een oudere versie noemt, dus VirtuHome-kaarten tonen misschien \"Custom element doesn't exist: virtuhome-card\". Verstuur om hem opnieuw toe te voegen, zoals VirtuHome doet als Home Assistant start, en laad daarna het dashboard opnieuw."
+          }
+        }
+      }
+    },
+    "missing_entities": {
+      "title": "VirtuHome heeft apparaten gekoppeld aan entiteiten die niet meer bestaan",
+      "description": "{count} apparaten, deuren, ramen of meubels in je VirtuHome-huis zijn gekoppeld aan entiteiten die Home Assistant niet meer heeft (hernoemd, opnieuw gekoppeld of verwijderd). Open VirtuHome in de zijbalk, dan Bewerken → Thuis → Controleer mijn installatie: daar kun je ze aan hun nieuwe entiteiten koppelen. Dit verdwijnt zodra ze gekoppeld zijn."
+    },
+    "extension_needs_update": {
+      "title": "Een VirtuHome-uitbreiding kan niet laden",
+      "description": "{count} van je VirtuHome-uitbreidingen hebben een nieuwere VirtuHome nodig of konden niet laden. Werk VirtuHome bij via HACS en start Home Assistant opnieuw; Bewerken → Thuis → Controleer mijn installatie in VirtuHome zegt welke. Dit verdwijnt zodra ze laden."
+    },
+    "licence_not_renewed": {
+      "title": "Je VirtuHome-licentie is al {days} dagen niet vernieuwd",
+      "description": "Home Assistant kon je VirtuHome-licentie al {days} dagen niet vernieuwen ({error}). Je uitbreidingen blijven werken; alleen nieuwe versies wachten. Controleer of Home Assistant het internet kan bereiken, en open dan VirtuHome → Bewerken → Extra's → Zoeken naar updates. Dit verdwijnt zodra hij vernieuwd is."
+    }
+  }
+}
