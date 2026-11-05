@@ -54,7 +54,7 @@ export async function bundle(entry = "dev/demo.ts") {
     metafile: true,
     // left out rather than failing to resolve, so the check below names it
     external: ["/dev/local.env.js"],
-    define: { __VERSION__: JSON.stringify(version), __DEV__: "false" },
+    define: { __VERSION__: JSON.stringify(version), __DEV__: "false", __NEWS__: "[]" },
     logLevel: "warning",
   });
   const files = res.outputFiles.map((f) => ({ name: basename(f.path), text: f.text }));

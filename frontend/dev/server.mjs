@@ -3,6 +3,11 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import * as esbuild from "esbuild";
+import { readFileSync } from "node:fs";
+import { news } from "./news.mjs";
+
+/** What's new in the harness: the changelog's Unreleased lines. */
+const devNews = () => news(readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8"), readFileSync(new URL("../../docs/GUIDE.md", import.meta.url), "utf8"), "Unreleased");
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".map": "application/json" };
 const devDir = new URL(".", import.meta.url).pathname;
@@ -17,7 +22,7 @@ export async function startDevServer(outDir, port = 5173, fast = process.argv.in
     sourcemap: fast ? false : "inline",
     minify: fast,
     external: ["/dev/local.env.js"],
-    define: { __VERSION__: '"dev"', __DEV__: "true" },
+    define: { __VERSION__: '"dev"', __DEV__: "true", __NEWS__: JSON.stringify(devNews()) },
     logLevel: "info",
   });
   await ctx.watch();

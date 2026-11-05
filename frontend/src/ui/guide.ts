@@ -5,3 +5,10 @@
 export const GUIDE_URL = "https://virtumaps.github.io/virtuhome/";
 
 export const guideLink = (anchor: string): string => `${GUIDE_URL}#${anchor}`;
+
+/**
+ * The same for an anchor held in a variable: helpLink("…") and the editor's TAB_HELP, whose anchors
+ * test/guide-site.test.ts checks where they are written, and What's new, whose anchors come from the
+ * guide's own headings (dev/news.mjs).
+ */
+export const guideAt = (anchor: string): string => `${GUIDE_URL}#${anchor}`;

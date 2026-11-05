@@ -46,8 +46,10 @@ import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
 import { daysLeft, type Check, type Fix } from "../ui/checks";
+import { helpLink, resetHints, showHint } from "../ui/help";
+import { CHANGELOG_URL } from "../ui/news";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
-import { guideLink } from "../ui/guide";
+import { guideAt, guideLink } from "../ui/guide";
 import type { PlainKey } from "../i18n";
 import { t, th, type EditorPlainKey } from "../i18n/editor";
 import { EDITOR_CSS } from "./styles";
@@ -69,6 +71,11 @@ const DEVICE_DOMAINS: [Set<string>, string[]][] = [
   [WATER_TYPES, ["water_heater", "sensor", "climate"]],
   [APPLIANCE_TYPES, APPLIANCE_DOMAINS],
 ];
+
+/** The guide's part about each tab, for its "?". */
+const TAB_HELP: Record<Tab, string> = {
+  home: "get-your-home-in", rooms: "draw-it-in-the-2d-plan", devices: "place-your-devices", selected: "by-hand", extensions: "extensions-and-licence-keys",
+};
 
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 /** Common solar panel sizes (mm), long side first, newest first. */
@@ -232,12 +239,15 @@ export class Editor {
         ...(["home", "rooms", "devices", "selected", "extensions"] as Tab[]).map((tab) =>
           h("button", { class: "ed-tab", "data-tab": tab, onclick: () => this.show(tab) }, { home: t("editor.main.home"), rooms: t("editor.rooms"), devices: t("editor.devices"), selected: t("editor.main.selected"), extensions: t("editor.main.extras") }[tab]),
         ),
+        // the guide's part about the tab shown
+        h("span", { class: "ed-help", html: helpLink(TAB_HELP.home, "ed-ib small vh-help") }),
       ),
       this.body,
       h("div", { class: "ed-foot" }, this.status),
     );
     const viewer = host.view.viewer;
     viewer.editMode = true;
+    showHint(host.view.root, "editor.select", t("editor.hint.select"));
     viewer.onDrag = (hit, x, z, phase) => this.onDrag(hit, x, z, phase);
     viewer.canDrag = (hit) => this.isHandle(hit);
     window.addEventListener("keydown", this.onKey);
@@ -309,6 +319,8 @@ export class Editor {
         },
       });
       root.append(this.plan2d.el);
+      root.querySelector(".vh-hint")?.remove();
+      showHint(root, "editor.measure", t("editor.hint.measure"));
       this.status.textContent = t("editor.main.selectSomethingThenDrag");
     } else if (!on && this.plan2d) {
       this.plan2d.dispose();
@@ -843,6 +855,7 @@ export class Editor {
 
   private render(): void {
     this.el.querySelectorAll<HTMLElement>(".ed-tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === this.tab));
+    this.el.querySelector<HTMLAnchorElement>(".ed-help a")?.setAttribute("href", guideAt(TAB_HELP[this.tab]));
     this.body.replaceChildren(
       this.tab === "home" ? this.homeTab() :
       this.tab === "rooms" ? this.roomsTab() :
@@ -883,6 +896,7 @@ export class Editor {
       ...this.energySection(),
       ...this.peopleSection(),
       ...this.topBarSection(),
+      ...this.helpSection(),
       ...this.skySection(),
       h("h4", {}, t("editor.home.floors")),
       ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
@@ -1469,6 +1483,24 @@ export class Editor {
           this.change((p) => (p.floors[i].exterior_finish = (v || null) as Floor["exterior_finish"]), false, t("editor.floor.nameOutsideWalls", { name: f.name })), t("editor.floor.sameAsTheHouse")),
       ),
     );
+  }
+
+  /** Help: the hints again, what's new in this version, and which version this is. */
+  private helpSection(): (HTMLElement | null)[] {
+    const note = h("p", { class: "ed-hint" });
+    return [
+      h("h4", {}, t("editor.home.help")),
+      h("div", { class: "ed-row" },
+        h("button", { class: "ed-btn ghost small", onclick: () => {
+          resetHints();
+          note.textContent = t("editor.home.hintsBack");
+        } }, t("editor.home.showHints")),
+        h("button", { class: "ed-btn ghost small", onclick: () => this.host.view.showNews() }, t("editor.home.whatsNew")),
+      ),
+      note,
+      h("p", { class: "ed-hint" }, t("editor.home.about", { version: __VERSION__ }), " · ",
+        h("a", { href: CHANGELOG_URL, target: "_blank", rel: "noopener" }, t("editor.home.changelog"))),
+    ];
   }
 
   /** Licence key and extensions. Buying shows up only once VirtuMaps opens the shop on the server. */

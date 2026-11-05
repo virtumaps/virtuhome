@@ -1,5 +1,6 @@
 // The sun and weather panel: the house at any date and time of day (where the sun is then, and
 // its shadows), a day played through, and the weather picked by hand. Live comes back with "Now".
+import { helpLink } from "./help";
 import { mdiClose, mdiPause, mdiPlay } from "@mdi/js";
 import type { Hass } from "../live/hass";
 import { location, WEATHER_PICKS, type Sky, type WeatherPick } from "../live/sky";
@@ -185,7 +186,7 @@ export class SkyPanel {
     const weatherNow = this.weather ?? (this.time() !== null ? "clear" : null);
     if (!this.el.firstChild) {
       this.el.innerHTML = `
-        <h3>${th("sky.title")}<button class="vh-icon" data-a="close" title="${th("sky.back")}">${svg(mdiClose)}</button></h3>
+        <h3>${th("sky.title")}${helpLink("sun-and-weather")}<button class="vh-icon" data-a="close" title="${th("sky.back")}">${svg(mdiClose)}</button></h3>
         <div class="vh-sky-row"><label>${th("sky.date")}</label><input type="range" min="0" max="365" step="1" data-k="date"><b data-l="date"></b></div>
         <div class="vh-sky-chips" data-c="date"></div>
         <div class="vh-sky-row"><label>${th("sky.time")}</label><input type="range" min="0" max="1435" step="5" data-k="time"><b data-l="time"></b></div>
