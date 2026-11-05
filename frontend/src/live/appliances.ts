@@ -28,7 +28,7 @@ const WORDS: [RunState, RegExp][] = [
   ["error", /^(error|failure|fault|action_?required|program_?interrupted|aborting|service)$/],
   ["paused", /^(pause|paused|rinse_?hold)$/],
   ["waiting", /^(delayed_?start|waiting_?to_?start|reserved|programmed|scheduled)$/],
-  ["running", /^(run|running|in_?use|washing|wash|main_?wash|pre_?wash|soak|rinse|rinsing|spin|spinning|drying|dry|cooling|detecting|steam|heating|refreshing|cleaning|drain|draining)$/],
+  ["running", /^(run|running|in_?use|washing|wash|main_?wash|pre_?wash|soak|rinse|rinsing|spin|spinning|drying|dry|cooling|detecting|steam|heating|refreshing|cleaning|auto_?cleaning|drain|draining)$/],
   ["idle", /^(off|power_?off|inactive|ready|idle|initial|standby|on|stop|stopped|none|not_?running)$/],
 ];
 
@@ -130,8 +130,10 @@ export function applianceNow(hass: Hass, ids: string[], now = Date.now()): Appli
   return { state, programme, ends, entity };
 }
 
+/** How well an entity's id says it's the machine's state: Miele's is the device's own name, its phase comes last. */
 function rankOf(id: string): number {
   const name = id.split(".")[1];
+  if (PHASE_IDS.test(name)) return STATE_IDS.length + 1;
   const i = STATE_IDS.findIndex((re) => re.test(name));
   return i < 0 ? STATE_IDS.length : i;
 }

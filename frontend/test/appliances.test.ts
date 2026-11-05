@@ -58,6 +58,41 @@ describe("run states from the common integrations", () => {
     expect(applianceText(now(hass, "sensor.washing_machine_status"), NOW)).toBe("Waiting to start");
   });
 
+  it("a real Miele dishwasher (its status is the device's own name, its phase is apart)", () => {
+    const enumOf = (options: string[]) => ({ device_class: "enum", options });
+    const hass = machine("miele", [
+      state("binary_sensor.dishwasher_door", "off", { device_class: "door" }),
+      state("sensor.dishwasher_program_phase", "not_running", enumOf(["drying", "final_rinse", "finished", "main_dishwash", "not_running"])),
+      state("sensor.dishwasher", "off", enumOf(["autocleaning", "failure", "idle", "in_use", "off", "on", "pause", "program_ended", "programmed", "reserved"])),
+      state("sensor.dishwasher_program", "no_program"),
+      state("sensor.dishwasher_remaining_time", "unknown", { device_class: "duration", unit_of_measurement: "min" }),
+      state("sensor.dishwasher_finish", "unknown", { device_class: "timestamp" }),
+      state("switch.dishwasher_power", "off"),
+    ], "Dishwasher", "kitchen");
+    expect(now(hass, "binary_sensor.dishwasher_door")).toMatchObject({ state: "idle", entity: "sensor.dishwasher" });
+    const set = (id: string, v: string, extra: Record<string, unknown> = {}) => (hass.states[id] = state(id, v, { ...hass.states[id].attributes, ...extra }));
+    set("sensor.dishwasher", "in_use");
+    set("sensor.dishwasher_program", "eco");
+    set("sensor.dishwasher_program_phase", "main_dishwash");
+    set("sensor.dishwasher_remaining_time", "95");
+    expect(applianceText(now(hass, "binary_sensor.dishwasher_door"), NOW)).toBe("Main dishwash · 1 h 35 left");
+    set("sensor.dishwasher", "program_ended");
+    set("sensor.dishwasher_program_phase", "finished");
+    expect(now(hass, "binary_sensor.dishwasher_door")).toMatchObject({ state: "done", entity: "sensor.dishwasher" });
+  });
+
+  it("a real LG ThinQ washer: its time left is a timestamp", () => {
+    const hass = machine("lg", [
+      state("sensor.washer_current_status", "running", { device_class: "enum" }),
+      state("select.washer_operation", "unknown"),
+      state("sensor.washer_cycles", "0"),
+      state("sensor.washer_remaining_time", new Date(NOW + 41 * 60_000).toISOString(), { device_class: "timestamp" }),
+      state("switch.washer_power", "on", { device_class: "switch" }),
+    ], "Washer");
+    expect(applianceText(now(hass, "switch.washer_power"), NOW)).toBe("Running · 41 min left");
+    expect(applianceKind("Washer")).toBe("washer");
+  });
+
   it("LG ThinQ: current status and time left as h:mm:ss", () => {
     const hass = machine("lg", [
       state("sensor.washer_current_status", "spinning"),
