@@ -40,7 +40,18 @@ export type PlainKey = { [K in Key]: Args<(typeof EN)[K]> extends [] ? K : never
  * Languages besides English, each loaded the first time it is needed, so none of them adds to
  * what every page loads. A new one goes here: `de: () => import("./de").then((m) => m.DE)`.
  */
-export const LANGUAGES: Record<string, () => Promise<Translation>> = {};
+export const LANGUAGES: Record<string, () => Promise<Translation>> = {
+  de: () => import("./de").then((m) => m.DE),
+  nl: () => import("./nl").then((m) => m.NL),
+};
+
+/** The editor's texts in each language, loaded when the editor opens (a wall tablet never needs them). */
+export const EDITOR_LANGUAGES: Record<string, () => Promise<Translation>> = {
+  de: () => import("./de-editor").then((m) => m.DE_EDITOR),
+  nl: () => import("./nl-editor").then((m) => m.NL_EDITOR),
+};
+/** The language whose editor texts are in the table now. */
+let editorLang = "en";
 
 let lang = "en";
 let table: Translation = {};
@@ -80,7 +91,22 @@ export async function useLanguage(hass: unknown): Promise<void> {
   if (!loaded) return;
   lang = code;
   table = loaded;
+  editorLang = "en";
   rules = null;
+}
+
+/** Adds the editor's texts in the language shown (before the editor draws). One that fails to load leaves English. */
+export async function useEditorLanguage(): Promise<void> {
+  const code = lang;
+  if (code === "en" || editorLang === code || !EDITOR_LANGUAGES[code]) return;
+  try {
+    const more = await EDITOR_LANGUAGES[code]();
+    if (lang !== code) return;
+    table = { ...table, ...more };
+    editorLang = code;
+  } catch (err) {
+    console.warn(`VirtuHome: no ${code} texts for the editor, showing English`, err);
+  }
 }
 
 /** Which form of a text with counts goes with n in the language shown. */

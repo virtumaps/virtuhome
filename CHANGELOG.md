@@ -23,6 +23,9 @@
   guide; first-time hints, once each (Edit → **Home** → **Show hints again**); and **What's new**
   after an update, once, for administrators in the sidebar (Edit → **Home** → **What's new**).
 
+- German and Dutch: everything VirtuHome shows, and Home Assistant's own screens for it (setting up,
+  options, Repairs), follow the language in your Home Assistant profile. Numbers follow it too.
+
 ### Changed
 - The licence server is reached at `license.virtumaps.com`, and at its first address when that can't
   be reached. A licence server set in the integration's options is still the only one used.

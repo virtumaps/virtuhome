@@ -12,7 +12,7 @@ import { holdsPost, POST_TYPES } from "../scene/bins";
 import { AC_TYPES, deviceGlow, fanTurns as turnsOf, gangsOf, linkedEntities, GANG_TYPES, GLOW_TYPES, HEAT_TYPES, heats, waterTemperature, WATER_TYPES } from "../scene/devices";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
-import type { EnergyLive } from "./energy";
+import { fixed, type EnergyLive } from "./energy";
 import { chargerEntities, type EvNow } from "./ev";
 import { areaOf, domainOf, type Hass, type HassEntity } from "./hass";
 import { roomOf, roomTrackers, slug, sourcesOf } from "./presence";
@@ -1090,7 +1090,7 @@ export function shownClimate(states: (HassEntity | undefined)[]): { entity: stri
 
 /** "20.5° → 21°", "20.5°" while the heating is off, "→ 21°" with nothing reading the room. */
 export function heatText(current: number | null, target: string | null): string | null {
-  const now = current !== null ? `${current.toFixed(1)}°` : null;
+  const now = current !== null ? `${fixed(current, 1)}°` : null;
   if (!target) return now;
   return now ? `${now} → ${target}` : `→ ${target}`;
 }
@@ -1098,7 +1098,7 @@ export function heatText(current: number | null, target: string | null): string 
 /** A setpoint as thermostats show it: "21°", "20.5°". */
 function degrees(v: number, mark = true): string {
   const r = Math.round(v * 10) / 10;
-  return `${Number.isInteger(r) ? r : r.toFixed(1)}${mark ? "°" : ""}`;
+  return `${Number.isInteger(r) ? r : fixed(r, 1)}${mark ? "°" : ""}`;
 }
 
 /** The panels' brightness in tenths: the 3D view only relights when it moves a step. */
