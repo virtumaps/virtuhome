@@ -7,7 +7,9 @@ dashboards look for it. Only in storage mode: YAML resources belong to the user 
 While Home Assistant starts, dashboards can be served before this integration registered its static
 path, so the resource is a tiny loader in /config/www (served as /local from the start) that keeps
 retrying until the card's script is there. Without a www folder at startup /local is not served yet;
-then the script itself is the resource until the next restart.
+then the script itself is the resource until the next restart. Whether /local is served is read from
+Home Assistant's routes, not from the folder: since 2026.11 the Marketplace creates www/ while Home
+Assistant starts, after the frontend decided not to serve it.
 """
 
 from __future__ import annotations
@@ -59,6 +61,17 @@ def _resources(hass: HomeAssistant) -> Any | None:
     return resources
 
 
+def _local_served(hass: HomeAssistant) -> bool | None:
+    """Whether Home Assistant serves /local in this run; None when its routes can't be read."""
+    router = getattr(getattr(getattr(hass, "http", None), "app", None), "router", None)
+    if router is None:
+        return None
+    try:
+        return any(getattr(r, "canonical", None) == "/local" for r in router.resources())
+    except Exception:  # noqa: BLE001 - an unexpected router: go by the folder, as before
+        return None
+
+
 def _ours(url: str) -> bool:
     return url.startswith((f"{URL_BASE}/{LOADER_FILE}", WWW_URL))
 
@@ -90,8 +103,10 @@ async def _async_register(hass: HomeAssistant, version: str) -> None:
         resources.loaded = True
     card_url = f"{URL_BASE}/{LOADER_FILE}?v={version}"
     www = Path(hass.config.path("www"))
-    # /local is only served when the www folder existed at startup
-    www_served = await hass.async_add_executor_job(www.is_dir)
+    # /local is only served when the www folder existed at startup (it may have appeared since)
+    www_served = _local_served(hass)
+    if www_served is None:
+        www_served = await hass.async_add_executor_job(www.is_dir)
     url = card_url
     if www_served:
         await hass.async_add_executor_job(_write_loader, www, card_url)
