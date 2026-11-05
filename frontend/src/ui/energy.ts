@@ -1,5 +1,6 @@
 // Solar, battery and grid on the view: a chip with what the panels make now, and a sheet with the
 // power flowing between solar, battery, grid, the house and the car, and today's totals.
+import { helpLink } from "./help";
 import { mdiBatteryCharging, mdiBatteryHigh, mdiBatteryLow, mdiBatteryMedium, mdiCarElectric, mdiClose, mdiHomeLightningBoltOutline, mdiSolarPower, mdiTransmissionTower } from "@mdi/js";
 import { formatEnergy, formatPower, formatPrice, formatRate, type EnergyLive, type EnergyNow, type Flows } from "../live/energy";
 import { evStateText, modeName, type EvNow } from "../live/ev";
@@ -206,7 +207,7 @@ export function renderEnergySheet(sheet: HTMLElement, energy: EnergyLive, sectio
   if (sheet.dataset.key !== "energy") {
     sheet.dataset.key = "energy";
     sheet.innerHTML = `
-      <h3><span class="t">${th("energy.title")}</span><button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose, 22)}</button></h3>
+      <h3><span class="t">${th("energy.title")}</span>${helpLink("energy-and-car-charging")}<button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose, 22)}</button></h3>
       <div class="sub"></div>
       <div class="vh-flow-box"></div>
       <div class="vh-ev-box"></div>

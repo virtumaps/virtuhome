@@ -106,6 +106,19 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm. With air quality sensors it is **Maps**, and each tap shows the next map (see **Maps** below) |
 | **Graphics** | Picks the graphics on this device (below) |
 
+**Help**
+- A **?** beside the close button of the room, energy, alarm and sun and weather sheets, and beside
+  the editor's tabs (for the tab shown), opens that part of this guide.
+- A hint shows once the first time you need it: in the sidebar panel how to switch and open
+  devices, in the editor how to select and move things, in the 2D plan how to type a measurement.
+  **Got it** puts it away for good on that browser. Edit → **Home** → **Show hints again** brings
+  them back.
+- After VirtuHome updates, the first time an administrator opens it in the sidebar it says **What's
+  new in VirtuHome 0.17.0**: the new things, each with **More** where the guide explains it, and
+  **Got it**. It never shows on dashboard cards (wall tablets), on a Fully Kiosk tablet or with
+  `?kiosk`, nor on a first install. Edit → **Home** → **What's new** shows it again; under it is the
+  version, with **Everything that changed**.
+
 **Maps**
 - The **Temperature map** colours each room by its temperature, from blue at 16° to red at 26°.
 - Homes with air quality sensors get more maps, one for each kind a room has a sensor for: the

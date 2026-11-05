@@ -179,6 +179,12 @@ export interface ViewHandle {
    * that says so. null when it isn't linked or nothing of its device says. Core 0.17 and later.
    */
   appliance?(item: string): ApplianceNow | null;
+  /**
+   * What's new in this extension, shown once per person in the sidebar panel to administrators, like
+   * the core's after an update: `title` names it and its version ("Household 1.1.0"), `lines` are short
+   * sentences (\*\*bold\*\* for the names of buttons). Core 0.17 and later.
+   */
+  news?(title: string, lines: string[]): void;
 }
 
 /** An automation an extension added to Home Assistant from one of its blueprints. */

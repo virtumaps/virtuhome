@@ -14,6 +14,10 @@ const out = dev
   ? new URL("./dev/out/ha/", import.meta.url).pathname
   : new URL("../custom_components/virtuhome/frontend/", import.meta.url).pathname;
 const version = JSON.parse(readFileSync(new URL("../custom_components/virtuhome/manifest.json", import.meta.url))).version;
+// what's new in this version (the changelog's New lines, with their guide sections), shown once after an update
+const news = (await import("./dev/news.mjs")).news(
+  readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8"), readFileSync(new URL("../docs/GUIDE.md", import.meta.url), "utf8"), version,
+);
 // the oldest browsers supported (test/browsers.test.ts checks the build against them)
 const browsers = JSON.parse(readFileSync(new URL("./browsers.json", import.meta.url)));
 
@@ -24,7 +28,7 @@ const common = {
   minify: !dev || fast,
   sourcemap: dev && !fast ? "inline" : false,
   legalComments: "none",
-  define: { __VERSION__: JSON.stringify(version), __DEV__: String(dev) },
+  define: { __VERSION__: JSON.stringify(version), __DEV__: String(dev), __NEWS__: JSON.stringify(news) },
   logLevel: "info",
 };
 

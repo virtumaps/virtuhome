@@ -138,6 +138,10 @@ describe("help links in VirtuHome", () => {
         expect(arg, `${name}: ${call}`).toMatch(/^"[^"]+"$/);
         used.push(arg.slice(1, -1));
       }
+      // help buttons, and the editor's tabs' anchors
+      for (const [, anchor] of text.matchAll(/\bhelpLink\("([\w-]+)"/g)) used.push(anchor);
+      const tabs = /TAB_HELP[^=]*=\s*\{([^}]*)\}/.exec(text)?.[1];
+      if (tabs) for (const [, anchor] of tabs.matchAll(/"([\w-]+)"/g)) used.push(anchor);
       // the guide on GitHub, or a page of the website
       for (const [, anchor] of text.matchAll(/(?:docs\/GUIDE\.md|virtumaps\.github\.io\/virtuhome\/[\w.-]*)#([\w-]+)/g)) used.push(anchor);
     }

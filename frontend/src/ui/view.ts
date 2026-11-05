@@ -25,6 +25,8 @@ import { roofFaces, shadeGeometry, solarArrays } from "../scene/roof-info";
 import { SkyPanel, SKY_CSS, type SkyPick } from "./sky";
 import { checkCounts, runChecks, type Check, type ServerChecks } from "./checks";
 import { callEach, errorBox, errorDetails, isolate, isStaleCode, logError, reportFrom, sendHeld } from "./errors";
+import { helpLink, HINT_CSS, showHint } from "./help";
+import { extNewsSeen, markExtNews, newsDue, NEWS_CSS, onKiosk, showNews } from "./news";
 
 export interface ViewConfig {
   /** Floor to open on (id, name or index); otherwise the whole house. */
@@ -165,6 +167,7 @@ export class VhView {
   /** When this view was made, for measuring (performance.now()). */
   private readonly madeAt = performance.now();
   private benched = false;
+  private welcomed = false;
   /** The tier was picked automatically (it may step down when the device struggles). */
   private tierAuto = true;
   private menu: HTMLDivElement;
@@ -217,7 +220,7 @@ export class VhView {
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
-    style.textContent = VIEW_CSS + ENERGY_CSS + SKY_CSS;
+    style.textContent = VIEW_CSS + ENERGY_CSS + SKY_CSS + HINT_CSS + NEWS_CSS;
     this.root = document.createElement("div");
     this.root.className = "vh-root";
     this.root.innerHTML = `
@@ -456,6 +459,7 @@ export class VhView {
     }
     callEach(this.hassListeners, h);
     if (this.config.bench && !this.benched && this.started) void this.bench();
+    if (!this.welcomed && this.started) this.welcome();
   }
 
   /** Draws a set of states: the live ones, or a replay's (plus parts to redraw anyway). */
@@ -642,6 +646,12 @@ export class VhView {
         this.viewer.refreshLabels();
       },
       appliance: (item) => this.live.applianceOf(item),
+      news: (title, lines) => {
+        // as the core's own: administrators in the sidebar panel, once each
+        if (!this.config.editable || this.config.demo || !this._hass?.user?.is_admin || !lines.length || extNewsSeen(title)) return;
+        if (onKiosk()) return;
+        showNews(this.root, title, lines.map((text) => ({ text, anchor: null })), () => markExtNews(title));
+      },
       energy: {
         get sources() {
           return self.energy.sources;
@@ -808,7 +818,7 @@ export class VhView {
     this.sheet.dataset.key = key;
     const name = (id: string) => String(h.states[id]?.attributes.friendly_name ?? id);
     const head = document.createElement("h3");
-    head.innerHTML = `<span class="t"></span><button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button>`;
+    head.innerHTML = `<span class="t"></span>${helpLink("find-your-way-around")}<button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button>`;
     head.querySelector(".t")!.textContent = t("alarm.title");
     head.querySelector<HTMLButtonElement>(".vh-close")!.onclick = () => this.closeSheet();
     const row = (text: string, onclick: () => void, state = "") => {
@@ -1386,6 +1396,7 @@ export class VhView {
     this.updateChecks();
     callEach(this.planListeners, plan);
     if (this.config.bench && !this.benched && this.started) void this.bench();
+    if (!this.welcomed && this.started) this.welcome();
   }
 
   private startFloor(plan: Plan): number {
@@ -1852,6 +1863,22 @@ export class VhView {
     if (start && !this.editor) void this.openEditor();
   }
 
+  /**
+   * Once the house shows in the sidebar panel: what's new since the last version for administrators,
+   * else the first-time hint. Never on dashboard cards (wall tablets), in the demos or while measuring.
+   */
+  private welcome(): void {
+    this.welcomed = true;
+    if (!this.config.editable || this.config.demo || this.config.bench || !this._hass) return;
+    if (this._hass.user?.is_admin && newsDue(__VERSION__)) return showNews(this.root, __VERSION__, __NEWS__);
+    showHint(this.root, "view.long", t("hint.long"), "bottom");
+  }
+
+  /** What's new in this version, again (Edit → Home → What's new). */
+  showNews(): void {
+    showNews(this.root, __VERSION__, __NEWS__);
+  }
+
   /** Measures how this device does (?bench), shows the numbers and writes them to the logbook. */
   private async bench(): Promise<void> {
     this.benched = true;
@@ -2155,7 +2182,7 @@ export class VhView {
     }
     this.sheet.dataset.key = key;
     this.sheet.innerHTML = `
-      <h3><span class="t"></span><button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button></h3>
+      <h3><span class="t"></span>${helpLink("labels-and-readings")}<button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button></h3>
       <div class="sub"></div>
       <div class="actions"></div>
       <div class="vh-tiles"></div>`;

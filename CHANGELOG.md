@@ -19,6 +19,10 @@
   resource missing (with a fix), links to entities that are gone, an extension that can't load, and
   a licence that hasn't renewed for 30 days. Each goes away once it's put right.
 
+- Help where you need it: a **?** on each sheet and beside the editor's tabs opens that part of the
+  guide; first-time hints, once each (Edit → **Home** → **Show hints again**); and **What's new**
+  after an update, once, for administrators in the sidebar (Edit → **Home** → **What's new**).
+
 ### Changed
 - The licence server is reached at `license.virtumaps.com`, and at its first address when that can't
   be reached. A licence server set in the integration's options is still the only one used.
