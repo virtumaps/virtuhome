@@ -768,9 +768,19 @@ The licence shows **Active**, the extensions it unlocks and their versions. **Ch
 fetches new versions; **Remove licence** frees the key for another Home Assistant. **Available
 extensions** lists what there is.
 
-**What is sent:** opening **Extras** asks the VirtuMaps licence server for the list of extensions.
-Activating a key sends the key and an anonymous code for this Home Assistant, nothing that names
-your home. The licence is then renewed about once a day while Home Assistant is online. Extensions are checked, stored in Home Assistant and keep working offline.
+**Try one first:** when an extension can be tried, **Available extensions** shows **Try it free for
+14 days** under it. Tap it, then **Reload now**: the extension works in this home until the trial
+ends, with no key and no account, and shows **· trial, 9 days left** beside its name. At the end it
+stops loading (**· trial ended**), the automations it added go, and nothing else in your home
+changes; **Check my setup** says so for two weeks, with **Open Extras**. Each extension can be tried
+once per Home Assistant. A trial sits beside a licence: trying one extension doesn't touch those
+your key unlocks, and one you buy afterwards replaces its trial.
+
+**What is sent:** opening **Extras** asks the VirtuMaps licence server (`license.virtumaps.com`, or
+its first address if that can't be reached) for the list of extensions. Activating a key sends the
+key and an anonymous code for this Home Assistant, nothing that names your home; starting a trial
+sends the extension's name and the same code. The licence and trials are then renewed about once a
+day while Home Assistant is online. Extensions are checked, stored in Home Assistant and keep working offline.
 
 **What you bought keeps working:** a bought extension keeps working at the version you have, for
 good, even if the licence server can't be reached or goes away. Only new versions need the licence

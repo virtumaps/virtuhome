@@ -20,5 +20,7 @@ EVENT_PLAN_UPDATED = f"{DOMAIN}_plan_updated"
 # extensions: unlocked by a licence key, downloaded from the licence server, served from here
 EXT_URL_BASE = "/virtuhome_ext"
 LICENCE_KEY_STORE = f"{DOMAIN}.licence"
-DEFAULT_LICENCE_SERVER = "https://virtuhome-license.virtumaps.workers.dev"
+DEFAULT_LICENCE_SERVER = "https://license.virtumaps.com"
+# the first address: tried when the other can't be reached, and what older installs have stored
+OLD_LICENCE_SERVER = "https://virtuhome-license.virtumaps.workers.dev"
 CONF_LICENCE_SERVER = "licence_server"

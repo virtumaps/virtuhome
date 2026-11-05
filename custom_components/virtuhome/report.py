@@ -101,6 +101,10 @@ def licence_summary(summary: dict[str, Any] | None, loaded: list[dict[str, Any]]
             {"id": e.get("id"), "version": e.get("version"), "loaded": e.get("id") in loaded_ids}
             for e in summary.get("extensions") or []
         ],
+        "trials": [
+            {"id": e.get("id"), "status": e.get("status"), "loaded": e.get("id") in loaded_ids}
+            for e in summary.get("trials") or []
+        ],
     }
 
 

@@ -45,7 +45,7 @@ import {
 import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
-import type { Check, Fix } from "../ui/checks";
+import { daysLeft, type Check, type Fix } from "../ui/checks";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { guideLink } from "../ui/guide";
 import type { PlainKey } from "../i18n";
@@ -999,6 +999,7 @@ export class Editor {
         linkRoomsByName(p, hass);
       }, true, t("editor.checks.linkRoomsToAreas"))],
       "open-rooms": [t("editor.checks.openRooms"), () => this.show("rooms")],
+      extras: [t("editor.checks.openExtras"), () => this.show("extensions")],
       reload: [t("editor.checks.reload"), () => location.reload()],
       resource: [t("editor.checks.addItAgain"), () => view.refreshServer(true)],
       graphics: [t("editor.checks.tryAgain"), () => view.resetGraphics()],
@@ -1013,7 +1014,7 @@ export class Editor {
     };
     const f = run[fix];
     if (!f) return null;
-    const b = h("button", { class: `ed-btn small${fix === "open-rooms" ? " ghost" : ""}`, onclick: async () => {
+    const b = h("button", { class: `ed-btn small${fix === "open-rooms" || fix === "extras" ? " ghost" : ""}`, onclick: async () => {
       b.disabled = true;
       await f[1]();
       if (this.tab === "home") this.render();
@@ -1473,7 +1474,11 @@ export class Editor {
   private extensionsTab(): HTMLElement {
     const box = h("div", {}, h("p", { class: "ed-hint" }, t("editor.loading")));
     const hass = this.hass;
-    type Summary = { status: string; kind?: string | null; error: string | null; key_hint: string | null; extensions: { id: string; name: string; version: string }[] };
+    type Trial = { id: string; name: string; version: string | null; end: number | null; status: string };
+    type Summary = {
+      status: string; kind?: string | null; error: string | null; key_hint: string | null;
+      extensions: { id: string; name: string; version: string }[]; trials?: Trial[];
+    };
     const trial = (s: Summary) => s.kind === "trial";
     // paid and installer licences keep what is installed past their renewal date (lapsed) or once ended
     const statusText = (s: Summary) => ({
@@ -1482,9 +1487,26 @@ export class Editor {
       ended: t("editor.extensions.ended"),
       expired: trial(s) ? t("editor.extensions.trialEnded") : t("editor.extensions.expiredRenewsOnline"),
     } as Record<string, string>)[s.status] ?? t("editor.extensions.notValid");
-    type Catalog = { id: string; name: string; description?: string; price?: string; checkout_url?: string }[];
+    type Catalog = { id: string; name: string; description?: string; price?: string; checkout_url?: string; trial_days?: number }[];
     const render = (s: Summary | null, catalog: Catalog, note = "", reload = false) => {
       const installed = new Set(s?.extensions.map((x) => x.id));
+      const trials = new Map((s?.trials ?? []).map((x) => [x.id, x]));
+      /** What an extension in the list says beside its name: installed, on trial or its trial over. */
+      const tag = (id: string) => {
+        const tr = trials.get(id);
+        if (installed.has(id)) return t("editor.extensions.installed");
+        if (tr?.status === "active" && tr.end !== null) return t("editor.extensions.trialDaysLeft", { n: daysLeft(tr.end) });
+        if (tr) return t("editor.extensions.trialOver");
+        return null;
+      };
+      const tryIt = (c: Catalog[number]) => h("button", { class: "ed-btn small", onclick: async (ev: Event) => {
+        busy(ev.target as HTMLButtonElement, t("editor.extensions.starting"));
+        try {
+          render(await hass.callWS<Summary>({ type: "virtuhome/licence/trial", ext: c.id }), catalog, t("editor.extensions.trialStartedReload"), true);
+        } catch (err) {
+          render(s, catalog, String((err as { message?: string }).message ?? err));
+        }
+      } }, t("editor.extensions.tryItFree", { n: c.trial_days ?? 0 }));
       const input = h("input", { class: "ed-in", placeholder: t("editor.extensions.licenceKey"), autocomplete: "off", spellcheck: false });
       const status = h("p", { class: "ed-hint" }, note);
       const busy = (b: HTMLButtonElement, text: string) => {
@@ -1529,11 +1551,20 @@ export class Editor {
         status,
         reload ? h("button", { class: "ed-btn ghost small", onclick: () => location.reload() }, t("editor.extensions.reloadNow")) : null,
         h("h4", {}, t("editor.extensions.availableExtensions")),
-        ...(catalog.length ? catalog.map((c) => h("div", { class: "ed-card" },
-          h("div", { class: "ed-row" }, h("b", {}, c.name), installed.has(c.id) ? h("small", {}, t("editor.extensions.installed")) : null),
-          c.description ? h("p", { class: "ed-hint" }, c.description) : null,
-          !installed.has(c.id) && c.checkout_url ? h("a", { class: "ed-btn small", href: c.checkout_url, target: "_blank", rel: "noopener" }, t("editor.extensions.getItX", { x: c.price ? ` · ${c.price}` : "" })) : null,
-        )) : [h("p", { class: "ed-hint" }, t("editor.extensions.theListOfExtensions"))]),
+        ...(catalog.length ? catalog.map((c) => {
+          const label = tag(c.id);
+          const tried = trials.has(c.id);
+          return h("div", { class: "ed-card" },
+            h("div", { class: "ed-row" }, h("b", {}, c.name), label ? h("small", {}, label) : null),
+            c.description ? h("p", { class: "ed-hint" }, c.description) : null,
+            !installed.has(c.id) && tried && trials.get(c.id)!.status !== "active" ? h("p", { class: "ed-hint" }, t("editor.extensions.trialOverHint")) : null,
+            !installed.has(c.id) && (c.checkout_url || (!tried && c.trial_days))
+              ? h("div", { class: "ed-row" },
+                !tried && c.trial_days ? tryIt(c) : null,
+                c.checkout_url ? h("a", { class: `ed-btn small${!tried && c.trial_days ? " ghost" : ""}`, href: c.checkout_url, target: "_blank", rel: "noopener" }, t("editor.extensions.getItX", { x: c.price ? ` · ${c.price}` : "" })) : null)
+              : null,
+          );
+        }) : [h("p", { class: "ed-hint" }, t("editor.extensions.theListOfExtensions"))]),
         !catalog.some((c) => c.checkout_url) ? h("p", { class: "ed-hint" }, t("editor.extensions.extensionsAreCurrentlyAvailable")) : null,
       ];
       box.replaceChildren(...parts.filter((x): x is Node => x !== null));

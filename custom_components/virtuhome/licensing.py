@@ -134,6 +134,29 @@ def to_keep(installed: list[dict[str, Any]], offered: list[dict[str, Any]], lice
     return loadable(installed, licence)
 
 
+def with_trials(main: list[dict[str, Any]], trials: list[tuple[Licence | None, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+    """The extensions that load: the licence's, then those on a trial that hasn't ended (a bought one wins)."""
+    out = list(main)
+    ids = {e["id"] for e in out}
+    for licence, entries in trials:
+        if licence is None or licence.kind != "trial":
+            continue
+        for e in loadable(entries, licence):
+            if e["id"] not in ids:
+                ids.add(e["id"])
+                out.append(e)
+    return out
+
+
+def licence_servers(option: str | None, default: str, old: str) -> list[str]:
+    """Where the licence server is, in the order to try: an address set in the options alone, else
+    our own address, then the first one (installs from before it still have that one stored)."""
+    own = (option or "").strip().rstrip("/")
+    if own and own not in (default, old):
+        return [own]
+    return [default, old]
+
+
 def ends_licence(message: str) -> bool:
     """A renewal answer that ends the licence here (revoked, refunded, unknown key): all of it stops."""
     text = message.lower()

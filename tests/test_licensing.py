@@ -138,3 +138,51 @@ def test_read_token_ignores_dates_but_not_the_installation():
         lic.read_token(t, lic.installation_hash("home-2"), public_key_b64=PUB)
     with pytest.raises(lic.LicenceError):
         lic.verify_token(t, INST, now=NOW, public_key_b64=PUB)
+
+
+def trial_state(ext, status="active", kind="trial"):
+    return lic.Licence(kind, status, frozenset(ext), 2_000_000_000)
+
+
+def entry(ext_id, version="1.0.0"):
+    return {"id": ext_id, "version": version, "file": f"{ext_id}-{version}.js"}
+
+
+def test_trials_add_to_the_licence():
+    main = [entry("energy", "1.2.0")]
+    got = lic.with_trials(main, [(trial_state(["security"]), [entry("security")])])
+    assert [e["id"] for e in got] == ["energy", "security"]
+
+
+def test_a_bought_extension_wins_over_its_trial():
+    main = [entry("energy", "1.2.0")]
+    got = lic.with_trials(main, [(trial_state(["energy"]), [entry("energy", "1.1.0")])])
+    assert got == main
+
+
+def test_ended_or_broken_trials_load_nothing():
+    trials = [
+        (trial_state(["security"], "expired"), [entry("security")]),
+        (None, [entry("household")]),
+        # a token that isn't a trial can't sneak in through the trials
+        (trial_state(["network"], "active", "installer"), [entry("network")]),
+        (trial_state(["energy"]), [entry("wall_tablet")]),
+    ]
+    assert lic.with_trials([], trials) == []
+
+
+NEW, OLD = "https://license.example", "https://old.example.workers.dev"
+
+
+@pytest.mark.parametrize("option,expected", [
+    (None, [NEW, OLD]),
+    ("", [NEW, OLD]),
+    # what the options form saved before there was our own address
+    (OLD, [NEW, OLD]),
+    (OLD + "/", [NEW, OLD]),
+    (NEW, [NEW, OLD]),
+    # a server of one's own (testing): only that one
+    ("http://192.168.1.10:8799/", ["http://192.168.1.10:8799"]),
+])
+def test_licence_server_order(option, expected):
+    assert lic.licence_servers(option, NEW, OLD) == expected
