@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0
 
 ### New
 - Measuring a device: add `?bench` to the VirtuHome panel's address (`/virtuhome?bench`) and it
