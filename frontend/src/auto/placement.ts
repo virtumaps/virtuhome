@@ -18,6 +18,7 @@ import { layoutWalls, openingPoint } from "../model/walls";
 import { gangWidth, linkedEntities, MAX_GANGS } from "../scene/devices";
 import { domainOf, type Hass, type HassEntity } from "../live/hass";
 import { findChargers, readEv, type EvCharger } from "../live/ev";
+import { applianceKind, applianceNow } from "../live/appliances";
 import { CAR_TYPES, carModel, FURNITURE } from "../scene/furniture-lib";
 import { t } from "../i18n";
 
@@ -192,6 +193,17 @@ function placeOne(c: Candidate, hass: Hass, floor: Floor, room: Room, spots: Spo
   };
 
   const outdoor = (room as Room & { outdoor?: boolean }).outdoor === true;
+  // a washing machine, dryer or dishwasher already drawn takes its appliance (by the device's name), not a pin
+  const appliance = applianceKind(`${c.name} ${id}`);
+  if (appliance) {
+    const free = (r: Room | null) => floor.furniture.find((x) => x.type === appliance && !x.entity && (!r || pointInPolygon([x.x, x.z], r.points)));
+    const machine = free(room) ?? free(null);
+    if (machine) {
+      machine.entity = applianceNow(hass, c.entities)?.entity ?? id;
+      report.linked.push(`${c.name} → ${t(FURNITURE[appliance].label)}`);
+      return true;
+    }
+  }
   const piece = (f: Floor, type: string, at: { x: number; z: number; rotation: number }, extra: Partial<Furniture>) => {
     const [w, d, h] = FURNITURE[type].size;
     f.furniture.push({ id: newId("f"), type, ...at, w, d, h, ...extra });

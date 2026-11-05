@@ -13,8 +13,10 @@
 // colours painted over them (a solar map).
 // API 5 adds automations (ctx.automations): an extension's own blueprints, signed with it, that Home
 // Assistant runs with no screen open. Each is added only after the user agrees in the core's dialog.
-// And marks on furniture: a piece's lit part glows (a bin's lid) and a tag shows over it.
+// And marks on furniture: a piece's lit part glows (a bin's lid) and a tag shows over it. Since core
+// 0.17 also what a washing machine, dryer or dishwasher does (appliance(); check for it).
 import * as THREE from "three";
+import type { ApplianceNow } from "../live/appliances";
 import type { EnergyNow, EnergySources, EnergyToday } from "../live/energy";
 import type { Hass, HassEntity } from "../live/hass";
 import type { ItemMark, ItemMarks, RoomText, RoomTint } from "../live/live";
@@ -171,6 +173,12 @@ export interface ViewHandle {
   markItems(fn: ItemMarks | null): void;
   /** Works the marks out again and redraws them (call it when what they show changes, not every frame). */
   refreshItems(): void;
+  /**
+   * What a washing machine, dryer or dishwasher of the plan does now, by the piece's id: its run state
+   * (idle, waiting, running, paused, done, error), programme or phase, when it ends (ms) and the entity
+   * that says so. null when it isn't linked or nothing of its device says. Core 0.17 and later.
+   */
+  appliance?(item: string): ApplianceNow | null;
 }
 
 /** An automation an extension added to Home Assistant from one of its blueprints. */

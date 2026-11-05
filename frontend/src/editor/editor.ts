@@ -35,7 +35,7 @@ import { cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
 import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
 import { binColours, POST_TYPES, WASTE_NAMES, wasteKind } from "../scene/bins";
-import { AC_TYPES, FAN_LIGHTS, FAN_TYPES, GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, HEAT_TYPES, linkedEntities, MAX_GANGS, WATER_TYPES, WIFI_TYPES } from "../scene/devices";
+import { AC_TYPES, APPLIANCE_DOMAINS, APPLIANCE_TYPES, FAN_LIGHTS, FAN_TYPES, GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, HEAT_TYPES, linkedEntities, MAX_GANGS, WATER_TYPES, WIFI_TYPES } from "../scene/devices";
 import { isRaised, outdoorTop } from "../scene/build";
 import { circlePoints, edgeOf, newArea, openEdges, rectSides, resizeRect, roundness, turnOf, type NewAreaKind } from "../scene/areas";
 import {
@@ -67,6 +67,7 @@ const DEVICE_DOMAINS: [Set<string>, string[]][] = [
   [AC_TYPES, ["climate"]],
   [HEAT_TYPES, ["climate", "valve", "switch", "input_boolean", "binary_sensor"]],
   [WATER_TYPES, ["water_heater", "sensor", "climate"]],
+  [APPLIANCE_TYPES, APPLIANCE_DOMAINS],
 ];
 
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];

@@ -641,6 +641,7 @@ export class VhView {
         this.viewer.refreshLighting();
         this.viewer.refreshLabels();
       },
+      appliance: (item) => this.live.applianceOf(item),
       energy: {
         get sources() {
           return self.energy.sources;

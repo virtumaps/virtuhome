@@ -9,7 +9,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { showsValue, spaces, type Device, type Floor, type Furniture, type Opening, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
 import { addFanBlades, buildFloor, buildRoofs, clipToRect, groundAt, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
-import { FAN_TYPES, WATER_TYPES } from "./devices";
+import { APPLIANCE_TYPES, FAN_TYPES, WATER_TYPES } from "./devices";
 import { baseHeight, FURNITURE } from "./furniture-lib";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
 import { fromRoofFrame, planeHeight } from "./roofs";
@@ -1721,9 +1721,9 @@ export class Viewer {
         f.labels.push(el);
         return el;
       };
-      // hot water: its temperature over it
+      // hot water: its temperature over it; a washing machine: what it does, while it does something
       for (const x of f.fb.floor.furniture) {
-        if (x.entity && WATER_TYPES.has(x.type)) this.drawLabel(small("vh-reading", x.entity, "piece", x.id), this.live?.pieceReading?.(x) ?? null);
+        if (x.entity && (WATER_TYPES.has(x.type) || APPLIANCE_TYPES.has(x.type))) this.drawPiece(small("vh-reading", x.entity, "piece", x.id), x);
       }
       // smart locks on their doors' handle side, and what TVs and speakers play over them
       for (const d of f.fb.doors) if (d.opening.lock) this.drawLock(small("vh-lock", d.opening.lock, "lock", d.opening.id), d.opening);
@@ -1804,6 +1804,15 @@ export class Viewer {
     return true;
   }
 
+  /** A piece's label: hot water always shows, an appliance only while it does something. */
+  private drawPiece(el: HTMLElement, x: Furniture): boolean {
+    const r = this.live?.pieceReading?.(x) ?? null;
+    const hide = !r && APPLIANCE_TYPES.has(x.type);
+    const changed = this.drawLabel(el, r) || el.hidden !== hide;
+    el.hidden = hide;
+    return changed;
+  }
+
   /** Fills a small label with an icon and a value. Returns whether it changed. */
   private drawLabel(el: HTMLElement, r: Reading | null): boolean {
     const text = r?.text ?? "–";
@@ -1826,7 +1835,7 @@ export class Viewer {
         const door = el.dataset.lock === undefined ? null : f.fb.floor.openings.find((o) => o.id === el.dataset.lock);
         const media = el.dataset.media;
         let redrawn: boolean | null = null;
-        if (piece) redrawn = this.drawLabel(el, this.live?.pieceReading?.(piece) ?? null);
+        if (piece) redrawn = this.drawPiece(el, piece);
         else if (door) redrawn = this.drawLock(el, door);
         else if (media !== undefined) redrawn = this.drawMedia(el, el.dataset.entity ?? "", media.startsWith("d:") ? null : f.fb.floor.furniture.find((x) => x.id === media)?.type ?? null);
         if (redrawn !== null) {
