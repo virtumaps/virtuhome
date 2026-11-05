@@ -271,6 +271,11 @@ function shift(parts: Part[], dx: number, dz: number): Part[] {
 }
 
 /** A cupboard on a plinth with a worktop. The worktop overhangs at the front only, so units stand flush in a run. */
+/** A washing machine's or dryer's display, top left of its front: it glows with what the machine does. */
+function applianceDisplay(w: number, d: number, h: number): Part {
+  return { ...box(-w * 0.22, h * 0.86, d / 2 + 0.002, w * 0.26, h * 0.06, 0.006, "screen"), glow: "screen" };
+}
+
 function cabinet(w: number, d: number, h: number, role: Role = "white", top: Role = "wood"): Part[] {
   return [box(0, 0.08, 0, w, h - 0.12, d, role), box(0, h - 0.04, 0.01, w, 0.04, d + 0.02, top), box(0, 0, -0.03, w - 0.04, 0.08, d - 0.06, "dark")];
 }
@@ -651,7 +656,7 @@ export const FURNITURE: Record<string, FurnitureType> = {
   },
   fridge: { label: "furniture.fridge", category: "kitchen", family: "fridge", size: [0.6, 0.65, 1.8], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(w / 2 - 0.06, h * 0.45, d / 2 + 0.01, 0.02, h * 0.35, 0.03, "metal"), box(0, h * 0.38, d / 2, w, 0.008, 0.008, "metal")] },
   fridge_american: { label: "furniture.fridge_american", category: "kitchen", family: "fridge", size: [0.92, 0.72, 1.8], paint: ["metal"], build: (w, d, h) => [box(0, 0, 0, w, h, d, "metal"), box(0, 0.02, d / 2, 0.006, h - 0.04, 0.006, "dark"), box(-0.05, h * 0.35, d / 2 + 0.015, 0.02, h * 0.4, 0.03, "dark"), box(0.05, h * 0.35, d / 2 + 0.015, 0.02, h * 0.4, 0.03, "dark")] },
-  dishwasher: { label: "furniture.dishwasher", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 0.85], build: (w, d, h) => [...cabinet(w, d, h, "metal", "woodDark"), box(0, h * 0.85, d / 2, w * 0.7, 0.02, 0.02, "dark")] },
+  dishwasher: { label: "furniture.dishwasher", category: "kitchen", family: "kitchen", size: [0.6, 0.6, 0.85], build: (w, d, h) => [...cabinet(w, d, h, "metal", "woodDark"), box(0, h * 0.85, d / 2, w * 0.7, 0.02, 0.02, "dark"), { ...box(w * 0.3, h * 0.78, d / 2 + 0.002, w * 0.16, 0.03, 0.006, "screen"), glow: "screen" as const }] },
 
   // ---------------------------------------------------------------- bedroom
   bed: { label: "furniture.bed", category: "bedroom", family: "bed", size: [1.4, 2.0, 0.55], build: (w, d, h) => bed(w, d, h) },
@@ -914,9 +919,9 @@ export const FURNITURE: Record<string, FurnitureType> = {
   // ---------------------------------------------------------------- utility
   washer: {
     label: "furniture.washer", category: "utility", family: "washer", size: [0.6, 0.6, 0.85],
-    build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "dark", 16)],
+    build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "dark", 16), applianceDisplay(w, d, h)],
   },
-  dryer: { label: "furniture.dryer", category: "utility", family: "washer", size: [0.6, 0.6, 0.85], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "metal", 16)] },
+  dryer: { label: "furniture.dryer", category: "utility", family: "washer", size: [0.6, 0.6, 0.85], build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), rod("z", 0, h * 0.25, d / 2, w * 0.55, w * 0.55, 0.02, "metal", 16), applianceDisplay(w, d, h)] },
   boiler: { label: "furniture.boiler", category: "utility", family: "boiler", size: [0.45, 0.35, 0.7], y: 1.2, build: (w, d, h) => [box(0, 0, 0, w, h, d, "white"), box(0, h * 0.15, d / 2, w * 0.4, h * 0.08, 0.01, "dark")] },
   laundry_basket: { label: "furniture.laundry_basket", category: "utility", family: "basket", size: [0.4, 0.4, 0.55], paint: ["wood"], build: (w, d, h) => [cyl(0, 0, 0, w, h, d, "wood", undefined, 12, 1.1), ball(0, h - 0.1, 0, w * 0.8, 0.2, d * 0.8, "fabric", 8)] },
   printer_3d: { label: "furniture.printer_3d", category: "utility", family: "printer", size: [0.4, 0.4, 0.5], build: (w, d, h) => [box(0, 0, 0, w, h, d, "dark"), box(0, 0.05, d / 2 - 0.004, w * 0.85, h * 0.8, 0.008, "glass", "screen")] },

@@ -389,6 +389,8 @@ Edit → **Home** → **Devices** → **Place devices automatically**:
 - hangs a ceiling fan on its room's ceiling (with its light, when the fan's device has one; air
   purifiers and the like stay pins), and puts an air conditioner (a thermostat that can cool) high
   on its room's outside wall, with its outdoor unit on the ground outside;
+- links a washing machine, dryer or dishwasher you drew to the appliance whose device is named so
+  ("Washer dryer" counts as a washing machine), in its room first, rather than adding a pin;
 - puts a car charger on the house wall at the driveway, with the car in front of it.
 
 It never moves what is already placed, so run it again after adding devices. It reports what it
@@ -446,6 +448,14 @@ did, and how many devices are in areas without a room in the plan.
 - **Hot water** (**Hot water cylinder**, **Water heater**): **Linked to** picks the water heater, or
   a thermostat or temperature sensor of the cylinder. Its temperature shows over it, with what it
   heats to (**52.0° → 55°**). Tap the label or the cylinder for its dialog.
+- **Washing machines, dryers and dishwashers** (**Washing machine**, **Dryer**, **Dishwasher**):
+  **Linked to** picks any sensor, binary sensor, select or switch of the appliance, or the smart
+  plug it runs on; the rest of its device is read too. That works with Home Connect (Bosch,
+  Siemens, Neff), Miele, LG ThinQ and SmartThings (Samsung), a "running" binary sensor, or a plug's
+  power (running above 8 W). Its display glows blue while it runs (amber paused or waiting, red when
+  it needs attention, green when the integration says it's done), and a label over it says what it
+  does: the programme or phase and the time left (**Eco 50 · 47 min left**), **Paused**, **Waiting
+  to start**, **Done** or **Needs attention**. Nothing shows while it's off or idle.
 - **Robot vacuums and mowers** go at their dock (Smart Setup puts them in a corner of their room, a
   mower on its lawn). Their pin shows what they do: blue and pulsing while cleaning or mowing, red
   on an error. When something says where the robot is, it moves on the plan while it works and

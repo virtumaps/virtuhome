@@ -14,8 +14,9 @@ export const LOADER_BYTES = 4 * 1024;
  * The built app (custom_components/virtuhome/frontend/app), in bytes: everything, and what a tablet
  * loads to show the house (app.js and the chunks it imports up front). The test allows 10% over these.
  */
-// raised from 1,555,108 for the devices, smart locks and media labels (1,707,428 measured)
-export const APP_BYTES = 1_600_000;
+// raised from 1,555,108 for the devices, smart locks and media labels (1,707,428 measured), then from 1,600,000
+// for ?bench (its own chunk), free trials in Extras and appliances (1,761,554 measured)
+export const APP_BYTES = 1_650_000;
 // raised from 1,123,987 for the devices (switches, fans, air conditioners, heating, hot water: 1,245,350 measured),
 // then from 1,160,000 for the air quality maps and robots moving on the plan (1,277,740 measured)
 export const FIRST_LOAD_BYTES = 1_190_000;

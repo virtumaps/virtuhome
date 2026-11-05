@@ -22,6 +22,7 @@ import { artwork, mediaText } from "./media";
 import { attributeFix, grow, isRunning, mirrored, ROBOT_DOMAINS, robotSources, robotToPlan, sourceKind, valetudoMap, type RobotSource } from "./robots";
 import { openWindows, powerCut, rainComing, rainSensors, type ForecastHour } from "./warnings";
 import { AIR, airBand, BAND_COLOURS, needsDoing, readsAir, type Air, type MapKind } from "./air";
+import { applianceEntities, applianceGlow, applianceNow, applianceText, APPLIANCE_TYPES, type ApplianceNow } from "./appliances";
 import { t } from "../i18n";
 
 export type Change = "lighting" | "openings" | "markers" | "tints" | "labels" | "status" | "readings";
@@ -166,6 +167,8 @@ export class HassLive implements LiveSource {
   peopleInRooms = true;
   /** Motion sensors of each camera's own device (a doorbell's motion turns its view cone red). */
   private cameraMotion = new Map<string, string[]>();
+  /** Each appliance piece's entities (its device's), by the piece's id. */
+  private applianceIds = new Map<string, string[]>();
   /** Rooms and garden areas with a car or a charger in them. */
   private evSpaces = new Map<string, Furniture[]>();
   /** The house's solar: solar panels in the plan shine with it (darker in the day look's brighter light). */
@@ -246,6 +249,7 @@ export class HassLive implements LiveSource {
     this.kinds.clear();
     this.rooms.clear();
     this.cameraMotion.clear();
+    this.applianceIds.clear();
     this.evSpaces.clear();
     this.presence = [];
     const set = this.plan.settings.presence;
@@ -383,6 +387,12 @@ export class HassLive implements LiveSource {
         if (GANG_TYPES.has(f.type)) for (const id of gangsOf(f)) this.watch(id, "lighting");
         this.watch(f.light, "lighting");
         if (WATER_TYPES.has(f.type)) this.watch(f.entity, "readings");
+        // a washing machine: all of its device's entities (its state, programme, time left, power)
+        if (APPLIANCE_TYPES.has(f.type) && f.entity) {
+          const ids = applianceEntities(hass, f.entity);
+          this.applianceIds.set(f.id, ids);
+          for (const id of ids) this.watch(id, "lighting", "readings");
+        }
       }
       for (const o of floor.openings) {
         this.watch(o.entity, "openings", "lighting");
@@ -540,6 +550,8 @@ export class HassLive implements LiveSource {
     // an access point is red while offline (unavailable too), a switch's gangs light while on, an air
     // conditioner with its mode, a radiator while it heats
     if (g.type && GLOW_TYPES.has(g.type)) return g.entity ? deviceGlow(g.type, this.state(g.entity)) : null;
+    // a washing machine's display: blue while it runs, green when done
+    if (g.type && APPLIANCE_TYPES.has(g.type)) return g.item ? applianceGlow(this.applianceOf(g.item)) : null;
     const s = this.state(g.entity);
     if (!s || isUnavailable(s)) return null;
     // a post box's window glows warm while its sensor says there is post
@@ -964,9 +976,20 @@ export class HassLive implements LiveSource {
 
   /** A hot water cylinder's temperature, and what it heats to: "52.0° → 55°". */
   pieceReading(f: Furniture): Reading | null {
-    if (!this.hass || !WATER_TYPES.has(f.type)) return null;
+    if (!this.hass) return null;
+    if (APPLIANCE_TYPES.has(f.type)) {
+      const text = applianceText(this.applianceOf(f.id));
+      return text ? { text, icon: "washer" } : null;
+    }
+    if (!WATER_TYPES.has(f.type)) return null;
     const w = waterTemperature(this.state(f.entity));
     return { text: (w && heatText(w.current, w.target !== null ? degrees(w.target) : null)) || "–", icon: "water" };
+  }
+
+  /** What a washing machine, dryer or dishwasher of the plan does now (by the piece's id). */
+  applianceOf(item: string): ApplianceNow | null {
+    const ids = this.applianceIds.get(item);
+    return this.hass && ids ? applianceNow(this.hass, ids) : null;
   }
 
   /** How fast a ceiling fan's blades turn. */

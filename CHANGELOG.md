@@ -10,6 +10,11 @@
   tried works in the home for its trial days with no key, beside any licence, shows the days left,
   and stops at the end with a note in **Check my setup**. Once per extension and Home Assistant.
 
+- Washing machines, dryers and dishwashers link to their appliance (Home Connect, Miele, LG ThinQ,
+  SmartThings, a running sensor or a smart plug's power): the display glows while it runs and a label
+  says the programme and time left, **Paused**, **Done** or **Needs attention**. Smart Setup links
+  one already drawn to the appliance named like it.
+
 ### Changed
 - The licence server is reached at `license.virtumaps.com`, and at its first address when that can't
   be reached. A licence server set in the integration's options is still the only one used.

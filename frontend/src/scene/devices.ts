@@ -21,6 +21,10 @@ export const FAN_LIGHTS = new Set(["fan_ceiling_light"]);
 export const AC_TYPES = new Set(["ac_wall", "ac_outdoor"]);
 /** Radiators and underfloor heating: they glow while their thermostat, valve or switch heats. */
 export const HEAT_TYPES = new Set(["radiator", "radiator_column", "towel_rail", "underfloor_heating"]);
+/** Washing machines, dryers and dishwashers: their display glows and a label says what they do (live/appliances.ts). */
+export const APPLIANCE_TYPES = new Set(["washer", "dryer", "dishwasher"]);
+/** What an appliance piece can be linked to (any entity of the appliance: the rest of its device is read too). */
+export const APPLIANCE_DOMAINS = ["sensor", "binary_sensor", "select", "switch"];
 /** Hot water: its temperature shows in a label over it. */
 export const WATER_TYPES = new Set(["hot_water_cylinder", "water_heater"]);
 /** Pieces a tap switches or opens as a whole, however small they are on the screen. */
