@@ -20,5 +20,30 @@
         }
       }
     }
+  },
+  "issues": {
+    "card_resource": {
+      "title": "The VirtuHome card is missing from your dashboards",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Add the VirtuHome card again",
+            "description": "Dashboards load the VirtuHome card from a resource that is missing or names an older version, so VirtuHome cards may show \"Custom element doesn't exist: virtuhome-card\". Submit to add it again, as VirtuHome does when Home Assistant starts, then reload the dashboard."
+          }
+        }
+      }
+    },
+    "missing_entities": {
+      "title": "VirtuHome has devices linked to entities that no longer exist",
+      "description": "{count} devices, doors, windows or pieces in your VirtuHome home are linked to entities Home Assistant no longer has (renamed, re-paired or removed). Open VirtuHome in the sidebar, then Edit → Home → Check my setup: it can link them to their new entities. This goes away once they are linked."
+    },
+    "extension_needs_update": {
+      "title": "A VirtuHome extension can't load",
+      "description": "{count} of your VirtuHome extensions need a newer VirtuHome or could not load. Update VirtuHome through HACS and restart Home Assistant; Edit → Home → Check my setup in VirtuHome says which. This goes away once they load."
+    },
+    "licence_not_renewed": {
+      "title": "Your VirtuHome licence hasn't renewed for {days} days",
+      "description": "Home Assistant couldn't renew your VirtuHome licence for {days} days ({error}). The extensions you have keep working; only new versions wait. Check that Home Assistant can reach the internet, then open VirtuHome → Edit → Extras → Check for updates. This goes away once it renews."
+    }
   }
 }
