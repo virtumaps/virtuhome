@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  checkAreas, checkCard, checkCounts, checkExtensions, checkGraphics, checkLinks, checkRepairs, checkRooms, runChecks, type ServerChecks,
+  checkAreas, checkCard, checkCounts, checkExtensions, daysLeft, checkGraphics, checkLinks, checkRepairs, checkRooms, runChecks, type ServerChecks,
 } from "../src/ui/checks";
 import { normalizePlan, type Plan, type Repair } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
@@ -94,6 +94,23 @@ describe("check my setup", () => {
     expect(checkExtensions({ ...active, status: "expired", error: "token expired" }, [])).toMatchObject({ level: "problem", fixes: ["renew"] });
     expect(checkExtensions({ ...active, error: "could not reach the licence server" }, [])).toMatchObject({ level: "note", fixes: ["renew"] });
     expect(checkExtensions(SERVER.licence, [])).toMatchObject({ level: "ok", count: 0 });
+  });
+
+  it("extensions: trials beside the licence, and a note for a while after one ends", () => {
+    const now = Date.parse("2026-11-05T12:00:00Z");
+    const day = 86_400;
+    const trial = (status: string, end: number) => ({ id: "security", name: "Security", status, end: now / 1000 + end });
+    const none = { status: "none", error: null, extensions: [] };
+    expect(daysLeft(now / 1000 + 9.2 * day, now)).toBe(10);
+    expect(daysLeft(now / 1000 - day, now)).toBe(0);
+    expect(checkExtensions({ ...none, trials: [trial("active", 9.5 * day)] }, [], now)).toMatchObject({ level: "ok", text: "Trying Security (10 days left)." });
+    const active = { status: "active", error: null, extensions: [{ id: "energy", name: "Energy" }], trials: [trial("active", 0.5 * day)] };
+    expect(checkExtensions(active, [], now)).toMatchObject({ level: "ok", text: "Licence active: Energy. Trying Security (1 day left)." });
+    const over = checkExtensions({ ...none, trials: [trial("expired", -2 * day)] }, [], now);
+    expect(over).toMatchObject({ level: "note", fixes: ["extras"] });
+    expect(over.text).toContain("The trial of Security has ended");
+    // long over: no more note
+    expect(checkExtensions({ ...none, trials: [trial("expired", -20 * day)] }, [], now)).toMatchObject({ level: "ok", fixes: [] });
   });
 
   it("extensions: what was bought keeps working past the renewal date; a trial stops", () => {

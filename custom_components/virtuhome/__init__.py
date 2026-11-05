@@ -15,7 +15,7 @@ from homeassistant.loader import async_get_integration
 from . import card_resource, websocket
 from .backgrounds import Backgrounds
 from .const import (
-    CONF_LICENCE_SERVER, DEFAULT_LICENCE_SERVER, DOMAIN, EXT_URL_BASE, LOADER_FILE, PANEL_ELEMENT, PANEL_ICON,
+    CONF_LICENCE_SERVER, DOMAIN, EXT_URL_BASE, LOADER_FILE, PANEL_ELEMENT, PANEL_ICON,
     PANEL_PATH, PANEL_TITLE, URL_BASE,
 )
 from .extensions import ExtensionManager
@@ -37,7 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DATA_BACKGROUNDS] = Backgrounds(Path(hass.config.path(".virtuhome", "backgrounds")))
     store.backgrounds = hass.data[DATA_BACKGROUNDS]
     hass.data[DOMAIN] = store
-    ext = ExtensionManager(hass, entry.options.get(CONF_LICENCE_SERVER) or DEFAULT_LICENCE_SERVER)
+    ext = ExtensionManager(hass, entry.options.get(CONF_LICENCE_SERVER))
     await ext.async_load()
     store.extension_manager = ext
     entry.async_on_unload(entry.add_update_listener(_options_updated))

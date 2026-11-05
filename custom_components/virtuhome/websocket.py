@@ -29,7 +29,7 @@ from .storage import PlanStore
 def async_register(hass: HomeAssistant) -> None:
     for command in (
         ws_info, ws_get, ws_save, ws_subscribe, ws_history_list, ws_history_restore,
-        ws_licence_get, ws_licence_activate, ws_licence_refresh, ws_licence_remove, ws_catalog,
+        ws_licence_get, ws_licence_activate, ws_licence_refresh, ws_licence_remove, ws_licence_trial, ws_catalog,
         ws_background_upload, ws_checks, ws_checks_fix_card, ws_errors_report,
         ws_automations_list, ws_automations_preview, ws_automations_add, ws_automations_remove,
     ):
@@ -319,6 +319,18 @@ async def ws_licence_remove(hass: HomeAssistant, connection: websocket_api.Activ
     if (m := _manager(hass, connection, msg)) is None:
         return
     await _run(connection, msg, m.async_remove())
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "virtuhome/licence/trial", vol.Required("ext"): vol.All(str, vol.Match(r"^[a-z0-9_]{1,40}$"))}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_licence_trial(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Starts a free trial of one extension in this home."""
+    if (m := _manager(hass, connection, msg)) is None:
+        return
+    await _run(connection, msg, m.async_trial(msg["ext"]))
 
 
 @websocket_api.websocket_command({vol.Required("type"): "virtuhome/catalog"})

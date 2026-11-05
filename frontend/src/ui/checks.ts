@@ -10,7 +10,7 @@ import { tierName, TIERS, type Tier } from "../scene/tier";
 
 export type CheckId = "links" | "rooms" | "areas" | "card" | "graphics" | "extensions" | "repairs";
 /** Safe fixes; nothing changes until one is pressed. */
-export type Fix = "relink" | "link-rooms" | "open-rooms" | "add-rooms" | "reload" | "resource" | "graphics" | "renew" | "save";
+export type Fix = "relink" | "link-rooms" | "open-rooms" | "add-rooms" | "reload" | "resource" | "graphics" | "renew" | "save" | "extras";
 
 export interface Check {
   id: CheckId;
@@ -34,7 +34,19 @@ export interface ServerChecks {
    */
   dashboard: { mode: string; urls?: string[]; current?: boolean; pending?: boolean };
   /** status: none, active, lapsed or ended (past renewal or ended, still loading), expired, invalid. */
-  licence: { status: string; kind?: string | null; error: string | null; extensions: { id: string; name: string }[] } | null;
+  licence: {
+    status: string; kind?: string | null; error: string | null; extensions: { id: string; name: string }[];
+    /** Trials beside the licence: status active or expired, end (unix). */
+    trials?: { id: string; name: string; status: string; end: number | null }[];
+  } | null;
+}
+
+/** How long after its end a trial still gets a note. */
+const TRIAL_NOTE_DAYS = 14;
+
+/** Whole days left until `end` (unix), counting a part day as one. */
+export function daysLeft(end: number, now = Date.now()): number {
+  return Math.max(0, Math.ceil((end * 1000 - now) / 86_400_000));
 }
 
 export interface CheckInput {
@@ -115,7 +127,7 @@ export function checkGraphics(g: CheckInput["graphics"]): Check {
   return check("graphics", t("checks.graphics.title"), found, ok, [capped && "graphics"]);
 }
 
-export function checkExtensions(licence: ServerChecks["licence"] | undefined, failed: CheckInput["extensions"]): Check {
+export function checkExtensions(licence: ServerChecks["licence"] | undefined, failed: CheckInput["extensions"], now = Date.now()): Check {
   const found: [Check["level"], string][] = [];
   const newer = failed.filter((x) => x.newer).map((x) => x.name);
   const broken = failed.filter((x) => !x.newer).map((x) => x.name);
@@ -129,13 +141,19 @@ export function checkExtensions(licence: ServerChecks["licence"] | undefined, fa
   else if (status === "lapsed") found.push(["note", t("checks.extensions.lapsed")]);
   else if (status === "active" && error) found.push(["note", t("checks.extensions.renewFailed", { error })]);
   const names = licence?.extensions.map((x) => x.name) ?? [];
+  const trials = licence?.trials ?? [];
+  const over = trials.filter((x) => x.status !== "active" && x.end !== null && now - x.end * 1000 < TRIAL_NOTE_DAYS * 86_400_000);
+  if (over.length) found.push(["note", t("checks.extensions.trialOver", { names: over.map((x) => x.name).join(", ") })]);
+  const trying = trials.filter((x) => x.status === "active" && x.end !== null)
+    .map((x) => t("checks.extensions.tryingOne", { name: x.name, n: daysLeft(x.end!, now) }));
   // paid and installer licences keep loading what is installed after their renewal date, or once ended
   const loads = status === "active" || status === "lapsed" || status === "ended";
   const renew = status === "expired" || status === "invalid" || status === "lapsed" || (status === "active" && !!error);
-  const ok = !loads ? t("checks.extensions.none")
+  const ok = (!loads ? (trying.length ? "" : t("checks.extensions.none"))
     : status === "ended" ? t("checks.extensions.ended")
-    : names.length ? t("checks.extensions.activeWith", { names: names.join(", ") }) : t("checks.extensions.active");
-  return check("extensions", t("checks.extensions.title"), found, ok, [renew && "renew"]);
+    : names.length ? t("checks.extensions.activeWith", { names: names.join(", ") }) : t("checks.extensions.active"))
+    + (trying.length ? `${loads ? " " : ""}${t("checks.extensions.trying", { list: trying.join(", ") })}` : "");
+  return check("extensions", t("checks.extensions.title"), found, ok, [renew && "renew", over.length > 0 && "extras"]);
 }
 
 export function checkRepairs(repairs: Repair[]): Check {

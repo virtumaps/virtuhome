@@ -6,6 +6,13 @@
 - Measuring a device: add `?bench` to the VirtuHome panel's address (`/virtuhome?bench`) and it
   times the first frame, turning the house and a floor, and tapping rooms, then shows the numbers
   and writes them to Home Assistant's logbook. For reporting how a tablet does.
+- **Try it free** under **Available extensions** (Edit → **Extras**): an extension that can be
+  tried works in the home for its trial days with no key, beside any licence, shows the days left,
+  and stops at the end with a note in **Check my setup**. Once per extension and Home Assistant.
+
+### Changed
+- The licence server is reached at `license.virtumaps.com`, and at its first address when that can't
+  be reached. A licence server set in the integration's options is still the only one used.
 
 ### Fixed
 - The map button said **Temperature map** after the page loaded, though the home had air quality
