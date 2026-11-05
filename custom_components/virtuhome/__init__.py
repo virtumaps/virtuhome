@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, Event, HomeAssistant
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.loader import async_get_integration
 
 from . import card_resource, websocket
@@ -19,6 +22,7 @@ from .const import (
     PANEL_PATH, PANEL_TITLE, URL_BASE,
 )
 from .extensions import ExtensionManager
+from .repair_issues import async_update_issues
 from .storage import PlanStore
 from .views import BackgroundView
 
@@ -67,6 +71,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await card_resource.async_register(hass, version)
         except Exception:  # noqa: BLE001 - the card can still be added as a resource by hand
             _LOGGER.exception("Could not add the VirtuHome card to the dashboard resources")
+        await _update_issues()
+
+    async def _update_issues(_now: Any = None) -> None:
+        try:
+            await async_update_issues(hass, hass.data.get(DOMAIN))
+        except Exception:  # noqa: BLE001 - Repairs are a convenience; VirtuHome works without them
+            _LOGGER.exception("Could not update VirtuHome's repair issues")
+
+    # a licence that stops renewing shows up in Repairs within a day
+    entry.async_on_unload(async_track_time_interval(hass, _update_issues, timedelta(hours=24)))
 
     if hass.state is CoreState.running:
         await _register_card()

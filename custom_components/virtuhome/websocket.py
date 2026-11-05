@@ -23,6 +23,7 @@ from .errors import LIMITS, private_strings
 from .schema import ID, PLAN
 from .licensing import LicenceError
 from .report import CHECK_IDS
+from .repair_issues import async_update_issues
 from .storage import PlanStore
 
 
@@ -174,6 +175,8 @@ async def ws_checks(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         return
     if "report" in msg:
         store.checks = {"time": time.time(), "counts": dict(msg["report"])}
+        # what Check my setup found shows in Settings → Repairs too, and goes once it's put right
+        await async_update_issues(hass, store)
     connection.send_result(msg["id"], await _checks_state(hass, store))
 
 
@@ -185,6 +188,7 @@ async def ws_checks_fix_card(hass: HomeAssistant, connection: websocket_api.Acti
     if (store := _store(hass, connection, msg)) is None:
         return
     await card_resource.async_register(hass, str((await async_get_integration(hass, DOMAIN)).version))
+    await async_update_issues(hass, store)
     connection.send_result(msg["id"], await _checks_state(hass, store))
 
 
@@ -310,6 +314,7 @@ async def ws_licence_refresh(hass: HomeAssistant, connection: websocket_api.Acti
     if (m := _manager(hass, connection, msg)) is None:
         return
     await _run(connection, msg, m.async_refresh())
+    await async_update_issues(hass, hass.data.get(DOMAIN))
 
 
 @websocket_api.websocket_command({vol.Required("type"): "virtuhome/licence/remove"})

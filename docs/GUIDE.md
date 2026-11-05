@@ -854,6 +854,13 @@ feet and inches (`11'4"`).
 **Check my setup**: Edit → **Home** starts with it. It lists what stops VirtuHome working as it
 should, with a fix where there is a safe one. Nothing changes until you press a fix, and
 **Check again** asks Home Assistant again.
+
+**Settings → System → Repairs** in Home Assistant lists VirtuHome's problems too, so they show up
+where Home Assistant users look first: **The VirtuHome card is missing from your dashboards** (with
+**Submit** to add it again), devices linked to entities that no longer exist, an extension that
+can't load, and a licence that hasn't renewed for a month. The first is checked when Home Assistant
+starts and each day; the others when someone opens Check my setup. Each goes away by itself once
+it's put right.
 - **Linked entities**: links to entities Home Assistant no longer has (see below).
 - **Rooms and areas**: rooms not linked to an area (named), or linked to one that is gone. **Link
   rooms by name** links them to the areas named like them; **Open Rooms** to pick by hand.

@@ -15,6 +15,10 @@
   says the programme and time left, **Paused**, **Done** or **Needs attention**. Smart Setup links
   one already drawn to the appliance named like it.
 
+- VirtuHome's problems in Home Assistant's **Settings → System → Repairs**: the dashboard card's
+  resource missing (with a fix), links to entities that are gone, an extension that can't load, and
+  a licence that hasn't renewed for 30 days. Each goes away once it's put right.
+
 ### Changed
 - The licence server is reached at `license.virtumaps.com`, and at its first address when that can't
   be reached. A licence server set in the integration's options is still the only one used.
