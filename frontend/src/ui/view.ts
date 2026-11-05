@@ -35,6 +35,8 @@ export interface ViewConfig {
   room_panel?: boolean;
   floor_chips?: boolean;
   stats?: boolean;
+  /** Measures this device once the house shows (?bench on the panel's address). */
+  bench?: boolean;
   /** Shows the Edit button to admins (the sidebar panel). */
   editable?: boolean;
   /** Alarm panel shown in the top bar (default: the first alarm_control_panel; "none" hides it). */
@@ -160,6 +162,9 @@ export class VhView {
   private toastTimer = 0;
   private statsTimer = 0;
   private started = false;
+  /** When this view was made, for measuring (performance.now()). */
+  private readonly madeAt = performance.now();
+  private benched = false;
   /** The tier was picked automatically (it may step down when the device struggles). */
   private tierAuto = true;
   private menu: HTMLDivElement;
@@ -450,6 +455,7 @@ export class VhView {
       this.updateChecks();
     }
     callEach(this.hassListeners, h);
+    if (this.config.bench && !this.benched && this.started) void this.bench();
   }
 
   /** Draws a set of states: the live ones, or a replay's (plus parts to redraw anyway). */
@@ -1378,6 +1384,7 @@ export class VhView {
     this.renderChips();
     this.updateChecks();
     callEach(this.planListeners, plan);
+    if (this.config.bench && !this.benched && this.started) void this.bench();
   }
 
   private startFloor(plan: Plan): number {
@@ -1842,6 +1849,31 @@ export class VhView {
     const sky = this.viewer.currentSky;
     if (sky) this.viewer.setSky(sky);
     if (start && !this.editor) void this.openEditor();
+  }
+
+  /** Measures how this device does (?bench), shows the numbers and writes them to the logbook. */
+  private async bench(): Promise<void> {
+    this.benched = true;
+    const { benchBox, benchLines, logBench, runBench } = await import("./bench");
+    const box = benchBox(this.root);
+    try {
+      const result = await runBench({
+        viewer: this.viewer,
+        hass: () => this._hass,
+        tap: (hit) => this.onHit(hit, "tap"),
+        closeSheet: () => this.closeSheet(),
+        showHouse: () => this.showHouse(),
+        madeAt: this.madeAt,
+        version: __VERSION__,
+      }, box.status);
+      const lines = benchLines(result, __VERSION__);
+      box.done(lines);
+      console.info(lines.join("\n"));
+      if (this._hass) await logBench(this._hass, lines).catch((err) => logError(err, "bench"));
+    } catch (err) {
+      box.status(String(err));
+      logError(err, "bench");
+    }
   }
 
   showHouse(): void {

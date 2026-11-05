@@ -4,7 +4,7 @@
 //   ?plan=demo|<file>     the demo house, or a plan JSON from dev/plans/<file>.json
 //   ?plan=empty           no home yet (the first run), in a Home Assistant with the demo home's areas and devices
 //   ?plan=catalog[&cat=<category>]  every built-in item in a labelled grid
-//   ?theme=day|night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?stats
+//   ?theme=day|night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?stats  ?bench
 //   ?weather=rainy|snowy|pouring|fog|lightning-rainy|none  ?where=<area id> (where Alex is)  ?leak
 import "../src/compat";
 import { createConnection, createLongLivedTokenAuth, subscribeEntities, type Connection } from "home-assistant-js-websocket";
@@ -82,6 +82,7 @@ async function main(): Promise<void> {
     walls: (q.get("walls") as WallMode) ?? "smart",
     quality: (q.get("quality") as Quality) ?? "auto",
     stats: q.has("stats"),
+    bench: q.has("bench"),
     editable: true,
     // ?ext=wall_tablet loads dev/ext/wall_tablet.js (a build from virtuhome-pro, git-ignored)
     dev_extensions: q.getAll("ext").map((id) => `/dev/ext/${id}.js`),

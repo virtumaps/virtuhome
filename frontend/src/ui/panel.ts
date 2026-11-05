@@ -42,7 +42,8 @@ export class PanelImpl extends ViewHost {
   }
 
   protected make(inner: ShadowRoot): VhView {
-    const view = new VhView(inner, { editable: true, stats: new URLSearchParams(location.search).has("stats") });
+    const query = new URLSearchParams(location.search);
+    const view = new VhView(inner, { editable: true, stats: query.has("stats"), bench: query.has("bench") });
     this.showNarrow(view);
     return view;
   }

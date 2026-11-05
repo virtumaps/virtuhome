@@ -218,4 +218,9 @@ export const VIEW_CSS = /* css */ `
 .vh-menu-row .tick svg { width: 18px; height: 18px; fill: currentColor; }
 @media (min-width: 601px) { .vh-root.editing .vh-menu { right: calc(min(380px, 100%) + 60px); } }
 .vh-stats { position: absolute; left: 10px; bottom: 10px; font: 11px/1.3 ui-monospace, monospace; color: var(--vh-dim); pointer-events: none; }
+.vh-bench { position: absolute; z-index: 6; left: 10px; right: 10px; bottom: 10px; max-width: 720px; padding: 10px 12px; border-radius: 12px;
+  background: rgba(10,15,26,.88); color: #eef3fb; }
+.vh-bench pre { margin: 0 0 8px; font: 12px/1.45 ui-monospace, monospace; white-space: pre-wrap; }
+.vh-bench div { display: flex; gap: 8px; }
+.vh-bench button { border: 0; border-radius: 8px; padding: 6px 12px; background: rgba(255,255,255,.14); color: inherit; font: inherit; cursor: pointer; }
 `;

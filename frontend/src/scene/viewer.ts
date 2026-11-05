@@ -246,6 +246,8 @@ export class Viewer {
   private pixelRatio = 1;
   private disposed = false;
   private stats = { frames: 0, last: 0, fps: 0, ms: 0 };
+  /** Frames drawn since the viewer was made, when the first one with a house was, and the last one's work (measuring, ?bench). */
+  readonly drawn = { frames: 0, first: 0, ms: 0, calls: 0, triangles: 0 };
   private lastPulseCheck = 0;
   private look: RealisticLook | null = null;
   private realistic: RealisticModule | null;
@@ -2124,6 +2126,12 @@ export class Viewer {
       const s = this.stats;
       s.frames++;
       s.ms = performance.now() - t0;
+      const d = this.drawn;
+      d.frames++;
+      d.ms = s.ms;
+      d.calls = this.renderer.info.render.calls;
+      d.triangles = this.renderer.info.render.triangles;
+      if (!d.first && this.floors.length) d.first = performance.now();
       if (now - s.last > 1000) {
         s.fps = (s.frames * 1000) / (now - s.last);
         s.frames = 0;
@@ -2161,6 +2169,27 @@ export class Viewer {
 
   get fps(): number {
     return this.stats.fps;
+  }
+
+  /** The camera is flying somewhere (a room, the whole house). */
+  get flying(): boolean {
+    return !!this.flight;
+  }
+
+  /** Where a room's label point is on the page (client coordinates), or null when it's behind the camera. */
+  roomOnScreen(fi: number, ri: number): [number, number] | null {
+    const f = this.floors[fi];
+    const r = f?.fb.rooms[ri];
+    if (!r) return null;
+    const v = new Vector3(r.label[0], f.fb.floor.elevation + f.offset + 0.05, r.label[1]).project(this.camera);
+    if (v.z > 1 || Math.abs(v.x) > 0.95 || Math.abs(v.y) > 0.95) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return [rect.left + ((v.x + 1) / 2) * rect.width, rect.top + ((1 - v.y) / 2) * rect.height];
+  }
+
+  /** Rooms on a floor (for measuring taps). */
+  roomCount(fi: number): number {
+    return this.floors[fi]?.fb.rooms.length ?? 0;
   }
 
   /** Tells onSlow once when two seconds of continuous movement averaged under ~22 frames per second. */
