@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The map button said **Temperature map** after the page loaded, though the home had air quality
+  maps too, until a sensor changed; and a robot lined up with the plan was first placed only then.
+
 ## 0.16.0
 
 ### New
