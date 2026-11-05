@@ -33,6 +33,9 @@
 ### Fixed
 - The map button said **Temperature map** after the page loaded, though the home had air quality
   maps too, until a sensor changed; and a robot lined up with the plan was first placed only then.
+- On a new Home Assistant 2026.11, dashboard cards showed "Custom element doesn't exist: virtuhome-card"
+  until the next restart: its Marketplace makes the `www` folder while Home Assistant starts, and
+  VirtuHome took that to mean `/local` was served already.
 
 ## 0.16.0
 
