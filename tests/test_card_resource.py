@@ -94,3 +94,26 @@ def test_yaml_resources_say_pending_too(tmp_path):
     hass = FakeHass(tmp_path, None)
     hass.data["lovelace"] = {"resources": object()}
     assert asyncio.run(cr.async_state(hass, "0.10.0")) == {"mode": "yaml", "www_loader": False, "pending": True}
+
+
+class Route(SimpleNamespace):
+    """A route of Home Assistant's web server (aiohttp resources have a canonical path)."""
+
+
+def with_routes(hass, *paths):
+    hass.http = SimpleNamespace(app=SimpleNamespace(router=SimpleNamespace(resources=lambda: [Route(canonical=p) for p in paths])))
+    return hass
+
+
+def test_www_made_after_startup_is_not_used_until_it_is_served(tmp_path):
+    # Home Assistant 2026.11's Marketplace creates www/ while starting, after the frontend left /local out
+    (tmp_path / "www").mkdir()
+    hass = with_routes(FakeHass(tmp_path, FakeResources([])), "/api", "/virtuhome_static")
+    asyncio.run(cr.async_register(hass, "0.17.0"))
+    assert [i["url"] for i in hass.data["lovelace"]["resources"].items] == ["/virtuhome_static/virtuhome-loader.js?v=0.17.0"]
+    assert not (tmp_path / "www" / "virtuhome").exists()
+    # after the next restart /local is served: the retrying loader in www/ takes over
+    hass = with_routes(FakeHass(tmp_path, hass.data["lovelace"]["resources"]), "/api", "/local", "/virtuhome_static")
+    asyncio.run(cr.async_register(hass, "0.17.0"))
+    assert [i["url"] for i in hass.data["lovelace"]["resources"].items] == ["/local/virtuhome/card-loader.js?v=0.17.0"]
+    assert (tmp_path / "www" / "virtuhome" / "card-loader.js").is_file()
