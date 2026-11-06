@@ -53,6 +53,8 @@ class ExtensionManager:
         self.status = "none"  # none | active | lapsed | ended | expired | invalid
         self.licence: Licence | None = None
         self.error: str | None = None
+        # the bundles on disk: read at load and after each prune, so extensions() never touches the disk
+        self._present: set[str] = set()
         self._unsub_timer = None
         self._unsub_started = None
         self.automations = AutomationStore(hass, self)
@@ -60,6 +62,7 @@ class ExtensionManager:
     async def async_load(self) -> None:
         self.instance = installation_hash(await instance_id.async_get(self.hass))
         self.data = await self._store.async_load() or {}
+        self._present = await self.hass.async_add_executor_job(self._on_disk)
         self._check()
         self._watch()
         # automations of extensions that went while Home Assistant was off (a trial that ended)
@@ -109,11 +112,11 @@ class ExtensionManager:
 
     def extensions(self) -> list[dict[str, str]]:
         """Extensions to load now: unlocked by the licence (also past its renewal date unless it was a
-        trial) and present on disk."""
+        trial) and present on disk. Runs on every card and panel load, so from memory only."""
         return [
             {"id": ext["id"], "name": ext["name"], "version": ext["version"], "url": f"{EXT_URL_BASE}/{ext['file']}"}
             for ext in self.installed()
-            if (self.folder / ext["file"]).is_file()
+            if ext["file"] in self._present
         ]
 
     def installed(self) -> list[dict[str, Any]]:
@@ -233,7 +236,7 @@ class ExtensionManager:
         trials = dict(self.data.get("trials") or {})
         trials[ext_id] = {"token": token, "activation": data.get("activation"), "extensions": installed}
         self.data = {**self.data, "trials": trials}
-        await self.hass.async_add_executor_job(self._prune, self._files())
+        self._present = await self.hass.async_add_executor_job(self._prune, self._files())
         await self._store.async_save(self.data)
         await self._tidy()
 
@@ -251,7 +254,7 @@ class ExtensionManager:
         await self._refresh_trials()
         key = self.data.get("key")
         if not key:
-            await self.hass.async_add_executor_job(self._prune, self._files())
+            self._present = await self.hass.async_add_executor_job(self._prune, self._files())
             return self.summary()
         try:
             data = await self._post("/v1/refresh", {"key": key, "activation": self.data.get("activation"), "instance": self.instance})
@@ -289,7 +292,7 @@ class ExtensionManager:
             "key": key, "activation": data.get("activation"), "token": token, "extensions": installed, "checked": time.time(),
             **({"trials": self.data["trials"]} if self.data.get("trials") else {}),
         }
-        await self.hass.async_add_executor_job(self._prune, self._files())
+        self._present = await self.hass.async_add_executor_job(self._prune, self._files())
         self.error = None
         await self._store.async_save(self.data)
         await self._tidy()
@@ -326,18 +329,21 @@ class ExtensionManager:
             return False
         return True
 
-    def _prune(self, keep: set[str]) -> None:
-        if not self.folder.is_dir():
-            return
+    def _prune(self, keep: set[str]) -> set[str]:
+        """Deletes the bundles not in keep; returns those left."""
         for f in self.folder.glob("*.js"):
             if f.name not in keep:
                 f.unlink(missing_ok=True)
+        return self._on_disk()
+
+    def _on_disk(self) -> set[str]:
+        return {f.name for f in self.folder.glob("*.js")}
 
     async def _wipe(self) -> None:
         """The licence goes; trials stay until their end."""
         trials = self.data.get("trials")
         self.data = {"trials": trials} if trials else {}
-        await self.hass.async_add_executor_job(self._prune, self._files())
+        self._present = await self.hass.async_add_executor_job(self._prune, self._files())
         if trials:
             await self._store.async_save(self.data)
         else:
@@ -347,5 +353,5 @@ class ExtensionManager:
     async def _daily(self, _now: Any = None) -> None:
         await self.async_refresh()
         # a trial that ended: its bundle and automations go
-        await self.hass.async_add_executor_job(self._prune, self._files())
+        self._present = await self.hass.async_add_executor_job(self._prune, self._files())
         await self._tidy()
