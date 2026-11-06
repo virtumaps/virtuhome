@@ -28,7 +28,7 @@ installed, the same house is in Home Assistant too: see [The demo home](#the-dem
 - [Sun and weather](#sun-and-weather)
 - [Wall tablets](#wall-tablets)
 - [The card and its options](#the-card-and-its-options)
-- [Extensions and licence keys](#extensions-and-licence-keys)
+- [Extensions and VirtuHome Pro](#extensions-and-virtuhome-pro)
 - [FAQ](#faq)
 - [Troubleshooting](#troubleshooting)
 
@@ -743,7 +743,7 @@ A Fire HD 8 runs well at **Tablet** and **Standard**; **Realistic** and above ar
 - The **Wall Tablet** extension adds a doorbell camera takeover, a return to the start view when
   nobody touches it, the screen on when someone comes near and off a while after, brightness by day
   and night or the room's light, and a screensaver with the time, the weather, who's home and the
-  next event over the turning house or your photos (see [Extensions](#extensions-and-licence-keys)).
+  next event over the turning house or your photos (see [Extensions](#extensions-and-virtuhome-pro)).
   With Fully Kiosk Browser, turn on **Enable JavaScript Interface** in its settings (Advanced Web
   Settings) so VirtuHome can switch the screen itself; else pick the tablet's **Screen** switch from
   the Fully Kiosk integration, or VirtuHome blacks the screen out instead.
@@ -781,10 +781,26 @@ height: 440
 
 Extensions add their own sections to the visual editor (below).
 
-## Extensions and licence keys
+## Extensions and VirtuHome Pro
 
-VirtuHome is free and open source. Extensions add more, and are currently available to VirtuMaps
-installation clients.
+VirtuHome is free and open source. Extensions add more (the table below). They come with
+**VirtuHome Pro**, an integration of its own from VirtuMaps that isn't in HACS's default list, and
+are currently available to VirtuMaps installation clients.
+
+**Install VirtuHome Pro (once):**
+1. Edit → **Extras** → **Open in HACS**. HACS asks to add the repository
+   `virtumaps/virtuhome-pro-integration`: **Add**. (By hand: HACS → ⋮ → **Custom repositories**,
+   that repository with the type **Integration**.)
+2. **Download**, then restart Home Assistant.
+3. VirtuHome Pro sets itself up after the restart. Reload the page: **Extras** shows the licence and
+   the extensions.
+
+Its updates come through HACS, like VirtuHome's.
+
+**Coming from VirtuHome 0.17 or earlier:** extensions used to come with VirtuHome itself. Since 0.18
+they need VirtuHome Pro; until it's installed, **Settings → System → Repairs** says **Your VirtuHome
+extensions now come with VirtuHome Pro**. Install it as above: your licence key, trials, extensions
+and the automations they added carry on as they were, with nothing to enter again.
 
 **Activate a key:** Edit → **Extras** → type the **Licence key** → **Activate** → **Reload now**.
 The licence shows **Active**, the extensions it unlocks and their versions. **Check for updates**
@@ -799,7 +815,8 @@ changes; **Check my setup** says so for two weeks, with **Open Extras**. Each ex
 once per Home Assistant. A trial sits beside a licence: trying one extension doesn't touch those
 your key unlocks, and one you buy afterwards replaces its trial.
 
-**What is sent:** opening **Extras** asks the VirtuMaps licence server (`license.virtumaps.com`, or
+**What is sent:** VirtuHome itself sends nothing for extensions. With VirtuHome Pro, opening
+**Extras** asks the VirtuMaps licence server (`license.virtumaps.com`, or
 its first address if that can't be reached) for the list of extensions. Activating a key sends the
 key and an anonymous code for this Home Assistant, nothing that names your home; starting a trial
 sends the extension's name and the same code. The licence and trials are then renewed about once a
@@ -840,8 +857,8 @@ plan floor by floor, or [import a plan](#import-from-another-program). A scan is
 furniture and decoration.
 
 **Does VirtuHome send my data anywhere?** No. It runs inside Home Assistant. Only these go out, and
-only when you use them: **Line up with the map** (your home's location, to OpenStreetMap), and the
-**Extras** tab and licence keys (see [Extensions](#extensions-and-licence-keys)).
+only when you use them: **Line up with the map** (your home's location, to OpenStreetMap), and
+VirtuHome Pro's licence keys and trials, if you install it (see [Extensions](#extensions-and-virtuhome-pro)).
 
 **Will it slow down my tablet?** It draws nothing while nothing changes, and each floor is one or two
 draw calls. On slow tablets pick **Tablet** graphics.
@@ -877,8 +894,9 @@ should, with a fix where there is a safe one. Nothing changes until you press a 
 **Settings → System → Repairs** in Home Assistant lists VirtuHome's problems too, so they show up
 where Home Assistant users look first: **The VirtuHome card is missing from your dashboards** (with
 **Submit** to add it again), devices linked to entities that no longer exist, an extension that
-can't load, and a licence that hasn't renewed for a month. The first is checked when Home Assistant
-starts and each day; the others when someone opens Check my setup. Each goes away by itself once
+can't load, and a licence key from before VirtuHome 0.18 without VirtuHome Pro installed. The card is
+checked when Home Assistant starts and each day; the others when someone opens Check my setup.
+VirtuHome Pro adds its own: a licence that hasn't renewed for a month. Each goes away by itself once
 it's put right.
 - **Linked entities**: links to entities Home Assistant no longer has (see below).
 - **Rooms and areas**: rooms not linked to an area (named), or linked to one that is gone. **Link
@@ -891,8 +909,8 @@ it's put right.
   finished starting.
 - **Graphics on this device**: Automatic stepped down because turning the view was slow (**Try
   again**), or the browser draws without the graphics card.
-- **Extensions and licence**: an extension that needs a newer VirtuHome, or a licence that has
-  expired or couldn't renew (**Renew now**).
+- **Extensions**: an extension that needs a newer VirtuHome or can't load, and what VirtuHome Pro
+  says about its licence: expired or couldn't renew (**Renew now**), or a trial that ended.
 - **Plan repairs**: what VirtuHome put right while loading the plan; **Save** keeps it.
 
 ![Check my setup](screenshots/check-setup.jpg)
@@ -963,6 +981,9 @@ home in](#get-your-home-in). Dashboard cards only show the house once it is ther
 **No solar, battery or grid in the corner**: set them up in Home Assistant's energy dashboard, or
 pick the sensors in Edit → **Home** → **Energy**.
 
+**Extras still says Open in HACS after installing VirtuHome Pro**: restart Home Assistant once it's
+downloaded, then reload the page.
+
 **Extensions don't show after activating**: tap **Reload now**, or reload the page.
 
 **An extension goes wrong**: the house carries on without it. Its room colours, labels, buttons and
@@ -976,9 +997,11 @@ Q&A](https://github.com/virtumaps/virtuhome/discussions/categories/q-a). To repo
 doesn't work, a device to support, a scan that came in wrong or a slow device, open an
 [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) with its form, and attach the
 diagnostics file: Settings → Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds
-the versions, the plan's size and what each floor counts, how the card reaches your dashboards and
-which extensions are loaded, how many things each check of **Check my setup** found when an
+the versions, the plan's size and what each floor counts, how the card reaches your dashboards, how
+many things each check of **Check my setup** found when an
 administrator last opened VirtuHome, and the last 50 errors the cards and the panel ran into (where,
 the error, the version, the graphics level and the browser). It has no room, area, device, people or
-entity names, no web addresses, and no licence key or token. Errors are kept until Home Assistant or
-VirtuHome restarts.
+entity names and no web addresses. Errors are kept until Home Assistant or VirtuHome restarts. For
+an extension, attach VirtuHome Pro's diagnostics file too (Settings → Devices & services → VirtuHome
+Pro → ⋮ → **Download diagnostics**): the licence's state and which extensions are installed and
+loaded, with no licence key or token.

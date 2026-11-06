@@ -45,9 +45,11 @@ import {
 import { iconIndex, type MarkerSpec } from "../scene/markers";
 import type { DragPhase, Hit } from "../scene/viewer";
 import type { VhView } from "../ui/view";
-import { daysLeft, type Check, type Fix } from "../ui/checks";
+import type { Check, Fix } from "../ui/checks";
 import { helpLink, resetHints, showHint } from "../ui/help";
 import { CHANGELOG_URL } from "../ui/news";
+import { extensionSources, onSources } from "../ext/api";
+import { logError } from "../ui/errors";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { guideAt, guideLink } from "../ui/guide";
 import type { PlainKey } from "../i18n";
@@ -74,8 +76,11 @@ const DEVICE_DOMAINS: [Set<string>, string[]][] = [
 
 /** The guide's part about each tab, for its "?". */
 const TAB_HELP: Record<Tab, string> = {
-  home: "get-your-home-in", rooms: "draw-it-in-the-2d-plan", devices: "place-your-devices", selected: "by-hand", extensions: "extensions-and-licence-keys",
+  home: "get-your-home-in", rooms: "draw-it-in-the-2d-plan", devices: "place-your-devices", selected: "by-hand", extensions: "extensions-and-virtuhome-pro",
 };
+
+/** Opens VirtuHome Pro in HACS, which offers to add it as a custom repository first. */
+const PRO_HACS_LINK = "https://my.home-assistant.io/redirect/hacs_repository/?owner=virtumaps&repository=virtuhome-pro-integration&category=integration";
 
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 /** Common solar panel sizes (mm), long side first, newest first. */
@@ -1019,8 +1024,9 @@ export class Editor {
       resource: [t("editor.checks.addItAgain"), () => view.refreshServer(true)],
       graphics: [t("editor.checks.tryAgain"), () => view.resetGraphics()],
       renew: [t("editor.checks.renewNow"), async () => {
-        await hass.callWS({ type: "virtuhome/licence/refresh" }).catch(() => undefined);
+        await Promise.all(extensionSources().map((x) => x.renew?.(hass).catch(() => undefined)));
         await view.refreshServer();
+        await view.refreshSources();
       }],
       save: [t("editor.checks.save"), () => {
         this.unsaved = true;
@@ -1503,109 +1509,42 @@ export class Editor {
     ];
   }
 
-  /** Licence key and extensions. Buying shows up only once VirtuMaps opens the shop on the server. */
+  /**
+   * Extras: what extension sources draw here (VirtuHome Pro: its licence key, trials and extensions),
+   * or how to get VirtuHome Pro while none is installed.
+   */
   private extensionsTab(): HTMLElement {
-    const box = h("div", {}, h("p", { class: "ed-hint" }, t("editor.loading")));
-    const hass = this.hass;
-    type Trial = { id: string; name: string; version: string | null; end: number | null; status: string };
-    type Summary = {
-      status: string; kind?: string | null; error: string | null; key_hint: string | null;
-      extensions: { id: string; name: string; version: string }[]; trials?: Trial[];
-    };
-    const trial = (s: Summary) => s.kind === "trial";
-    // paid and installer licences keep what is installed past their renewal date (lapsed) or once ended
-    const statusText = (s: Summary) => ({
-      active: trial(s) ? t("editor.extensions.trial") : t("editor.extensions.active"),
-      lapsed: t("editor.extensions.lapsed"),
-      ended: t("editor.extensions.ended"),
-      expired: trial(s) ? t("editor.extensions.trialEnded") : t("editor.extensions.expiredRenewsOnline"),
-    } as Record<string, string>)[s.status] ?? t("editor.extensions.notValid");
-    type Catalog = { id: string; name: string; description?: string; price?: string; checkout_url?: string; trial_days?: number }[];
-    const render = (s: Summary | null, catalog: Catalog, note = "", reload = false) => {
-      const installed = new Set(s?.extensions.map((x) => x.id));
-      const trials = new Map((s?.trials ?? []).map((x) => [x.id, x]));
-      /** What an extension in the list says beside its name: installed, on trial or its trial over. */
-      const tag = (id: string) => {
-        const tr = trials.get(id);
-        if (installed.has(id)) return t("editor.extensions.installed");
-        if (tr?.status === "active" && tr.end !== null) return t("editor.extensions.trialDaysLeft", { n: daysLeft(tr.end) });
-        if (tr) return t("editor.extensions.trialOver");
-        return null;
-      };
-      const tryIt = (c: Catalog[number]) => h("button", { class: "ed-btn small", onclick: async (ev: Event) => {
-        busy(ev.target as HTMLButtonElement, t("editor.extensions.starting"));
-        try {
-          render(await hass.callWS<Summary>({ type: "virtuhome/licence/trial", ext: c.id }), catalog, t("editor.extensions.trialStartedReload"), true);
-        } catch (err) {
-          render(s, catalog, String((err as { message?: string }).message ?? err));
-        }
-      } }, t("editor.extensions.tryItFree", { n: c.trial_days ?? 0 }));
-      const input = h("input", { class: "ed-in", placeholder: t("editor.extensions.licenceKey"), autocomplete: "off", spellcheck: false });
-      const status = h("p", { class: "ed-hint" }, note);
-      const busy = (b: HTMLButtonElement, text: string) => {
-        b.disabled = true;
-        b.textContent = text;
-      };
-      const parts: (Node | null)[] = [
-        h("h4", {}, t("editor.extensions.licence")),
-        s && s.status !== "none"
-          ? h("div", { class: "ed-card" },
-            h("div", { class: "ed-row" }, h("b", {}, statusText(s)), h("small", {}, s.key_hint ?? "")),
-            s.error ? h("p", { class: "ed-hint" }, s.error) : null,
-            ...s.extensions.map((x) => h("div", { class: "ed-item" }, h("span", {}, x.name), h("small", {}, x.version))),
+    const box = h("div", {});
+    const draw = () => {
+      const sources = extensionSources().filter((x) => x.extras);
+      if (!sources.length) {
+        box.replaceChildren(
+          h("h4", {}, t("editor.extras.extensions")),
+          h("p", { class: "ed-hint" }, t("editor.extras.whatTheyAdd")),
+          h("div", { class: "ed-card" },
+            h("b", {}, t("editor.extras.getPro")),
+            h("p", { class: "ed-hint" }, t("editor.extras.howToGet")),
             h("div", { class: "ed-row" },
-              h("button", { class: "ed-btn ghost small", onclick: async (ev: Event) => {
-                busy(ev.target as HTMLButtonElement, t("editor.extensions.checking"));
-                try {
-                  render(await hass.callWS<Summary>({ type: "virtuhome/licence/refresh" }), catalog, t("editor.extensions.upToDateReload"), true);
-                } catch (err) {
-                  render(s, catalog, String((err as { message?: string }).message ?? err));
-                }
-              } }, t("editor.extensions.checkForUpdates")),
-              h("button", { class: "ed-btn ghost small", onclick: () => this.confirm(t("editor.extensions.removeTheLicenceFrom"), t("editor.remove"), async () => {
-                render(await hass.callWS<Summary>({ type: "virtuhome/licence/remove" }), catalog, t("editor.extensions.licenceRemoved"));
-              }) }, t("editor.extensions.removeLicence")),
-            ))
-          : h("p", { class: "ed-hint" }, t("editor.extensions.extensionsAddFeaturesSuch")),
-        h("div", { class: "ed-row" },
-          input,
-          h("button", { class: "ed-btn small", onclick: async (ev: Event) => {
-            const key = input.value.trim();
-            if (key.length < 8) return;
-            busy(ev.target as HTMLButtonElement, t("editor.extensions.activating"));
-            try {
-              const next = await hass.callWS<Summary>({ type: "virtuhome/licence/activate", key });
-              render(next, catalog, t("editor.extensions.activatedReloadThePage"), true);
-            } catch (err) {
-              render(s, catalog, String((err as { message?: string }).message ?? err));
-            }
-          } }, t("editor.extensions.activate")),
-        ),
-        status,
-        reload ? h("button", { class: "ed-btn ghost small", onclick: () => location.reload() }, t("editor.extensions.reloadNow")) : null,
-        h("h4", {}, t("editor.extensions.availableExtensions")),
-        ...(catalog.length ? catalog.map((c) => {
-          const label = tag(c.id);
-          const tried = trials.has(c.id);
-          return h("div", { class: "ed-card" },
-            h("div", { class: "ed-row" }, h("b", {}, c.name), label ? h("small", {}, label) : null),
-            c.description ? h("p", { class: "ed-hint" }, c.description) : null,
-            !installed.has(c.id) && tried && trials.get(c.id)!.status !== "active" ? h("p", { class: "ed-hint" }, t("editor.extensions.trialOverHint")) : null,
-            !installed.has(c.id) && (c.checkout_url || (!tried && c.trial_days))
-              ? h("div", { class: "ed-row" },
-                !tried && c.trial_days ? tryIt(c) : null,
-                c.checkout_url ? h("a", { class: `ed-btn small${!tried && c.trial_days ? " ghost" : ""}`, href: c.checkout_url, target: "_blank", rel: "noopener" }, t("editor.extensions.getItX", { x: c.price ? ` · ${c.price}` : "" })) : null)
-              : null,
-          );
-        }) : [h("p", { class: "ed-hint" }, t("editor.extensions.theListOfExtensions"))]),
-        !catalog.some((c) => c.checkout_url) ? h("p", { class: "ed-hint" }, t("editor.extensions.extensionsAreCurrentlyAvailable")) : null,
-      ];
-      box.replaceChildren(...parts.filter((x): x is Node => x !== null));
+              h("a", { class: "ed-btn small", href: PRO_HACS_LINK, target: "_blank", rel: "noopener" }, t("editor.extras.openInHacs")),
+              h("a", { class: "ed-btn ghost small", href: guideLink("extensions-and-virtuhome-pro"), target: "_blank", rel: "noopener" }, t("editor.extras.howItWorks")),
+            ),
+          ),
+        );
+        return;
+      }
+      box.replaceChildren(...sources.map((x) => {
+        const el = h("div", {});
+        try {
+          x.extras!(el, this.hass);
+        } catch (err) {
+          logError(err, `extras of ${x.name}`);
+        }
+        return el;
+      }));
     };
-    Promise.all([
-      hass.callWS<Summary>({ type: "virtuhome/licence/get" }).catch(() => null),
-      hass.callWS<Catalog>({ type: "virtuhome/catalog" }).catch(() => [] as Catalog),
-    ]).then(([s, c]) => render(s, c, s ? "" : t("editor.extensions.extensionsNeedTheVirtuhome")));
+    draw();
+    // a source that registers while Extras is open draws itself then
+    const off = onSources(() => (box.isConnected ? draw() : off()));
     return box;
   }
 

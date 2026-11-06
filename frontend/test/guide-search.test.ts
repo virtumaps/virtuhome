@@ -60,7 +60,7 @@ describe("the guide's search", () => {
     const real: Section[] = JSON.parse(guideSite({ version: "1.0.0" }).files.find((f) => f.name === "search.json")!.text!);
     expect(find(real, "storeys")[0][0]).toBe("Storeys");
     expect(find(real, "wall tablets")[0][0]).toBe("Wall tablets");
-    expect(find(real, "licence key")[0][0]).toBe("Extensions and licence keys");
+    expect(find(real, "licence key")[0][0]).toBe("Extensions and VirtuHome Pro");
     expect(find(real, "sweet home 3d")[0][0]).toBe("Import from another program");
   });
 });

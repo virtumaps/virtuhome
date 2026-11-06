@@ -1,6 +1,7 @@
-// Extensions: paid add-ons (VirtuHome Pro) are separate ES modules that the integration downloads
-// for a licence, verifies and serves. The core loads them and hands each one this API. They share
-// the core's three.js through the context, so they stay small.
+// Extensions: add-ons that a separately installed integration (VirtuHome Pro) brings. It registers an
+// ExtensionSource from its own frontend module, `(window.virtuhomeSources ||= []).push(source)`, and
+// imports its extensions' modules itself; the core never fetches or imports extension code. The core
+// hands each extension this API. They share the core's three.js through the context, so they stay small.
 //
 // An extension module's default export:
 //   export default { id: "wall_tablet", name: "Wall Tablet", apiVersion: 1, setup(ctx) { ... } }
@@ -240,7 +241,45 @@ export interface ExtensionInfo {
   id: string;
   name: string;
   version: string;
-  url: string;
+}
+
+/** An extension a source offers: load() imports its module (the source's code, not the core's). */
+export interface SourceExtension extends ExtensionInfo {
+  load(): Promise<ExtensionModule | { default?: ExtensionModule }>;
+}
+
+/** What a source says in Check my setup, in the user's language. */
+export interface SourceCheck {
+  /** Problems (the dot on Edit) and notes. */
+  found: ["problem" | "note", string][];
+  /** Said when nothing was found. */
+  ok: string;
+  /** Offer Renew now (runs the source's renew()). */
+  renew?: boolean;
+  /** Offer Open Extras. */
+  extras?: boolean;
+}
+
+/**
+ * A separately installed integration that brings extensions, registered by its own frontend module
+ * with `(window.virtuhomeSources ||= []).push(source)`, before or after the core loads.
+ */
+export interface ExtensionSource {
+  id: string;
+  name: string;
+  /** The extensions to load now. */
+  extensions(hass: Hass): Promise<SourceExtension[]>;
+  /** WebSocket type prefix for its extensions' automations: `<prefix>/list`, `/preview`, `/add`, `/remove`. */
+  automations?: string;
+  /**
+   * Draws its part of Edit → Extras into `el` (a key, trials, what it has). `el` is in the editor, so
+   * its classes style it: ed-card, ed-row, ed-item, ed-btn (small, ghost), ed-in, ed-hint.
+   */
+  extras?(el: HTMLElement, hass: Hass): void;
+  /** Its lines in Check my setup. */
+  check?(hass: Hass): Promise<SourceCheck>;
+  /** Check my setup's Renew now. */
+  renew?(hass: Hass): Promise<void>;
 }
 
 type ViewEntry = { handle: ViewHandle; cleanups: (() => void)[] };
@@ -249,7 +288,6 @@ const views = new Set<ViewEntry>();
 const viewHooks: ((v: ViewHandle) => void | (() => void))[] = [];
 export const cardSchemas: { section: Record<string, unknown>; labels: Record<string, string> }[] = [];
 export const loaded = new Map<string, ExtensionInfo>();
-let loading: Promise<void> | null = null;
 
 /** The core registers each view; extensions loaded later still get it. */
 export function registerView(handle: ViewHandle): () => void {
@@ -292,25 +330,26 @@ const context: Omit<ExtensionContext, "automations"> = {
 type Ask = (preview: AutomationPreview, extName: string, hass: Hass) => Promise<boolean>;
 const askToAdd: Ask = async (preview, extName, hass) => (await import("../ui/automation-dialog")).askToAdd(preview, extName, hass);
 
-/** One extension's automations; `ask` shows the agreement dialog. */
-export function automationsFor(ext: { id: string; name: string }, getHass: () => Hass | null, ask: Ask = askToAdd): AutomationsHandle {
+/** One extension's automations, through its source's WebSocket commands (`prefix`); `ask` shows the agreement dialog. */
+export function automationsFor(ext: { id: string; name: string }, getHass: () => Hass | null, prefix: string | undefined, ask: Ask = askToAdd): AutomationsHandle {
   const ws = <T>(msg: Record<string, unknown>): Promise<T> => {
     const hass = getHass();
-    return hass ? hass.callWS<T>({ ...msg, ext_id: ext.id }) : Promise.reject(new Error("no Home Assistant connection"));
+    if (!prefix) return Promise.reject(new Error("automations aren't available to this extension"));
+    return hass ? hass.callWS<T>({ ...msg, type: `${prefix}/${msg.type}`, ext_id: ext.id }) : Promise.reject(new Error("no Home Assistant connection"));
   };
-  const list = () => ws<ExtAutomation[]>({ type: "virtuhome/automations/list" });
+  const list = () => ws<ExtAutomation[]>({ type: "list" });
   return {
     list,
     async add(blueprint, inputs, options = {}) {
       const msg = { blueprint, inputs, alias: options.name ?? "", description: t("automations.description", { name: ext.name }) };
-      const preview = await ws<AutomationPreview>({ type: "virtuhome/automations/preview", ...msg });
+      const preview = await ws<AutomationPreview>({ ...msg, type: "preview" });
       if (!(await ask(preview, ext.name, getHass()!))) return null;
-      const added = await ws<{ id: string; entity_id: string }>({ type: "virtuhome/automations/add", ...msg });
+      const added = await ws<{ id: string; entity_id: string }>({ ...msg, type: "add" });
       const found = (await list()).find((a) => a.id === added.id);
       return found ?? { id: added.id, alias: preview.alias, blueprint, entity_id: added.entity_id, state: null };
     },
     async remove(id) {
-      await ws({ type: "virtuhome/automations/remove", automation_id: id });
+      await ws({ type: "remove", automation_id: id });
     },
   };
 }
@@ -319,35 +358,77 @@ export function automationsFor(ext: { id: string; name: string }, getHass: () =>
 let loadedWith: Hass | null = null;
 const currentHass = (): Hass | null => [...views].find((v) => v.handle.hass)?.handle.hass ?? loadedWith;
 
-/** Loads the extensions the integration serves (once per page). */
-const failed: { id: string; name: string; newer: boolean }[] = [];
 /** Extensions that could not load on this page; `newer`: they need a newer VirtuHome. */
+const failed: { id: string; name: string; newer: boolean }[] = [];
 export const extensionFailures = (): readonly { id: string; name: string; newer: boolean }[] => failed;
 
-export function loadExtensions(hass: Hass, extra: string[] = []): Promise<void> {
-  loadedWith = hass;
-  loading ??= (async () => {
-    let list: ExtensionInfo[] = [];
+/** The sources registered on this page, in order. */
+const sources: ExtensionSource[] = [];
+const sourceListeners = new Set<() => void>();
+const started = new Set<string>();
+const loads = new Map<string, Promise<void>>();
+export const extensionSources = (): readonly ExtensionSource[] => sources;
+/** Called when a source registers (the Extras tab draws it) and once its extensions loaded; returns an unsubscribe. */
+export function onSources(cb: () => void): () => void {
+  sourceListeners.add(cb);
+  return () => sourceListeners.delete(cb);
+}
+const sourcesChanged = () => [...sourceListeners].forEach((cb) => cb());
+
+function addSource(source: ExtensionSource): void {
+  if (!source || typeof source.extensions !== "function" || sources.some((s) => s.id === source.id)) return;
+  sources.push(source);
+  // registered after the views started: its extensions load now
+  if (loadedWith) void loadSource(source, loadedWith).then(sourcesChanged);
+  sourcesChanged();
+}
+
+// sources queued before the core loaded, and a push that registers from now on
+type Queue = ExtensionSource[] | { push(...s: ExtensionSource[]): number; apiVersion: number };
+if (typeof window !== "undefined") {
+  const w = window as unknown as { virtuhomeSources?: Queue };
+  const queued = Array.isArray(w.virtuhomeSources) ? w.virtuhomeSources : [];
+  w.virtuhomeSources = {
+    apiVersion: EXT_API_VERSION,
+    push(...s) {
+      s.forEach(addSource);
+      return sources.length;
+    },
+  };
+  queued.forEach(addSource);
+}
+
+function loadSource(source: ExtensionSource, hass: Hass): Promise<void> {
+  if (started.has(source.id)) return loads.get(source.id)!;
+  started.add(source.id);
+  const run = (async () => {
+    let list: SourceExtension[] = [];
     try {
-      const info = await hass.callWS<{ extensions?: ExtensionInfo[] }>({ type: "virtuhome/info" });
-      list = info.extensions ?? [];
-    } catch {
-      // the dev harness has no integration
+      list = await source.extensions(hass);
+    } catch (err) {
+      logError(err, `extensions of ${source.name}`);
+      return;
     }
-    list = list.concat(extra.map((url, i) => ({ id: `dev${i}`, name: url, version: "dev", url })));
     for (const ext of list) {
       try {
-        const mod = (await import(/* @vite-ignore */ ext.url)) as { default?: ExtensionModule };
-        const m = mod.default;
+        const mod = await ext.load();
+        const m = ("setup" in mod ? mod : mod.default) as ExtensionModule | undefined;
         if (!m || typeof m.setup !== "function") throw new Error("not a VirtuHome extension");
         if (m.apiVersion > EXT_API_VERSION) throw new Error(`needs a newer VirtuHome (API ${m.apiVersion})`);
-        await m.setup({ ...context, automations: automationsFor({ id: m.id, name: m.name }, currentHass) });
-        loaded.set(m.id, { ...ext, id: m.id, name: m.name });
+        await m.setup({ ...context, automations: automationsFor({ id: m.id, name: m.name }, currentHass, source.automations) });
+        loaded.set(m.id, { id: m.id, name: m.name, version: ext.version });
       } catch (err) {
         logError(err, `extension ${ext.id}`);
         failed.push({ id: ext.id, name: ext.name, newer: /newer VirtuHome/.test(String(err)) });
       }
     }
   })();
-  return loading;
+  loads.set(source.id, run);
+  return run;
+}
+
+/** Loads the extensions of every source, now and as more register (once per page). */
+export function loadExtensions(hass: Hass): Promise<void> {
+  loadedWith = hass;
+  return Promise.all(sources.map((s) => loadSource(s, hass))).then(() => undefined);
 }

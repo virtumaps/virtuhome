@@ -10,6 +10,7 @@ import "../src/compat";
 import { createConnection, createLongLivedTokenAuth, subscribeEntities, type Connection } from "home-assistant-js-websocket";
 import { emptyPlan, normalizePlan, type Plan } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
+import type { ExtensionSource } from "../src/ext/api";
 import { VhView } from "../src/ui/view";
 import type { WallMode, Quality } from "../src/scene/viewer";
 import { DEMO_PLAN } from "../src/demo/plan";
@@ -74,6 +75,17 @@ async function liveHass(onChange: (h: Hass) => void): Promise<Hass> {
   return hass;
 }
 
+// ?ext=wall_tablet loads dev/ext/wall_tablet.js (a build from virtuhome-pro, git-ignored), through a
+// source of its own as VirtuHome Pro registers one
+if (q.has("ext")) {
+  const w = window as unknown as { virtuhomeSources?: { push(s: ExtensionSource): void } };
+  (w.virtuhomeSources ??= [] as unknown as { push(s: ExtensionSource): void }).push({
+    id: "dev", name: "Dev extensions",
+    extensions: async () => q.getAll("ext").map((id) => ({ id, name: id, version: "dev", load: () => import(/* @vite-ignore */ `/dev/ext/${id}.js`) })),
+    automations: "virtuhome_pro/automations",
+  });
+}
+
 async function main(): Promise<void> {
   const plan = await loadPlan();
   const host = document.getElementById("view")!;
@@ -84,8 +96,6 @@ async function main(): Promise<void> {
     stats: q.has("stats"),
     bench: q.has("bench"),
     editable: true,
-    // ?ext=wall_tablet loads dev/ext/wall_tablet.js (a build from virtuhome-pro, git-ignored)
-    dev_extensions: q.getAll("ext").map((id) => `/dev/ext/${id}.js`),
     popup_camera: q.get("popup_camera") ?? undefined,
     popup_triggers: q.getAll("popup_trigger"),
     idle_return: q.has("idle") ? Number(q.get("idle")) : undefined,

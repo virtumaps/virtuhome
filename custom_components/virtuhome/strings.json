@@ -10,17 +10,6 @@
       "single_instance_allowed": "VirtuHome is already set up."
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "title": "VirtuHome",
-        "description": "Advanced: the server licence keys are checked with and extensions come from. Leave as it is unless VirtuMaps support asks you to change it.",
-        "data": {
-          "licence_server": "Licence server"
-        }
-      }
-    }
-  },
   "issues": {
     "card_resource": {
       "title": "The VirtuHome card is missing from your dashboards",
@@ -39,11 +28,11 @@
     },
     "extension_needs_update": {
       "title": "A VirtuHome extension can't load",
-      "description": "{count} of your VirtuHome extensions need a newer VirtuHome or could not load. Update VirtuHome through HACS and restart Home Assistant; Edit → Home → Check my setup in VirtuHome says which. This goes away once they load."
+      "description": "{count} of your VirtuHome extensions need a newer VirtuHome or could not load. Update VirtuHome and VirtuHome Pro through HACS and restart Home Assistant; Edit → Home → Check my setup in VirtuHome says which. This goes away once they load."
     },
-    "licence_not_renewed": {
-      "title": "Your VirtuHome licence hasn't renewed for {days} days",
-      "description": "Home Assistant couldn't renew your VirtuHome licence for {days} days ({error}). The extensions you have keep working; only new versions wait. Check that Home Assistant can reach the internet, then open VirtuHome → Edit → Extras → Check for updates. This goes away once it renews."
+    "pro_needed": {
+      "title": "Your VirtuHome extensions now come with VirtuHome Pro",
+      "description": "Since VirtuHome 0.18, extensions come with VirtuHome Pro, an integration of its own, and this Home Assistant has a licence key for them. Open VirtuHome → Edit → Extras → Open in HACS, download VirtuHome Pro and restart Home Assistant. Your key, trials and the automations the extensions added carry on as they were, with nothing to enter again. This goes away once VirtuHome Pro is installed."
     }
   }
 }

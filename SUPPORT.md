@@ -17,8 +17,9 @@
 
 - **The diagnostics file:** Settings → Devices & services → VirtuHome → ⋮ → **Download
   diagnostics**. It holds the versions, the plan's size and what each floor counts, how the card
-  reaches your dashboards, which extensions are loaded and the last errors the cards and the panel
-  ran into. It has no room, device or entity names, no web addresses, and no licence key or token.
+  reaches your dashboards and the last errors the cards and the panel ran into. It has no room,
+  device or entity names and no web addresses. For an extension, add VirtuHome Pro's diagnostics
+  file too (Settings → Devices & services → VirtuHome Pro); it has no licence key or token.
 - The VirtuHome and Home Assistant versions, and the device and browser or app.
 - A screenshot, with anything private taken out. Everything on GitHub is public.
 

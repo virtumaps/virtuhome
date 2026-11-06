@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  checkAreas, checkCard, checkCounts, checkExtensions, daysLeft, checkGraphics, checkLinks, checkRepairs, checkRooms, runChecks, type ServerChecks,
+  checkAreas, checkCard, checkCounts, checkExtensions, checkGraphics, checkLinks, checkRepairs, checkRooms, runChecks, type ServerChecks,
 } from "../src/ui/checks";
 import { normalizePlan, type Plan, type Repair } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
+import type { SourceCheck } from "../src/ext/api";
 
 const rect = (x0: number, z0: number, x1: number, z1: number): [number, number][] => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
 
@@ -34,7 +35,7 @@ const hass = (): Hass => ({
   },
 } as unknown as Hass);
 
-const SERVER: ServerChecks = { version: "0.10.0", dashboard: { mode: "storage", urls: ["/virtuhome_static/virtuhome-loader.js?v=0.10.0"], current: true }, licence: { status: "none", error: null, extensions: [] } };
+const SERVER: ServerChecks = { version: "0.10.0", dashboard: { mode: "storage", urls: ["/virtuhome_static/virtuhome-loader.js?v=0.10.0"], current: true } };
 
 describe("check my setup", () => {
   it("linked entities: missing ones are a problem to relink", () => {
@@ -87,39 +88,16 @@ describe("check my setup", () => {
     expect(checkGraphics({ ...g, tier: "low", detected: "low", cap: null, software: true })).toMatchObject({ level: "note", fixes: [] });
   });
 
-  it("extensions: one needing a newer VirtuHome, a licence expired or unable to renew", () => {
-    const active = { status: "active", error: null, extensions: [{ id: "wall_tablet", name: "Wall Tablet" }] };
-    expect(checkExtensions(active, [])).toMatchObject({ level: "ok", text: "Licence active: Wall Tablet." });
-    expect(checkExtensions(active, [{ name: "Wall Tablet", newer: true }])).toMatchObject({ level: "problem", fixes: [] });
-    expect(checkExtensions({ ...active, status: "expired", error: "token expired" }, [])).toMatchObject({ level: "problem", fixes: ["renew"] });
-    expect(checkExtensions({ ...active, error: "could not reach the licence server" }, [])).toMatchObject({ level: "note", fixes: ["renew"] });
-    expect(checkExtensions(SERVER.licence, [])).toMatchObject({ level: "ok", count: 0 });
-  });
-
-  it("extensions: trials beside the licence, and a note for a while after one ends", () => {
-    const now = Date.parse("2026-11-05T12:00:00Z");
-    const day = 86_400;
-    const trial = (status: string, end: number) => ({ id: "security", name: "Security", status, end: now / 1000 + end });
-    const none = { status: "none", error: null, extensions: [] };
-    expect(daysLeft(now / 1000 + 9.2 * day, now)).toBe(10);
-    expect(daysLeft(now / 1000 - day, now)).toBe(0);
-    expect(checkExtensions({ ...none, trials: [trial("active", 9.5 * day)] }, [], now)).toMatchObject({ level: "ok", text: "Trying Security (10 days left)." });
-    const active = { status: "active", error: null, extensions: [{ id: "energy", name: "Energy" }], trials: [trial("active", 0.5 * day)] };
-    expect(checkExtensions(active, [], now)).toMatchObject({ level: "ok", text: "Licence active: Energy. Trying Security (1 day left)." });
-    const over = checkExtensions({ ...none, trials: [trial("expired", -2 * day)] }, [], now);
-    expect(over).toMatchObject({ level: "note", fixes: ["extras"] });
-    expect(over.text).toContain("The trial of Security has ended");
-    // long over: no more note
-    expect(checkExtensions({ ...none, trials: [trial("expired", -20 * day)] }, [], now)).toMatchObject({ level: "ok", fixes: [] });
-  });
-
-  it("extensions: what was bought keeps working past the renewal date; a trial stops", () => {
-    const paid = { status: "lapsed", kind: "paid", error: null, extensions: [{ id: "security", name: "Security" }] };
-    expect(checkExtensions(paid, [])).toMatchObject({ level: "note", fixes: ["renew"], text: expect.stringContaining("installed extensions keep working") });
-    expect(checkExtensions({ ...paid, status: "ended", kind: "installer" }, [])).toMatchObject({ level: "ok", fixes: [], text: expect.stringContaining("keep working") });
-    expect(checkExtensions({ ...paid, status: "expired", kind: "trial" }, [])).toMatchObject({
-      level: "problem", text: "The trial has ended, so its extensions have stopped.",
-    });
+  it("extensions: none without a source, one that can't load, and what each source says", () => {
+    expect(checkExtensions([], [])).toMatchObject({ level: "ok", count: 0, text: "No extensions. They come with VirtuHome Pro (Edit → Extras)." });
+    const pro: SourceCheck = { found: [], ok: "Licence active: Wall Tablet." };
+    expect(checkExtensions([pro], [])).toMatchObject({ level: "ok", text: "Licence active: Wall Tablet." });
+    expect(checkExtensions([pro], [{ name: "Wall Tablet", newer: true }])).toMatchObject({ level: "problem", count: 1, fixes: [] });
+    const expired: SourceCheck = { found: [["problem", "The licence has expired."]], ok: "", renew: true };
+    // counted for Repairs only when an extension can't load: VirtuHome Pro raises its own
+    expect(checkExtensions([expired], [])).toMatchObject({ level: "problem", count: 0, fixes: ["renew"], text: "The licence has expired." });
+    const over: SourceCheck = { found: [["note", "The trial of Security has ended."]], ok: "Licence active.", extras: true };
+    expect(checkExtensions([over], [])).toMatchObject({ level: "note", fixes: ["extras"], text: "The trial of Security has ended." });
   });
 
   it("repairs: normalizePlan says what it put right, and returns the same plan", () => {
@@ -154,7 +132,7 @@ describe("check my setup", () => {
     const p = plan();
     const before = JSON.stringify(p);
     const checks = runChecks({
-      plan: p, hass: hass(), repairs: [], server: SERVER, version: "0.10.0", extensions: [],
+      plan: p, hass: hass(), repairs: [], server: SERVER, version: "0.10.0", extensions: [], sources: [],
       graphics: { tier: "high", auto: true, detected: "high", cap: null, software: false },
     });
     expect(JSON.stringify(p)).toBe(before);

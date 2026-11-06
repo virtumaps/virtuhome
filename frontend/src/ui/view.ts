@@ -12,7 +12,7 @@ import type { ForecastHour } from "../live/warnings";
 import { alarmPanels, armModes, numericCode, openSensors, panelArea, wantsCode, whatSetItOff } from "../live/alarm";
 import { lockActions, needsCode } from "../live/locks";
 import { ICONS } from "../scene/markers";
-import { extensionFailures, loadExtensions, registerView, type Place, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
+import { extensionFailures, extensionSources, loadExtensions, onSources, registerView, type Place, type SourceCheck, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
 import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveTier, setDeviceTier, tierHint, tierName, tierNameEn, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
@@ -51,8 +51,6 @@ export interface ViewConfig {
   roof?: boolean;
   /** Values in the top bar, by entity (default: the plan's; an empty list shows none). */
   chips?: string[];
-  /** Dev harness: extension modules to load without the integration. */
-  dev_extensions?: string[];
   /** Options of extensions (e.g. Wall Tablet's popup, idle_return) live in the same config. */
   [option: string]: unknown;
   /** Saves somewhere else than the integration (dev harness). */
@@ -147,6 +145,8 @@ export class VhView {
   /** Check my setup, for admins: what normalizePlan put right, what the integration says, the problems for the dot on Edit. */
   private repairs: Repair[] = [];
   private server: ServerChecks | null | undefined = undefined;
+  /** What each extension source (VirtuHome Pro) last said for Check my setup. */
+  private sourceChecks: SourceCheck[] = [];
   /** Asks the integration again while Home Assistant is still starting. */
   private serverTimer = 0;
   private serverTries = 0;
@@ -445,9 +445,14 @@ export class VhView {
     else this.checkParked();
     // the demos load no extensions: they could reach Home Assistant past the pretend states
     if (!this.unregister && !this.config.demo) {
-      this.unregister = registerView(this.handle());
-      // an extension that can't load shows in Check my setup
-      loadExtensions(h, this.config.dev_extensions ?? []).then(() => this.updateChecks());
+      const unview = registerView(this.handle());
+      // a source registered later loads then; an extension that can't load shows in Check my setup
+      const unsources = onSources(() => void this.refreshSources());
+      this.unregister = () => {
+        unview();
+        unsources();
+      };
+      loadExtensions(h).then(() => this.refreshSources());
     }
     if (h.entities !== this.registrySeen) {
       this.registrySeen = h.entities;
@@ -1293,7 +1298,18 @@ export class VhView {
     return runChecks({
       plan, hass: h, repairs: this.repairs, server: this.server, version: __VERSION__,
       graphics: { tier: this.viewer.tier, auto: this.tierAuto, ...autoTierInfo() }, extensions: extensionFailures(),
+      sources: this.sourceChecks,
     });
+  }
+
+  /** Asks each extension source what it says for Check my setup (admins only). */
+  async refreshSources(): Promise<void> {
+    const h = this._hass;
+    if (!h || !this.canEdit()) return;
+    const said = await Promise.all(extensionSources().map((s) => s.check?.(h).catch(() => null) ?? null));
+    this.sourceChecks = said.filter((c): c is SourceCheck => !!c);
+    this.updateChecks();
+    this.editor?.checksChanged();
   }
 
   /** Asks the integration about the card, its version and the licence (admins only). */
