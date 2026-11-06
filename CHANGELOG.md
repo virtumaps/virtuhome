@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.0
 
 ### Changed
 - Extensions come with **VirtuHome Pro**, an integration of its own installed from HACS. While it
