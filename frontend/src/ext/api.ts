@@ -271,8 +271,11 @@ export interface ExtensionSource {
   extensions(hass: Hass): Promise<SourceExtension[]>;
   /** WebSocket type prefix for its extensions' automations: `<prefix>/list`, `/preview`, `/add`, `/remove`. */
   automations?: string;
-  /** Draws its part of Edit → Extras into `el` (a key, trials, what it has); may return a cleanup. */
-  extras?(el: HTMLElement, hass: Hass): void | (() => void);
+  /**
+   * Draws its part of Edit → Extras into `el` (a key, trials, what it has). `el` is in the editor, so
+   * its classes style it: ed-card, ed-row, ed-item, ed-btn (small, ghost), ed-in, ed-hint.
+   */
+  extras?(el: HTMLElement, hass: Hass): void;
   /** Its lines in Check my setup. */
   check?(hass: Hass): Promise<SourceCheck>;
   /** Check my setup's Renew now. */
