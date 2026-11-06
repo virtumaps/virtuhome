@@ -66,7 +66,8 @@ and shadows, and the weather.
   the biggest users and what is not measured yet, and how good each part of the roof is for solar
   panels) and Security (what happened played back on the
   house: doors, motion, cameras, the doorbell and the alarm on a timeline, and what happened while
-  everyone was out) are available to VirtuMaps installation clients.
+  everyone was out) come with [VirtuHome Pro](#extensions-and-virtuhome-pro), available to VirtuMaps
+  installation clients.
 
 **[Read the user guide](https://virtumaps.github.io/virtuhome/)**: installing, getting your home in
 with or without a scanner, devices, wall tablets, FAQ and troubleshooting. It is also here as
@@ -189,9 +190,9 @@ can vote for them. [SUPPORT.md](SUPPORT.md) says where everything else goes.
 To report a problem, open an [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) (there
 are forms for bugs, device support, imports and slow devices) and attach the diagnostics file: Settings →
 Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds the versions, the plan's size and
-what each floor counts, how the card reaches your dashboards, which extensions are loaded and the last
-errors the cards and the panel ran into. It has no room, device or entity names, no web addresses, and no
-licence key or token.
+what each floor counts, how the card reaches your dashboards and the last errors the cards and the
+panel ran into. It has no room, device or entity names and no web addresses. (VirtuHome Pro has a
+diagnostics file of its own for the licence and extensions.)
 
 ## Development
 
@@ -217,12 +218,15 @@ website, a page per part of `docs/GUIDE.md` (`frontend/dev/guide-site.mjs`).
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md) and
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Extensions and licence keys
+## Extensions and VirtuHome Pro
 
-Editor → **Extras** takes a licence key. Keys are checked with the VirtuMaps licence server; the
-extensions they unlock are verified, stored in Home Assistant and keep working offline. Opening Extras
-asks the server for the list of extensions; nothing else is sent unless you enter a key or start a
-free trial (the guide says [what is sent](docs/GUIDE.md#extensions-and-virtuhome-pro)).
+Extensions (Energy, Security, Household, Wall Tablet, Network) come with **VirtuHome Pro**, an
+integration of its own from VirtuMaps, installed from HACS as a custom repository
+([virtumaps/virtuhome-pro-integration](https://github.com/virtumaps/virtuhome-pro-integration)).
+Editor → **Extras** has **Open in HACS**. VirtuHome itself has no licence code, downloads nothing and
+never loads code from outside this repository. VirtuHome Pro takes the licence key; the extensions it
+unlocks are verified, stored in Home Assistant and keep working offline (the guide says
+[how to install it and what is sent](docs/GUIDE.md#extensions-and-virtuhome-pro)).
 
 ## Licence
 

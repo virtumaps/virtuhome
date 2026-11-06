@@ -10,17 +10,6 @@
       "single_instance_allowed": "VirtuHome ist schon eingerichtet."
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "title": "VirtuHome",
-        "description": "Erweitert: der Server, bei dem Lizenzschlüssel geprüft werden und von dem Erweiterungen kommen. Lass ihn, wie er ist, außer der VirtuMaps-Support bittet dich, ihn zu ändern.",
-        "data": {
-          "licence_server": "Lizenzserver"
-        }
-      }
-    }
-  },
   "issues": {
     "card_resource": {
       "title": "Die VirtuHome-Karte fehlt in deinen Dashboards",
@@ -39,11 +28,11 @@
     },
     "extension_needs_update": {
       "title": "Eine VirtuHome-Erweiterung kann nicht geladen werden",
-      "description": "{count} deiner VirtuHome-Erweiterungen brauchen ein neueres VirtuHome oder konnten nicht geladen werden. Aktualisiere VirtuHome über HACS und starte Home Assistant neu; Bearbeiten → Zuhause → Meine Einrichtung prüfen in VirtuHome sagt, welche. Das verschwindet, sobald sie laden."
+      "description": "{count} deiner VirtuHome-Erweiterungen brauchen ein neueres VirtuHome oder konnten nicht geladen werden. Aktualisiere VirtuHome und VirtuHome Pro über HACS und starte Home Assistant neu; Bearbeiten → Zuhause → Meine Einrichtung prüfen in VirtuHome sagt, welche. Das verschwindet, sobald sie laden."
     },
-    "licence_not_renewed": {
-      "title": "Deine VirtuHome-Lizenz wurde seit {days} Tagen nicht erneuert",
-      "description": "Home Assistant konnte deine VirtuHome-Lizenz seit {days} Tagen nicht erneuern ({error}). Deine Erweiterungen funktionieren weiter; nur neue Versionen warten. Prüfe, ob Home Assistant das Internet erreicht, und öffne dann VirtuHome → Bearbeiten → Extras → Nach Updates suchen. Das verschwindet, sobald sie erneuert ist."
+    "pro_needed": {
+      "title": "Deine VirtuHome-Erweiterungen kommen jetzt mit VirtuHome Pro",
+      "description": "Seit VirtuHome 0.18 kommen Erweiterungen mit VirtuHome Pro, einer eigenen Integration, und dieses Home Assistant hat einen Lizenzschlüssel dafür. Öffne VirtuHome → Bearbeiten → Extras → In HACS öffnen, lade VirtuHome Pro herunter und starte Home Assistant neu. Dein Schlüssel, deine Testzeiträume und die Automationen der Erweiterungen laufen weiter wie bisher, ohne dass du etwas neu eingeben musst. Das verschwindet, sobald VirtuHome Pro installiert ist."
     }
   }
 }

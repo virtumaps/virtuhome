@@ -16,12 +16,10 @@ from homeassistant.helpers import area_registry as ar, device_registry as dr, fl
 from homeassistant.loader import async_get_integration
 
 from . import card_resource
-from .automations import BLUEPRINT_ID, EXT_ID, BlueprintError
 from .backgrounds import CHUNK_BYTES, MAX_BYTES, BackgroundError
 from .const import DOMAIN
 from .errors import LIMITS, private_strings
 from .schema import ID, PLAN
-from .licensing import LicenceError
 from .report import CHECK_IDS
 from .repair_issues import async_update_issues
 from .storage import PlanStore
@@ -30,9 +28,7 @@ from .storage import PlanStore
 def async_register(hass: HomeAssistant) -> None:
     for command in (
         ws_info, ws_get, ws_save, ws_subscribe, ws_history_list, ws_history_restore,
-        ws_licence_get, ws_licence_activate, ws_licence_refresh, ws_licence_remove, ws_licence_trial, ws_catalog,
         ws_background_upload, ws_checks, ws_checks_fix_card, ws_errors_report,
-        ws_automations_list, ws_automations_preview, ws_automations_add, ws_automations_remove,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -47,15 +43,11 @@ def _store(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg:
 @websocket_api.websocket_command({vol.Required("type"): "virtuhome/info"})
 @websocket_api.async_response
 async def ws_info(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """Version, plan revision and the extensions (Pro add-ons) that registered themselves."""
+    """Version and plan revision."""
     if (store := _store(hass, connection, msg)) is None:
         return
     integration = await async_get_integration(hass, DOMAIN)
-    manager = store.extension_manager
-    connection.send_result(
-        msg["id"],
-        {"version": str(integration.version), "revision": store.revision, "extensions": manager.extensions() if manager else []},
-    )
+    connection.send_result(msg["id"], {"version": str(integration.version), "revision": store.revision})
 
 
 @websocket_api.websocket_command({vol.Required("type"): "virtuhome/plan/get"})
@@ -152,12 +144,7 @@ async def ws_history_restore(
 
 async def _checks_state(hass: HomeAssistant, store: PlanStore) -> dict[str, Any]:
     version = str((await async_get_integration(hass, DOMAIN)).version)
-    manager = store.extension_manager
-    return {
-        "version": version,
-        "dashboard": await card_resource.async_state(hass, version),
-        "licence": manager.summary() if manager else None,
-    }
+    return {"version": version, "dashboard": await card_resource.async_state(hass, version)}
 
 
 @websocket_api.websocket_command(
@@ -170,7 +157,7 @@ async def _checks_state(hass: HomeAssistant, store: PlanStore) -> dict[str, Any]
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_checks(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """The version, how dashboards get the card and the licence; keeps the frontend's counts for diagnostics."""
+    """The version and how dashboards get the card; keeps the frontend's counts for diagnostics."""
     if (store := _store(hass, connection, msg)) is None:
         return
     if "report" in msg:
@@ -263,155 +250,3 @@ async def ws_background_upload(hass: HomeAssistant, connection: websocket_api.Ac
             connection.send_result(msg["id"], {"upload_id": upload_id, "bytes": size})
     except BackgroundError as err:
         connection.send_error(msg["id"], "invalid_image", str(err))
-
-
-# ---------------------------------------------------------------------------- licence and extensions
-
-
-def _manager(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict):
-    store = _store(hass, connection, msg)
-    if store is None:
-        return None
-    if store.extension_manager is None:
-        connection.send_error(msg["id"], "not_loaded", "Extensions are not available")
-        return None
-    return store.extension_manager
-
-
-async def _run(connection: websocket_api.ActiveConnection, msg: dict, coro) -> None:
-    try:
-        connection.send_result(msg["id"], await coro)
-    except LicenceError as err:
-        connection.send_error(msg["id"], "licence", str(err))
-    except Exception as err:  # noqa: BLE001 - network trouble ends up in the UI as a message
-        connection.send_error(msg["id"], "unreachable", f"The licence server could not be reached: {err}")
-
-
-@websocket_api.websocket_command({vol.Required("type"): "virtuhome/licence/get"})
-@websocket_api.require_admin
-@callback
-def ws_licence_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    if (m := _manager(hass, connection, msg)) is None:
-        return
-    connection.send_result(msg["id"], m.summary())
-
-
-@websocket_api.websocket_command(
-    {vol.Required("type"): "virtuhome/licence/activate", vol.Required("key"): vol.All(str, vol.Length(min=8, max=120))}
-)
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_licence_activate(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    if (m := _manager(hass, connection, msg)) is None:
-        return
-    await _run(connection, msg, m.async_activate(msg["key"]))
-
-
-@websocket_api.websocket_command({vol.Required("type"): "virtuhome/licence/refresh"})
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_licence_refresh(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    if (m := _manager(hass, connection, msg)) is None:
-        return
-    await _run(connection, msg, m.async_refresh())
-    await async_update_issues(hass, hass.data.get(DOMAIN))
-
-
-@websocket_api.websocket_command({vol.Required("type"): "virtuhome/licence/remove"})
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_licence_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    if (m := _manager(hass, connection, msg)) is None:
-        return
-    await _run(connection, msg, m.async_remove())
-
-
-@websocket_api.websocket_command(
-    {vol.Required("type"): "virtuhome/licence/trial", vol.Required("ext"): vol.All(str, vol.Match(r"^[a-z0-9_]{1,40}$"))}
-)
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_licence_trial(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """Starts a free trial of one extension in this home."""
-    if (m := _manager(hass, connection, msg)) is None:
-        return
-    await _run(connection, msg, m.async_trial(msg["ext"]))
-
-
-@websocket_api.websocket_command({vol.Required("type"): "virtuhome/catalog"})
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_catalog(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """What extensions exist; only lists buy links once the shop is open on the server."""
-    if (m := _manager(hass, connection, msg)) is None:
-        return
-    await _run(connection, msg, m.async_catalog())
-
-
-# ---------------------------------------------------------------------------- automations from extensions' blueprints
-
-
-async def _automations(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict, run) -> None:
-    if (m := _manager(hass, connection, msg)) is None:
-        return
-    try:
-        connection.send_result(msg["id"], await run(m.automations))
-    except BlueprintError as err:
-        connection.send_error(msg["id"], "blueprint", str(err))
-
-
-EXTENSION = vol.All(str, vol.Match(EXT_ID))
-ADD = {
-    vol.Required("ext_id"): EXTENSION,
-    vol.Required("blueprint"): vol.All(str, vol.Match(BLUEPRINT_ID)),
-    # checked against the blueprint's inputs and their selectors (automations.check_inputs)
-    vol.Optional("inputs", default={}): vol.Schema({vol.All(str, vol.Length(max=64)): object}),
-    vol.Optional("alias", default=""): vol.All(str, vol.Length(max=100)),
-    vol.Optional("description", default=""): vol.All(str, vol.Length(max=500)),
-}
-
-
-def _add_args(msg: dict[str, Any]) -> tuple:
-    return msg["ext_id"], msg["blueprint"], msg["inputs"], msg["alias"], msg["description"]
-
-
-@websocket_api.websocket_command({vol.Required("type"): "virtuhome/automations/list", vol.Optional("ext_id"): EXTENSION})
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_automations_list(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """The automations extensions added (one extension's with ext_id), as automations.yaml has them now."""
-    await _automations(hass, connection, msg, lambda a: a.async_list(msg.get("ext_id")))
-
-
-@websocket_api.websocket_command({vol.Required("type"): "virtuhome/automations/preview", **ADD})
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_automations_preview(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """What add would create (name, inputs, notify services, the automation as YAML), for the user to agree to."""
-    await _automations(hass, connection, msg, lambda a: a.async_preview(*_add_args(msg)))
-
-
-@websocket_api.websocket_command({vol.Required("type"): "virtuhome/automations/add", **ADD})
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_automations_add(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """Adds an automation from a blueprint in an installed extension's signed bundle, once the user agreed."""
-    await _automations(hass, connection, msg, lambda a: a.async_add(*_add_args(msg)))
-
-
-@websocket_api.websocket_command({
-    vol.Required("type"): "virtuhome/automations/remove",
-    vol.Required("ext_id"): EXTENSION,
-    vol.Required("automation_id"): vol.All(str, vol.Length(max=100)),
-})
-@websocket_api.require_admin
-@websocket_api.async_response
-async def ws_automations_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """Removes one of the extension's automations (and its blueprint once no automation uses it)."""
-
-    async def run(a):
-        if not (removed := await a.async_remove(msg["ext_id"], {msg["automation_id"]})):
-            raise BlueprintError("No such automation of this extension")
-        return {"removed": removed}
-
-    await _automations(hass, connection, msg, run)

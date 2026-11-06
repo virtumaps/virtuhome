@@ -124,7 +124,8 @@ export function checkExtensions(sources: readonly SourceCheck[], failed: CheckIn
   if (broken.length) found.push(["problem", t("checks.extensions.broken", { names: broken.join(", ") })]);
   for (const s of sources) found.push(...s.found);
   const ok = sources.length ? sources.map((s) => s.ok).filter(Boolean).join(" ") : t("checks.extensions.none");
-  return check("extensions", t("checks.extensions.title"), found, ok, [sources.some((s) => s.renew) && "renew", sources.some((s) => s.extras) && "extras"]);
+  // the count (Repairs, diagnostics) is what can't load: a source raises its own repairs
+  return { ...check("extensions", t("checks.extensions.title"), found, ok, [sources.some((s) => s.renew) && "renew", sources.some((s) => s.extras) && "extras"]), count: newer.length + broken.length };
 }
 
 export function checkRepairs(repairs: Repair[]): Check {

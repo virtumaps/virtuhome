@@ -6,6 +6,11 @@
 - Extensions come with **VirtuHome Pro**, an integration of its own installed from HACS. While it
   isn't installed, Edit → **Extras** explains it and has **Open in HACS**; once it is, its licence
   key, trials and extensions show there as before. **Check my setup** calls its check **Extensions**.
+- VirtuHome itself has no licence code any more, downloads nothing and loads no code from outside
+  its repository. A licence key from an earlier version carries over to VirtuHome Pro with its
+  trials, extensions and their automations; until VirtuHome Pro is installed, Repairs says so. The
+  integration's options (the licence server) moved to VirtuHome Pro, and so did the licence part of
+  the diagnostics file and the repair for a licence that hasn't renewed.
 - The dashboard card's resource is `/virtuhome_static/virtuhome-loader.js`, served by VirtuHome
   itself. VirtuHome no longer writes a loader into the `www` folder, and removes the one older
   versions put there (`www/virtuhome/card-loader.js`). A dashboard opened while Home Assistant is

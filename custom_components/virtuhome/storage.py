@@ -26,8 +26,7 @@ class PlanStore:
         self.revision = 0
         self.snapshots: list[dict[str, Any]] = []
         self._listeners: list[Callable[[], None]] = []
-        # set up by __init__: licence and downloaded extensions, and the floor plan images
-        self.extension_manager = None
+        # set up by __init__: the floor plan images
         self.backgrounds = None
         # what Check my setup last found (counts per check, from the frontend), for diagnostics
         self.checks: dict[str, Any] | None = None
