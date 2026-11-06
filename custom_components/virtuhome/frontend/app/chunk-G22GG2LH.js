@@ -35,6 +35,7 @@ import{a as Ai}from"./chunk-YQHLT63R.js";import{A as Uo,B as Xo,F as Zo,J as Jo,
 .ed-btn {
   border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; cursor: pointer; background: var(--vh-accent); color: #fff; font-weight: 600;
 }
+a.ed-btn { display: inline-block; text-decoration: none; }
 .ed-btn.ghost { background: var(--vh-chip); color: var(--vh-text); font-weight: 500; }
 .ed-btn.danger { background: #d9534f; }
 .ed-btn.small { padding: 5px 9px; font-size: 12px; }
