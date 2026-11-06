@@ -28,7 +28,7 @@ installed, the same house is in Home Assistant too: see [The demo home](#the-dem
 - [Sun and weather](#sun-and-weather)
 - [Wall tablets](#wall-tablets)
 - [The card and its options](#the-card-and-its-options)
-- [Extensions and licence keys](#extensions-and-licence-keys)
+- [Extensions and VirtuHome Pro](#extensions-and-virtuhome-pro)
 - [FAQ](#faq)
 - [Troubleshooting](#troubleshooting)
 
@@ -743,7 +743,7 @@ A Fire HD 8 runs well at **Tablet** and **Standard**; **Realistic** and above ar
 - The **Wall Tablet** extension adds a doorbell camera takeover, a return to the start view when
   nobody touches it, the screen on when someone comes near and off a while after, brightness by day
   and night or the room's light, and a screensaver with the time, the weather, who's home and the
-  next event over the turning house or your photos (see [Extensions](#extensions-and-licence-keys)).
+  next event over the turning house or your photos (see [Extensions](#extensions-and-virtuhome-pro)).
   With Fully Kiosk Browser, turn on **Enable JavaScript Interface** in its settings (Advanced Web
   Settings) so VirtuHome can switch the screen itself; else pick the tablet's **Screen** switch from
   the Fully Kiosk integration, or VirtuHome blacks the screen out instead.
@@ -781,10 +781,21 @@ height: 440
 
 Extensions add their own sections to the visual editor (below).
 
-## Extensions and licence keys
+## Extensions and VirtuHome Pro
 
-VirtuHome is free and open source. Extensions add more, and are currently available to VirtuMaps
-installation clients.
+VirtuHome is free and open source. Extensions add more (the table below). They come with
+**VirtuHome Pro**, an integration of its own from VirtuMaps that isn't in HACS's default list, and
+are currently available to VirtuMaps installation clients.
+
+**Install VirtuHome Pro (once):**
+1. Edit → **Extras** → **Open in HACS**. HACS asks to add the repository
+   `virtumaps/virtuhome-pro-integration`: **Add**. (By hand: HACS → ⋮ → **Custom repositories**,
+   that repository with the type **Integration**.)
+2. **Download**, then restart Home Assistant.
+3. VirtuHome Pro sets itself up after the restart. Reload the page: **Extras** shows the licence and
+   the extensions.
+
+Its updates come through HACS, like VirtuHome's.
 
 **Activate a key:** Edit → **Extras** → type the **Licence key** → **Activate** → **Reload now**.
 The licence shows **Active**, the extensions it unlocks and their versions. **Check for updates**
@@ -841,7 +852,7 @@ furniture and decoration.
 
 **Does VirtuHome send my data anywhere?** No. It runs inside Home Assistant. Only these go out, and
 only when you use them: **Line up with the map** (your home's location, to OpenStreetMap), and the
-**Extras** tab and licence keys (see [Extensions](#extensions-and-licence-keys)).
+**Extras** tab and licence keys (see [Extensions](#extensions-and-virtuhome-pro)).
 
 **Will it slow down my tablet?** It draws nothing while nothing changes, and each floor is one or two
 draw calls. On slow tablets pick **Tablet** graphics.
@@ -891,8 +902,8 @@ it's put right.
   finished starting.
 - **Graphics on this device**: Automatic stepped down because turning the view was slow (**Try
   again**), or the browser draws without the graphics card.
-- **Extensions and licence**: an extension that needs a newer VirtuHome, or a licence that has
-  expired or couldn't renew (**Renew now**).
+- **Extensions**: an extension that needs a newer VirtuHome or can't load, and what VirtuHome Pro
+  says about its licence: expired or couldn't renew (**Renew now**), or a trial that ended.
 - **Plan repairs**: what VirtuHome put right while loading the plan; **Save** keeps it.
 
 ![Check my setup](screenshots/check-setup.jpg)
@@ -962,6 +973,9 @@ home in](#get-your-home-in). Dashboard cards only show the house once it is ther
 
 **No solar, battery or grid in the corner**: set them up in Home Assistant's energy dashboard, or
 pick the sensors in Edit → **Home** → **Energy**.
+
+**Extras still says Open in HACS after installing VirtuHome Pro**: restart Home Assistant once it's
+downloaded, then reload the page.
 
 **Extensions don't show after activating**: tap **Reload now**, or reload the page.
 

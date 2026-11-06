@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { privateStrings, stripPrivate } from "../src/live/strip";
 import { browserName, callEach, describeError, errorDetails, isolate, isStaleCode } from "../src/ui/errors";
-import { extensionFailures, loadExtensions, registerView, type ViewHandle } from "../src/ext/api";
+import type { ExtensionModule, ViewHandle } from "../src/ext/api";
 import { normalizePlan } from "../src/model/plan";
 import type { Hass } from "../src/live/hass";
 
@@ -174,19 +174,25 @@ describe("extensions that throw", () => {
 
   it("an extension that throws in setup or on a view leaves the others working", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const module = (body: string) => `data:text/javascript,${encodeURIComponent(body)}`;
-    const urls = [
-      module(`export default { id: "bad_setup", name: "Bad setup", apiVersion: 1, setup() { throw new Error("no"); } };`),
-      module(`export default { id: "bad_view", name: "Bad view", apiVersion: 1, setup(ctx) { ctx.onView(() => { throw new Error("no"); }); } };`),
-      module(`export default { id: "good", name: "Good", apiVersion: 1, setup(ctx) { ctx.onView((v) => { v.toast("hello"); return () => { throw new Error("no"); }; }); } };`),
+    const modules: ExtensionModule[] = [
+      { id: "bad_setup", name: "Bad setup", apiVersion: 1, setup() { throw new Error("no"); } },
+      { id: "bad_view", name: "Bad view", apiVersion: 1, setup(ctx) { ctx.onView(() => { throw new Error("no"); }); } },
+      { id: "good", name: "Good", apiVersion: 1, setup(ctx) { ctx.onView((v) => { v.toast("hello"); return () => { throw new Error("no"); }; }); } },
     ];
+    vi.resetModules();
+    vi.stubGlobal("window", { virtuhomeSources: [{
+      id: "test", name: "Test",
+      extensions: async () => modules.map((m) => ({ id: m.id, name: m.name, version: "1", load: async () => ({ default: m }) })),
+    }] });
+    const api = await import("../src/ext/api");
     const toasts: string[] = [];
-    const unregister = registerView({ toast: (t: string) => toasts.push(t) } as unknown as ViewHandle);
-    await loadExtensions({ callWS: () => Promise.reject(new Error("no integration")) } as unknown as Hass, urls);
+    const unregister = api.registerView({ toast: (t: string) => toasts.push(t) } as unknown as ViewHandle);
+    await api.loadExtensions({ callWS: () => Promise.reject(new Error("no integration")) } as unknown as Hass);
     expect(toasts).toEqual(["hello"]);
-    expect(extensionFailures().map((f) => f.name)).toEqual([urls[0]]);
+    expect(api.extensionFailures().map((f) => f.name)).toEqual(["Bad setup"]);
     // a cleanup that throws doesn't stop the view going away
     expect(() => unregister()).not.toThrow();
+    vi.unstubAllGlobals();
   });
 });
 

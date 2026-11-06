@@ -222,7 +222,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md) a
 Editor → **Extras** takes a licence key. Keys are checked with the VirtuMaps licence server; the
 extensions they unlock are verified, stored in Home Assistant and keep working offline. Opening Extras
 asks the server for the list of extensions; nothing else is sent unless you enter a key or start a
-free trial (the guide says [what is sent](docs/GUIDE.md#extensions-and-licence-keys)).
+free trial (the guide says [what is sent](docs/GUIDE.md#extensions-and-virtuhome-pro)).
 
 ## Licence
 

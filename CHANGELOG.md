@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- Extensions come with **VirtuHome Pro**, an integration of its own installed from HACS. While it
+  isn't installed, Edit → **Extras** explains it and has **Open in HACS**; once it is, its licence
+  key, trials and extensions show there as before. **Check my setup** calls its check **Extensions**.
 - The dashboard card's resource is `/virtuhome_static/virtuhome-loader.js`, served by VirtuHome
   itself. VirtuHome no longer writes a loader into the `www` folder, and removes the one older
   versions put there (`www/virtuhome/card-loader.js`). A dashboard opened while Home Assistant is

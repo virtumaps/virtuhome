@@ -211,7 +211,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       if (msg.type === "virtuhome/background/upload") return demoUpload(msg) as T;
       // Check my setup: all well with the card, and no licence
       if (msg.type === "virtuhome/checks" || msg.type === "virtuhome/checks/fix_card") {
-        return { version: __VERSION__, dashboard: { mode: "storage", urls: [`/virtuhome_static/virtuhome-loader.js?v=${__VERSION__}`], current: true }, licence: { status: "none", error: null, extensions: [] } } as T;
+        return { version: __VERSION__, dashboard: { mode: "storage", urls: [`/virtuhome_static/virtuhome-loader.js?v=${__VERSION__}`], current: true } } as T;
       }
       if (msg.type === "config/entity_registry/list") {
         return Object.values(entities).map((e) => ({ id: regId(e.entity_id), entity_id: e.entity_id, device_id: e.device_id ?? null, area_id: e.area_id ?? null, platform: e.platform ?? "demo" })) as T;
