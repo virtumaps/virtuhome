@@ -19,14 +19,10 @@ from .storage import PlanStore
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     version = str((await async_get_integration(hass, DOMAIN)).version)
     store: PlanStore | None = hass.data.get(DOMAIN)
-    manager = store.extension_manager if store else None
-    loaded = manager.extensions() if manager else []
     report = build_report(
         store, entry,
         version=version,
         ha_version=HA_VERSION,
-        licence=manager.summary() if manager else None,
-        loaded=loaded,
         dashboard=await card_resource.async_state(hass, version),
         panel=PANEL_PATH in hass.data.get("frontend_panels", {}),
         entity_exists=lambda entity_id: hass.states.get(entity_id) is not None,

@@ -94,7 +94,8 @@ describe("check my setup", () => {
     expect(checkExtensions([pro], [])).toMatchObject({ level: "ok", text: "Licence active: Wall Tablet." });
     expect(checkExtensions([pro], [{ name: "Wall Tablet", newer: true }])).toMatchObject({ level: "problem", count: 1, fixes: [] });
     const expired: SourceCheck = { found: [["problem", "The licence has expired."]], ok: "", renew: true };
-    expect(checkExtensions([expired], [])).toMatchObject({ level: "problem", count: 1, fixes: ["renew"], text: "The licence has expired." });
+    // counted for Repairs only when an extension can't load: VirtuHome Pro raises its own
+    expect(checkExtensions([expired], [])).toMatchObject({ level: "problem", count: 0, fixes: ["renew"], text: "The licence has expired." });
     const over: SourceCheck = { found: [["note", "The trial of Security has ended."]], ok: "Licence active.", extras: true };
     expect(checkExtensions([over], [])).toMatchObject({ level: "note", fixes: ["extras"], text: "The trial of Security has ended." });
   });

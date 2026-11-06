@@ -57,6 +57,7 @@ change instead.
 
 ## Extensions
 
-Paid extensions (for example Wall Tablet) are separate and not part of this repository. The core
-loads them through the extension API in `frontend/src/ext/api.ts`; changes to that API need a bump of
-`EXT_API_VERSION` when they break existing extensions.
+Paid extensions (for example Wall Tablet) are separate and not part of this repository: they come
+with VirtuHome Pro, an integration installed on its own, which registers them with the core through
+the extension API in `frontend/src/ext/api.ts`. The core never fetches or imports their code. Changes
+to that API need a bump of `EXT_API_VERSION` when they break existing extensions.

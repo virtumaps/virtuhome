@@ -797,6 +797,11 @@ are currently available to VirtuMaps installation clients.
 
 Its updates come through HACS, like VirtuHome's.
 
+**Coming from VirtuHome 0.17 or earlier:** extensions used to come with VirtuHome itself. Since 0.18
+they need VirtuHome Pro; until it's installed, **Settings → System → Repairs** says **Your VirtuHome
+extensions now come with VirtuHome Pro**. Install it as above: your licence key, trials, extensions
+and the automations they added carry on as they were, with nothing to enter again.
+
 **Activate a key:** Edit → **Extras** → type the **Licence key** → **Activate** → **Reload now**.
 The licence shows **Active**, the extensions it unlocks and their versions. **Check for updates**
 fetches new versions; **Remove licence** frees the key for another Home Assistant. **Available
@@ -810,7 +815,8 @@ changes; **Check my setup** says so for two weeks, with **Open Extras**. Each ex
 once per Home Assistant. A trial sits beside a licence: trying one extension doesn't touch those
 your key unlocks, and one you buy afterwards replaces its trial.
 
-**What is sent:** opening **Extras** asks the VirtuMaps licence server (`license.virtumaps.com`, or
+**What is sent:** VirtuHome itself sends nothing for extensions. With VirtuHome Pro, opening
+**Extras** asks the VirtuMaps licence server (`license.virtumaps.com`, or
 its first address if that can't be reached) for the list of extensions. Activating a key sends the
 key and an anonymous code for this Home Assistant, nothing that names your home; starting a trial
 sends the extension's name and the same code. The licence and trials are then renewed about once a
@@ -851,8 +857,8 @@ plan floor by floor, or [import a plan](#import-from-another-program). A scan is
 furniture and decoration.
 
 **Does VirtuHome send my data anywhere?** No. It runs inside Home Assistant. Only these go out, and
-only when you use them: **Line up with the map** (your home's location, to OpenStreetMap), and the
-**Extras** tab and licence keys (see [Extensions](#extensions-and-virtuhome-pro)).
+only when you use them: **Line up with the map** (your home's location, to OpenStreetMap), and
+VirtuHome Pro's licence keys and trials, if you install it (see [Extensions](#extensions-and-virtuhome-pro)).
 
 **Will it slow down my tablet?** It draws nothing while nothing changes, and each floor is one or two
 draw calls. On slow tablets pick **Tablet** graphics.
@@ -888,8 +894,9 @@ should, with a fix where there is a safe one. Nothing changes until you press a 
 **Settings → System → Repairs** in Home Assistant lists VirtuHome's problems too, so they show up
 where Home Assistant users look first: **The VirtuHome card is missing from your dashboards** (with
 **Submit** to add it again), devices linked to entities that no longer exist, an extension that
-can't load, and a licence that hasn't renewed for a month. The first is checked when Home Assistant
-starts and each day; the others when someone opens Check my setup. Each goes away by itself once
+can't load, and a licence key from before VirtuHome 0.18 without VirtuHome Pro installed. The card is
+checked when Home Assistant starts and each day; the others when someone opens Check my setup.
+VirtuHome Pro adds its own: a licence that hasn't renewed for a month. Each goes away by itself once
 it's put right.
 - **Linked entities**: links to entities Home Assistant no longer has (see below).
 - **Rooms and areas**: rooms not linked to an area (named), or linked to one that is gone. **Link
@@ -990,9 +997,11 @@ Q&A](https://github.com/virtumaps/virtuhome/discussions/categories/q-a). To repo
 doesn't work, a device to support, a scan that came in wrong or a slow device, open an
 [issue](https://github.com/virtumaps/virtuhome/issues/new/choose) with its form, and attach the
 diagnostics file: Settings → Devices & services → VirtuHome → ⋮ → **Download diagnostics**. It holds
-the versions, the plan's size and what each floor counts, how the card reaches your dashboards and
-which extensions are loaded, how many things each check of **Check my setup** found when an
+the versions, the plan's size and what each floor counts, how the card reaches your dashboards, how
+many things each check of **Check my setup** found when an
 administrator last opened VirtuHome, and the last 50 errors the cards and the panel ran into (where,
 the error, the version, the graphics level and the browser). It has no room, area, device, people or
-entity names, no web addresses, and no licence key or token. Errors are kept until Home Assistant or
-VirtuHome restarts.
+entity names and no web addresses. Errors are kept until Home Assistant or VirtuHome restarts. For
+an extension, attach VirtuHome Pro's diagnostics file too (Settings → Devices & services → VirtuHome
+Pro → ⋮ → **Download diagnostics**): the licence's state and which extensions are installed and
+loaded, with no licence key or token.

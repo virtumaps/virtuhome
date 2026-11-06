@@ -1,10 +1,9 @@
 """What "Download diagnostics" puts in the file (no Home Assistant imports: testable alone).
 
 Only versions, counts and states go in, and the frontend's last errors with names, entity ids and
-addresses stripped (errors.py). No room or device names and no entity ids from the plan, and never
-the licence key, token, activation id or installation hash: the licence part is built from a short
-list of safe fields. diagnostics.py also runs Home Assistant's redaction over the result, in case
-a secret ever ends up in one of the dicts copied here.
+addresses stripped (errors.py). No room or device names and no entity ids from the plan.
+diagnostics.py also runs Home Assistant's redaction over the result, in case a secret ever ends up
+in one of the dicts copied here.
 """
 
 from __future__ import annotations
@@ -85,32 +84,8 @@ def checks_summary(checks: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def licence_summary(summary: dict[str, Any] | None, loaded: list[dict[str, Any]]) -> dict[str, Any]:
-    """The licence state and each extension: from ExtensionManager.summary() and .extensions()."""
-    if summary is None:
-        return {"status": "unavailable"}
-    loaded_ids = {e.get("id") for e in loaded}
-    return {
-        "status": summary.get("status"),
-        "kind": summary.get("kind"),
-        "error": summary.get("error"),
-        "server": summary.get("server"),
-        "key_entered": bool(summary.get("key_hint")),
-        "last_check": summary.get("checked"),
-        "extensions": [
-            {"id": e.get("id"), "version": e.get("version"), "loaded": e.get("id") in loaded_ids}
-            for e in summary.get("extensions") or []
-        ],
-        "trials": [
-            {"id": e.get("id"), "status": e.get("status"), "loaded": e.get("id") in loaded_ids}
-            for e in summary.get("trials") or []
-        ],
-    }
-
-
 def build_report(
-    store: Any, entry: Any, *, version: str, ha_version: str, licence: dict[str, Any] | None,
-    loaded: list[dict[str, Any]], dashboard: dict[str, Any], panel: bool,
+    store: Any, entry: Any, *, version: str, ha_version: str, dashboard: dict[str, Any], panel: bool,
     entity_exists: Callable[[str], bool] | None = None,
 ) -> dict[str, Any]:
     """The whole report. `store` is the PlanStore (or None when VirtuHome isn't loaded), `entry` the
@@ -128,5 +103,4 @@ def build_report(
         report["checks"] = checks_summary(getattr(store, "checks", None))
         errors = getattr(store, "errors", None)
         report["errors"] = errors.summary() if errors is not None else []
-    report["licence"] = licence_summary(licence, loaded)
     return report
