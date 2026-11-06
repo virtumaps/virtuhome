@@ -60,11 +60,15 @@ class FakeHass:
 
 
 OLD = "/local/virtuhome/card-loader.js?v=0.9.0"
+SERVED = "/virtuhome_static/virtuhome-loader.js"
+
+
+def urls(hass):
+    return [i["url"] for i in hass.data["lovelace"]["resources"].items]
 
 
 def test_after_an_update_the_old_resource_is_pending_until_put_right(tmp_path):
-    (tmp_path / "www").mkdir()
-    hass = FakeHass(tmp_path, FakeResources([OLD]))
+    hass = FakeHass(tmp_path, FakeResources([f"{SERVED}?v=0.9.0"]))
     # Home Assistant is still starting: the resource names the version before the update
     state = asyncio.run(cr.async_state(hass, "0.10.0"))
     assert state["pending"] is True
@@ -73,7 +77,7 @@ def test_after_an_update_the_old_resource_is_pending_until_put_right(tmp_path):
     state = asyncio.run(cr.async_state(hass, "0.10.0"))
     assert state["pending"] is False
     assert state["current"] is True
-    assert state["urls"] == ["/local/virtuhome/card-loader.js?v=0.10.0"]
+    assert state["urls"] == [f"{SERVED}?v=0.10.0"]
 
 
 def test_a_failed_registration_still_shows_what_is_there(tmp_path):
@@ -81,7 +85,6 @@ def test_a_failed_registration_still_shows_what_is_there(tmp_path):
         async def async_update_item(self, item_id, data):
             raise RuntimeError("storage full")
 
-    (tmp_path / "www").mkdir()
     hass = FakeHass(tmp_path, Broken([OLD]))
     with pytest.raises(RuntimeError):
         asyncio.run(cr.async_register(hass, "0.10.0"))
@@ -93,27 +96,46 @@ def test_a_failed_registration_still_shows_what_is_there(tmp_path):
 def test_yaml_resources_say_pending_too(tmp_path):
     hass = FakeHass(tmp_path, None)
     hass.data["lovelace"] = {"resources": object()}
-    assert asyncio.run(cr.async_state(hass, "0.10.0")) == {"mode": "yaml", "www_loader": False, "pending": True}
+    assert asyncio.run(cr.async_state(hass, "0.10.0")) == {"mode": "yaml", "pending": True}
 
 
-class Route(SimpleNamespace):
-    """A route of Home Assistant's web server (aiohttp resources have a canonical path)."""
-
-
-def with_routes(hass, *paths):
-    hass.http = SimpleNamespace(app=SimpleNamespace(router=SimpleNamespace(resources=lambda: [Route(canonical=p) for p in paths])))
-    return hass
-
-
-def test_www_made_after_startup_is_not_used_until_it_is_served(tmp_path):
-    # Home Assistant 2026.11's Marketplace creates www/ while starting, after the frontend left /local out
+def test_nothing_is_written_to_www(tmp_path):
+    hass = FakeHass(tmp_path, FakeResources([]))
+    asyncio.run(cr.async_register(hass, "0.18.0"))
+    assert urls(hass) == [f"{SERVED}?v=0.18.0"]
+    assert not (tmp_path / "www").exists()
     (tmp_path / "www").mkdir()
-    hass = with_routes(FakeHass(tmp_path, FakeResources([])), "/api", "/virtuhome_static")
-    asyncio.run(cr.async_register(hass, "0.17.0"))
-    assert [i["url"] for i in hass.data["lovelace"]["resources"].items] == ["/virtuhome_static/virtuhome-loader.js?v=0.17.0"]
-    assert not (tmp_path / "www" / "virtuhome").exists()
-    # after the next restart /local is served: the retrying loader in www/ takes over
-    hass = with_routes(FakeHass(tmp_path, hass.data["lovelace"]["resources"]), "/api", "/local", "/virtuhome_static")
-    asyncio.run(cr.async_register(hass, "0.17.0"))
-    assert [i["url"] for i in hass.data["lovelace"]["resources"].items] == ["/local/virtuhome/card-loader.js?v=0.17.0"]
-    assert (tmp_path / "www" / "virtuhome" / "card-loader.js").is_file()
+    asyncio.run(cr.async_register(hass, "0.18.0"))
+    assert list((tmp_path / "www").iterdir()) == []
+
+
+def test_the_loader_older_versions_put_in_www_goes(tmp_path):
+    old = tmp_path / "www" / "virtuhome" / "card-loader.js"
+    old.parent.mkdir(parents=True)
+    old.write_text("// VirtuHome: loads the dashboard card")
+    (tmp_path / "www" / "photo.jpg").write_bytes(b"")
+    hass = FakeHass(tmp_path, FakeResources(["/local/other-card.js", OLD]))
+    asyncio.run(cr.async_register(hass, "0.18.0"))
+    assert urls(hass) == ["/local/other-card.js", f"{SERVED}?v=0.18.0"]
+    assert not old.parent.exists()
+    assert (tmp_path / "www" / "photo.jpg").exists()
+
+
+def test_a_virtuhome_folder_with_the_users_own_files_stays(tmp_path):
+    folder = tmp_path / "www" / "virtuhome"
+    folder.mkdir(parents=True)
+    (folder / "card-loader.js").write_text("")
+    (folder / "floorplan.png").write_bytes(b"")
+    hass = FakeHass(tmp_path, FakeResources([OLD]))
+    asyncio.run(cr.async_register(hass, "0.18.0"))
+    assert [f.name for f in folder.iterdir()] == ["floorplan.png"]
+
+
+def test_removing_the_integration_takes_the_resource_and_an_old_loader(tmp_path):
+    old = tmp_path / "www" / "virtuhome" / "card-loader.js"
+    old.parent.mkdir(parents=True)
+    old.write_text("")
+    hass = FakeHass(tmp_path, FakeResources(["/local/other-card.js", f"{SERVED}?v=0.18.0", OLD]))
+    asyncio.run(cr.async_unregister(hass))
+    assert urls(hass) == ["/local/other-card.js"]
+    assert not old.parent.exists()

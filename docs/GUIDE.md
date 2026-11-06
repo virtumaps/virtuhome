@@ -899,6 +899,7 @@ it's put right.
 
 **"Custom element doesn't exist: virtuhome-card"**, or the card stays empty
 - Check the integration is added (Settings → Devices & services → VirtuHome), then reload the page.
+- A dashboard opened while Home Assistant was still starting: reload the page once it has started.
 - Dashboards with resources in YAML mode: add `/virtuhome_static/virtuhome-loader.js` as a
   `module` resource yourself. In storage mode VirtuHome adds it.
 - After an update, reload the page, or clear the browser's cache on a tablet.

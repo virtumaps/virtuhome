@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- The dashboard card's resource is `/virtuhome_static/virtuhome-loader.js`, served by VirtuHome
+  itself. VirtuHome no longer writes a loader into the `www` folder, and removes the one older
+  versions put there (`www/virtuhome/card-loader.js`). A dashboard opened while Home Assistant is
+  still starting can show "Custom element doesn't exist: virtuhome-card" until the page is reloaded.
+
+### Fixed
+- Each card and panel that opened looked for the extension files on disk while Home Assistant
+  waited, which could hold everything up on a slow SD card.
+- A card or panel that couldn't load its 3D engine (Home Assistant restarting, a dropped connection)
+  tries again every 5 seconds for 10 minutes, instead of staying on "VirtuHome could not load".
+
 ## 0.17.0
 
 ### New

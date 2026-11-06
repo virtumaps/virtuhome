@@ -34,7 +34,7 @@ const hass = (): Hass => ({
   },
 } as unknown as Hass);
 
-const SERVER: ServerChecks = { version: "0.10.0", dashboard: { mode: "storage", urls: ["/local/virtuhome/card-loader.js?v=0.10.0"], current: true }, licence: { status: "none", error: null, extensions: [] } };
+const SERVER: ServerChecks = { version: "0.10.0", dashboard: { mode: "storage", urls: ["/virtuhome_static/virtuhome-loader.js?v=0.10.0"], current: true }, licence: { status: "none", error: null, extensions: [] } };
 
 describe("check my setup", () => {
   it("linked entities: missing ones are a problem to relink", () => {

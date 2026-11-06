@@ -12,7 +12,9 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, Event, HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from . import card_resource, websocket
@@ -29,16 +31,32 @@ from .views import BackgroundView
 _LOGGER = logging.getLogger(__name__)
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
-DATA_STATIC = f"{DOMAIN}_static_registered"
 DATA_BACKGROUNDS = f"{DOMAIN}_backgrounds"
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Static files, views and WebSocket commands: once per Home Assistant run (they can't be
+    unregistered), and before the config entry so the card's resource is served as early as can be;
+    dashboards opened while Home Assistant starts may still ask before this."""
+    ext_dir = Path(hass.config.path(".virtuhome", "extensions"))
+    await hass.async_add_executor_job(lambda: ext_dir.mkdir(parents=True, exist_ok=True))
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(URL_BASE, str(FRONTEND_DIR), cache_headers=False),
+        # extension files carry their version in the name, so caching them is safe
+        StaticPathConfig(EXT_URL_BASE, str(ext_dir), cache_headers=True),
+    ])
+    # floor plan images to trace over; kept across reloads, like the view that serves them
+    hass.data[DATA_BACKGROUNDS] = Backgrounds(Path(hass.config.path(".virtuhome", "backgrounds")))
+    hass.http.register_view(BackgroundView(hass, hass.data[DATA_BACKGROUNDS]))
+    websocket.async_register(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store = PlanStore(hass)
     await store.async_load()
-    # floor plan images to trace over; kept across reloads, like the view that serves them
-    if DATA_BACKGROUNDS not in hass.data:
-        hass.data[DATA_BACKGROUNDS] = Backgrounds(Path(hass.config.path(".virtuhome", "backgrounds")))
     store.backgrounds = hass.data[DATA_BACKGROUNDS]
     hass.data[DOMAIN] = store
     ext = ExtensionManager(hass, entry.options.get(CONF_LICENCE_SERVER))
@@ -48,19 +66,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     integration = await async_get_integration(hass, DOMAIN)
     version = str(integration.version)
-
-    # static files and WebSocket commands cannot be unregistered: once per Home Assistant run
-    if not hass.data.get(DATA_STATIC):
-        ext_dir = Path(hass.config.path(".virtuhome", "extensions"))
-        await hass.async_add_executor_job(lambda: ext_dir.mkdir(parents=True, exist_ok=True))
-        await hass.http.async_register_static_paths([
-            StaticPathConfig(URL_BASE, str(FRONTEND_DIR), cache_headers=False),
-            # extension files carry their version in the name, so caching them is safe
-            StaticPathConfig(EXT_URL_BASE, str(ext_dir), cache_headers=True),
-        ])
-        hass.http.register_view(BackgroundView(hass, hass.data[DATA_BACKGROUNDS]))
-        websocket.async_register(hass)
-        hass.data[DATA_STATIC] = True
 
     # the loader is tiny; it defines the card and panel elements and fetches the 3D engine only
     # where one of them is actually shown. Dashboards get it as a Lovelace resource, the panel directly.

@@ -7,12 +7,25 @@ type Impl = { setConfig?(c: unknown): void; set hass(h: unknown); setNarrow?(n: 
 
 const APP_URL = new URL(`./app/app.js?v=${__VERSION__}`, import.meta.url).href;
 let app: Promise<AppModule> | null = null;
-const loadApp = (): Promise<AppModule> => (app ??= import(/* @vite-ignore */ APP_URL) as Promise<AppModule>);
+let failed = 0;
+// A failed import stays failed for its address, so a later try asks with &retry=n
+const loadApp = (): Promise<AppModule> =>
+  (app ??= (import(/* @vite-ignore */ failed ? `${APP_URL}&retry=${failed}` : APP_URL) as Promise<AppModule>).catch(
+    (err) => {
+      failed++;
+      app = null;
+      throw err;
+    },
+  ));
+// Home Assistant still starting or a dropped connection: try again every 5 s for 10 minutes
+const RETRY_MS = 5000;
+const RETRIES = 120;
 
 abstract class LazyElement extends HTMLElement {
   protected impl: Impl | null = null;
   protected _hass: unknown = null;
   private loading = false;
+  private retries = 0;
 
   set hass(h: unknown) {
     this._hass = h;
@@ -39,9 +52,17 @@ abstract class LazyElement extends HTMLElement {
     if (this.loading || this.impl || !this.isConnected || !this._hass) return;
     this.loading = true;
     try {
-      const mod = await loadApp();
+      let mod: AppModule;
+      try {
+        mod = await loadApp();
+      } catch (err) {
+        this.textContent = `VirtuHome could not load: ${err}`;
+        if (this.retries++ < RETRIES) window.setTimeout(() => this.start(), RETRY_MS);
+        return;
+      }
       // the texts in the user's language before anything is drawn
       await mod.useLanguage(this._hass);
+      this.textContent = "";
       this.impl = this.mount(mod);
       this.impl.hass = this._hass;
     } catch (err) {

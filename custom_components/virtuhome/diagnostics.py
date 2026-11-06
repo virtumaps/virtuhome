@@ -20,8 +20,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     version = str((await async_get_integration(hass, DOMAIN)).version)
     store: PlanStore | None = hass.data.get(DOMAIN)
     manager = store.extension_manager if store else None
-    # extensions() looks for the files on disk
-    loaded = await hass.async_add_executor_job(manager.extensions) if manager else []
+    loaded = manager.extensions() if manager else []
     report = build_report(
         store, entry,
         version=version,

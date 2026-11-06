@@ -58,7 +58,7 @@ def report(store=None, entry=None):
                                      data={"token": TOKEN})
     return rep.build_report(
         store, entry, version="0.6.0", ha_version="2026.10.2", licence=manager.summary(), loaded=manager.extensions(),
-        dashboard={"mode": "storage", "urls": ["/local/virtuhome/card-loader.js?v=0.6.0"], "current": True},
+        dashboard={"mode": "storage", "urls": ["/virtuhome_static/virtuhome-loader.js?v=0.6.0"], "current": True},
         panel=True, entity_exists=EXISTING.__contains__,
     )
 
