@@ -53,6 +53,9 @@ questions on it, label it `needs info`, and remove `in progress`.
 - `frontend/test/budget.test.ts` passes: draw calls per floor, the demo house's triangles at the Tablet
   level, and the size of the loader and the app. Raise a budget in `frontend/test/budgets.ts` only on
   purpose, and say in the pull request why it grew.
+- The Visual checks pass. When the look changed on purpose, the new pictures are stored with
+  `npm run visual -- --fetch` (see [Visual checks](#visual-checks)), and so are the guide's
+  screenshots that show it (`npm run screenshots`, see [Screenshots](#screenshots)).
 - Old plans still load. Plan format changes go through `normalizePlan` (and `schema.py`).
   `frontend/test/fixtures/plans/` keeps the demo plan as every release saved it, and small plans
   with the rarer parts; `frontend/test/fixtures.test.ts` loads and builds each one, and
@@ -96,6 +99,36 @@ It listens on 127.0.0.1:8131 (`--port` for another, never that of a Home Assista
 drives Google Chrome (`--chrome <path>`, or Playwright's Chromium after
 `npx playwright-core install chromium` in `frontend/`). Screenshots, Home Assistant's log and the
 diagnostics are left in the folder it names at the end (`--dir` picks it).
+
+## Visual checks
+
+`tests/visual/run.mjs` draws key views of the demo home and compares each with its stored picture
+in `tests/visual/baseline/`: the whole house at the Tablet level by day and by night and at Standard
+by day, the ground floor at night, the first floor with the walls low, the editor in 3D and in the
+2D plan, the ground floor at Realistic by day and the house at Ultra by night. A view fails when
+more than 0.1 % of its pixels look different. CI runs it (the Visual checks workflow) on pull
+requests that touch the frontend's sources, in Playwright's container, where software WebGL
+(SwiftShader), the same fonts and the fixed clock, seed, window and pixel ratio of
+`tools/render.mjs` draw the same pixels every time. A failed run uploads the differences side by
+side (stored, changed pixels in red, now) as `visual-diffs`.
+
+**When the look changes on purpose** (or another pull request changed it), store the new pictures in
+one step once the branch is pushed and its Visual checks have run:
+
+```bash
+cd frontend && npm run visual -- --fetch    # needs the gh CLI signed in to GitHub
+```
+
+It downloads what CI drew for the branch's last commit (`visual-new`, which every run uploads) into
+`tests/visual/baseline/`. Look at the pictures, commit them, and say in the pull request why the
+look changed; the next run passes.
+
+`npm run visual` also runs on any computer (after `npx playwright-core install chromium`), and
+`npm run visual -- standard-house-day` checks one view, but fonts and the software renderer differ
+from CI's, so compare there only against pictures stored on the same computer with `--update`. The
+drawn pictures and the differences go to `tools/out/visual/` (`--out` for another folder). The
+workflow's container tag follows playwright-core's version in `package-lock.json`, and `npm test`
+fails until they agree.
 
 ## The guide's website
 

@@ -1,0 +1,57 @@
+name: Visual checks
+# Draws key views of the demo home in software WebGL and compares each with its stored picture in
+# tests/visual/baseline (tests/visual/run.mjs). It runs in Playwright's container, so the browser,
+# the fonts and the software renderer are the same every time; its tag follows playwright-core's
+# version in frontend/package-lock.json (npm test checks it). Every run uploads what it drew
+# (visual-new, which `npm run visual -- --fetch` stores as the new pictures), and a failed one the
+# differences side by side (visual-diffs).
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/**"
+      - "frontend/dev/main.ts"
+      - "frontend/dev/index.html"
+      - "frontend/dev/server.mjs"
+      - "frontend/package-lock.json"
+      - "tools/render.mjs"
+      - "tools/png.mjs"
+      - "tests/visual/**"
+      - ".github/workflows/visual.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/src/**"
+      - "frontend/dev/main.ts"
+      - "frontend/package-lock.json"
+      - "tests/visual/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+        working-directory: frontend
+      - name: Compare the views with their stored pictures
+        run: node tests/visual/run.mjs --out visual-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-new
+          path: visual-out/new/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diffs
+          path: visual-out/*.diff.png
+          if-no-files-found: ignore
+          retention-days: 14

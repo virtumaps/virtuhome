@@ -67,3 +67,11 @@ describe("comparing pictures", () => {
     expect(png.width * png.height * 4).toBe(png.data.length);
   });
 });
+
+describe("visual checks", () => {
+  it("run in the Playwright container of the playwright-core the frontend installs", () => {
+    const lock = JSON.parse(read("frontend/package-lock.json")) as { packages: Record<string, { version: string }> };
+    const version = lock.packages["node_modules/playwright-core"].version;
+    expect(read(".github/workflows/visual.yml")).toContain(`mcr.microsoft.com/playwright:v${version}-`);
+  });
+});
