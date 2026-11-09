@@ -13,7 +13,8 @@ import { WALL_HANG, WALL_TRIM } from "./materials";
 import { buildOpeningFixed, joineryLook, type OpeningInfo } from "./joinery";
 import { cameraPieces, cameraRig, type CameraRig } from "./cameras";
 import { deviceEntities, DEVICE_TYPES, fanBlades, FAN_LIGHTS, FAN_TYPES, gangsOf, GANG_TYPES } from "./devices";
-import { fencePaint, fencePieces, FENCE_STYLES } from "./fences";
+import { fencePaint, fencePieces, FENCE_STYLES, type FencePiece } from "./fences";
+import { AWNING_TYPES } from "./garden";
 import { edgeOf, insetPolygon, openEdges, railingRuns, stepBlocks, turnOf } from "./areas";
 import { areaColour, areaPaving, BORDER_MATERIALS, BORDER_UNITS, deckKey, deckLook, isPaved, layingAngle, layingFrame, pavingKey, pavingLook, type PavingMaterial } from "./paving";
 import { drawRoof, drawRoofItem, floorRoofs, type RoofDraw, type RoofModel } from "./roofs";
@@ -123,6 +124,24 @@ export interface DeviceTarget {
   /** Its middle (world, before the floor's offset). */
   pos: V3;
   room: number;
+  /** A tap asks first (a gate, an awning). */
+  ask?: boolean;
+}
+
+/** A gate that opens with its entity, or an awning: drawn with the moving parts (scene/covers.ts). */
+export interface MoverInfo {
+  /** Index into FloorBuild.items. */
+  item: number;
+  entity: string | null;
+  room: number;
+  /** What it stands on (world, before the floor's offset). */
+  bottom: number;
+  /** A gate: its fence, its index in the fence's gates and its leaves, shut. */
+  fence?: Fence;
+  gate?: number;
+  leaves?: FencePiece[];
+  /** An awning. */
+  furniture?: Furniture;
 }
 
 /** A ceiling fan: its blades are drawn with the floor's moving parts, turned about its middle. */
@@ -164,6 +183,7 @@ export interface FloorBuild {
   screens: { furniture: Furniture; glow: number; entity: string | null; at: V3 }[];
   targets: DeviceTarget[];
   fans: FanInfo[];
+  movers: MoverInfo[];
   /** Cameras: where each hangs and what it sees (the viewer draws that). */
   cameras: CameraRig[];
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
@@ -219,6 +239,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
   const screens: FloorBuild["screens"] = [];
   const targets: DeviceTarget[] = [];
   const fans: FanInfo[] = [];
+  const movers: MoverInfo[] = [];
   const items: ItemRef[] = [];
   // doors and windows can be tapped in the editor: one item each
   const openingItems = new Map<string, number>();
@@ -401,6 +422,10 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     const raised = baseHeight(item, floor.height) > 0.05;
     addParts(opaque, parts, item, bottom, raised, room, glow, pal, opt.low, glass);
     if (FAN_TYPES.has(item.type)) fans.push({ furniture: item, item: items.length - 1, bottom, room });
+    if (AWNING_TYPES.has(item.type)) {
+      movers.push({ item: items.length - 1, entity: item.entity ?? null, room, bottom, furniture: item });
+      if (item.entity) targets.push({ item: items.length - 1, entities: [item.entity], pos: [item.x, bottom + item.h, item.z], room, ask: true });
+    }
     if (isLamp) {
       const top = parts.reduce((m, p) => Math.max(m, p.y + p.h), -10);
       const low = parts.reduce((m, p) => Math.min(m, p.y), 10);
@@ -419,14 +444,28 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
     }
   }
 
-  // fences: a piece per bay, post and gate, standing on the ground; a tap picks the whole fence
+  // fences: a piece per bay, post and gate, standing on the ground; a tap picks the whole fence. A gate
+  // that opens with its entity moves with the moving parts, an item of its own that asks when tapped
   for (const fence of floor.fences ?? []) {
     opaque.currentItem = glass.currentItem = items.length;
     items.push({ kind: "fence", id: fence.id });
     const paint = fencePaint(fence);
+    const moving: MoverInfo[] = [];
     for (const piece of fencePieces(fence, opt.low)) {
       const at: Vec2 = [piece.item.x, piece.item.z];
-      addParts(opaque, piece.parts, piece.item, y0 + groundAt(floor, at), false, roomAt(at), -1, pal, opt.low, glass, paint);
+      const bottom = y0 + groundAt(floor, at), room = roomAt(at);
+      const entity = fence.gates?.[piece.gate!]?.entity;
+      if (!entity) {
+        addParts(opaque, piece.parts, piece.item, bottom, false, room, -1, pal, opt.low, glass, paint);
+        continue;
+      }
+      let m = moving[piece.gate!];
+      if (!m) {
+        movers.push((m = moving[piece.gate!] = { item: items.length, entity, room, bottom, fence, gate: piece.gate, leaves: [] }));
+        items.push({ kind: "fence", id: fence.id });
+        targets.push({ item: m.item, entities: [entity], pos: [at[0], bottom + piece.item.h / 2, at[1]], room, ask: true });
+      }
+      m.leaves!.push(piece);
     }
   }
 
@@ -445,7 +484,7 @@ export function buildFloor(plan: Plan, floorIndex: number, pal: Palette, opt: Bu
   opaque.currentItem = glass.currentItem = -1;
   const all = floor.rooms.flatMap((r) => r.points);
   const fb: FloorBuild = {
-    floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens, targets, fans, cameras,
+    floor, items, index: floorIndex, opaque, glass, layout, rooms, glows, lamps, doors, windows, portals, screens, targets, fans, movers, cameras,
     bounds: all.length ? bounds(all) : { minX: 0, minZ: 0, maxX: 1, maxZ: 1 },
     roof: new Geo(), roofGlass: new Geo(), roofs: [], glowsBase: glows.length, itemsBase: items.length,
   };
@@ -843,8 +882,17 @@ export function addFanBlades(g: Geo, fan: FanInfo, pal: Palette, low: boolean): 
   return [start, g.vertexCount];
 }
 
+/**
+ * Whether a plan has parts that move with their entities besides doors and windows: blinds, gates
+ * that open, awnings. scene/covers.ts draws them, loaded only then.
+ */
+export function hasMoving(plan: Plan): boolean {
+  return plan.floors.some((f) => [...f.openings, ...(f.roofs ?? []).flatMap((r) => r.items ?? [])].some((x) => x.cover) ||
+    (f.fences ?? []).some((x) => x.gates?.some((g) => g.entity)) || f.furniture.some((x) => AWNING_TYPES.has(x.type)));
+}
+
 /** A piece's parts, into the floor's mesh; its glass into the glass mesh when one is given. */
-function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, raised: boolean, room: number, glow: number, pal: Palette, low: boolean, glass?: Geo, paint?: Set<Role>): void {
+export function addParts(opaque: Geo, parts: Part[], item: Furniture, bottom: number, raised: boolean, room: number, glow: number, pal: Palette, low: boolean, glass?: Geo, paint?: Set<Role>): void {
   const def = furnitureType(item.type);
   const r = (item.rotation * Math.PI) / 180;
   const c = Math.cos(r);

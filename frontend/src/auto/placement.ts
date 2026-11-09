@@ -90,6 +90,7 @@ export function autoPlace(plan: Plan, hass: Hass): { plan: Plan; report: Placeme
       if (o.cover) inPlan.add(o.cover);
       if (o.lock) inPlan.add(o.lock);
     }
+    for (const x of f.fences ?? []) for (const g of x.gates ?? []) if (g.entity) inPlan.add(g.entity);
     for (const r of f.rooms) {
       if (r.temperature) inPlan.add(r.temperature);
       if (r.humidity) inPlan.add(r.humidity);

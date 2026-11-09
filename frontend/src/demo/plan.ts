@@ -65,7 +65,7 @@ const ground: Floor = {
   rooms: [kitchen, dining, living, hall, side, wc, store, shed],
   openings: [
     on(hall, "door", 1.35, 7.4, 0.86, { entity: "binary_sensor.front_door", lock: "lock.front_door" }),
-    on(living, "window", 4.2, 7.4, 1.8, { entity: "binary_sensor.living_room_window" }),
+    on(living, "window", 4.2, 7.4, 1.8, { entity: "binary_sensor.living_room_window", cover: "cover.living_room_blind" }),
     on(hall, "window", 0, 6.5, 0.55, { entity: "binary_sensor.hall_window" }),
     on(living, "door", 2.15, 6.4, 0.76, { hinge: "right" }),
     on(hall, "passage", 1.45, 3.15, 0.85),
@@ -154,6 +154,8 @@ const ground: Floor = {
     { id: "fence_garden", points: [[-3.24, -0.14], [-3.24, -10], [6.39, -10], [6.39, -0.14]], style: "closeboard", height: 1.8, gates: [{ at: 14.68, width: 0.9 }] },
     { id: "wall_left", points: [[-3.24, 7.54], [-3.24, 13], [-0.6, 13]], style: "brick_wall", height: 0.9, gates: [] },
     { id: "wall_right", points: [[3.4, 13], [6.39, 13], [6.39, 7.54]], style: "brick_wall", height: 0.9, gates: [] },
+    // an electric driveway gate between the walls' piers, opening in towards the house
+    { id: "drive_gate", points: [[-0.39, 13], [3.19, 13]], style: "railings", height: 1.2, gates: [{ at: 1.79, width: 3.58, double: true, swing: "back", entity: "cover.driveway_gate" }] },
   ],
 };
 
@@ -167,6 +169,8 @@ ground.furniture.push(
   f("lamp_garden", 6.0, -2.8, 0, 0.15, 0.15, 0.6, { entity: "switch.deck_lights" }),
   f("lamp_garden", -2.8, -4.5, 0, 0.15, 0.15, 0.6, { entity: "light.garden_post" }),
   f("lamp_wall", 4.65, -0.2, 180, 0.25, 0.12, 0.2, { y: 2.1, entity: "switch.patio_wall_light" }),
+  // an awning over the deck that runs out with its motor
+  f("awning", 4.7, -1.39, 180, 3.0, 2.5, 0.7, { y: 2.0, entity: "cover.patio_awning" }),
 );
 
 // ---------------------------------------------------------------- first floor
@@ -190,7 +194,7 @@ const mainRoof: Roof = {
     panels(4.5, 5.45, 2, 1, "sensor.solar_pv1_power"),
     panels(3.75, 1.2, 3, 1, "sensor.solar_pv2_power"),
     { id: "chimney", kind: "chimney", x: 6.0, z: 3.7, w: 0.9, d: 0.55, h: 0.9, pots: 2 },
-    { id: "roof_window", kind: "window", x: 1.5, z: 1.1, w: 0.78, d: 0.98 },
+    { id: "roof_window", kind: "window", x: 1.5, z: 1.1, w: 0.78, d: 0.98, cover: "cover.roof_window_blind" },
   ],
 };
 

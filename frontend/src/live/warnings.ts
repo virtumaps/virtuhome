@@ -52,7 +52,8 @@ export function rainComing(hass: Hass, weather: string | null, sensors: string[]
 /** The sensors of the windows and roof windows that are open, leaving out sheltered ones. */
 export function openWindows(plan: Plan, hass: Hass): string[] {
   const ids = new Set<string>();
-  const open = (id: string | null | undefined) => !!id && hass.states[id]?.state === "on";
+  // a contact sensor that is on, or a roof window's opener (a cover) that is open
+  const open = (id: string | null | undefined) => !!id && /^(on|open)$/.test(hass.states[id]?.state ?? "");
   for (const f of plan.floors) {
     for (const o of f.openings) if (o.kind === "window" && !o.sheltered && open(o.entity)) ids.add(o.entity!);
     for (const r of f.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window" && !it.sheltered && open(it.entity)) ids.add(it.entity!);

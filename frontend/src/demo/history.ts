@@ -25,9 +25,16 @@ const NIGHT: Record<string, [string, Attrs?]> = {
   "person.alex": ["home"],
   "person.sam": ["home"],
   "cover.bedroom_curtains": ["closed", { current_position: 0 }],
+  "cover.driveway_gate": ["closed"],
   "media_player.living_room_tv": ["off"],
   "climate.thermostat": ["heat", { hvac_action: "idle", current_temperature: 18.5, temperature: 17 }],
 };
+
+/** The driveway gate opens (about 12 s), stays open some minutes and closes again. */
+const gate = (at: number, minutes: number): Step[] => [
+  [at, "cover.driveway_gate", "opening"], [at + 0.2, "cover.driveway_gate", "open"],
+  [at + minutes, "cover.driveway_gate", "closing"], [at + minutes + 0.2, "cover.driveway_gate", "closed"],
+];
 
 /** "on" now and "off" after some minutes. */
 const pulse = (at: number, id: string, minutes: number, on = "on", off = "off", attrs?: Attrs): Step[] => [[at, id, on, attrs], [at + minutes, id, off]];
@@ -51,6 +58,7 @@ const SCENES: [number, Step[]][] = [
   [480, [
     ...pulse(-2, "binary_sensor.hall_motion", 5),
     ...pulse(2, "binary_sensor.front_door", 1),
+    ...gate(3, 2),
     [2, "person.sam", "Work"],
   ]],
   // Alex leaves, the alarm is set
@@ -105,6 +113,7 @@ const SCENES: [number, Step[]][] = [
   ]],
   // Sam comes home
   [1110, [
+    ...gate(-1, 1.5),
     ...pulse(0, "binary_sensor.doorbell_motion", 1),
     ...pulse(1, "binary_sensor.front_door", 1),
     [1, "person.sam", "home"],

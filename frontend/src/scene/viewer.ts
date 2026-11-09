@@ -8,7 +8,7 @@ import {
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { showsValue, spaces, type Device, type Floor, type Furniture, type Opening, type Plan, type Vec2 } from "../model/plan";
 import { pointInPolygon } from "../model/geom";
-import { addFanBlades, buildFloor, buildRoofs, clipToRect, groundAt, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
+import { addFanBlades, buildFloor, buildRoofs, clipToRect, groundAt, hasMoving, lin, outdoorAt, SLAB, stairwells, type DeviceTarget, type FloorBuild, type GlowSlot, type ItemRef, type LampInfo } from "./build";
 import { APPLIANCE_TYPES, FAN_TYPES, WATER_TYPES } from "./devices";
 import { baseHeight, FURNITURE } from "./furniture-lib";
 import { faceInfos, type RoofFaceInfo } from "./roof-info";
@@ -23,6 +23,8 @@ import { floorUniforms, getCut, glassMaterial, opaqueMaterial, setCut, setTint, 
 import { DAY, NIGHT, paletteFor, type Palette } from "./palette";
 import { afterglow, duskColours } from "./dusk";
 import type { RealisticLook } from "./realistic";
+import type { Moving } from "./covers";
+import type { HassEntity } from "../live/hass";
 import type { Tier, TierSetting } from "./tier";
 import { quietSky, type Sky } from "../live/sky";
 import { initials, type LockBadge, type NowPlaying, type Person, type Reading, type RoomPart } from "../live/live";
@@ -49,8 +51,8 @@ export interface LiveSource {
   marker(d: Device): MarkerLook | null;
   /** Doors and windows: 0 closed .. 1 open, null without a sensor. */
   contact(entity: string | null | undefined): number | null;
-  /** Blind or curtain: 0 closed .. 1 open, null without one. */
-  cover(entity: string | null | undefined): number | null;
+  /** An entity's state: blinds, gates and awnings move with it (scene/covers.ts). */
+  stateOf?(entity: string): HassEntity | undefined;
   tint(floor: Floor, room: { id: string }): [number, number, number, number] | null;
   /** Short text under the room name, e.g. "20.5° → 21° · 48 %", in pieces (a piece with an entity opens it). */
   roomLine(floor: Floor, room: { id: string }): RoomPart[];
@@ -84,6 +86,8 @@ export interface Hit {
   entities?: string[];
   /** Where the finger was, in the view's pixels. */
   at?: [number, number];
+  /** A tap asks before switching it (a gate, an awning). */
+  ask?: boolean;
   device?: Device;
   /** The plan item under the finger (furniture, or the device behind a marker or lamp). */
   item?: ItemRef;
@@ -129,8 +133,8 @@ interface FloorView {
   doorTarget: Float32Array;
   winPos: Float32Array;
   winTarget: Float32Array;
-  coverPos: Float32Array;
-  coverTarget: Float32Array;
+  /** Blinds, gates and awnings, once scene/covers.ts is loaded. */
+  moving: Moving | null;
   /** Each ceiling fan's blades: their angle, and where they are in the moving parts' mesh (at rest). */
   fanAngle: Float32Array;
   fanDraw: FanDraw[];
@@ -504,6 +508,7 @@ export class Viewer {
       }
     });
     this.activeFloor = Math.min(this.activeFloor, Math.max(0, this.floors.length - 1));
+    this.loadCovers(plan);
     this.layoutFloors();
     this.refreshAll();
     if (!keepView) this.frame(false);
@@ -561,6 +566,23 @@ export class Viewer {
       c.remove();
       if (this.fade === c) this.fade = null;
     }, 1000);
+  }
+
+  /** Blinds, gates and awnings are drawn by a module of their own, loaded the first time a plan has any. */
+  private covers: typeof import("./covers") | null = null;
+  private coversAsked = false;
+
+  private loadCovers(plan: Plan): void {
+    if (this.coversAsked || !hasMoving(plan)) return;
+    this.coversAsked = true;
+    import("./covers").then((m) => {
+      this.covers = m;
+      for (const f of this.floors) f.moving = new m.Moving(f.fb, null);
+      this.refreshOpenings();
+    }).catch((err: unknown) => {
+      this.coversAsked = false;
+      this.onError?.(err, false, "covers");
+    });
   }
 
   setLive(live: LiveSource): void {
@@ -656,8 +678,7 @@ export class Viewer {
       doorTarget: doorRest(fb),
       winPos: new Float32Array(fb.windows.length),
       winTarget: new Float32Array(fb.windows.length),
-      coverPos: new Float32Array(fb.windows.length).fill(1),
-      coverTarget: new Float32Array(fb.windows.length).fill(1),
+      moving: this.covers ? new this.covers.Moving(fb, null) : null,
       fanAngle: new Float32Array(fb.fans.length),
       fanDraw: [],
       roomGlow: [],
@@ -703,9 +724,8 @@ export class Viewer {
     if (!sameWindows) {
       f.winPos = new Float32Array(fb.windows.length);
       f.winTarget = new Float32Array(fb.windows.length);
-      f.coverPos = new Float32Array(fb.windows.length).fill(1);
-      f.coverTarget = new Float32Array(fb.windows.length).fill(1);
     }
+    f.moving = this.covers ? new this.covers.Moving(fb, f.moving) : null;
     if (fb.fans.length !== f.fanAngle.length) f.fanAngle = new Float32Array(fb.fans.length);
     this.rebuildDynamic(f);
   }
@@ -805,6 +825,8 @@ export class Viewer {
   /** Builds a storey's roofs again, leaving the rest of it as it is. */
   private rebuildRoofs(f: FloorView, i: number): void {
     buildRoofs(this.plan!, f.fb, this.look ? DAY : this.pal, { low: this.low });
+    // roof window blinds follow their windows
+    if (this.covers) f.moving = new this.covers.Moving(f.fb, f.moving);
     this.disposeRoofMeshes(f);
     [f.roof, f.roofGlass] = this.makeRoofMeshes(f.fb, f.group, f.u);
     f.roofKey = this.roofKey(i);
@@ -814,6 +836,7 @@ export class Viewer {
     this.updateRoofs();
     this.sceneChanged = true;
     this.refreshLighting();
+    if (f.moving?.roofs) this.refreshOpenings();
   }
 
   /**
@@ -863,6 +886,7 @@ export class Viewer {
       if (f.roof) f.roof.visible = shown;
       if (f.roofGlass) f.roofGlass.visible = shown;
       if (f.paint) f.paint.visible = shown;
+      if (f.moving?.roofs && f.moving.roofsShown !== shown) this.rebuildDynamic(f);
     });
     this.sceneChanged = true;
     this.invalidate();
@@ -1376,10 +1400,8 @@ export class Viewer {
       f.fb.windows.forEach((w, i) => {
         f.winTarget[i] = windowFollowsSensor(w.opening) ? this.live!.contact(w.opening.entity) ?? 0 : 0;
         if (Math.abs(f.winTarget[i] - f.winPos[i]) > 0.001) moving = true;
-        const c = this.live!.cover(w.opening.cover);
-        f.coverTarget[i] = c === null ? 1 : c;
-        if (Math.abs(f.coverTarget[i] - f.coverPos[i]) > 0.001) moving = true;
       });
+      if (f.moving?.retarget((id) => this.live!.stateOf?.(id), reducedMotion())) moving = true;
       this.rebuildDynamic(f);
     }
     if (moving) this.invalidate();
@@ -1391,7 +1413,6 @@ export class Viewer {
     g.uvY0 = gl.uvY0 = f.fb.floor.elevation;
     gl.useSurface("glass");
     const pal = this.look ? DAY : this.pal;
-    const y0 = f.fb.floor.elevation;
     const draw = (info: OpeningInfo, open: number, glow: number) => {
       g.currentItem = gl.currentItem = info.item;
       // cut, door leaves and sashes settle just under the wall's cut top
@@ -1402,28 +1423,8 @@ export class Viewer {
     f.fb.windows.forEach((w, i) => {
       if (windowFollowsSensor(w.opening)) draw(w, f.winPos[i], w.glow);
     });
-    g.currentItem = gl.currentItem = -1;
-    f.fb.windows.forEach((w, i) => {
-      if (!w.opening.cover) return;
-      const open = f.coverPos[i];
-      const span = w.top - w.bottom;
-      const yb = w.top - span * (1 - open);
-      if (w.top - yb < 0.01) {
-        // rolled up: a slim box at the top
-      }
-      const off = 0.09;
-      const P = (s: number, y: number): V3 => [
-        w.centre[0] + w.along[0] * s + w.normal[0] * off, y, w.centre[2] + w.along[1] * s + w.normal[1] * off,
-      ];
-      const half = w.width / 2 + 0.06;
-      const top = y0 + w.top + 0.06;
-      const bot = y0 + Math.min(w.top, yb);
-      g.useSurface("blind");
-      const fabric = lin((this.look ? DAY : this.pal).roles.fabric);
-      const slot = w.wallSlot >= 0 ? w.wallSlot * 2 : -1;
-      g.quad(P(-half, bot), P(half, bot), P(half, top), P(-half, top), [w.normal[0], 0, w.normal[1]], fabric, w.room, slot, -1, 2, 2);
-      g.quad(P(half, bot), P(-half, bot), P(-half, top), P(half, top), [-w.normal[0], 0, -w.normal[1]], fabric, w.room, slot, -1, 2, 2);
-    });
+    // blinds, gates and awnings, where they are
+    f.moving?.draw(g, gl, pal, this.low, this.roofShown(this.floors.indexOf(f)));
     // ceiling fans' blades, at rest and then turned to where they are
     f.fanDraw = f.fb.fans.map((fan, i) => {
       const range = addFanBlades(g, fan, pal, this.low);
@@ -2030,10 +2031,22 @@ export class Viewer {
     return moved;
   }
 
+  /** Gates, awnings and blinds whose entity says only that they are opening or closing: on at their pace. */
+  private travelCovers(dt: number): boolean {
+    let moved = false;
+    for (const f of this.floors) {
+      if (!f.moving?.step(dt, false, true)) continue;
+      this.rebuildDynamic(f);
+      moved = true;
+    }
+    return moved;
+  }
+
   /** Moves cut amounts, doors and blinds towards their targets; true while anything moves. */
   private animate(dt: number): boolean {
     let moving = false;
     const step = Math.min(1, dt * 4.5);
+    const calm = reducedMotion();
     for (const f of this.floors) {
       for (let i = 0; i < f.fb.layout.walls.length && i < 128; i++) {
         const cur = getCut(f.u, i);
@@ -2056,16 +2069,7 @@ export class Viewer {
           }
         }
       }
-      for (let i = 0; i < f.coverPos.length; i++) {
-        const d = f.coverTarget[i] - f.coverPos[i];
-        if (Math.abs(d) > 0.002) {
-          f.coverPos[i] += d * Math.min(1, dt * 2.5);
-          dynChanged = true;
-        } else if (d !== 0) {
-          f.coverPos[i] = f.coverTarget[i];
-          dynChanged = true;
-        }
-      }
+      if (f.moving?.step(dt, calm, false)) dynChanged = true;
       if (dynChanged) {
         this.rebuildDynamic(f);
         moving = true;
@@ -2130,7 +2134,9 @@ export class Viewer {
     const pulsing = this.markers.pulsing;
     if (pulsing) this.markers.setTime(now / 1000);
     const shown = this.visible && !document.hidden;
-    const spinning = shown && this.spinFans(dt);
+    // fans turning, and gates and awnings travelling at their own pace, are drawn fewer times a second
+    const fans = shown && this.spinFans(dt);
+    const spinning = (shown && this.travelCovers(dt)) || fans;
 
     if ((this.dirty || again || pulsing || spinning) && shown) {
       const t0 = performance.now();
@@ -2454,7 +2460,7 @@ export class Viewer {
     }
     if (devBest && (!lampBest || devBest.d < lampBest.d) && (!camBest || devBest.d < camBest.d)) {
       const { fi, t } = devBest;
-      return { kind: "entity", floor: fi, room: t.room, entity: t.entities[0], entities: t.entities, at: [x, y], item: this.floors[fi].fb.items[t.item], y: devBest.y };
+      return { kind: "entity", floor: fi, room: t.room, entity: t.entities[0], entities: t.entities, at: [x, y], item: this.floors[fi].fb.items[t.item], y: devBest.y, ask: t.ask };
     }
     if (camBest && (!lampBest || camBest.d < lampBest.d)) {
       const { fi, rig } = camBest;
@@ -2492,7 +2498,7 @@ export class Viewer {
         return { kind: room >= 0 ? "room" : "empty", floor: fi, room, entity: null };
       }
       const target = itemIdx >= 0 && !this.editMode ? f.fb.targets.find((t) => t.item === itemIdx) : undefined;
-      if (target) return { kind: "entity", floor: fi, room: target.room, entity: target.entities[0], entities: target.entities, at: [x, y], item };
+      if (target) return { kind: "entity", floor: fi, room: target.room, entity: target.entities[0], entities: target.entities, at: [x, y], item, ask: target.ask };
       if (slot >= 0 && !this.editMode) {
         const g = f.fb.glows[slot];
         if (g?.entity) return { kind: "entity", floor: fi, room: g.room, entity: g.entity, item };

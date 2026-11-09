@@ -9,6 +9,7 @@ import type { V3 } from "../scene/geo";
 import { kelvinToRgb, type LampState } from "../scene/lighting";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
 import { holdsPost, POST_TYPES } from "../scene/bins";
+import { AWNING_TYPES } from "../scene/garden";
 import { AC_TYPES, deviceGlow, fanTurns as turnsOf, gangsOf, linkedEntities, GANG_TYPES, GLOW_TYPES, HEAT_TYPES, heats, waterTemperature, WATER_TYPES } from "../scene/devices";
 import { iconIndex } from "../scene/markers";
 import type { LiveSource, MarkerLook } from "../scene/viewer";
@@ -387,6 +388,8 @@ export class HassLive implements LiveSource {
         if (GANG_TYPES.has(f.type)) for (const id of gangsOf(f)) this.watch(id, "lighting");
         this.watch(f.light, "lighting");
         if (WATER_TYPES.has(f.type)) this.watch(f.entity, "readings");
+        // an awning runs out with its cover
+        if (AWNING_TYPES.has(f.type)) this.watch(f.entity, "openings");
         // a washing machine: all of its device's entities (its state, programme, time left, power)
         if (APPLIANCE_TYPES.has(f.type) && f.entity) {
           const ids = applianceEntities(hass, f.entity);
@@ -402,8 +405,13 @@ export class HassLive implements LiveSource {
         // a lock's badge, and its door's sensor (open while locked is a problem)
         if (o.lock) for (const id of [o.lock, o.entity]) this.watch(id, "readings");
       }
-      // a roof window that opens glows warm, like a window in a wall
-      for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") this.watch(it.entity, "lighting", "status");
+      // a roof window that opens glows warm, like a window in a wall; its blind moves
+      for (const r of floor.roofs ?? []) for (const it of r.items ?? []) if (it.kind === "window") {
+        this.watch(it.entity, "lighting", "status");
+        this.watch(it.cover, "openings");
+      }
+      // gates open with what opens them
+      for (const x of floor.fences ?? []) for (const g of x.gates ?? []) this.watch(g.entity, "openings");
     }
     // robots keep what they had seen when the registry changes, unless what says where they are changed
     const robots = new Map<string, RobotLive>();
@@ -582,10 +590,8 @@ export class HassLive implements LiveSource {
     return s.state === "on" || s.state === "open" ? 1 : 0;
   }
 
-  cover(entity: string | null | undefined): number | null {
-    const s = this.state(entity);
-    if (!s || isUnavailable(s)) return null;
-    return coverLevel(s);
+  stateOf(entity: string): HassEntity | undefined {
+    return this.state(entity);
   }
 
   marker(d: Device): MarkerLook | null {

@@ -117,6 +117,9 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
         else delete x.parked;
       });
     }
+    for (const x of f.fences ?? []) {
+      for (const g of x.gates ?? []) if (isEntityId(g.entity)) visit({ entity: g.entity, label: where(t("links.gate"), null), area: null, device: false }, (to) => (g.entity = to));
+    }
     const gone = new Set<string>();
     for (const d of f.devices) {
       const s = at(d.x, d.z);

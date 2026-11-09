@@ -17,6 +17,15 @@
 - Keyboard and screen readers: a ring shows where the keyboard is, sheets, menus and the sun and
   weather panel take the focus when they open and **Escape** closes them, every button and field
   has a name, and what a tap did and new alerts are read out once.
+- **Gates that open**: a gate's **Opener** (a cover, lock, switch or contact sensor) opens and closes
+  it in 3D, swinging to either side or sliding along the fence (**Swings**, **Slides**, **Flip
+  hinge**, **Swing other way**). A tap on the gate asks first, with **Open**, **Close**, **Stop** and a
+  position slider for a cover, as it can do them.
+- **Awnings** (in **Garden**) run out and back with their cover, and a tap asks first like a gate's.
+- A window's blind that reports a tilt is drawn as a **venetian blind** with its slats at that angle,
+  and a **roof window** can have a **Blind**, and a motorised window's cover as its **Sensor**.
+- Blinds, gates and awnings move smoothly (at a gate's pace while one only says it is opening or
+  closing), draw nothing once they have stopped, and jump with reduce motion turned on.
 
 ### Changed
 - With reduce motion turned on in the device's settings, the view jumps instead of flying, markers

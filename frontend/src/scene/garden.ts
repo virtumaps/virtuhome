@@ -10,6 +10,9 @@ import { BIN_FURNITURE, BIN_WASTES, POST_TYPES, wasteKind, type WasteKind } from
 import type { FurnitureType, Part, Role } from "./furniture-lib";
 import type { PlainKey } from "../i18n";
 
+/** Awnings: their cassette is built with the floor, the rest moves (scene/covers.ts). */
+export const AWNING_TYPES = new Set(["awning"]);
+
 /** What a pergola is covered with. */
 export type Canopy = "open" | "slats" | "louvres" | "glass" | "canvas" | "plants";
 /** What a shed's or gazebo's roof is covered with. */
@@ -737,6 +740,9 @@ export const GARDEN_FURNITURE: Record<string, FurnitureType> = {
   gazebo: { label: "furniture.gazebo", category: "outdoor", family: "pergola", size: [3.0, 3.0, 3.0], paint: ["softwood"], build: (w, d, h, item) => gazebo(w, d, h, item) },
   garden_arch: { label: "furniture.garden_arch", category: "outdoor", family: "pergola", size: [1.4, 0.6, 2.3], paint: ["softwood"], build: (w, d, h, item) => arch(w, d, h, item) },
   arbour: { label: "furniture.arbour", category: "outdoor", family: "pergola", size: [1.6, 0.7, 2.2], paint: ["softwood"], build: (w, d, h, item) => arch(w, d, h, item, true) },
+  // a folding-arm awning on a wall, its back against it: only the cassette is built with the floor, the
+  // fabric and arms run out with its cover in the moving parts (scene/covers.ts)
+  awning: { label: "furniture.awning", category: "outdoor", size: [3.0, 2.5, 0.7], y: 2.0, paint: ["canvas"], build: (w, d, h) => [box(0, h - 0.16, -d / 2 + 0.08, w, 0.16, 0.16, "metal")] },
   // ---------------------------------------------------------------- sheds and garden buildings
   shed: {
     label: "furniture.shed", category: "outdoor", family: "shed", size: [1.83, 2.44, 2.2], paint: ["shiplap"], trim: ["softwood"],

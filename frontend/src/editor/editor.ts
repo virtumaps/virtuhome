@@ -12,7 +12,7 @@ import { isZip } from "../import/zip";
 import type { ImportSummary } from "../import/draft";
 import { labelPoint } from "../model/geom";
 import {
-  DEFAULT_LABEL, MAX_CHIPS, MAX_LABEL, newId, normalizePlan, PANEL, panelOf, panelSize, showsValue, solarSize, spaces, splitEdge, type Device, type LabelPart, type EnergySettings, type PresenceSettings, type Fence, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
+  DEFAULT_LABEL, MAX_CHIPS, MAX_LABEL, newId, normalizePlan, PANEL, panelOf, panelSize, showsValue, solarSize, spaces, splitEdge, type Device, type LabelPart, type EnergySettings, type PresenceSettings, type Fence, type FenceGate, type FencePost, type FenceStyle, type Floor, type FloorMaterial,
   type Furniture, type Opening, type OutdoorArea, type OutdoorKind, type PartyEnds, type Plan, type Roof, type RoofCovering, type RoofItem, type RoofShape, type Room, type Vec2,
 } from "../model/plan";
 import { bounds } from "../model/geom";
@@ -34,7 +34,7 @@ import { pointInPolygon, segmentDistance } from "../model/geom";
 import { layoutWalls, openingPoint } from "../model/walls";
 import { cameraRig } from "../scene/cameras";
 import { FENCE_ORDER, FENCE_STYLES, FENCE_SWATCHES, fenceLength, fenceStyle } from "../scene/fences";
-import { CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
+import { AWNING_TYPES, CANOPY_NAMES, DOOR_NAMES, GARDEN_OPTIONS, gardenChoice, PLANTER_MATERIALS, PLANTING_NAMES, ROOFING_NAMES, type PlanterMaterial, type Planting } from "../scene/garden";
 import { binColours, POST_TYPES, WASTE_NAMES, wasteKind } from "../scene/bins";
 import { AC_TYPES, APPLIANCE_DOMAINS, APPLIANCE_TYPES, FAN_LIGHTS, FAN_TYPES, GANG_DOMAINS, gangsOf, GANG_TYPES, gangWidth, HEAT_TYPES, linkedEntities, MAX_GANGS, WATER_TYPES, WIFI_TYPES } from "../scene/devices";
 import { isRaised, outdoorTop } from "../scene/build";
@@ -74,6 +74,7 @@ const DEVICE_DOMAINS: [Set<string>, string[]][] = [
   [HEAT_TYPES, ["climate", "valve", "switch", "input_boolean", "binary_sensor"]],
   [WATER_TYPES, ["water_heater", "sensor", "climate"]],
   [APPLIANCE_TYPES, APPLIANCE_DOMAINS],
+  [AWNING_TYPES, ["cover"]],
 ];
 
 /** The guide's part about each tab, for its "?". */
@@ -1634,6 +1635,7 @@ export class Editor {
     // what is not in the plan yet, by area of a linked room
     const inPlan = new Set(this.plan.floors.flatMap((f) => [
       ...f.devices.map((d) => d.entity), ...f.furniture.flatMap(linkedEntities), ...f.openings.flatMap((o) => [o.entity, o.cover, o.lock]),
+      ...(f.fences ?? []).flatMap((x) => (x.gates ?? []).map((g) => g.entity)),
     ]).filter(Boolean) as string[]);
     const roomByArea = new Map<string, { fi: number; room: Room }>();
     this.plan.floors.forEach((f, fi) => [...f.rooms, ...(f.outdoor ?? []) as unknown as Room[]].forEach((r) => r.area_id && !roomByArea.has(r.area_id) && roomByArea.set(r.area_id, { fi, room: r })));
@@ -1968,6 +1970,25 @@ export class Editor {
     )];
   }
 
+  /** A gate's way of opening (swings or slides, its hinge, its side) and what opens it. */
+  private gateRows(g: FenceGate, upd: (label: string, fn: (x: FenceGate) => void) => void, openers: [string, string][]): HTMLElement[] {
+    const slides = g.kind === "slide";
+    const chip = (label: string, on: boolean, onclick: () => void) => h("button", { class: `ed-chip${on ? " on" : ""}`, onclick: () => !on && onclick() }, label);
+    const flip = (x: FenceGate) => (x.hinge = x.hinge === "end" ? null : "end");
+    return [
+      h("div", { class: "ed-row" },
+        chip(t("editor.fence.swings"), !slides, () => upd(t("editor.fence.swingingGate"), (x) => (x.kind = null))),
+        chip(t("editor.fence.slides"), slides, () => upd(t("editor.fence.slidingGate"), (x) => (x.kind = "slide"))),
+        !slides && !g.double ? h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.fence.flipAGatesHinge"), flip) }, t("editor.flipHinge")) : null,
+        slides && !g.double ? h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.fence.slideAGateThe"), flip) }, t("editor.opening.slideTheOtherWay")) : null,
+        h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.fence.swingAGateThe"), (x) => (x.swing = x.swing === "back" ? null : "back")) }, slides ? t("editor.fence.otherSide") : t("editor.room.swingOtherWay")),
+      ),
+      h("div", { class: "ed-row" },
+        h("label", {}, t("editor.fence.opener")),
+        this.dropdown(openers, g.entity ?? "", (v) => upd(t("editor.fence.linkAGateOpener"), (x) => (x.entity = v || null)), t("editor.none"))),
+    ];
+  }
+
   private fencePanel(fi: number, fence: Fence | undefined): HTMLElement {
     if (!fence) return h("div", {});
     const def = fenceStyle(fence.style);
@@ -1979,6 +2000,9 @@ export class Editor {
         const v = (e.target as HTMLInputElement).value;
         onSet(v === "" ? null : Number(v));
       } });
+    // what can open a gate or say it is open
+    const openers = this.entities((id, st) => ["cover", "lock", "switch", "input_boolean"].includes(domainOf(id)) ||
+      (domainOf(id) === "binary_sensor" && ["door", "garage_door", "opening"].includes(String(st.attributes.device_class))));
     const posts: [FencePost, string][] = [["timber", "timber"], ["concrete", "concrete"], ["metal", "metal"], ["pier", t("editor.fence.brickPiers")]];
     // a new gate goes in the middle of the longest stretch without one
     const freeSpot = (width: number) => {
@@ -2022,18 +2046,19 @@ export class Editor {
         h("input", { type: "checkbox", checked: fence.topper === "trellis", onchange: (e: Event) => upd(t("editor.fence.trellisTopper"), (x) => (x.topper = (e.target as HTMLInputElement).checked ? "trellis" : null)) }),
         ` ${t("editor.fence.trellisOnTop30")}`) : null,
       h("div", { class: "ed-sub" }, t("editor.fence.gatesN", { n: gates.length })),
-      ...gates.map((g, gi) => h("div", { class: "ed-row" },
+      ...gates.flatMap((g, gi) => [h("div", { class: "ed-row" },
         h("label", {}, t("editor.fence.atM")),
         num(g.at, "", "0.1", (v) => upd(t("editor.fence.moveAGate"), (x) => (x.gates![gi].at = Math.max(g.width / 2, Math.min(len - g.width / 2, v ?? g.at)))), t("editor.fence.itsMiddleFromThe")),
         h("label", {}, t("editor.fence.wide")),
         num(g.width, "", "0.05", (v) => upd(t("editor.fence.gateWidth"), (x) => (x.gates![gi].width = Math.max(0.5, Math.min(6, v ?? g.width))))),
         h("button", { class: `ed-chip${g.double ? " on" : ""}`, title: t("editor.fence.twoLeavesMeetingIn"), onclick: () => upd(t("editor.fence.gateLeaves"), (x) => (x.gates![gi].double = !g.double)) }, t("editor.fence.double")),
         h("button", { class: "ed-ib small", title: t("editor.fence.removeTheGate"), html: svg(mdiDelete), onclick: () => upd(t("editor.fence.removeAGate"), (x) => (x.gates = x.gates!.filter((_, k) => k !== gi))) }),
-      )),
+      ), ...this.gateRows(g, (label, fn) => upd(label, (x) => fn(x.gates![gi])), openers)]),
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.fence.addAGate"), (x) => (x.gates = [...(x.gates ?? []), { at: freeSpot(0.9), width: 0.9 }])) }, t("editor.fence.addAGate")),
         h("button", { class: "ed-btn ghost small", onclick: () => upd(t("editor.fence.addADrivewayGate"), (x) => (x.gates = [...(x.gates ?? []), { at: freeSpot(3), width: 3, double: true }])) }, t("editor.fence.addADrivewayGate")),
       ),
+      gates.length ? h("p", { class: "ed-hint" }, t("editor.fence.openerHint")) : null,
       h("div", { class: "ed-row" },
         h("button", { class: "ed-btn ghost", onclick: () => {
           const id = newId("fence");
@@ -2242,6 +2267,7 @@ export class Editor {
       ...(GANG_TYPES.has(x.type) ? this.gangRows(x, upd, reshape) : []),
       (garden && !POST_TYPES.has(x.type)) || GANG_TYPES.has(x.type) ? null : h("div", { class: "ed-row" }, h("label", {}, EV_TYPES.has(x.type) ? t("editor.charger") : POST_TYPES.has(x.type) ? t("editor.furniture.postSensor") : t("editor.furniture.linkedTo")),
         this.dropdown(linkable, x.entity ?? "", (v) => upd((y) => (y.entity = v || null)), EV_TYPES.has(x.type) ? (chargers.length ? t("editor.furniture.theHousesCharger") : t("editor.furniture.noneFound")) : t("editor.furniture.nothing"))),
+      AWNING_TYPES.has(x.type) ? h("p", { class: "ed-hint" }, t("editor.furniture.awningHint")) : null,
       // a ceiling fan's light, a lamp of its own
       FAN_LIGHTS.has(x.type) ? h("div", { class: "ed-row" }, h("label", {}, t("editor.furniture.light")),
         this.dropdown(this.entities((id) => domainOf(id) === "light"), x.light ?? "", (v) => upd((y) => (y.light = v || null)), t("editor.furniture.nothing"))) : null,
@@ -2833,7 +2859,9 @@ export class Editor {
         } }, t("editor.roofItem.fillTheSlope")) : null,
       );
     } else if (it.kind === "window") {
-      const contacts = this.entities((id, st) => domainOf(id) === "binary_sensor" && ["window", "opening"].includes(String(st.attributes.device_class)));
+      // a contact sensor, or the window's opener (a cover)
+      const contacts = this.entities((id, st) => ["binary_sensor", "cover"].includes(domainOf(id)) && ["window", "opening"].includes(String(st.attributes.device_class)));
+      const covers = this.entities((id) => domainOf(id) === "cover");
       const sizes: [string, number, number][] = [["55 × 78", 0.55, 0.78], ["55 × 98", 0.55, 0.98], ["78 × 98", 0.78, 0.98], ["78 × 118", 0.78, 1.18], ["78 × 140", 0.78, 1.4], ["94 × 118", 0.94, 1.18], ["114 × 118", 1.14, 1.18]];
       rows.push(
         h("div", { class: "ed-row" },
@@ -2847,6 +2875,7 @@ export class Editor {
         h("div", { class: "ed-row" }, ...num(t("editor.houses.width"), it.w, "0.01", (v) => v && upd(t("editor.roofItem.roofWindowWidth"), (x) => (x.w = Math.max(0.3, v)))), ...num(t("editor.length"), it.d, "0.01", (v) => v && upd(t("editor.roofItem.roofWindowLength"), (x) => (x.d = Math.max(0.3, v))))),
         this.colourPicker(JOINERY_SWATCHES, it.color, (c) => upd(t("editor.roofItem.roofWindowColour"), (x) => (x.color = c)), t("editor.roofItem.grey")),
         h("div", { class: "ed-row" }, h("label", {}, t("editor.sensor")), this.dropdown(contacts, it.entity ?? "", (v) => upd(t("editor.roofItem.roofWindowSensor"), (x) => (x.entity = v || null)), t("editor.none"))),
+        h("div", { class: "ed-row" }, h("label", {}, t("editor.blind")), this.dropdown(covers, it.cover ?? "", (v) => upd(t("editor.opening.linkABlind"), (x) => (x.cover = v || null)), t("editor.none"))),
         it.entity ? h("label", { class: "ed-check" },
           h("input", { type: "checkbox", checked: !!it.sheltered, onchange: (e: Event) => upd(t("editor.sheltered"), (x) => (x.sheltered = (e.target as HTMLInputElement).checked || null)) }),
           ` ${t("editor.shelteredWhy")}`) : null,
