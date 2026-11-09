@@ -87,11 +87,11 @@ dashboard card draws, and that the diagnostics download works and holds no names
 runs it (the End-to-end workflow) against the oldest Home Assistant `hacs.json` allows and the
 newest, on pull requests that touch the integration, the loader or the build, and every night.
 
-To run it yourself, after `npm ci` in `frontend/` (Home Assistant 2025.1 runs on Python 3.12 or
-3.13; the newest needs 3.14):
+To run it yourself, after `npm ci` in `frontend/` (Home Assistant 2025.4 runs on Python 3.13; the
+newest needs 3.14):
 
 ```bash
-python3.13 -m venv ~/ha-e2e && ~/ha-e2e/bin/pip install homeassistant==2025.1.0
+python3.13 -m venv ~/ha-e2e && ~/ha-e2e/bin/pip install homeassistant==2025.4.0
 node tests/e2e/run.mjs --python ~/ha-e2e/bin/python
 ```
 

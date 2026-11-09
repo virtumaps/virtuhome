@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "custom_components/**"
+      - "hacs.json"
       - "frontend/src/loader.ts"
       - "frontend/build.mjs"
       - "tests/e2e/**"
