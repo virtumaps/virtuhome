@@ -76,7 +76,7 @@ export function advance(c: Channel, dt: number, calm: boolean): boolean {
   else if (c.going) {
     next = c.pos + c.going * c.speed * dt;
     if (c.at !== null && (c.at - next) * c.going > 0) next += (c.at - next) * Math.min(1, dt * 2.5);
-    next = c.going > 0 ? Math.min(1, next) : Math.max(0, next);
+    next = Math.abs(to - next) < 0.002 ? to : c.going > 0 ? Math.min(1, next) : Math.max(0, next);
   } else {
     const d = to - c.pos;
     next = Math.abs(d) < 0.002 ? to : c.pos + d * Math.min(1, dt * 2.5);

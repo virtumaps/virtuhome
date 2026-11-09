@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Covers",
+  "settings": {"wall_exterior": 0.28, "wall_interior": 0.12, "north": 0, "theme": "day", "exterior_finish": "render"},
+  "floors": [
+    {
+      "id": "ground", "name": "Ground Floor", "ha_floor": null, "elevation": 0, "height": 2.6,
+      "rooms": [
+        {"id": "lounge", "name": "Lounge", "area_id": "living_room", "points": [[0, 0], [7, 0], [7, 5], [0, 5]], "floor": "oak"}
+      ],
+      "openings": [
+        {"id": "bay", "room_id": "lounge", "edge": 2, "offset": 3.5, "width": 2.0, "height": 1.3, "sill": 0.8, "kind": "window", "cover": "cover.lounge_venetian"},
+        {"id": "patio_door", "room_id": "lounge", "edge": 0, "offset": 2, "width": 1.8, "height": 2.1, "sill": 0, "kind": "door", "style": "french"}
+      ],
+      "furniture": [
+        {"id": "awning", "type": "awning", "x": 2, "z": -1.39, "rotation": 180, "w": 3.5, "d": 2.5, "h": 0.7, "y": 2.1, "entity": "cover.patio_awning", "color": "#3b5a46"},
+        {"id": "awning_plain", "type": "awning", "x": 5.5, "z": -1.04, "rotation": 180, "w": 2.0, "d": 1.8, "h": 0.5}
+      ],
+      "devices": [],
+      "walls": [],
+      "outdoor": [
+        {"id": "garden", "name": "Garden", "kind": "lawn", "area_id": null, "points": [[-0.14, -8], [7.14, -8], [7.14, -0.14], [-0.14, -0.14]]},
+        {"id": "drive", "name": "Driveway", "kind": "driveway", "area_id": null, "points": [[-0.14, 5.14], [7.14, 5.14], [7.14, 11], [-0.14, 11]]}
+      ],
+      "fences": [
+        {"id": "back", "points": [[-0.14, -0.14], [-0.14, -8], [7.14, -8], [7.14, -0.14]], "style": "closeboard", "height": 1.8,
+          "gates": [{"at": 11.5, "width": 0.9, "hinge": "end", "swing": "back", "entity": "lock.garden_gate"}]},
+        {"id": "front", "points": [[-0.14, 11], [7.14, 11]], "style": "railings", "height": 1.4,
+          "gates": [{"at": 2.0, "width": 3.2, "double": true, "entity": "cover.drive_gate"}, {"at": 5.6, "width": 2.4, "kind": "slide", "hinge": "end", "entity": "switch.side_gate"}]}
+      ],
+      "roofs": [
+        {"id": "roof", "x": 3.5, "z": 2.5, "w": 7, "d": 5, "rotation": 0, "shape": "gable", "pitch": 35, "covering": "slate",
+          "items": [{"id": "rw", "kind": "window", "x": 2, "z": 1.4, "w": 0.78, "d": 1.18, "entity": "cover.roof_window", "cover": "cover.roof_window_blind"}]}
+      ]
+    }
+  ]
+}
