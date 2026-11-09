@@ -206,7 +206,7 @@ whole-house view. Tap one for its dialog.
 | Level | Look | For |
 |---|---|---|
 | **Automatic** | Picks a level for the device, and steps down if turning the view gets slow | most devices |
-| **Tablet** | Fastest, for wall tablets | Fire tablets, old phones |
+| **Tablet** | Fastest, for wall tablets: labels and buttons in solid colours, without the frosted glass | Fire tablets, old phones |
 | **Standard** | Clean model look | phones, older laptops |
 | **Realistic** | Textures, sunlight and shadows, the weather | computers, recent iPads |
 | **Ultra** | Adds soft shading and glow; needs a strong GPU | gaming computers |
@@ -977,9 +977,12 @@ home in](#get-your-home-in). Dashboard cards only show the house once it is ther
 - Close other apps, and use a panel view with only the VirtuHome card.
 - To measure it, open the VirtuHome panel on that tablet with `?bench` after its address
   (`http://homeassistant.local:8123/virtuhome?bench`, or in the Companion app a notification with
-  `command_webview` and `/virtuhome?bench`). Leave the screen alone for about half a minute: it
+  `command_webview` and `/virtuhome?bench`). Leave the screen alone for about a minute: it
   times the first frame, turning the house and a floor, and tapping a few rooms (only rooms, never
-  a switch), then shows the numbers with **Copy**, and writes them to the logbook as **VirtuHome**.
+  a switch). Then it turns the house again without the frosted glass (not on **Tablet**, which has
+  none), with nothing over the house, and at half the resolution, and says what holds the tablet
+  back: **fill rate** (the pixels it draws) or **compositing** (the labels and buttons over the
+  house). It shows the numbers with **Copy**, and writes them to the logbook as **VirtuHome**.
   Post them in the [performance issue](https://github.com/virtumaps/virtuhome/issues/11) with the
   tablet's name.
 

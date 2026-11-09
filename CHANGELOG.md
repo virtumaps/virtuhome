@@ -14,6 +14,13 @@
 ### Changed
 - With reduced motion turned on in the device's settings, the view jumps to a room or floor instead of
   flying there.
+- **Tablet** graphics draws labels and buttons in nearly solid colours instead of frosted glass, and
+  the labels that move with the house without shadows. Blurring the house behind each of them again
+  on every frame costs a wall tablet's graphics a lot while the house turns, most of all in a floor,
+  which has a label per room.
+- `?bench` then turns the house again without the frosted glass, with nothing over the house and at
+  half the resolution, and says what holds the device back: the pixels it draws (fill rate) or the
+  labels and buttons put together over the house (compositing).
 - The pictures in the guide and the README show VirtuHome as it is now. They are made from the demo
   home, so they no longer go out of date.
 
