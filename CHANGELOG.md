@@ -28,6 +28,9 @@
   closing), draw nothing once they have stopped, and jump with reduce motion turned on.
 
 ### Changed
+- VirtuHome needs Home Assistant 2025.4 or later (it was 2025.1). The Security extension's daily
+  summaries are automations that need it, and HACS won't offer this version to an older Home
+  Assistant.
 - With reduce motion turned on in the device's settings, the view jumps instead of flying, markers
   and the alert banner don't pulse and sheets don't slide.
 - **Tablet** graphics draws labels and buttons in nearly solid colours instead of frosted glass, and

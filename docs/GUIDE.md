@@ -36,7 +36,7 @@ installed, the same house is in Home Assistant too: see [The demo home](#the-dem
 
 ## Install
 
-You need Home Assistant 2025.1 or later and [HACS](https://hacs.xyz).
+You need Home Assistant 2025.4 or later and [HACS](https://hacs.xyz).
 
 1. Search for **VirtuHome** in HACS, download it, and restart Home Assistant. Or
    [open VirtuHome in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=virtumaps&repository=virtuhome&category=integration) straight from here.
