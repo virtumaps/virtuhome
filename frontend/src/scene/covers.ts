@@ -217,12 +217,16 @@ export class Moving {
     return (m.tilt ? advance(m.tilt, 0, true) : false) || a;
   }
 
-  /** Moves each on by dt seconds; true while something moved. */
-  step(dt: number, calm: boolean): boolean {
+  /**
+   * Moves on by dt seconds those easing to where their entity says, or (`travel`) those whose entity
+   * says only that they are opening or closing, which the viewer draws fewer times a second; true
+   * when something moved.
+   */
+  step(dt: number, calm: boolean, travel: boolean): boolean {
     let moved = false;
     for (const m of this.list) {
-      if (advance(m.open, dt, calm)) moved = true;
-      if (m.tilt && advance(m.tilt, dt, calm)) moved = true;
+      if (!!m.open.going === travel && advance(m.open, dt, calm)) moved = true;
+      if (!travel && m.tilt && advance(m.tilt, dt, calm)) moved = true;
     }
     return moved;
   }

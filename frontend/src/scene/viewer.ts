@@ -2031,6 +2031,17 @@ export class Viewer {
     return moved;
   }
 
+  /** Gates, awnings and blinds whose entity says only that they are opening or closing: on at their pace. */
+  private travelCovers(dt: number): boolean {
+    let moved = false;
+    for (const f of this.floors) {
+      if (!f.moving?.step(dt, false, true)) continue;
+      this.rebuildDynamic(f);
+      moved = true;
+    }
+    return moved;
+  }
+
   /** Moves cut amounts, doors and blinds towards their targets; true while anything moves. */
   private animate(dt: number): boolean {
     let moving = false;
@@ -2058,7 +2069,7 @@ export class Viewer {
           }
         }
       }
-      if (f.moving?.step(dt, calm)) dynChanged = true;
+      if (f.moving?.step(dt, calm, false)) dynChanged = true;
       if (dynChanged) {
         this.rebuildDynamic(f);
         moving = true;
@@ -2123,7 +2134,9 @@ export class Viewer {
     const pulsing = this.markers.pulsing;
     if (pulsing) this.markers.setTime(now / 1000);
     const shown = this.visible && !document.hidden;
-    const spinning = shown && this.spinFans(dt);
+    // fans turning, and gates and awnings travelling at their own pace, are drawn fewer times a second
+    const fans = shown && this.spinFans(dt);
+    const spinning = (shown && this.travelCovers(dt)) || fans;
 
     if ((this.dirty || again || pulsing || spinning) && shown) {
       const t0 = performance.now();

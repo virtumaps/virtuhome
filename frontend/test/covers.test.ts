@@ -192,7 +192,7 @@ describe("moving parts of a floor", () => {
     };
     expect(m.retarget((id) => states[id], false)).toBe(true);
     // already where they should be: nothing moves, nothing to draw again
-    expect(m.step(0.1, false)).toBe(false);
+    expect(m.step(0.1, false, false) || m.step(0.1, false, true)).toBe(false);
     expect(m.retarget((id) => states[id], false)).toBe(false);
     const g = new Geo(), gl = new Geo();
     m.draw(g, gl, DAY, true, false);
@@ -202,9 +202,9 @@ describe("moving parts of a floor", () => {
     states = { ...states, "cover.gate": state("cover.gate", "opening") };
     expect(m.retarget((id) => states[id], false)).toBe(true);
     let frames = 0;
-    while (m.step(0.1, false)) frames++;
+    while (m.step(0.1, false, true)) frames++;
     expect(frames).toBeGreaterThan(100);
-    expect(m.step(0.1, false)).toBe(false);
+    expect(m.step(0.1, false, false) || m.step(0.1, false, true)).toBe(false);
     // a new floor build keeps where everything is
     const again = new Moving(buildFloor(plan, 0, DAY, { low: true }), m);
     expect(again.retarget((id) => states[id], false)).toBe(false);
