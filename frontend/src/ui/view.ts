@@ -286,6 +286,9 @@ export class VhView {
     this.tierAuto = auto;
     this.viewer = new Viewer(canvas, overlay, { tier, theme: "night", realistic: realisticModule });
     this.viewer.onSlow = () => this.onSlow();
+    // the Tablet level draws labels and buttons without frosted glass, whatever changes the level
+    this.viewer.onTier = (t) => this.root.classList.toggle("solid", t === "low");
+    this.viewer.onTier(tier);
     this.viewer.onError = (err, fatal, where) => (fatal ? this.fail(err, where) : logError(err, where));
     // errors go to the integration stripped of what this view knows
     this.unreport = reportFrom(() => ({ hass: this._hass, plan: this.plan, graphics: tierNameEn(this.viewer.tier) }));
@@ -1912,6 +1915,7 @@ export class VhView {
         tap: (hit) => this.onHit(hit, "tap"),
         closeSheet: () => this.closeSheet(),
         showHouse: () => this.showHouse(),
+        root: this.root,
         madeAt: this.madeAt,
         version: __VERSION__,
       }, box.status);

@@ -1,6 +1,8 @@
 // ?bench on the panel's address: how quickly this device shows the house, how smoothly it turns and
 // how soon a tap answers. The numbers show over the house and go into Home Assistant's logbook, so a
-// tablet on the wall can be measured without plugging it into anything (issue #11).
+// tablet on the wall can be measured without plugging it into anything (issue #11). Then it turns the
+// house again with one thing changed at a time (no frosted glass, nothing over the house, half the
+// resolution), to tell what holds the device back: drawing the pixels or putting the page together.
 //
 // Like Copy details, the report is in plain English for whoever reads it, not translated.
 import type { Hass } from "../live/hass";
@@ -15,6 +17,8 @@ export interface BenchHost {
   tap(hit: Hit): unknown;
   closeSheet(): void;
   showHouse(): void;
+  /** The view's root: the passes take the frosted glass away (as Tablet draws it) and hide what is over the house. */
+  root: HTMLElement;
   /** When the view was made (performance.now()). */
   madeAt: number;
   version: string;
@@ -31,6 +35,20 @@ export interface Turn {
   draw: number;
 }
 
+/**
+ * Short turns of the house one after another: as it is, then with one thing changed each time (no
+ * frosted glass, null on Tablet, which has none; nothing over the house; half the resolution).
+ */
+export interface Passes {
+  base: Turn;
+  glass: Turn | null;
+  bare: Turn;
+  half: Turn;
+}
+
+/** What holds a device back, worked out from the passes. */
+export type Limit = "fill" | "glass" | "overlay" | "both" | "main" | "screen" | "unclear";
+
 export interface BenchResult {
   device: string;
   graphics: string;
@@ -41,6 +59,7 @@ export interface BenchResult {
   idle: number;
   house: Turn;
   floor: Turn | null;
+  passes: Passes | null;
   /** Finding what was tapped, and the tap until the next frame showed its answer (ms, medians). */
   taps: { pick: number; answer: number; n: number } | null;
   drawCalls: number;
@@ -103,6 +122,57 @@ async function turn(v: Viewer, seconds: number, degPerS = 45): Promise<Turn> {
     v.invalidate();
   }
   return turnStats(intervals, v.drawn.frames - start, (last - t0) / 1000, draws);
+}
+
+/** The house turned with something changed for it (`change` returns how to undo it). */
+async function turnWith(v: Viewer, change: () => () => void, seconds = 4): Promise<Turn> {
+  const undo = change();
+  try {
+    await settle(v, 1000);
+    return await turn(v, seconds);
+  } finally {
+    undo();
+  }
+}
+
+/** Labels, buttons and chips hidden for a pass; labels show themselves every frame, hence !important. */
+function hideOverlay(root: HTMLElement): () => void {
+  const style = document.createElement("style");
+  style.textContent = ".vh-root > :not(.vh-canvas):not(.vh-bench), .vh-label { visibility: hidden !important; }";
+  root.append(style);
+  return () => style.remove();
+}
+
+/** Labels and buttons drawn as the Tablet level draws them, without frosted glass (`solid`, styles.ts). */
+function solid(root: HTMLElement): () => void {
+  root.classList.add("solid");
+  return () => root.classList.remove("solid");
+}
+
+/** A pass that turned the house at least this much faster shows something holding it back. */
+const GAIN = 1.15;
+
+/**
+ * What holds the device back. Half the resolution draws a quarter of the pixels: much faster, and
+ * it is the fill rate. Without the glass, or without anything over the house, much faster: putting
+ * the page together over the house (compositing). Neither: drawing takes most of each frame, or it
+ * already keeps up with the screen, or something else (the browser, the graphics driver).
+ */
+export function limitOf(p: Passes): Limit {
+  const base = p.base;
+  const gain = (t: Turn | null) => (t && base.fps > 0 ? t.fps / base.fps : 0);
+  const fill = gain(p.half);
+  const glass = gain(p.glass);
+  const over = Math.max(glass, gain(p.bare));
+  if (fill < GAIN && over < GAIN) {
+    if (base.p50 > 0 && base.draw > base.p50 * 0.6) return "main";
+    // a frame every 20 ms or sooner: the most a 60 Hz screen shows
+    return base.p50 > 0 && base.p50 <= 20 ? "screen" : "unclear";
+  }
+  if (fill >= GAIN && over >= GAIN && Math.min(fill, over) > 0.85 * Math.max(fill, over)) return "both";
+  if (fill > over) return "fill";
+  // the glass alone gives (nearly) all of it
+  return glass >= GAIN && glass >= 0.85 * gain(p.bare) ? "glass" : "overlay";
 }
 
 /** Taps the middle of up to `n` rooms of the floor shown, the way a finger's tap goes, and times the answer. */
@@ -176,6 +246,15 @@ export async function runBench(host: BenchHost, status: (text: string) => void =
   const tapped = await taps(host);
   host.showHouse();
   await settle(v);
+  status("Finding what holds it back…");
+  // as it is again first: compared right next to each other, the passes share the same view and warmth
+  const passes: Passes = {
+    base: await turnWith(v, () => () => undefined),
+    glass: v.tier !== "low" ? await turnWith(v, () => solid(host.root)) : null,
+    bare: await turnWith(v, () => hideOverlay(host.root)),
+    half: await turnWith(v, () => (v.setRenderScale(0.5), () => v.setRenderScale(1))),
+  };
+  await settle(v, 1000);
   const mem = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
   const canvas = v.renderer.domElement;
   return {
@@ -186,6 +265,7 @@ export async function runBench(host: BenchHost, status: (text: string) => void =
     idle,
     house,
     floor,
+    passes,
     taps: tapped,
     drawCalls: v.drawn.calls,
     triangles: v.drawn.triangles,
@@ -196,6 +276,26 @@ export async function runBench(host: BenchHost, status: (text: string) => void =
 const s1 = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 const ms0 = (ms: number) => `${Math.round(ms)} ms`;
 const turnText = (t: Turn) => `${t.fps.toFixed(0)} fps (frames ${ms0(t.p50)}, 95% under ${ms0(t.p95)}, worst ${ms0(t.worst)}; drawing ${t.draw.toFixed(1)} ms)`;
+
+const LIMITS: Record<Limit, string> = {
+  fill: "fill rate, the pixels the graphics chip draws (a lower resolution helps most)",
+  glass: "compositing, the frosted glass under the labels and buttons",
+  overlay: "compositing, the labels and buttons over the house",
+  both: "both fill rate and compositing",
+  main: "the main thread: drawing takes most of each frame",
+  screen: "nothing: it keeps up with the screen",
+  unclear: "neither the pixels nor what is over the house (perhaps the browser or the graphics driver)",
+};
+
+/** The passes on one line, each with how much faster than the house as it is, and what that says. */
+function passLines(p: Passes): string[] {
+  const one = (name: string, t: Turn) => {
+    const pct = p.base.fps > 0 ? Math.round((t.fps / p.base.fps - 1) * 100) : 0;
+    return `${name} ${t.fps.toFixed(0)} fps (${pct >= 0 ? "+" : ""}${pct}%)`;
+  };
+  const parts = [`as it is ${p.base.fps.toFixed(0)} fps`, p.glass ? one("without glass", p.glass) : "", one("nothing over the house", p.bare), one("half resolution", p.half)];
+  return [`Turning again: ${parts.filter(Boolean).join(", ")}`, `Held back by ${LIMITS[limitOf(p)]}`];
+}
 
 /** The result as lines of text, the same on the screen and in the logbook. */
 export function benchLines(r: BenchResult, version: string): string[] {
@@ -208,6 +308,7 @@ export function benchLines(r: BenchResult, version: string): string[] {
     `Still: ${r.idle} frames in 3 s`,
     `Turning the house: ${turnText(r.house)}`,
     r.floor ? `Turning a floor: ${turnText(r.floor)}` : "",
+    ...(r.passes ? passLines(r.passes) : []),
     r.taps ? `Taps: ${r.taps.pick.toFixed(1)} ms to find the room, ${ms0(r.taps.answer)} until it shows (median of ${r.taps.n})` : "Taps: no room to tap",
     `Last frame: ${r.drawCalls} draw calls, ${Math.round(r.triangles / 1000)}k triangles${r.heapMb !== null ? ` · ${r.heapMb} MB of JavaScript` : ""}`,
   ].filter(Boolean);
@@ -223,7 +324,7 @@ export function benchBox(root: HTMLElement): { status(text: string): void; done(
   const box = document.createElement("div");
   box.className = "vh-bench";
   const pre = document.createElement("pre");
-  pre.textContent = "Measuring: leave the screen alone for about half a minute.";
+  pre.textContent = "Measuring: leave the screen alone for about a minute.";
   const copy = document.createElement("button");
   copy.textContent = "Copy";
   copy.hidden = true;

@@ -223,4 +223,15 @@ export const VIEW_CSS = /* css */ `
 .vh-bench pre { margin: 0 0 8px; font: 12px/1.45 ui-monospace, monospace; white-space: pre-wrap; }
 .vh-bench div { display: flex; gap: 8px; }
 .vh-bench button { border: 0; border-radius: 8px; padding: 6px 12px; background: rgba(255,255,255,.14); color: inherit; font: inherit; cursor: pointer; }
+` +
+// Tablet graphics (view.ts sets solid): no frosted glass. Each frame the house moves, the blur behind
+// every label and button is worked out again, more than a Fire tablet's graphics keep up with. Nearly
+// opaque colours read as well (the selected chip's too, with no glass under it), and the labels that
+// move with the house lose their shadows (a jammed lock keeps its red ring as a border). Written
+// tight: this is in what every wall tablet loads.
+`.vh-root.solid{--vh-glass:rgba(16,22,34,.9);--vh-chip-on:#1f3d53}
+.vh-root.solid.day{--vh-glass:rgba(250,251,253,.94);--vh-chip-on:#dae7fc}
+.vh-root.solid *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.vh-root.solid .vh-label{box-shadow:none}
+.vh-root.solid .vh-lock[data-kind=jammed],.vh-root.solid .vh-lock[data-kind=problem]{border:2px solid #e5484d}
 `;

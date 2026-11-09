@@ -214,6 +214,8 @@ export class Viewer {
   overlayMarkers: MarkerSpec[] = [];
   /** Called once when moving the view stays slow (under ~22 frames per second). */
   onSlow: (() => void) | null = null;
+  /** Called when the graphics level changes (whoever asked for it). */
+  onTier: ((tier: Tier) => void) | null = null;
   /**
    * Called when drawing goes wrong; `fatal` when the house can't be drawn any more (frames failed
    * again and again, or the graphics could not be got back), and the viewer has stopped.
@@ -244,6 +246,8 @@ export class Viewer {
   private width = 1;
   private height = 1;
   private pixelRatio = 1;
+  /** A share of the usual resolution to draw at (?bench's pass at half resolution), else 1. */
+  private renderScale = 1;
   private disposed = false;
   private stats = { frames: 0, last: 0, fps: 0, ms: 0 };
   /** Frames drawn since the viewer was made, when the first one with a house was, and the last one's work (measuring, ?bench). */
@@ -415,6 +419,16 @@ export class Viewer {
     this.width = this.height = 0;
     this.resize();
     if (this.plan) this.setPlan(this.plan, true);
+    this.onTier?.(tier);
+  }
+
+  /** Draws at this share of the usual resolution, stretched to fill the view (measuring what pixels cost); 1 is as usual. */
+  setRenderScale(k: number): void {
+    this.renderScale = k;
+    this.width = this.height = 0;
+    this.resize();
+    // markers are sized in the canvas's pixels
+    this.refreshMarkers();
   }
 
   /**
@@ -2244,7 +2258,7 @@ export class Viewer {
     const want = Math.min(window.devicePixelRatio || 1, this.low ? 1 : 2);
     const budget = this.tier === "ultra" ? 3_500_000 : this.tier === "high" ? 3_000_000 : 2_500_000;
     const cap = Math.sqrt(budget / (w * h));
-    const ratio = Math.max(1, Math.min(want, cap));
+    const ratio = Math.max(1, Math.min(want, cap)) * this.renderScale;
     if (Math.abs(ratio - this.pixelRatio) > 0.01) {
       this.pixelRatio = ratio;
       this.renderer.setPixelRatio(ratio);
