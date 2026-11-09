@@ -53,6 +53,9 @@ questions on it, label it `needs info`, and remove `in progress`.
 - `frontend/test/budget.test.ts` passes: draw calls per floor, the demo house's triangles at the Tablet
   level, and the size of the loader and the app. Raise a budget in `frontend/test/budgets.ts` only on
   purpose, and say in the pull request why it grew.
+- The Visual checks pass. When the look changed on purpose, the new pictures are stored with
+  `npm run visual -- --fetch` (see [Visual checks](#visual-checks)), and so are the guide's
+  screenshots that show it (`npm run screenshots`, see [Screenshots](#screenshots)).
 - Old plans still load. Plan format changes go through `normalizePlan` (and `schema.py`).
   `frontend/test/fixtures/plans/` keeps the demo plan as every release saved it, and small plans
   with the rarer parts; `frontend/test/fixtures.test.ts` loads and builds each one, and
@@ -97,6 +100,36 @@ drives Google Chrome (`--chrome <path>`, or Playwright's Chromium after
 `npx playwright-core install chromium` in `frontend/`). Screenshots, Home Assistant's log and the
 diagnostics are left in the folder it names at the end (`--dir` picks it).
 
+## Visual checks
+
+`tests/visual/run.mjs` draws key views of the demo home and compares each with its stored picture
+in `tests/visual/baseline/`: the whole house at the Tablet level by day and by night and at Standard
+by day, the ground floor at night, the first floor with the walls low, the editor in 3D and in the
+2D plan, the ground floor at Realistic by day and the house at Ultra by night. A view fails when
+more than 0.1 % of its pixels look different. CI runs it (the Visual checks workflow) on pull
+requests that touch the frontend's sources, in Playwright's container, where software WebGL
+(SwiftShader), the same fonts and the fixed clock, seed, window and pixel ratio of
+`tools/render.mjs` draw the same pixels every time. A failed run uploads the differences side by
+side (stored, changed pixels in red, now) as `visual-diffs`.
+
+**When the look changes on purpose** (or another pull request changed it), store the new pictures in
+one step once the branch is pushed and its Visual checks have run:
+
+```bash
+cd frontend && npm run visual -- --fetch    # needs the gh CLI signed in to GitHub
+```
+
+It downloads what CI drew for the branch's last commit (`visual-new`, which every run uploads) into
+`tests/visual/baseline/`. Look at the pictures, commit them, and say in the pull request why the
+look changed; the next run passes.
+
+`npm run visual` also runs on any computer (after `npx playwright-core install chromium`), and
+`npm run visual -- standard-house-day` checks one view, but fonts and the software renderer differ
+from CI's, so compare there only against pictures stored on the same computer with `--update`. The
+drawn pictures and the differences go to `tools/out/visual/` (`--out` for another folder). The
+workflow's container tag follows playwright-core's version in `package-lock.json`, and `npm test`
+fails until they agree.
+
 ## The guide's website
 
 `npm run site` builds [the website](https://virtumaps.github.io/virtuhome/) from `docs/GUIDE.md`
@@ -106,6 +139,32 @@ the guide of the previous minor release in `/<minor>/`, read from its tag. Pictu
 line of its own as a link, `[What it shows](clips/name.mp4)`; a picture with the same name
 (`clips/name.jpg`) shows until it plays. Comments aside, the site shows HTML in the guide as text,
 so the guide is Markdown only. `npm run site -- --serve` shows it on http://127.0.0.1:5180/virtuhome/.
+
+## Screenshots
+
+The guide's and the README's pictures are made from the demo home with one command, so they show
+VirtuHome as it is now. After `npm ci` and `npx playwright-core install chromium` in `frontend/`:
+
+```bash
+npm run screenshots              # all of them, into docs/screenshots/
+npm run screenshots -- night day # the ones named
+```
+
+`tools/screenshots.mjs` lists each picture: its window size, the dev harness's address
+(`theme=night&floor=0&quality=ultra`), the time, and the clicks that lead to it (opening the
+editor, picking a house type, importing the test Sweet Home 3D home, tracing the test floor plan
+picture). `tools/render.mjs` makes them the same every time: the clock stands at a fixed time (the
+sun, the sky and day or night with it), the demo's random values come from a fixed seed, the window
+and pixel ratio are fixed, no hints show, and an animated camera flight is jumped to its end. It
+draws in software WebGL (SwiftShader), as CI does; `--gpu` uses the graphics card instead, which is
+quicker but not quite the same to the pixel. Text is in the computer's own fonts, so make them on a
+Mac for pictures like the ones there.
+
+[docs/screenshots/README.md](screenshots/README.md) says what each picture shows. When a change
+alters what a picture shows, run it again and look at the result before committing; a new picture
+for the guide gets an entry in `SHOTS`, a line in that list, and a place in the guide. `npm test`
+fails if the guide or the README shows a picture that isn't there, or a picture isn't made by the
+command or listed.
 
 ## Text and translations
 
