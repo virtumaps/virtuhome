@@ -174,6 +174,13 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
   put("binary_sensor.kitchen_leak", opts.leak ? "on" : "off", { device_class: "moisture", friendly_name: "Kitchen leak" });
   entities["binary_sensor.kitchen_leak"] = { entity_id: "binary_sensor.kitchen_leak", area_id: kitchenArea };
 
+  // scenes and scripts on the rooms' sheets: Leaving locks the front door, so it asks first
+  for (const [id, area, name] of DEMO_SCENES) {
+    const scene = id.startsWith("scene.");
+    put(id, scene ? now : "off", { friendly_name: name, ...(scene ? { entity_id: Object.keys(SCENE_STATES[id] ?? {}) } : {}) });
+    entities[id] = { entity_id: id, area_id: area, platform: scene ? "homeassistant" : "script" };
+  }
+
   /** When the user last switched an entity: what happens by itself leaves it alone for a minute. */
   const touched = new Map<string, number>();
   const hass: Hass = {
@@ -187,6 +194,20 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     config: { latitude: place.latitude, longitude: place.longitude, time_zone: place.time_zone },
     async callService(domain, service, _data, target) {
       const ids = ([] as string[]).concat((target?.entity_id as string | string[]) ?? []);
+      // a scene sets its states (Goodnight turns every light off); then each is switched as by hand
+      if (domain === "scene" || domain === "script") {
+        for (const id of ids) {
+          const set = id === "script.goodnight" ? Object.fromEntries(Object.keys(states).filter((x) => x.startsWith("light.")).map((x) => [x, "off"])) : SCENE_STATES[id] ?? {};
+          if (domain === "scene" && states[id]) states[id] = { ...states[id], state: new Date().toISOString() };
+          for (const [x, to] of Object.entries(set)) {
+            const dom = x.split(".")[0];
+            if (states[x] && states[x].state !== to) await hass.callService(dom, dom === "cover" ? "toggle" : dom === "lock" ? "lock" : to === "on" ? "turn_on" : "turn_off", {}, { entity_id: x });
+          }
+        }
+        Object.assign(hass, { states: { ...states } });
+        onChange({ ...hass, states: { ...states } });
+        return;
+      }
       for (const id of ids) {
         touched.set(id, Date.now());
         const s = states[id];
@@ -361,6 +382,23 @@ function demoUpload(msg: Record<string, unknown>): { upload_id?: string; file?: 
   demoImages.set(file, URL.createObjectURL(new Blob([raw], { type: png ? "image/png" : "image/jpeg" })));
   return { file, bytes: raw.length };
 }
+
+/** The demo's scenes and scripts, with their area and name. */
+const DEMO_SCENES: [string, string | null, string][] = [
+  ["scene.movie_night", "living_room", "Movie night"],
+  ["scene.living_room_bright", "living_room", "Bright"],
+  ["scene.leaving", "hallway", "Leaving"],
+  ["scene.bedtime", "bedroom", "Bedtime"],
+  ["script.goodnight", null, "Goodnight"],
+];
+
+/** What each scene sets. */
+const SCENE_STATES: Record<string, Record<string, string>> = {
+  "scene.movie_night": { "light.living_room_ceiling": "off", "light.living_room_downlights": "off", "light.living_room_floor_lamp": "on", "light.fireplace_strip": "on" },
+  "scene.living_room_bright": { "light.living_room_ceiling": "on", "light.living_room_downlights": "on", "light.living_room_floor_lamp": "on" },
+  "scene.leaving": { "lock.front_door": "locked", "light.stairs": "off" },
+  "scene.bedtime": { "light.bedside_left": "on", "light.bedside_right": "on", "light.bedroom_ceiling": "off", "cover.bedroom_curtains": "closed" },
+};
 
 function pretty(id: string): string {
   const name = id.split(".")[1].replace(/_/g, " ");

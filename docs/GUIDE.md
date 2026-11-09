@@ -166,9 +166,23 @@ whole-house view. Tap one for its dialog.
 - **Tap a lock's badge** on its door to lock or unlock it: it asks first (see
   [By hand](#by-hand)). Tap what a TV or speaker plays to play or pause it.
 - **Tap a room** to open it: in the house view this goes to its floor first. A sheet shows the
-  room's temperature, who is here and its devices, with **All lights on** / **All lights off**.
+  room's temperature, who is here and its devices, with **All lights on** / **All lights off** and
+  its scenes and scripts (below).
 - **Double-tap a room** to switch all its lights.
 - **Double-tap empty space** to go back to the whole house.
+
+**Scenes and scripts**
+- A room's sheet has a button for each scene and script of its Home Assistant area (given to the
+  scene or script, or to its device), beside **All lights on** / **All lights off**. A tap runs it
+  and says so: "Movie night: on".
+- A scene that locks or unlocks a door, arms or disarms the alarm, or opens a garage door or gate
+  asks first ("Run Leaving? It changes Front door.") and runs only on **Run**.
+- Scripts that need details to run (a field they can't do without) are left out. One you add
+  yourself opens its dialog, which asks for them.
+- Edit → **Selected**, with a room or garden area selected, → **Scenes and scripts** chooses them:
+  tap one to hide it, or tap it again to show it. **Add another** adds any scene or script, also one
+  in another area or in none (such as a Goodnight for the whole house); those you add come first. A
+  sheet shows up to 12.
 
 **Graphics** (the sliders button, under **Graphics on this device**):
 

@@ -59,6 +59,8 @@ export interface Hass {
   devices?: Record<string, HassDeviceReg>;
   areas?: Record<string, HassAreaReg>;
   floors?: Record<string, HassFloorReg>;
+  /** The services, by domain: each script is one, with the fields it takes. */
+  services?: Record<string, Record<string, { fields?: Record<string, { required?: boolean } | undefined> }>>;
   user?: { id: string; name: string; is_admin: boolean };
   themes?: { darkMode?: boolean };
   language?: string;

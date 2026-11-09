@@ -60,6 +60,16 @@ def test_bad_labels_and_shows_are_refused():
         schema.PLAN({"version": 1, "floors": [{**FLOOR, "devices": [{**READING, "show": "graph"}]}]})
 
 
+def test_room_scenes_are_kept_and_bounded():
+    room = {**ROOM, "scenes": ["script.goodnight", "scene.cooking"], "hide_scenes": ["scene.kitchen_off"]}
+    out = schema.PLAN({"version": 1, "floors": [{**FLOOR, "rooms": [room]}]})
+    assert out["floors"][0]["rooms"][0]["scenes"] == ["script.goodnight", "scene.cooking"]
+    assert out["floors"][0]["rooms"][0]["hide_scenes"] == ["scene.kitchen_off"]
+    for bad in ({**ROOM, "scenes": "scene.cooking"}, {**ROOM, "hide_scenes": [""]}, {**ROOM, "scenes": ["scene.x"] * 51}):
+        with pytest.raises(vol.Invalid):
+            schema.PLAN({"version": 1, "floors": [{**FLOOR, "rooms": [bad]}]})
+
+
 ROBOT = {"id": "r1", "entity": "vacuum.robbie", "x": 1, "z": 1, "mount": "floor"}
 
 

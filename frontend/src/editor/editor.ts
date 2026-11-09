@@ -19,6 +19,7 @@ import { bounds } from "../model/geom";
 import { canFollow, entityRegistry, followRenames, missingLinks, proposeFor, recordLinks, replaceEntity, type Proposal, type RegistryEntry } from "../model/links";
 import { areaOf, domainOf, isPower, type Hass } from "../live/hass";
 import { valueText } from "../live/readings";
+import { areaScenes, idList, MAX_SCENES, needsDetails, runnable } from "../live/scenes";
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { canInflate, ROBOT_DOMAINS, robotSources } from "../live/robots";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, furnitureName, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
@@ -1686,6 +1687,7 @@ export class Editor {
         }, false, t("editor.room.wallsInEveryRoom")) }, t("editor.room.useTheseWallsEverywhere")),
       ),
       ...this.labelRows(room, false, updRoom),
+      ...this.sceneRows(room, updRoom),
       h("h4", {}, t("editor.room.addFurnitureAndDecor")),
       this.itemPicker((type) => this.addFurniture(fi, room, type)),
       h("h4", {}, t("editor.room.inThisRoomN", { n: inRoom.length })),
@@ -1759,6 +1761,7 @@ export class Editor {
       ...this.areaSizeRows(o, upd),
       h("div", { class: "ed-row" }, h("label", {}, t("editor.area")), this.dropdown(areas.map((a) => [a.area_id, a.name]), o.area_id ?? "", (v) => upd(t("editor.outdoor.linkAGardenArea"), (x) => (x.area_id = v || null)), t("editor.notLinked"))),
       ...this.labelRows(o, true, upd),
+      ...this.sceneRows(o, upd),
       lawn ? h("h4", {}, t("editor.outdoor.addToThisGarden")) : null,
       lawn ? h("div", { class: "ed-chips" },
         h("button", { class: "ed-chip", onclick: () => this.addArea("patio", "rect", o) }, t("editor.patio")),
@@ -3307,6 +3310,40 @@ export class Editor {
         h("div", { class: "ed-row" }, h("label", {}, t("editor.label.humiditySensor")),
           this.dropdown(sensors("humidity"), room.humidity ?? "", (v) => upd(t("editor.label.change", { name: item.name }), (x) => ((x as Room).humidity = v || null)), t("editor.auto"))),
       ] : []),
+    ];
+  }
+
+  /**
+   * The scenes and scripts on a room's or garden area's sheet: its area's own and those added here
+   * (shown first). A tap hides one, or shows it again.
+   */
+  private sceneRows<T extends Room | OutdoorArea>(item: T, upd: (label: string, fn: (x: T) => void) => void): HTMLElement[] {
+    const hass = this.hass;
+    const picked = idList(item.scenes);
+    const hidden = idList(item.hide_scenes);
+    const own = areaScenes(hass, item.area_id);
+    const set = (scenes: string[], hide: string[]) => upd(t("editor.scenes.change", { name: item.name }), (x) => {
+      if (scenes.length) x.scenes = scenes;
+      else delete x.scenes;
+      if (hide.length) x.hide_scenes = hide;
+      else delete x.hide_scenes;
+    });
+    const shown = (id: string) => picked.includes(id) || (own.includes(id) && !hidden.includes(id));
+    const toggle = (id: string) => {
+      if (!shown(id)) return set(picked, hidden.filter((x) => x !== id));
+      set(picked.filter((x) => x !== id), own.includes(id) ? [...hidden, id] : hidden);
+    };
+    const name = (id: string) => String(hass.states[id]?.attributes.friendly_name ?? id);
+    return [
+      h("h4", {}, t("editor.scenes.title")),
+      h("p", { class: "ed-hint" }, t("editor.scenes.hint")),
+      h("div", { class: "ed-chips" }, ...[...new Set([...picked, ...own])].map((id) => h("button", { class: `ed-chip${shown(id) ? " on" : ""}`, title: id, onclick: () => toggle(id) }, name(id)))),
+      h("div", { class: "ed-row" }, h("label", {}, t("editor.label.addAnother")), this.entityInput(this.entities((id) => runnable(id) && !needsDetails(hass, id)), "", (v) => {
+        if (!v || picked.includes(v)) return;
+        if (!runnable(v) || !hass.states[v]) return this.toastInDrawer(t("editor.scenes.notOne", { entity: v }));
+        if (picked.length >= MAX_SCENES) return this.toastInDrawer(t("editor.scenes.full", { n: MAX_SCENES }));
+        set([...picked, v], hidden.filter((x) => x !== v));
+      })),
     ];
   }
 

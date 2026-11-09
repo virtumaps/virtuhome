@@ -189,7 +189,7 @@ describe("loading", () => {
 
 /** The files whose text has moved into the table: text written straight into them is caught here. */
 const SCANNED = [
-  "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/demo.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
+  "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/demo.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/room-scenes.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
   "editor/background.ts", "editor/editor.ts", "editor/house-types.ts", "editor/north.ts", "editor/plan2d.ts", "editor/roomfind-apply.ts", "editor/roomfind-client.ts",
   "import/draft.ts", "import/names.ts", "import/roomplan.ts", "import/sh3d.ts", "import/simple.ts", "import/xml.ts", "import/zip.ts",
   "live/appliances.ts", "live/ev.ts", "live/locks.ts", "live/media.ts", "starters/houses.ts",

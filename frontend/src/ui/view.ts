@@ -1,5 +1,5 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent, mdiPlay } from "@mdi/js";
 import { barChips, normalizePlan, spaces, type Plan, type Repair, type ThemeName } from "../model/plan";
 import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
@@ -11,6 +11,7 @@ import { BAND_COLOURS, BANDS, legendScale, type MapKind } from "../live/air";
 import type { ForecastHour } from "../live/warnings";
 import { alarmPanels, armModes, numericCode, openSensors, panelArea, wantsCode, whatSetItOff } from "../live/alarm";
 import { lockActions, needsCode } from "../live/locks";
+import type { SceneHost } from "./room-scenes";
 import { ICONS } from "../scene/markers";
 import { extensionFailures, extensionSources, loadExtensions, onSources, registerView, type Place, type SourceCheck, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
@@ -2178,6 +2179,9 @@ export class VhView {
   // ------------------------------------------------------------------ room sheet
 
   private tileHelpers: Promise<{ createCardElement(c: Record<string, unknown>): HTMLElement & { hass?: unknown } }> | null = null;
+  private scenesPart: typeof import("./room-scenes") | null = null;
+  private scenesAsked = false;
+  private sceneHost: SceneHost = { hass: () => this._hass, name: (id) => this.nameOf(id), dialog: (id) => this.dialog(id), toast: (text) => this.toast(text), icon: svg(mdiPlay).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"') };
 
   private renderSheet(): void {
     const hass = this._hass;
@@ -2190,7 +2194,19 @@ export class VhView {
     const here = hereText(this.config.people === false || this.replayed ? [] : this.live.roomPeople(floor, room).map((p) => p.name));
     const lights = this.live.roomLights(floor, room);
     const anyOn = lights.some((id) => hass.states[id]?.state === "on");
-    const key = `${room.id}|${ids.join(",")}|${anyOn}|${text}|${here}`;
+    // the room's scenes and scripts: their code is fetched when a sheet first opens
+    if (!this.scenesAsked) {
+      this.scenesAsked = true;
+      void this.loadPart(() => import("./room-scenes"), "scenes").then((m) => {
+        this.scenesPart = m;
+        if (!m || !this.sheetRoom) return;
+        this.sheet.dataset.key = "";
+        this.renderSheet();
+      });
+    }
+    const sc = this.replayed ? null : this.scenesPart;
+    const scenes = sc ? sc.sheetScenes(hass, floor, room.id) : [];
+    const key = `${room.id}|${ids.join(",")}|${anyOn}|${text}|${here}|${scenes.join(",")}`;
     if (this.sheet.dataset.key === key) {
       this.sheet.querySelectorAll<HTMLElement & { hass?: unknown }>("[data-tile]").forEach((t) => (t.hass = hass));
       this.updateRows(hass);
@@ -2214,6 +2230,7 @@ export class VhView {
       b.onclick = () => this.toggleRoomLights(this.sheetRoom!.floor, this.sheetRoom!.room);
       actions.appendChild(b);
     }
+    if (sc && scenes.length) sc.sceneButtons(this.sceneHost, scenes, actions as HTMLElement);
     const grid = this.sheet.querySelector(".vh-tiles")!;
     // the demo's devices are pretend: Home Assistant's tiles would open its own dialogs for them
     const helpers = this.config.demo ? undefined : (window as unknown as { loadCardHelpers?: () => Promise<never> }).loadCardHelpers;

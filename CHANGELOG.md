@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Scenes and scripts** on a room's sheet: a button for each scene and script of the room's area
+  (its own or its device's), and a tap runs it. A scene that locks, arms or opens a garage door asks
+  first; scripts that need details are left out. Edit → **Selected** → **Scenes and scripts** hides
+  some and adds others, also from another area or none.
+
 ## 0.18.0
 
 ### Changed
