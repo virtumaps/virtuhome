@@ -38,14 +38,13 @@ installed, the same house is in Home Assistant too: see [The demo home](#the-dem
 
 You need Home Assistant 2025.1 or later and [HACS](https://hacs.xyz).
 
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/virtumaps/virtuhome` as
-   **Integration**.
-2. Find **VirtuHome** in HACS, download it, and restart Home Assistant.
-3. Settings → Devices & services → **Add integration** → **VirtuHome**. One Home Assistant has one
+1. Search for **VirtuHome** in HACS, download it, and restart Home Assistant. Or
+   [open VirtuHome in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=virtumaps&repository=virtuhome&category=integration) straight from here.
+2. Settings → Devices & services → **Add integration** → **VirtuHome**. One Home Assistant has one
    VirtuHome.
-4. Reload the page in your browser. **VirtuHome** is now in the sidebar, and the VirtuHome card is
+3. Reload the page in your browser. **VirtuHome** is now in the sidebar, and the VirtuHome card is
    in your dashboards' card picker.
-5. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
+4. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
    floor plan picture**, **Start from a house type**, **Import a scan or plan** or **Draw it
    myself**, and the editor opens on that step
    (see [Get your home in](#get-your-home-in)). To see a finished home first, tap **Look at the
