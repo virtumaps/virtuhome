@@ -79,12 +79,12 @@ with or without a scanner, devices, wall tablets, FAQ and troubleshooting. It is
 | **Finishes, colours and decor** | **2D plan with measurements** |
 | ![Editing a room's look](docs/screenshots/editor.jpg) | ![The 2D plan editor](docs/screenshots/plan.jpg) |
 
-## Install (HACS, custom repository)
+## Install (HACS)
 
-1. HACS → ⋮ → Custom repositories → `https://github.com/virtumaps/virtuhome` as **Integration**.
-2. Install **VirtuHome**, restart Home Assistant.
-3. Settings → Devices & services → Add integration → **VirtuHome**.
-4. Open **VirtuHome** in the sidebar. Add the card to a dashboard with `type: custom:virtuhome-card`.
+1. Search for **VirtuHome** in HACS, download it and restart Home Assistant. Or
+   [open VirtuHome in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=virtumaps&repository=virtuhome&category=integration) straight from here.
+2. Settings → Devices & services → Add integration → **VirtuHome**.
+3. Open **VirtuHome** in the sidebar. Add the card to a dashboard with `type: custom:virtuhome-card`.
 
 The [user guide](docs/GUIDE.md) goes on from here.
 
