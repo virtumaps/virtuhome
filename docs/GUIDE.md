@@ -694,8 +694,8 @@ its **Style** for another of its kind, and set its **Colour**, size and **Turn**
   from the wall); its width, how far it reaches out (**Depth**), its fall (**Height**) and
   **Above floor** (the bottom of its valance when it is out; raise it to sit on a pergola). **Colour**
   colours the fabric. **Linked to** picks its cover: it runs out and back with the cover's
-  position, and a tap on it asks first, with **Open**, **Close**, **Stop**, a position slider (for a
-  cover that can be set to a position) and **Details**. Without a cover it is drawn out.
+  position, and a tap on it asks first, as a gate does (see
+  [Fences and garden walls](#fences-and-garden-walls)). Without a cover it is drawn out.
 
 ### Fences and garden walls
 
@@ -709,9 +709,10 @@ its **Style** for another of its kind, and set its **Colour**, size and **Turn**
   on its other post, **Swing other way** swings it to the other side of the fence; a sliding gate
   has **Slide the other way** and **Other side** (the side of the fence it runs along).
 - **Opener**: a cover (an electric gate), a lock, a switch or a contact sensor. The gate opens and
-  closes with it in 3D. Tap the gate and it asks first: a cover offers **Open**, **Close**, **Stop**
-  and a position slider (as the cover can), a lock **Lock**, **Unlock** and **Open** (with a
-  **Code** box when it needs one), a switch **Open** and **Close**; **Details** opens its dialog.
+  closes with it in 3D. Tap the gate and it asks first: a cover offers **Open** (unless it is open
+  all the way), **Close** (unless it is closed), **Stop** while it moves and a position slider, as
+  the cover can; a lock **Lock**, **Unlock** and **Open** (with a **Code** box when it needs one); a
+  switch **Open** and **Close**; and **Details** opens its dialog.
 
 ### The roof
 

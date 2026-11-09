@@ -48,9 +48,12 @@ export function coverRows(hass: Hass, id: string, host: CoverMenuHost): HTMLElem
   if (s && s.state !== "unavailable") {
     if (dom === "cover") {
       const f = typeof s.attributes.supported_features === "number" ? s.attributes.supported_features : OPEN | CLOSE | STOP;
-      if (f & OPEN) row(t("cover.open"), () => run("cover", "open_cover", {}, t("cover.doing.open", { name })));
-      if (f & CLOSE) row(t("cover.close"), () => run("cover", "close_cover", {}, t("cover.doing.close", { name })));
-      if (f & STOP) row(t("cover.stop"), () => run("cover", "stop_cover", {}, t("cover.doing.stop", { name })));
+      // what it can do now: not open what is open all the way, stop only what moves
+      const moving = s.state === "opening" || s.state === "closing";
+      const full = s.state === "opening" || (s.state === "open" && (typeof pos !== "number" || pos >= 100));
+      if (f & OPEN && !full) row(t("cover.open"), () => run("cover", "open_cover", {}, t("cover.doing.open", { name })));
+      if (f & CLOSE && s.state !== "closed" && s.state !== "closing") row(t("cover.close"), () => run("cover", "close_cover", {}, t("cover.doing.close", { name })));
+      if (f & STOP && moving) row(t("cover.stop"), () => run("cover", "stop_cover", {}, t("cover.doing.stop", { name })));
       if (f & SET_POSITION) {
         const r = document.createElement("input");
         r.type = "range";

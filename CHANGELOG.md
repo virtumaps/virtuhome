@@ -20,7 +20,7 @@
 - **Gates that open**: a gate's **Opener** (a cover, lock, switch or contact sensor) opens and closes
   it in 3D, swinging to either side or sliding along the fence (**Swings**, **Slides**, **Flip
   hinge**, **Swing other way**). A tap on the gate asks first, with **Open**, **Close**, **Stop** and a
-  position slider for a cover.
+  position slider for a cover, as it can do them.
 - **Awnings** (in **Garden**) run out and back with their cover, and a tap asks first like a gate's.
 - A window's blind that reports a tilt is drawn as a **venetian blind** with its slats at that angle,
   and a **roof window** can have a **Blind**, and a motorised window's cover as its **Sensor**.
