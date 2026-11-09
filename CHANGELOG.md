@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.19.0
 
 ### New
 - **Scenes and scripts** on a room's sheet: a button for each scene and script of the room's area
