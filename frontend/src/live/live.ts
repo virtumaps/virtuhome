@@ -599,10 +599,12 @@ export class HassLive implements LiveSource {
     const dom = domainOf(d.entity);
     if (dom === "light") return null;
     const dc = s?.attributes.device_class;
-    const look = (icon: string, color: number, pulse = 0): MarkerLook => ({
-      icon: iconIndex(icon), color, pulse, attention: pulse > 0 || color === C.alert || color === C.open,
+    const look = (icon: string, color: number, pulse = 0, busy = false): MarkerLook => ({
+      icon: iconIndex(icon), color, pulse, attention: busy || pulse > 0 || color === C.alert || color === C.open,
     });
-    // attention fades: pulsing only during the first minute after a change
+    // attention fades: pulsing only during the first minute after a change. Music or a robot's run can
+    // go on for hours, and a pulse makes a wall tablet draw all that time, so those stay shown over the
+    // whole house (busy) but pulse only as they start
     const fresh = s ? this.now() - Date.parse(s.last_changed) < 60_000 : false;
     if (!s || isUnavailable(s)) {
       const icon = dom === "binary_sensor" && dc ? (MOTION_CLASSES.has(dc) ? "motion-off" : OPENING_CLASSES.has(dc) ? "door" : ALERT_CLASSES.has(dc) ? "smoke" : "dot") : iconName(dom, dc, s);
@@ -619,7 +621,7 @@ export class HassLive implements LiveSource {
         // the camera is drawn as a model with its view; a pin only says it is live or sees motion
         return this.cameraActive(d) ? look(/doorbell/i.test(d.entity) ? "doorbell" : "camera", C.alert) : null;
       case "media_player":
-        return look(/tv|television|webos|xbox|plex/i.test(d.entity) ? "tv" : "speaker", ["off", "standby"].includes(s.state) ? C.off : C.media, s.state === "playing" ? 0.35 : 0);
+        return look(/tv|television|webos|xbox|plex/i.test(d.entity) ? "tv" : "speaker", ["off", "standby"].includes(s.state) ? C.off : C.media, s.state === "playing" && fresh ? 0.35 : 0, s.state === "playing");
       case "climate": {
         const action = s.attributes.hvac_action;
         return look("thermostat", action === "heating" ? C.heat : action === "cooling" ? C.cool : s.state === "off" ? C.off : C.idle);
@@ -632,7 +634,7 @@ export class HassLive implements LiveSource {
       case "vacuum":
       case "lawn_mower": {
         const busy = s.state === "cleaning" || s.state === "mowing";
-        return look(dom === "vacuum" ? "vacuum" : "mower", s.state === "error" ? C.alert : busy ? C.camera : C.idle, busy ? 0.4 : 0);
+        return look(dom === "vacuum" ? "vacuum" : "mower", s.state === "error" ? C.alert : busy ? C.camera : C.idle, busy && fresh ? 0.4 : 0, busy);
       }
       case "cover":
         return look(dc === "blind" || dc === "shutter" ? "blinds" : "curtains", (coverLevel(s) ?? 0) > 0.05 ? C.on : C.idle);

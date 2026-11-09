@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- A speaker or TV that's playing, and a robot that's cleaning or mowing, pulse only in their first
+  minute, as everything else does; they still show over the whole house while they play or work.
+  Music can play for hours, and its pulse kept a wall tablet drawing about ten frames a second all
+  that time.
+
 ## 0.19.0
 
 ### New
