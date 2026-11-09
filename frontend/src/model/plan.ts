@@ -404,6 +404,17 @@ export interface FenceGate {
   width: number;
   /** Two leaves meeting in the middle (a driveway gate). */
   double?: boolean;
+  /** How it opens: on hinges (null, the usual) or sliding along the fence. */
+  kind?: "swing" | "slide" | null;
+  /**
+   * A single leaf's hinges, or where a sliding gate runs to: the post towards the fence's first
+   * point (null, the usual) or its last.
+   */
+  hinge?: "start" | "end" | null;
+  /** The side it swings to, or slides along: the fence's front (null; right of its line, first point to last) or its back. */
+  swing?: "front" | "back" | null;
+  /** What opens it or says it is open (a cover, lock, switch or contact sensor): it moves with that in 3D. */
+  entity?: string | null;
 }
 
 /** A fence or garden wall: a line of posts and panels along the ground, corner to corner. */

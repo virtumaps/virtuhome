@@ -295,6 +295,10 @@ function leaf(def: FenceStyleDef, w: number, h: number, low: boolean): Part[] {
 export interface FencePiece {
   item: Furniture;
   parts: Part[];
+  /** A gate's leaf: the gate's index in the fence's gates, where its hinges are across it (x), and its posts' width. */
+  gate?: number;
+  hinge?: number;
+  post?: number;
 }
 
 /** The total length of a fence's line. */
@@ -337,7 +341,7 @@ export function fencePieces(f: Fence, low: boolean): FencePiece[] {
   const top = height + topper + post.extra;
   const metal = def.metal?.role ?? BM;
   const color = f.color ?? def.color ?? null;
-  const gates = (f.gates ?? []).map((g) => ({ g, a: g.at - g.width / 2, b: g.at + g.width / 2 })).sort((x, y) => x.a - y.a);
+  const gates = (f.gates ?? []).map((g, i) => ({ g, i, a: g.at - g.width / 2, b: g.at + g.width / 2 })).sort((x, y) => x.a - y.a);
   const out: FencePiece[] = [];
   let s0 = 0;
   for (let i = 1; i < f.points.length; i++) {
@@ -346,9 +350,9 @@ export function fencePieces(f: Fence, low: boolean): FencePiece[] {
     if (len < 0.05) continue;
     const dir: Vec2 = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
     const rotation = (Math.atan2(dir[1], dir[0]) * 180) / Math.PI;
-    const piece = (d: number, w: number, h: number, parts: Part[]) => {
+    const piece = (d: number, w: number, h: number, parts: Part[], leaf?: Partial<FencePiece>) => {
       const t = d - s0;
-      out.push({ item: { id: f.id, type: "fence", x: a[0] + dir[0] * t, z: a[1] + dir[1] * t, rotation, w, d: 0.1, h, color }, parts });
+      out.push({ item: { id: f.id, type: "fence", x: a[0] + dir[0] * t, z: a[1] + dir[1] * t, rotation, w, d: 0.1, h, color }, parts, ...leaf });
     };
     // the run without its gates, and the gates in it
     const inRun = gates.filter((x) => x.b > s0 + 0.01 && x.a < s0 + len - 0.01).map((x) => ({ ...x, a: Math.max(x.a, s0), b: Math.min(x.b, s0 + len) }));
@@ -387,9 +391,11 @@ export function fencePieces(f: Fence, low: boolean): FencePiece[] {
       const leaves = x.g.double ? 2 : 1;
       const lw = (w - (leaves - 1) * 0.01) / leaves;
       for (let k = 0; k < leaves; k++) {
-        // the second leaf of a pair is turned round, so both handles meet in the middle
-        const parts = leaf(def, lw, h, low).map((p) => (k === 1 ? { ...p, x: -p.x, lean: p.lean ? [-p.lean[0], p.lean[1]] as [number, number] : undefined } : p)).map((p) => ({ ...p, y: p.y + 0.05 }));
-        piece(x.a + gp / 2 + 0.01 + lw * (k + 0.5) + k * 0.01, lw, h, parts);
+        // the second leaf of a pair is turned round, so both handles meet in the middle; so is a single
+        // leaf hung at the fence's far end
+        const turned = k === 1 || (leaves < 2 && x.g.hinge === "end");
+        const parts = leaf(def, lw, h, low).map((p) => (turned ? { ...p, x: -p.x, lean: p.lean ? [-p.lean[0], p.lean[1]] as [number, number] : undefined } : p)).map((p) => ({ ...p, y: p.y + 0.05 }));
+        piece(x.a + gp / 2 + 0.01 + lw * (k + 0.5) + k * 0.01, lw, h, parts, { gate: x.i, hinge: turned ? lw / 2 : -lw / 2, post: gp });
       }
     }
     for (const [d, gate] of posts) {

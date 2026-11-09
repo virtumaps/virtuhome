@@ -1634,6 +1634,7 @@ export class Editor {
     // what is not in the plan yet, by area of a linked room
     const inPlan = new Set(this.plan.floors.flatMap((f) => [
       ...f.devices.map((d) => d.entity), ...f.furniture.flatMap(linkedEntities), ...f.openings.flatMap((o) => [o.entity, o.cover, o.lock]),
+      ...(f.fences ?? []).flatMap((x) => (x.gates ?? []).map((g) => g.entity)),
     ]).filter(Boolean) as string[]);
     const roomByArea = new Map<string, { fi: number; room: Room }>();
     this.plan.floors.forEach((f, fi) => [...f.rooms, ...(f.outdoor ?? []) as unknown as Room[]].forEach((r) => r.area_id && !roomByArea.has(r.area_id) && roomByArea.set(r.area_id, { fi, room: r })));

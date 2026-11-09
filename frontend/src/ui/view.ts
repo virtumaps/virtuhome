@@ -2091,6 +2091,8 @@ export class VhView {
     if (hit.entity && (hit.kind === "marker" || hit.kind === "lamp" || hit.kind === "entity")) {
       if (gesture === "long") return this.dialog(hit.entity);
       if (gesture === "double") return;
+      // a gate or an awning asks first
+      if (hit.ask) return this.coverMenu(hit.entity, hit.at);
       const done = await toggleEntity(hass, hit.entity).catch(() => false);
       if (!done) this.dialog(hit.entity);
       else this.toast(this.nameOf(hit.entity));
@@ -2132,6 +2134,14 @@ export class VhView {
       };
       return b;
     }), at);
+  }
+
+  /** A gate's or awning's controls by the finger (ui/cover-menu.ts, loaded the first time). */
+  private async coverMenu(id: string, at: [number, number] | undefined): Promise<void> {
+    const hass = this._hass;
+    if (!hass) return;
+    const { coverRows } = await import("./cover-menu");
+    this.showPop(coverRows(hass, id, { name: this.nameOf(id), done: () => (this.pop.hidden = true), toast: (x) => this.toast(x), dialog: (x) => this.dialog(x) }), at);
   }
 
   /** Switches a device (plays or pauses a TV or speaker), as a tap on it does; its dialog when it can't. */
