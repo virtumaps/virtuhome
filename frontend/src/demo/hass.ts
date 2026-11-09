@@ -53,7 +53,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     for (const o of floor.outdoor ?? []) if (o.area_id) areas[o.area_id] = { area_id: o.area_id, name: o.name, floor_id: floor.ha_floor ?? null };
     for (const room of floor.rooms) {
       if (!room.area_id) continue;
-      areas[room.area_id] = { area_id: room.area_id, name: room.name, floor_id: floor.ha_floor ?? null };
+      areas[room.area_id] = { area_id: room.area_id, name: room.name, floor_id: floor.ha_floor ?? null, aliases: AREA_ALIASES[room.area_id] ?? [] };
       // a climate sensor per area so the labels show something
       const t = `sensor.${room.area_id}_temperature`;
       put(t, (19 + Math.random() * 3).toFixed(1), { device_class: "temperature", unit_of_measurement: "°C" });
@@ -174,6 +174,13 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
   put("binary_sensor.kitchen_leak", opts.leak ? "on" : "off", { device_class: "moisture", friendly_name: "Kitchen leak" });
   entities["binary_sensor.kitchen_leak"] = { entity_id: "binary_sensor.kitchen_leak", area_id: kitchenArea };
 
+  // scenes and scripts on the rooms' sheets: Leaving locks the front door, so it asks first
+  for (const [id, area, name] of DEMO_SCENES) {
+    const scene = id.startsWith("scene.");
+    put(id, scene ? now : "off", { friendly_name: name, ...(scene ? { entity_id: Object.keys(SCENE_STATES[id] ?? {}) } : {}) });
+    entities[id] = { entity_id: id, area_id: area, platform: scene ? "homeassistant" : "script" };
+  }
+
   /** When the user last switched an entity: what happens by itself leaves it alone for a minute. */
   const touched = new Map<string, number>();
   const hass: Hass = {
@@ -187,6 +194,20 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     config: { latitude: place.latitude, longitude: place.longitude, time_zone: place.time_zone },
     async callService(domain, service, _data, target) {
       const ids = ([] as string[]).concat((target?.entity_id as string | string[]) ?? []);
+      // a scene sets its states (Goodnight turns every light off); then each is switched as by hand
+      if (domain === "scene" || domain === "script") {
+        for (const id of ids) {
+          const set = id === "script.goodnight" ? Object.fromEntries(Object.keys(states).filter((x) => x.startsWith("light.")).map((x) => [x, "off"])) : SCENE_STATES[id] ?? {};
+          if (domain === "scene" && states[id]) states[id] = { ...states[id], state: new Date().toISOString() };
+          for (const [x, to] of Object.entries(set)) {
+            const dom = x.split(".")[0];
+            if (states[x] && states[x].state !== to) await hass.callService(dom, dom === "cover" ? "toggle" : dom === "lock" ? "lock" : to === "on" ? "turn_on" : "turn_off", {}, { entity_id: x });
+          }
+        }
+        Object.assign(hass, { states: { ...states } });
+        onChange({ ...hass, states: { ...states } });
+        return;
+      }
       for (const id of ids) {
         touched.set(id, Date.now());
         const s = states[id];
@@ -212,6 +233,10 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       // Check my setup: all well with the card, and no licence
       if (msg.type === "virtuhome/checks" || msg.type === "virtuhome/checks/fix_card") {
         return { version: __VERSION__, dashboard: { mode: "storage", urls: [`/virtuhome_static/virtuhome-loader.js?v=${__VERSION__}`], current: true } } as T;
+      }
+      // the search's aliases
+      if (msg.type === "config/entity_registry/get_entries") {
+        return Object.fromEntries((msg.entity_ids as string[]).map((id) => [id, entities[id] ? { entity_id: id, aliases: ALIASES[id] ?? [] } : null])) as T;
       }
       if (msg.type === "config/entity_registry/list") {
         return Object.values(entities).map((e) => ({ id: regId(e.entity_id), entity_id: e.entity_id, device_id: e.device_id ?? null, area_id: e.area_id ?? null, platform: e.platform ?? "demo" })) as T;
@@ -361,6 +386,27 @@ function demoUpload(msg: Record<string, unknown>): { upload_id?: string; file?: 
   demoImages.set(file, URL.createObjectURL(new Blob([raw], { type: png ? "image/png" : "image/jpeg" })));
   return { file, bytes: raw.length };
 }
+
+/** The demo's scenes and scripts, with their area and name. */
+const DEMO_SCENES: [string, string | null, string][] = [
+  ["scene.movie_night", "living_room", "Movie night"],
+  ["scene.living_room_bright", "living_room", "Bright"],
+  ["scene.leaving", "hallway", "Leaving"],
+  ["scene.bedtime", "bedroom", "Bedtime"],
+  ["script.goodnight", null, "Goodnight"],
+];
+
+/** Aliases of a few entities and an area, as Home Assistant's voice settings give them, for the search. */
+const ALIASES: Record<string, string[]> = { "light.living_room_floor_lamp": ["Reading lamp"], "media_player.living_room_tv": ["Telly"], "scene.movie_night": ["Film night"] };
+const AREA_ALIASES: Record<string, string[]> = { hallway: ["Entrance"] };
+
+/** What each scene sets. */
+const SCENE_STATES: Record<string, Record<string, string>> = {
+  "scene.movie_night": { "light.living_room_ceiling": "off", "light.living_room_downlights": "off", "light.living_room_floor_lamp": "on", "light.fireplace_strip": "on" },
+  "scene.living_room_bright": { "light.living_room_ceiling": "on", "light.living_room_downlights": "on", "light.living_room_floor_lamp": "on" },
+  "scene.leaving": { "lock.front_door": "locked", "light.stairs": "off" },
+  "scene.bedtime": { "light.bedside_left": "on", "light.bedside_right": "on", "light.bedroom_ceiling": "off", "cover.bedroom_curtains": "closed" },
+};
 
 function pretty(id: string): string {
   const name = id.split(".")[1].replace(/_/g, " ");

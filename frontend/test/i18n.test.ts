@@ -189,7 +189,7 @@ describe("loading", () => {
 
 /** The files whose text has moved into the table: text written straight into them is caught here. */
 const SCANNED = [
-  "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/demo.ts", "ui/energy.ts", "ui/errors.ts", "ui/panel.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
+  "ui/card.ts", "ui/card-editor.ts", "ui/checks.ts", "ui/demo.ts", "ui/energy.ts", "ui/errors.ts", "ui/find.ts", "ui/panel.ts", "ui/room-scenes.ts", "ui/search.ts", "ui/setup.ts", "ui/sky.ts", "ui/view.ts",
   "editor/background.ts", "editor/editor.ts", "editor/house-types.ts", "editor/north.ts", "editor/plan2d.ts", "editor/roomfind-apply.ts", "editor/roomfind-client.ts",
   "import/draft.ts", "import/names.ts", "import/roomplan.ts", "import/sh3d.ts", "import/simple.ts", "import/xml.ts", "import/zip.ts",
   "live/appliances.ts", "live/ev.ts", "live/locks.ts", "live/media.ts", "starters/houses.ts",
@@ -201,6 +201,9 @@ const NOT_TEXT: Record<string, string[]> = {
   // class lists and key names
   "editor/editor.ts": ['"ed-btn ghost small"', 'e.key === "Backspace"', '"ed-ib small vh-help"'],
   "editor/plan2d.ts": ['"ed-btn ghost small"', 'e.key === "Enter"', 'e.key === "Escape"', 'e.key === "Delete"'],
+  "ui/search.ts": ['e.key === "ArrowDown"', 'e.key === "Enter"', 'e.key === "Escape"'],
+  // a Unicode normal form
+  "ui/find.ts": ['normalize("NFD")'],
   "editor/roomfind-client.ts": ['new DOMException("Stopped", "AbortError")'],
   "editor/north.ts": ['method: "POST"'],
   "import/sh3d.ts": ['"Home.xml"'],

@@ -83,6 +83,17 @@ function walk(plan: Plan, visit: (use: Use, set: (to: string | null) => void) =>
       // what was unlinked leaves the label
       if (label.includes("")) s.label = label.filter(Boolean);
     }
+    // scenes and scripts picked for a sheet, or hidden from it
+    for (const s of [...f.rooms, ...(f.outdoor ?? [])]) {
+      for (const k of ["scenes", "hide_scenes"] as const) {
+        const list = s[k];
+        if (!Array.isArray(list)) continue;
+        list.forEach((e, i) => {
+          if (isEntityId(e)) visit({ entity: e, label: t("links.scene", { room: s.name }), area: s.area_id, device: false }, (to) => (list[i] = to ?? ""));
+        });
+        if (list.includes("")) s[k] = list.filter(Boolean);
+      }
+    }
     for (const o of f.openings) {
       const room = f.rooms.find((r) => r.id === o.room_id);
       const kind = OPENING_KINDS.find((k) => k === o.kind) ?? "passage";

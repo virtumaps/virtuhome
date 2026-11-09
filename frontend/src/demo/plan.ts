@@ -175,6 +175,8 @@ const bed2 = room("Bedroom 2", "bedroom_2", rect(2.3, 0, 6.25, 3.05), "carpet");
 const landing = room("Landing", "hallway", rect(0, 1.95, 2.3, 4.5), "carpet");
 const bed3 = room("Bedroom 3", "bedroom_3", rect(0, 4.5, 2.3, 7.4), "carpet");
 const bed1 = room("Bedroom 1", "bedroom", rect(2.3, 3.05, 6.25, 7.4), "carpet");
+// Goodnight is in no area: picked for the main bedroom's sheet
+bed1.scenes = ["script.goodnight"];
 
 const panels = (x: number, z: number, cols: number, rows: number, entity: string): RoofItem => ({
   id: id("pv"), kind: "solar", x, z, cols, rows, portrait: true, watts: 430, entity, ...solarSize({ cols, rows }),

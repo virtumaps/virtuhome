@@ -38,6 +38,9 @@ export interface Room {
   humidity?: string | null;
   /** What the label shows under the room's name, in order (null: its temperature and humidity). */
   label?: LabelPart[] | null;
+  /** Scenes and scripts picked for the room's sheet, shown first; and those of its area left out. */
+  scenes?: string[] | null;
+  hide_scenes?: string[] | null;
 }
 
 /**
@@ -228,6 +231,9 @@ export interface OutdoorArea {
   railing?: FenceStyle | null;
   /** What the label shows under the area's name, in order (null: nothing but a car that is here). */
   label?: LabelPart[] | null;
+  /** Scenes and scripts picked for its sheet, and those of its area left out (as a room's). */
+  scenes?: string[] | null;
+  hide_scenes?: string[] | null;
 }
 
 /** Steps down from a raised area: in the middle of an edge (points[edge] -> points[edge + 1]). */

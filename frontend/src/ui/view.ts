@@ -1,5 +1,5 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent, mdiPlay, mdiMagnify } from "@mdi/js";
 import { barChips, normalizePlan, spaces, type Plan, type Repair, type ThemeName } from "../model/plan";
 import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
@@ -11,6 +11,8 @@ import { BAND_COLOURS, BANDS, legendScale, type MapKind } from "../live/air";
 import type { ForecastHour } from "../live/warnings";
 import { alarmPanels, armModes, numericCode, openSensors, panelArea, wantsCode, whatSetItOff } from "../live/alarm";
 import { lockActions, needsCode } from "../live/locks";
+import type { SceneHost } from "./room-scenes";
+import type { SearchBox } from "./search";
 import { ICONS } from "../scene/markers";
 import { extensionFailures, extensionSources, loadExtensions, onSources, registerView, type Place, type SourceCheck, type ReplayOptions, type ReplaySession, type Tool, type ToolHandle, type ViewHandle } from "../ext/api";
 import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } from "../scene/viewer";
@@ -381,6 +383,7 @@ export class VhView {
       useRealistic: () => this.setGraphics("high"),
     });
     this.root.append(this.skyPanel.el);
+    this.addSearch();
     this.skyLive.onChange = () => this.updateSky();
     // the sun moves about a quarter of a degree a minute
     this.skyTimer = window.setInterval(() => this.updateSky(), 60_000);
@@ -1480,6 +1483,8 @@ export class VhView {
     window.clearInterval(this.statsTimer);
     window.clearInterval(this.todayTimer);
     this.barWatch?.disconnect();
+    window.removeEventListener("keydown", this.onSearchKey);
+    this.search?.close();
     this.viewer.dispose();
   }
 
@@ -2175,9 +2180,67 @@ export class VhView {
     this.empty.querySelector("p")!.textContent = text;
   }
 
+  // ------------------------------------------------------------------ search
+
+  private search: SearchBox | null = null;
+  private searchBtn: HTMLButtonElement | null = null;
+
+  /** The Search button, over the others (extensions add theirs above it); / or Ctrl+K opens it too. */
+  private addSearch(): void {
+    const b = document.createElement("button");
+    b.className = "vh-icon vh-find-btn";
+    b.title = t("view.tool.search");
+    b.setAttribute("aria-keyshortcuts", "/");
+    b.innerHTML = svg(mdiMagnify);
+    b.onclick = () => (this.search ? this.search.close() : void this.openSearch());
+    this.tools.prepend(b);
+    this.searchBtn = b;
+    window.addEventListener("keydown", this.onSearchKey);
+  }
+
+  /**
+   * / where nothing is typed, for the view on the screen (the first, with several); Ctrl+K (⌘K) too,
+   * unless Home Assistant took it first for its own search.
+   */
+  private onSearchKey = (e: KeyboardEvent): void => {
+    const k = e.key;
+    if (e.defaultPrevented || e.altKey || !(k === "/" ? !e.ctrlKey && !e.metaKey : (e.ctrlKey || e.metaKey) && k.toLowerCase() === "k")) return;
+    const at = e.composedPath()[0] as HTMLElement | undefined;
+    if (this.away || this.demo || this.editor || !this.root.getClientRects().length || (at && (/^(INPUT|TEXTAREA|SELECT)$/.test(at.tagName) || at.isContentEditable))) return;
+    e.preventDefault();
+    void this.openSearch();
+  };
+
+  private async openSearch(): Promise<void> {
+    if (this.search) return this.search.focus();
+    if (this.editor || this.replayed || !this.plan?.floors.length) return;
+    const m = await this.loadPart(() => import("./search"), "search");
+    if (!m || this.search || this.editor || this.destroyed) return;
+    this.closeSheet();
+    this.menu.hidden = true;
+    if (this.skyPanel.open) this.skyPanel.close();
+    this.search = m.openSearch({
+      root: this.root,
+      button: this.searchBtn!,
+      viewer: this.viewer,
+      hass: () => this._hass,
+      plan: () => this.plan,
+      go: (f, r) => !this.editor && (r >= 0 ? this.openRoom(f, r) : this.showFloor(f)),
+      dialog: (id) => this.dialog(id),
+      closed: () => {
+        this.search = null;
+        this.searchBtn?.focus();
+      },
+      icons: { find: svg(mdiMagnify), close: svg(mdiClose) },
+    });
+  }
+
   // ------------------------------------------------------------------ room sheet
 
   private tileHelpers: Promise<{ createCardElement(c: Record<string, unknown>): HTMLElement & { hass?: unknown } }> | null = null;
+  private scenesPart: typeof import("./room-scenes") | null = null;
+  private scenesAsked = false;
+  private sceneHost: SceneHost = { hass: () => this._hass, name: (id) => this.nameOf(id), dialog: (id) => this.dialog(id), toast: (text) => this.toast(text), icon: svg(mdiPlay).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"') };
 
   private renderSheet(): void {
     const hass = this._hass;
@@ -2190,7 +2253,19 @@ export class VhView {
     const here = hereText(this.config.people === false || this.replayed ? [] : this.live.roomPeople(floor, room).map((p) => p.name));
     const lights = this.live.roomLights(floor, room);
     const anyOn = lights.some((id) => hass.states[id]?.state === "on");
-    const key = `${room.id}|${ids.join(",")}|${anyOn}|${text}|${here}`;
+    // the room's scenes and scripts: their code is fetched when a sheet first opens
+    if (!this.scenesAsked) {
+      this.scenesAsked = true;
+      void this.loadPart(() => import("./room-scenes"), "scenes").then((m) => {
+        this.scenesPart = m;
+        if (!m || !this.sheetRoom) return;
+        this.sheet.dataset.key = "";
+        this.renderSheet();
+      });
+    }
+    const sc = this.replayed ? null : this.scenesPart;
+    const scenes = sc ? sc.sheetScenes(hass, floor, room.id) : [];
+    const key = `${room.id}|${ids.join(",")}|${anyOn}|${text}|${here}|${scenes.join(",")}`;
     if (this.sheet.dataset.key === key) {
       this.sheet.querySelectorAll<HTMLElement & { hass?: unknown }>("[data-tile]").forEach((t) => (t.hass = hass));
       this.updateRows(hass);
@@ -2214,6 +2289,7 @@ export class VhView {
       b.onclick = () => this.toggleRoomLights(this.sheetRoom!.floor, this.sheetRoom!.room);
       actions.appendChild(b);
     }
+    if (sc && scenes.length) sc.sceneButtons(this.sceneHost, scenes, actions as HTMLElement);
     const grid = this.sheet.querySelector(".vh-tiles")!;
     // the demo's devices are pretend: Home Assistant's tiles would open its own dialogs for them
     const helpers = this.config.demo ? undefined : (window as unknown as { loadCardHelpers?: () => Promise<never> }).loadCardHelpers;

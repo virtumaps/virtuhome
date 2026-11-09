@@ -23,6 +23,8 @@ _POINT = vol.All([_COORD], vol.Length(min=2, max=2))
 _ENTITY = vol.Any(None, vol.All(str, vol.Length(max=255)))
 # what a room's label shows: "temperature", "humidity" or entity ids, in order
 _LABEL = vol.Any(None, vol.All([vol.All(str, vol.Length(min=1, max=255))], vol.Length(max=8)))
+# scenes and scripts picked for a room's sheet, or hidden from it
+_SCENES = vol.Any(None, vol.All([vol.All(str, vol.Length(min=1, max=255))], vol.Length(max=50)))
 
 ROOM = vol.Schema(
     {
@@ -34,6 +36,8 @@ ROOM = vol.Schema(
         vol.Optional("temperature", default=None): _ENTITY,
         vol.Optional("humidity", default=None): _ENTITY,
         vol.Optional("label"): _LABEL,
+        vol.Optional("scenes"): _SCENES,
+        vol.Optional("hide_scenes"): _SCENES,
     },
     extra=vol.ALLOW_EXTRA,
 )

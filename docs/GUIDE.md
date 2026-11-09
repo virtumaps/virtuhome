@@ -97,6 +97,7 @@ The same view is in the sidebar and in every VirtuHome card.
 
 | Button | What it does |
 |---|---|
+| **Search** | Finds a room, device, piece of furniture or scene by name (see **Search** below) |
 | **Walls** | Steps through smart cutaway (walls between you and a room slide away), low, and full height. Its picture shows the mode |
 | **Roof** | Only when the house has a roof: takes the roofs off to look in from above, or puts them back. Each device remembers its own choice |
 | **Day / night** | Switches between the day and night looks. Normally the look follows the sun, and the picture fades from one to the other |
@@ -104,6 +105,22 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Show all** | Fits the house on the screen, with its garden, driveway and fences (a long garden is cut short, so the house stays big) |
 | **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm. With air quality sensors it is **Maps**, and each tap shows the next map (see **Maps** below) |
 | **Graphics** | Picks the graphics on this device (below) |
+
+**Search**
+- **Search** opens a box at the top: type a name such as "lamp", "kitchen" or "front door". It
+  finds rooms and garden areas, the devices in the plan and in the rooms' areas, furniture, and scenes
+  and scripts, by their names in Home Assistant, their aliases (as set for voice assistants), their
+  area's name and aliases, and their entity ids. Every word typed has to start a word of what it
+  finds. With nothing typed it lists the rooms, to tap one.
+- Tap a result, or pick one with the arrow keys and **Enter**. The view goes there and opens the
+  room's sheet, and a pulsing marker points out the device or piece of furniture for a few seconds. A
+  scene or script in no room (and on no room's sheet) opens its dialog instead.
+- On a keyboard, **/** opens it too, and so does **Ctrl+K** (⌘K on a Mac) where Home Assistant doesn't
+  use it for its own search. **Escape** closes it.
+- It is on dashboard cards and wall tablets too, for finding a room by touch. It isn't there while
+  editing.
+- With reduced motion turned on in the device's settings, the view jumps to a room or floor instead of
+  flying there (here and everywhere), and the marker holds still.
 
 **Help**
 - A **?** beside the close button of the room, energy, alarm and sun and weather sheets, and beside
@@ -166,9 +183,23 @@ whole-house view. Tap one for its dialog.
 - **Tap a lock's badge** on its door to lock or unlock it: it asks first (see
   [By hand](#by-hand)). Tap what a TV or speaker plays to play or pause it.
 - **Tap a room** to open it: in the house view this goes to its floor first. A sheet shows the
-  room's temperature, who is here and its devices, with **All lights on** / **All lights off**.
+  room's temperature, who is here and its devices, with **All lights on** / **All lights off** and
+  its scenes and scripts (below).
 - **Double-tap a room** to switch all its lights.
 - **Double-tap empty space** to go back to the whole house.
+
+**Scenes and scripts**
+- A room's sheet has a button for each scene and script of its Home Assistant area (given to the
+  scene or script, or to its device), beside **All lights on** / **All lights off**. A tap runs it
+  and says so: "Movie night: on".
+- A scene that locks or unlocks a door, arms or disarms the alarm, or opens a garage door or gate
+  asks first ("Run Leaving? It changes Front door.") and runs only on **Run**.
+- Scripts that need details to run (a field they can't do without) are left out. One you add
+  yourself opens its dialog, which asks for them.
+- Edit → **Selected**, with a room or garden area selected, → **Scenes and scripts** chooses them:
+  tap one to hide it, or tap it again to show it. **Add another** adds any scene or script, also one
+  in another area or in none (such as a Goodnight for the whole house); those you add come first. A
+  sheet shows up to 12.
 
 **Graphics** (the sliders button, under **Graphics on this device**):
 
