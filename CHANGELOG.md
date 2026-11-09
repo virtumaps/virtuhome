@@ -7,6 +7,13 @@
   (its own or its device's), and a tap runs it. A scene that locks, arms or opens a garage door asks
   first; scripts that need details are left out. Edit → **Selected** → **Scenes and scripts** hides
   some and adds others, also from another area or none.
+- **Search** (the magnifier over the buttons on the right, or **/** on a keyboard) finds a room,
+  device, piece of furniture or scene by its name in Home Assistant, an alias, its area or its entity
+  id. Picking one goes there, opens the room's sheet and points the device out with a pulsing marker.
+
+### Changed
+- With reduced motion turned on in the device's settings, the view jumps to a room or floor instead of
+  flying there.
 
 ## 0.18.0
 

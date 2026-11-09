@@ -1236,7 +1236,8 @@ export class Viewer {
   }
 
   private flyTo(pos: Vector3, target: Vector3, animate: boolean): void {
-    if (!animate) {
+    // with reduced motion the view jumps there
+    if (!animate || reducedMotion()) {
       this.camera.position.copy(pos);
       this.controls.target.copy(target);
       this.controls.update();

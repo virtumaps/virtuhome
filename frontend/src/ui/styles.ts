@@ -189,7 +189,7 @@ export const VIEW_CSS = /* css */ `
 .vh-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .vh-legend .ramp { display: flex; align-items: center; gap: 6px; }
 .vh-legend .ramp i { width: 90px; height: 8px; border-radius: 4px; margin: 0; }
-.vh-root.editing .vh-legend { display: none; }
+.vh-root.editing .vh-legend, .vh-root.editing .vh-find-btn { display: none; }
 @media (max-width: 600px) { .vh-root.mapped .vh-toast { bottom: 112px; } }
 .vh-updated {
   position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 40px);

@@ -97,6 +97,7 @@ The same view is in the sidebar and in every VirtuHome card.
 
 | Button | What it does |
 |---|---|
+| **Search** | Finds a room, device, piece of furniture or scene by name (see **Search** below) |
 | **Walls** | Steps through smart cutaway (walls between you and a room slide away), low, and full height. Its picture shows the mode |
 | **Roof** | Only when the house has a roof: takes the roofs off to look in from above, or puts them back. Each device remembers its own choice |
 | **Day / night** | Switches between the day and night looks. Normally the look follows the sun, and the picture fades from one to the other |
@@ -104,6 +105,22 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Show all** | Fits the house on the screen, with its garden, driveway and fences (a long garden is cut short, so the house stays big) |
 | **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm. With air quality sensors it is **Maps**, and each tap shows the next map (see **Maps** below) |
 | **Graphics** | Picks the graphics on this device (below) |
+
+**Search**
+- **Search** opens a box at the top: type a name such as "lamp", "kitchen" or "front door". It
+  finds rooms and garden areas, the devices in the plan and in the rooms' areas, furniture, and scenes
+  and scripts, by their names in Home Assistant, their aliases (as set for voice assistants), their
+  area's name and aliases, and their entity ids. Every word typed has to start a word of what it
+  finds. With nothing typed it lists the rooms, to tap one.
+- Tap a result, or pick one with the arrow keys and **Enter**. The view goes there and opens the
+  room's sheet, and a pulsing marker points out the device or piece of furniture for a few seconds. A
+  scene or script in no room (and on no room's sheet) opens its dialog instead.
+- On a keyboard, **/** opens it too, and so does **Ctrl+K** (⌘K on a Mac) where Home Assistant doesn't
+  use it for its own search. **Escape** closes it.
+- It is on dashboard cards and wall tablets too, for finding a room by touch. It isn't there while
+  editing.
+- With reduced motion turned on in the device's settings, the view jumps to a room or floor instead of
+  flying there (here and everywhere), and the marker holds still.
 
 **Help**
 - A **?** beside the close button of the room, energy, alarm and sun and weather sheets, and beside

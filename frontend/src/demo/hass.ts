@@ -53,7 +53,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     for (const o of floor.outdoor ?? []) if (o.area_id) areas[o.area_id] = { area_id: o.area_id, name: o.name, floor_id: floor.ha_floor ?? null };
     for (const room of floor.rooms) {
       if (!room.area_id) continue;
-      areas[room.area_id] = { area_id: room.area_id, name: room.name, floor_id: floor.ha_floor ?? null };
+      areas[room.area_id] = { area_id: room.area_id, name: room.name, floor_id: floor.ha_floor ?? null, aliases: AREA_ALIASES[room.area_id] ?? [] };
       // a climate sensor per area so the labels show something
       const t = `sensor.${room.area_id}_temperature`;
       put(t, (19 + Math.random() * 3).toFixed(1), { device_class: "temperature", unit_of_measurement: "°C" });
@@ -234,6 +234,10 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       if (msg.type === "virtuhome/checks" || msg.type === "virtuhome/checks/fix_card") {
         return { version: __VERSION__, dashboard: { mode: "storage", urls: [`/virtuhome_static/virtuhome-loader.js?v=${__VERSION__}`], current: true } } as T;
       }
+      // the search's aliases
+      if (msg.type === "config/entity_registry/get_entries") {
+        return Object.fromEntries((msg.entity_ids as string[]).map((id) => [id, entities[id] ? { entity_id: id, aliases: ALIASES[id] ?? [] } : null])) as T;
+      }
       if (msg.type === "config/entity_registry/list") {
         return Object.values(entities).map((e) => ({ id: regId(e.entity_id), entity_id: e.entity_id, device_id: e.device_id ?? null, area_id: e.area_id ?? null, platform: e.platform ?? "demo" })) as T;
       }
@@ -391,6 +395,10 @@ const DEMO_SCENES: [string, string | null, string][] = [
   ["scene.bedtime", "bedroom", "Bedtime"],
   ["script.goodnight", null, "Goodnight"],
 ];
+
+/** Aliases of a few entities and an area, as Home Assistant's voice settings give them, for the search. */
+const ALIASES: Record<string, string[]> = { "light.living_room_floor_lamp": ["Reading lamp"], "media_player.living_room_tv": ["Telly"], "scene.movie_night": ["Film night"] };
+const AREA_ALIASES: Record<string, string[]> = { hallway: ["Entrance"] };
 
 /** What each scene sets. */
 const SCENE_STATES: Record<string, Record<string, string>> = {
