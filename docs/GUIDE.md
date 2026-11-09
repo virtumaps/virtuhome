@@ -242,8 +242,8 @@ sidebar and in a card.
 
 **Reduced motion**: with reduce motion turned on in the device's settings, the view jumps to a room
 or floor instead of flying there, markers and the alert banner don't pulse, sheets appear without
-sliding, the day and night looks change without fading, and rain, snow, lightning, plants and fans
-hold still.
+sliding, the day and night looks change without fading, rain, snow, lightning, plants and fans
+hold still, and blinds, gates and awnings jump to where they are going.
 
 **Colours**: text on the buttons and labels is dark or light enough to read by day and by night,
 alerts say what is wrong in words as well as in red, and the [maps](#find-your-way-around) use
@@ -483,7 +483,15 @@ did, and how many devices are in areas without a room in the plan.
   on a stand) with what they see lit up to the first walls: red on motion, grey while offline. Set
   **View °** and **Reach m** if the usual view is wrong.
 - **Doors and windows:** tap one, then pick its **Sensor** (it opens in 3D when the sensor does) and,
-  for a window, its **Blind**, for a door, its **Lock**.
+  for a window, its **Blind**, for a door, its **Lock**. The blind goes up and down with its
+  position; one that reports a tilt (`current_tilt_position`) is drawn as a venetian blind, its
+  slats at that angle.
+- **Gates** open with a cover, lock, switch or contact sensor (see
+  [Fences and garden walls](#fences-and-garden-walls)), and **Awnings** run out with their cover (see
+  [Pergolas, sheds and planters](#pergolas-sheds-and-planters)). Tap one: it asks first, with what
+  it can do. Blinds, gates and awnings move only while they move: one that says where it is goes
+  there, one that only says it is opening or closing travels at about a gate's pace, and with
+  reduce motion turned on in the device's settings they jump.
 - **Smart locks** (Yale, Nuki, Ultion, Aqara, any `lock` in Home Assistant) go on their door with
   **Lock**. A badge on the door's handle side shows the lock: green while locked, orange while
   unlocked, red while jammed or when the door is open but its lock says locked (a deadbolt thrown
@@ -682,6 +690,12 @@ its **Style** for another of its kind, and set its **Colour**, size and **Turn**
 - **Post boxes** (Post box, Post box on a post, Parcel box): pick a **Post sensor** (a binary
   sensor, a sensor that counts post, or a toggle helper) and the post box's window glows while it
   holds post. Tap the post box to open the sensor.
+- **Awnings** (**Awning**): a folding-arm awning, its back against a wall (**Turn** it to face away
+  from the wall); its width, how far it reaches out (**Depth**), its fall (**Height**) and
+  **Above floor** (the bottom of its valance when it is out; raise it to sit on a pergola). **Colour**
+  colours the fabric. **Linked to** picks its cover: it runs out and back with the cover's
+  position, and a tap on it asks first, with **Open**, **Close**, **Stop**, a position slider (for a
+  cover that can be set to a position) and **Details**. Without a cover it is drawn out.
 
 ### Fences and garden walls
 
@@ -691,6 +705,13 @@ its **Style** for another of its kind, and set its **Colour**, size and **Turn**
   walls),
   height, **Colour**, **Posts**, the gravel board and a trellis on top, and its gates: **Add a gate**
   or **Add a driveway gate**, each with its place and width, single or **Double**.
+- Each gate **Swings** on hinges or **Slides** along the fence. **Flip hinge** hangs a single gate
+  on its other post, **Swing other way** swings it to the other side of the fence; a sliding gate
+  has **Slide the other way** and **Other side** (the side of the fence it runs along).
+- **Opener**: a cover (an electric gate), a lock, a switch or a contact sensor. The gate opens and
+  closes with it in 3D. Tap the gate and it asks first: a cover offers **Open**, **Close**, **Stop**
+  and a position slider (as the cover can), a lock **Lock**, **Unlock** and **Open** (with a
+  **Code** box when it needs one), a switch **Open** and **Close**; **Details** opens its dialog.
 
 ### The roof
 
@@ -719,6 +740,11 @@ roof a **Roof lantern**). Drag them along the roof once selected.
 - **Each (W)**: each panel's peak power. On a flat roof, **Tilt °** puts them on frames.
 - **Shines with**: the power sensor of their string (PV1, PV2…), so they shine with what it makes.
 - **Fill the slope**: as many as fit.
+
+**Roof windows:** **Centre-pivot** or **Conservation**, their size and colour, a **Sensor** (a
+contact sensor, or the window's opener: a cover such as a motorised roof window; it glows warm while
+open and counts in the rain warning) and a **Blind**, drawn under the glass with its position while
+the roofs show.
 
 ## Energy and car charging
 
