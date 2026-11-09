@@ -112,6 +112,29 @@ describe("a replay's clock", () => {
   });
 });
 
+describe("pulses that would last for hours", () => {
+  it("pulses music and a robot's run only as they start, and still shows them over the house", () => {
+    const live = new HassLive(plan());
+    const h = house();
+    const started = Date.parse("2026-10-17T13:02:00Z");
+    const at = new Date(started).toISOString();
+    h.states["media_player.kitchen"] = { entity_id: "media_player.kitchen", state: "playing", attributes: {}, last_changed: at, last_updated: at } as unknown as HassEntity;
+    h.states["vacuum.rob"] = { entity_id: "vacuum.rob", state: "cleaning", attributes: {}, last_changed: at, last_updated: at } as unknown as HassEntity;
+    live.update(h);
+    const speaker = { id: "d8", entity: "media_player.kitchen", x: 1, z: 1 };
+    const robot = { id: "d9", entity: "vacuum.rob", x: 2, z: 1 };
+    live.now = () => started + 30_000;
+    expect(live.marker(speaker)?.pulse).toBeGreaterThan(0);
+    expect(live.marker(robot)?.pulse).toBeGreaterThan(0);
+    // two hours of music or cleaning: no pulse (a wall tablet would draw all that time), still shown
+    live.now = () => started + 2 * 3_600_000;
+    for (const d of [speaker, robot]) {
+      expect(live.marker(d)?.pulse).toBe(0);
+      expect(live.marker(d)?.attention).toBe(true);
+    }
+  });
+});
+
 describe("the demo's pretend day", () => {
   const midnight = new Date(2026, 9, 14).getTime();
   const at = (h: number, m = 0) => midnight + (h * 60 + m) * 60_000;

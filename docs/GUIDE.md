@@ -542,8 +542,8 @@ did, and how many devices are in areas without a room in the plan.
   does: the programme or phase and the time left (**Eco 50 · 47 min left**), **Paused**, **Waiting
   to start**, **Done** or **Needs attention**. Nothing shows while it's off or idle.
 - **Robot vacuums and mowers** go at their dock (Smart Setup puts them in a corner of their room, a
-  mower on its lawn). Their pin shows what they do: blue and pulsing while cleaning or mowing, red
-  on an error. When something says where the robot is, it moves on the plan while it works and
+  mower on its lawn). Their pin shows what they do: blue while cleaning or mowing (pulsing as it
+  starts), red on an error. When something says where the robot is, it moves on the plan while it works and
   leaves a soft trail where it has been this run (gone again once it's back on its dock):
   - a map camera with the robot's position: the **Xiaomi Cloud Map Extractor**, or **MQTT Vacuum
     Camera** for Valetudo;
