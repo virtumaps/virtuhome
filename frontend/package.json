@@ -10,7 +10,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
     "shot": "node ../tools/shot.mjs",
-    "a11y": "node ../tools/a11y.mjs"
+    "a11y": "node ../tools/a11y.mjs",
+    "screenshots": "node ../tools/screenshots.mjs",
+    "visual": "node ../tests/visual/run.mjs"
   },
   "dependencies": {
     "@mdi/js": "^7.4.47",

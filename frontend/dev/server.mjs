@@ -12,7 +12,12 @@ const devNews = () => news(readFileSync(new URL("../../CHANGELOG.md", import.met
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".map": "application/json" };
 const devDir = new URL(".", import.meta.url).pathname;
 
-export async function startDevServer(outDir, port = 5173, fast = process.argv.includes("--fast")) {
+/**
+ * Builds the harness and serves it. `watch: false` builds once (the screenshot and visual check tools),
+ * port 0 takes any free port, and `version` is the version it says it is. Resolves once it listens,
+ * with the port and a way to stop it.
+ */
+export async function startDevServer(outDir, port = 5173, fast = process.argv.includes("--fast"), { watch = true, quiet = false, version = "dev" } = {}) {
   const ctx = await esbuild.context({
     entryPoints: { main: join(devDir, "main.ts"), "roomfind-worker": join(devDir, "../src/editor/roomfind-worker.ts") },
     outdir: join(devDir, "out"),
@@ -22,11 +27,12 @@ export async function startDevServer(outDir, port = 5173, fast = process.argv.in
     sourcemap: fast ? false : "inline",
     minify: fast,
     external: ["/dev/local.env.js"],
-    define: { __VERSION__: '"dev"', __DEV__: "true", __NEWS__: JSON.stringify(devNews()) },
-    logLevel: "info",
+    define: { __VERSION__: JSON.stringify(version), __DEV__: "true", __NEWS__: JSON.stringify(devNews()) },
+    logLevel: quiet ? "warning" : "info",
   });
-  await ctx.watch();
-  createServer(async (req, res) => {
+  if (watch) await ctx.watch();
+  else await ctx.rebuild();
+  const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     if (url.pathname === "/dev/local.env.js") {
       // live mode: Home Assistant URL and token from the environment, never from a file in the repo
@@ -47,7 +53,18 @@ export async function startDevServer(outDir, port = 5173, fast = process.argv.in
       res.writeHead(404);
       res.end("not found");
     }
-  }).listen(port, "127.0.0.1", () => console.log(`VirtuHome dev: http://127.0.0.1:${port}/`));
+  });
+  await new Promise((resolve) => server.listen(port, "127.0.0.1", resolve));
+  const at = server.address().port;
+  if (!quiet) console.log(`VirtuHome dev: http://127.0.0.1:${at}/`);
+  return {
+    port: at,
+    async close() {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+      await ctx.dispose();
+    },
+  };
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {

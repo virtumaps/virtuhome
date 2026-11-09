@@ -32,6 +32,8 @@
   alert banner, and buttons at night now have dark text on the light blue.
 - In the editor, the drawer keeps the focus on the field you changed, and **Close without saving?**
   and the other questions start on **Cancel** and close with **Escape**.
+- The pictures in the guide and the README show VirtuHome as it is now. They are made from the demo
+  home, so they no longer go out of date.
 
 ## 0.18.0
 
