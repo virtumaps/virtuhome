@@ -199,7 +199,8 @@ const SCANNED = [
 /** Strings in them that look like text but aren't shown to users. */
 const NOT_TEXT: Record<string, string[]> = {
   // class lists and key names
-  "editor/editor.ts": ['"ed-btn ghost small"', 'e.key === "Backspace"', '"ed-ib small vh-help"'],
+  "editor/editor.ts": ['"ed-btn ghost small"', 'e.key === "Backspace"', '"ed-ib small vh-help"', 'e.key !== "Escape"', '=== "LABEL"'],
+  "ui/view.ts": ['e.key !== "Escape"'],
   "editor/plan2d.ts": ['"ed-btn ghost small"', 'e.key === "Enter"', 'e.key === "Escape"', 'e.key === "Delete"'],
   "ui/search.ts": ['e.key === "ArrowDown"', 'e.key === "Enter"', 'e.key === "Escape"'],
   // a Unicode normal form

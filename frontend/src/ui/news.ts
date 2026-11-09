@@ -2,7 +2,7 @@
 // the changelog's New lines (taken at build time, dev/news.mjs), each linking to its part of the guide,
 // and Got it. Shown once per person per version; a first install shows nothing (all of it is new).
 // The lines are the changelog's own words, in English.
-import { esc, th } from "../i18n";
+import { esc, t, th } from "../i18n";
 import { guideAt } from "./guide";
 
 const KEY = "virtuhome.news";
@@ -76,6 +76,8 @@ export function showNews(root: HTMLElement, version: string, lines: { text: stri
   }
   const el = document.createElement("div");
   el.className = "vh-news";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", t("news.title", { version }));
   el.innerHTML = `<h3>${th("news.title", { version })}</h3><ul>${lines.map((l) =>
     `<li>${lineHtml(l.text)}${l.anchor ? ` <a href="${esc(guideAt(l.anchor))}" target="_blank" rel="noopener">${th("news.more")}</a>` : ""}</li>`).join("")}</ul>
     <div><a href="${esc(CHANGELOG_URL)}" target="_blank" rel="noopener">${th("news.all")}</a><button>${th("news.gotIt")}</button></div>`;
@@ -86,7 +88,7 @@ export function showNews(root: HTMLElement, version: string, lines: { text: stri
   root.append(el);
 }
 
-export const NEWS_CSS = `
+export const NEWS_CSS = /* css */ `
 .vh-news { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92%, 560px); max-height: 80%;
   overflow-y: auto; box-sizing: border-box; padding: 16px 18px; border-radius: 18px; background: var(--vh-glass); color: var(--vh-text);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 32px rgba(0,0,0,.35); font-size: 13px; line-height: 1.45; }
@@ -95,6 +97,6 @@ export const NEWS_CSS = `
 .vh-news a { color: var(--vh-accent); }
 .vh-news code { font-size: 12px; }
 .vh-news div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.vh-news button { border: 0; border-radius: 12px; padding: 7px 16px; background: var(--vh-accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.vh-news button { border: 0; border-radius: 12px; padding: 7px 16px; background: var(--vh-accent); color: var(--vh-on-accent); font: inherit; font-weight: 600; cursor: pointer; }
 `;
 

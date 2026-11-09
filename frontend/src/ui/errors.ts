@@ -215,8 +215,8 @@ const BOX_CSS = /* css */ `
 .vh-error [hidden] { display: none; }
 .day .vh-error { background: #e4e8ee; color: #1d232b; }
 .day .vh-error button, .day .vh-error textarea { background: rgba(0,0,0,0.06); }
-.day .vh-error button.main { background: #2f7cf6; color: #fff; }
-.day .vh-error small { color: #5a6573; }
+.day .vh-error button.main { background: #1a5fcc; color: #fff; }
+.day .vh-error small { color: #46505d; }
 `;
 
 /** Copies text: the clipboard where the page may use it, else the old way through a selected textarea. */

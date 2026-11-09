@@ -33,7 +33,7 @@ export const EDITOR_CSS = /* css */ `
 .ed-in option { color: #111; }
 .ed-grow { flex: 1; display: flex; min-width: 0; }
 .ed-btn {
-  border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; cursor: pointer; background: var(--vh-accent); color: #fff; font-weight: 600;
+  border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; cursor: pointer; background: var(--vh-accent); color: var(--vh-on-accent); font-weight: 600;
 }
 a.ed-btn { display: inline-block; text-decoration: none; }
 .ed-btn.ghost { background: var(--vh-chip); color: var(--vh-text); font-weight: 500; }
@@ -42,7 +42,7 @@ a.ed-btn { display: inline-block; text-decoration: none; }
 .ed-ib { width: 34px; height: 34px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--vh-chip); color: var(--vh-text); cursor: pointer; padding: 0; }
 .ed-ib.small { width: 28px; height: 28px; }
 .ed-ib svg, .ed-save svg { width: 18px; height: 18px; fill: currentColor; }
-.ed-save { display: inline-flex; gap: 6px; align-items: center; border: 0; border-radius: 17px; padding: 7px 12px; background: var(--vh-accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.ed-save { display: inline-flex; gap: 6px; align-items: center; border: 0; border-radius: 17px; padding: 7px 12px; background: var(--vh-accent); color: var(--vh-on-accent); font: inherit; font-weight: 600; cursor: pointer; }
 .ed-save:disabled { background: rgba(127,127,127,0.32); color: rgba(255,255,255,0.7); cursor: default; }
 .ed-hb {
   display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 17px; padding: 6px 10px 6px 8px;

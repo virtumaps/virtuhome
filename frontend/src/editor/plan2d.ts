@@ -160,6 +160,7 @@ export class Plan2D {
     this.input = document.createElement("input");
     this.input.className = "p2-input";
     this.input.hidden = true;
+    this.input.setAttribute("aria-label", t("editor.length"));
     this.panel = document.createElement("div");
     this.panel.className = "p2-panel";
     this.panel.hidden = true;
@@ -1888,7 +1889,7 @@ export const PLAN2D_CSS = /* css */ `
 .p2-group { display: flex; gap: 2px; padding: 3px; border-radius: 14px; background: var(--vh-glass); box-shadow: 0 1px 6px rgba(0,0,0,0.16); pointer-events: auto; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .p2-tool { width: 34px; height: 34px; border: 0; border-radius: 11px; background: none; color: var(--vh-text); display: grid; place-items: center; cursor: pointer; padding: 0; }
 .p2-tool svg { width: 20px; height: 20px; fill: currentColor; }
-.p2-tool.on { background: var(--vh-accent); color: #fff; }
+.p2-tool.on { background: var(--vh-accent); color: var(--vh-on-accent); }
 .p2-floor { border: 0; border-radius: 11px; background: none; color: var(--vh-text); font: inherit; font-size: 12px; padding: 0 10px; cursor: pointer; }
 .p2-floor.on { background: var(--vh-chip-on); font-weight: 600; }
 .p2-bg image { pointer-events: none; }
