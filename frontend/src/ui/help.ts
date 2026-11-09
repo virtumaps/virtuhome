@@ -62,7 +62,7 @@ export function helpLink(anchor: string, cls = "vh-icon vh-help"): string {
   return `<a class="${cls}" href="${esc(guideAt(anchor))}" target="_blank" rel="noopener" title="${th("view.help")}" aria-label="${th("view.help")}"><svg viewBox="0 0 24 24"><path d="${mdiHelpCircleOutline}"/></svg></a>`;
 }
 
-export const HINT_CSS = `
+export const HINT_CSS = /* css */ `
 .vh-hint { position: absolute; z-index: 7; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
   max-width: min(92%, 420px); padding: 8px 8px 8px 14px; border-radius: 14px; background: rgba(14,20,32,.86); color: #eef3fb;
   font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.3); }

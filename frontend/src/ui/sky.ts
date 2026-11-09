@@ -67,6 +67,9 @@ export class SkyPanel {
     this.el = document.createElement("div");
     this.el.className = "vh-sky";
     this.el.hidden = true;
+    this.el.tabIndex = -1;
+    this.el.setAttribute("role", "dialog");
+    this.el.setAttribute("aria-label", t("sky.title"));
     this.el.addEventListener("input", (e) => {
       const t = e.target as HTMLInputElement;
       if (t.dataset.k === "date") this.yday = Number(t.value);
@@ -180,16 +183,16 @@ export class SkyPanel {
     }
     const yearDay = (month: number, day: number) => Math.round((Date.UTC(now.year, month, day) - Date.UTC(now.year, 0, 1)) / 86_400_000);
     const chip = (a: string, v: string, label: string, on: boolean) =>
-      `<button class="vh-chip${on ? " on" : ""}" data-a="${a}" data-v="${v}">${esc(label)}</button>`;
+      `<button class="vh-chip${on ? " on" : ""}" data-a="${a}" data-v="${v}" aria-pressed="${on}">${esc(label)}</button>`;
     const days: [string, number][] = [[t("sky.midwinter"), yearDay(11, 21)], [t("sky.spring"), yearDay(2, 20)], [t("sky.midsummer"), yearDay(5, 21)], [t("sky.autumn"), yearDay(8, 22)]];
     const times: [string, number | null][] = events ? [[t("sky.sunrise"), events.rise], [t("sky.noon"), events.noon], [t("sky.sunset"), events.set]] : [];
     const weatherNow = this.weather ?? (this.time() !== null ? "clear" : null);
     if (!this.el.firstChild) {
       this.el.innerHTML = `
         <h3>${th("sky.title")}${helpLink("sun-and-weather")}<button class="vh-icon" data-a="close" title="${th("sky.back")}">${svg(mdiClose)}</button></h3>
-        <div class="vh-sky-row"><label>${th("sky.date")}</label><input type="range" min="0" max="365" step="1" data-k="date"><b data-l="date"></b></div>
+        <div class="vh-sky-row"><label>${th("sky.date")}</label><input type="range" min="0" max="365" step="1" data-k="date" aria-label="${th("sky.date")}"><b data-l="date"></b></div>
         <div class="vh-sky-chips" data-c="date"></div>
-        <div class="vh-sky-row"><label>${th("sky.time")}</label><input type="range" min="0" max="1435" step="5" data-k="time"><b data-l="time"></b></div>
+        <div class="vh-sky-row"><label>${th("sky.time")}</label><input type="range" min="0" max="1435" step="5" data-k="time" aria-label="${th("sky.time")}"><b data-l="time"></b></div>
         <div class="vh-sky-chips" data-c="time"></div>
         <div class="vh-sky-chips weather" data-c="weather"></div>
         <div class="vh-sky-info"></div>`;
@@ -201,8 +204,13 @@ export class SkyPanel {
     const focused = (this.el.getRootNode() as Document | ShadowRoot).activeElement;
     if (focused !== dateIn || this.yday === null) dateIn.value = String(yday);
     if (focused !== timeIn || this.minutes === null || this.playTimer) timeIn.value = String(minutes);
-    q('[data-l="date"]').textContent = fmt({ day: "numeric", month: "short" }, shown);
-    q('[data-l="time"]').textContent = fmt({ hour: "numeric", minute: "2-digit" }, shown);
+    // the sliders say the date and time they stand for, not the day of the year or minute of the day
+    const day = fmt({ day: "numeric", month: "short" }, shown);
+    const clock = fmt({ hour: "numeric", minute: "2-digit" }, shown);
+    q('[data-l="date"]').textContent = day;
+    q('[data-l="time"]').textContent = clock;
+    dateIn.setAttribute("aria-valuetext", day);
+    timeIn.setAttribute("aria-valuetext", clock);
     const html = (sel: string, h: string) => {
       const e = q(sel);
       if (e.innerHTML !== h) e.innerHTML = h;

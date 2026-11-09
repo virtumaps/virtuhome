@@ -2,6 +2,7 @@
 import { mdiMenu } from "@mdi/js";
 import type { Hass } from "../live/hass";
 import { failedView } from "./errors";
+import { t } from "../i18n";
 import { ViewHost } from "./host";
 import { VhView } from "./view";
 
@@ -27,6 +28,7 @@ export class PanelImpl extends ViewHost {
     this.menu = document.createElement("button");
     this.menu.className = "menu";
     this.menu.innerHTML = `<svg viewBox="0 0 24 24"><path d="${mdiMenu}"/></svg>`;
+    this.menu.title = t("view.menu");
     this.menu.onclick = () => host.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
     const viewHost = document.createElement("div");
     viewHost.className = "host";
