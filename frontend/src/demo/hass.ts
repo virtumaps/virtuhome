@@ -37,6 +37,13 @@ export interface DemoOptions {
 /** The pretend Home Assistant; stop() ends what happens by itself. */
 export type DemoHass = Hass & { stop(): void };
 
+/** The demo's covers that aren't plain blinds: the driveway gate (no position), the awning, a venetian blind. */
+const COVERS: Record<string, [string, HassEntity["attributes"]]> = {
+  "cover.driveway_gate": ["closed", { device_class: "gate", supported_features: 11 }],
+  "cover.patio_awning": ["open", { device_class: "awning", supported_features: 15, current_position: 80 }],
+  "cover.living_room_blind": ["open", { device_class: "blind", supported_features: 255, current_position: 30, current_tilt_position: 50 }],
+};
+
 export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOptions = {}): DemoHass {
   const place = opts.place ?? { latitude: 51.5072, longitude: -0.1276, time_zone: "Europe/London" };
   const sun = sunPosition(Date.now(), place.latitude, place.longitude);
@@ -86,6 +93,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       ...floor.devices.map((d) => [d.entity, roomArea(d.x, d.z)] as [string, string | null]),
       ...floor.furniture.flatMap((f) => linkedEntities(f).map((e) => [e, roomArea(f.x, f.z)] as [string, string | null])),
       ...floor.openings.flatMap((o) => [o.entity, o.cover, o.lock].filter(Boolean).map((e) => [e!, floor.rooms.find((r) => r.id === o.room_id)?.area_id ?? null] as [string, string | null])),
+      ...(floor.fences ?? []).flatMap((x) => (x.gates ?? []).flatMap((g) => (g.entity ? [[g.entity, null] as [string, string | null]] : []))),
     ];
     for (const [id, area] of ids) {
       if (states[id]) continue;
@@ -109,7 +117,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
       else if (dom === "fan") put(id, "on", { percentage: 66, percentage_step: 33.33 });
       else if (dom === "valve") put(id, "open", { current_position: 100 });
       else if (dom === "water_heater") put(id, "eco", { current_temperature: 52, temperature: 55, min_temp: 40, max_temp: 65, operation_mode: "eco" });
-      else if (dom === "cover") put(id, "open", { current_position: 60 });
+      else if (dom === "cover") put(id, ...(COVERS[id] ?? ["open", { current_position: 60 }]));
       else if (dom === "device_tracker") put(id, "home", { source_type: "router" })
       else if (dom === "switch") put(id, /coffee/.test(id) ? "off" : "on")
       else if (dom === "sensor" && /temperature/.test(id)) put(id, (9 + Math.random() * 5).toFixed(1), { device_class: "temperature", unit_of_measurement: "°C" });
@@ -121,6 +129,10 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
         if (it.kind === "solar") put(it.entity, "0", { device_class: "power", unit_of_measurement: "kW" });
         else put(it.entity, "off", { device_class: "window" });
         entities[it.entity] = { entity_id: it.entity, area_id: null };
+      }
+      if (it.cover && !states[it.cover]) {
+        put(it.cover, "open", { device_class: "blind", supported_features: 15, current_position: 40 });
+        entities[it.cover] = { entity_id: it.cover, area_id: null };
       }
     }
   }
@@ -212,6 +224,14 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
         touched.set(id, Date.now());
         const s = states[id];
         if (!s) continue;
+        // covers take their time: opening, then open
+        if (domain === "cover") {
+          const pos = s.attributes.current_position;
+          if (service === "stop_cover") stopCover(id);
+          else if (service === "set_cover_tilt_position") states[id] = { ...s, attributes: { ...s.attributes, current_tilt_position: Number(_data?.tilt_position ?? 50) } };
+          else moveCover(id, service === "set_cover_position" ? Number(_data?.position ?? 0) : service === "open_cover" ? 100 : service === "close_cover" ? 0 : (typeof pos === "number" ? pos > 0 : s.state === "open") ? 0 : 100);
+          continue;
+        }
         let next = s.state;
         if (service === "toggle") next = s.state === "on" || s.state === "open" ? (domain === "cover" ? "closed" : "off") : domain === "cover" ? "open" : "on";
         if (service === "turn_on") next = "on";
@@ -220,7 +240,6 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
         if (service === "media_play_pause") next = s.state === "playing" ? "paused" : "playing";
         const attrs = { ...s.attributes };
         if (domain === "light" && next === "on" && attrs.brightness === undefined) Object.assign(attrs, { brightness: 220, color_temp_kelvin: 2900 });
-        if (domain === "cover") attrs.current_position = next === "open" ? 100 : 0;
         states[id] = { ...s, state: next, attributes: attrs, last_changed: new Date().toISOString() };
       }
       Object.assign(hass, { states: { ...states } });
@@ -284,6 +303,44 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     entities[id] = { entity_id: id, area_id: reg.area ?? null, device_id: reg.device ?? null };
     publish();
   };
+  /**
+   * A cover moving to `to` (0..100): opening or closing, its position in steps of 5 every half second
+   * when it has one, else open or closed after 12 s. The latest move or stop wins.
+   */
+  const moves = new Map<string, number>();
+  const show = () => {
+    Object.assign(hass, { states: { ...states } });
+    onChange({ ...hass, states: { ...states } });
+  };
+  const setCover = (id: string, state: string, attrs: HassEntity["attributes"] = {}) => {
+    const s = states[id];
+    const at = new Date().toISOString();
+    states[id] = { ...s, state, attributes: { ...s.attributes, ...attrs }, last_changed: s.state === state ? s.last_changed : at, last_updated: at };
+  };
+  function moveCover(id: string, to: number): void {
+    const s = states[id];
+    const known = typeof s.attributes.current_position === "number";
+    let pos = known ? Number(s.attributes.current_position) : s.state === "open" ? 100 : 0;
+    if (pos === to) return;
+    const token = (moves.get(id) ?? 0) + 1;
+    moves.set(id, token);
+    const dir = to > pos ? 1 : -1;
+    setCover(id, dir > 0 ? "opening" : "closing");
+    const tick = () => {
+      if (moves.get(id) !== token) return;
+      pos = known ? pos + dir * Math.min(5, Math.abs(to - pos)) : to;
+      if (pos === to) setCover(id, to > 0 ? "open" : "closed", known ? { current_position: to } : {});
+      else setCover(id, dir > 0 ? "opening" : "closing", { current_position: pos });
+      show();
+      if (pos !== to) later(500, tick);
+    };
+    later(known ? 500 : 12_000, tick);
+  }
+  function stopCover(id: string): void {
+    moves.set(id, (moves.get(id) ?? 0) + 1);
+    const s = states[id];
+    if (s.state === "opening" || s.state === "closing") setCover(id, typeof s.attributes.current_position === "number" && s.attributes.current_position === 0 ? "closed" : "open");
+  }
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const later = (ms: number, fn: () => void) => {
     const t = setTimeout(() => {
@@ -292,10 +349,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     }, ms);
     timers.add(t);
   };
-  if (opts.lively) later(2500, () => liven(states, areas, touched, later, () => {
-    Object.assign(hass, { states: { ...states } });
-    onChange({ ...hass, states: { ...states } });
-  }));
+  if (opts.lively) later(2500, () => liven(states, areas, touched, later, show, moveCover));
   return Object.assign(hass, {
     stop() {
       for (const t of timers) clearTimeout(t);
@@ -310,7 +364,7 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
  */
 function liven(
   states: Record<string, HassEntity>, areas: NonNullable<Hass["areas"]>, touched: Map<string, number>,
-  later: (ms: number, fn: () => void) => void, show: () => void,
+  later: (ms: number, fn: () => void) => void, show: () => void, moveCover: (id: string, to: number) => void,
 ): void {
   const recent = (id: string) => Date.now() - (touched.get(id) ?? 0) < 60_000;
   const free = (re: RegExp) => Object.keys(states).filter((id) => re.test(id) && !recent(id));
@@ -341,9 +395,11 @@ function liven(
       if (id) set(id, states[id].state === "on" ? "off" : "on", { brightness: 200, color_temp_kelvin: 2800 });
     },
     () => {
+      // a blind, the awning or the gate moves; a venetian blind may only turn its slats
       const id = pick(free(/^cover\./));
-      const open = id && states[id].state !== "open";
-      if (id) set(id, open ? "open" : "closed", { current_position: open ? 100 : 0 });
+      if (!id || /ing$/.test(states[id].state)) return;
+      if (typeof states[id].attributes.current_tilt_position === "number" && Math.random() < 0.5) set(id, states[id].state, { current_tilt_position: pick([0, 50, 100])! });
+      else moveCover(id, states[id].state === "closed" ? 100 : 0);
     },
     () => {
       for (const id of free(/^sensor\..*_temperature$/)) {
