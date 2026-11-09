@@ -9,7 +9,8 @@
     "site": "node dev/site.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
-    "shot": "node ../tools/shot.mjs"
+    "shot": "node ../tools/shot.mjs",
+    "screenshots": "node ../tools/screenshots.mjs"
   },
   "dependencies": {
     "@mdi/js": "^7.4.47",

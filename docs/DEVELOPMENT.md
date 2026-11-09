@@ -107,6 +107,32 @@ line of its own as a link, `[What it shows](clips/name.mp4)`; a picture with the
 (`clips/name.jpg`) shows until it plays. Comments aside, the site shows HTML in the guide as text,
 so the guide is Markdown only. `npm run site -- --serve` shows it on http://127.0.0.1:5180/virtuhome/.
 
+## Screenshots
+
+The guide's and the README's pictures are made from the demo home with one command, so they show
+VirtuHome as it is now. After `npm ci` and `npx playwright-core install chromium` in `frontend/`:
+
+```bash
+npm run screenshots              # all of them, into docs/screenshots/
+npm run screenshots -- night day # the ones named
+```
+
+`tools/screenshots.mjs` lists each picture: its window size, the dev harness's address
+(`theme=night&floor=0&quality=ultra`), the time, and the clicks that lead to it (opening the
+editor, picking a house type, importing the test Sweet Home 3D home, tracing the test floor plan
+picture). `tools/render.mjs` makes them the same every time: the clock stands at a fixed time (the
+sun, the sky and day or night with it), the demo's random values come from a fixed seed, the window
+and pixel ratio are fixed, no hints show, and an animated camera flight is jumped to its end. It
+draws in software WebGL (SwiftShader), as CI does; `--gpu` uses the graphics card instead, which is
+quicker but not quite the same to the pixel. Text is in the computer's own fonts, so make them on a
+Mac for pictures like the ones there.
+
+[docs/screenshots/README.md](screenshots/README.md) says what each picture shows. When a change
+alters what a picture shows, run it again and look at the result before committing; a new picture
+for the guide gets an entry in `SHOTS`, a line in that list, and a place in the guide. `npm test`
+fails if the guide or the README shows a picture that isn't there, or a picture isn't made by the
+command or listed.
+
 ## Text and translations
 
 Every text a user sees or hears in the frontend (labels, buttons, titles and `aria-label`s, toasts,

@@ -14,6 +14,8 @@
 ### Changed
 - With reduced motion turned on in the device's settings, the view jumps to a room or floor instead of
   flying there.
+- The pictures in the guide and the README show VirtuHome as it is now. They are made from the demo
+  home, so they no longer go out of date.
 
 ## 0.18.0
 
