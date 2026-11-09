@@ -1,8 +1,9 @@
 // End-to-end test against a real Home Assistant: starts one with VirtuHome (tests/e2e/ha.py), saves
 // the plan fixtures through VirtuHome's WebSocket API and checks in headless Chrome that each one
-// draws in the panel, that the editor opens and a save survives a reload, that the demo home opens
-// without saving or calling a service, that a dashboard card draws, and that the diagnostics
-// download works without names from the plan in it.
+// draws in the panel, that the editor opens and a save survives a reload, that axe-core finds no
+// serious accessibility problems in the panel and a card, that the demo home opens without saving or
+// calling a service, that a dashboard card draws, and that the diagnostics download works without
+// names from the plan in it.
 //
 //   node tests/e2e/run.mjs --python <the Python Home Assistant is installed in> [--port 8131]
 //                          [--dir <new folder for the config, logs and screenshots>] [--chrome <path>]
@@ -17,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import esbuild from "../../frontend/node_modules/esbuild/lib/main.js";
 import { chromium } from "../../frontend/node_modules/playwright-core/index.mjs";
+import { axeReport, axeRun } from "../../tools/axe.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -187,6 +189,15 @@ const waitDrawn = (page, selector, drawn = true, timeout = 60_000) =>
     return { ...p, ok: p.drawn === drawn };
   }, drawn ? `${selector} drew no house` : `${selector} did not show an empty view`, timeout);
 
+/**
+ * axe-core on the page: what it finds in VirtuHome's element (Home Assistant's own frontend is not
+ * ours to check). Throws on serious or critical problems.
+ */
+async function noSeriousProblems(page, element) {
+  const { lines, count } = axeReport(await axeRun(page), false, new RegExp(`\\b${element}\\b`));
+  check(!count, `axe found ${count} serious or critical problems:\n${lines.join("\n")}`);
+}
+
 // ------------------------------------------------------------------ plans
 
 /** The frontend's normalizePlan, bundled from the sources. */
@@ -310,6 +321,22 @@ async function run() {
     check(now.revision === saved.revision && canonical(now.plan) === canonical(saved.plan), "opening the editor changed the stored plan");
   });
 
+  await step("axe finds no serious problems in the panel, its List, a room and the editor", async () => {
+    await page.reload();
+    await waitDrawn(page, panel);
+    await noSeriousProblems(page, panel);
+    await page.locator(`${panel} [data-act="list"]`).click();
+    await page.locator(`${panel} .vh-list .vh-row`).first().waitFor({ state: "visible", timeout: 30_000 });
+    await noSeriousProblems(page, panel);
+    await page.locator(`${panel} .vh-list .vh-row`).first().click();
+    await page.waitForTimeout(1000);
+    await noSeriousProblems(page, panel);
+    await page.locator(`${panel} .vh-edit`).click();
+    await page.locator(`${panel} .ed-save`).waitFor({ state: "visible", timeout: 30_000 });
+    await noSeriousProblems(page, panel);
+    await page.locator(`${panel} .ed-head button[title="Close"]`).click();
+  });
+
   await step("The demo home opens from Edit → Home, saves nothing, calls no service and closes back to the home", async () => {
     const saved = await ws.call({ type: "virtuhome/plan/get" });
     // everything the page sends Home Assistant from here on
@@ -354,7 +381,8 @@ async function run() {
     await page.goto(`${url}/${DASHBOARD}/0`);
     const p = await waitDrawn(page, "virtuhome-card");
     await page.screenshot({ path: join(shots, "card.png") });
-    return `${p.share}% of the view drawn`;
+    await noSeriousProblems(page, "virtuhome-card");
+    return `${p.share}% of the view drawn, and axe finds no serious problems in it`;
   });
 
   await step("An error report from the frontend is kept, without names", async () => {

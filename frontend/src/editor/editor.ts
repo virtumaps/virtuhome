@@ -53,6 +53,7 @@ import { extensionSources, onSources } from "../ext/api";
 import { logError } from "../ui/errors";
 import { cardOnDashboard, setupComplete, setupItems, showChecklist, type SetupId, type SetupItem, type StartKind } from "../ui/setup";
 import { guideAt, guideLink } from "../ui/guide";
+import { focused, focusOn, keepFocus } from "../ui/a11y";
 import type { PlainKey } from "../i18n";
 import { t, th, type EditorPlainKey } from "../i18n/editor";
 import { EDITOR_CSS } from "./styles";
@@ -146,6 +147,25 @@ function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, 
   }
   for (const c of children) if (c !== null && c !== undefined && c !== false) el.append(c);
   return el;
+}
+
+/**
+ * Fields with no name of their own are named by the label just before them (or before the box
+ * they are in), else a list by its first, empty choice ("Pick another…"), so a screen reader says
+ * what each one is.
+ */
+export function nameFields(box: ParentNode): void {
+  box.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach((el) => {
+    if (el.type === "file" || el.getAttribute("aria-label") || el.title || (el as HTMLInputElement).placeholder) return;
+    for (const at of [el, el.parentElement]) {
+      let p = at?.previousElementSibling;
+      while (p && !/^(LABEL|INPUT|SELECT)$/.test(p.tagName)) p = p.previousElementSibling;
+      if (p?.tagName === "LABEL") return el.setAttribute("aria-label", p.textContent!.trim());
+      if (p) break;
+    }
+    const first = (el as HTMLSelectElement).options?.[0];
+    if (first && !first.value && first.text) el.setAttribute("aria-label", first.text);
+  });
 }
 
 export interface EditorHost {
@@ -284,15 +304,18 @@ export class Editor {
 
   private modeButtons(): HTMLButtonElement[] {
     this.modeBtns = [
-      h("button", { class: "ed-mode on", onclick: () => this.setPlanMode(false) }, t("editor.main.view3d")),
-      h("button", { class: "ed-mode", onclick: () => this.setPlanMode(true) }, t("editor.main.plan2d")),
+      h("button", { class: "ed-mode on", "aria-pressed": "true", onclick: () => this.setPlanMode(false) }, t("editor.main.view3d")),
+      h("button", { class: "ed-mode", "aria-pressed": "false", onclick: () => this.setPlanMode(true) }, t("editor.main.plan2d")),
     ];
     return this.modeBtns;
   }
 
   /** Shows the 2D plan with measurements over the 3D view, or goes back to 3D. */
   private setPlanMode(on: boolean): void {
-    this.modeBtns.forEach((b, i) => b.classList.toggle("on", (i === 1) === on));
+    this.modeBtns.forEach((b, i) => {
+      b.classList.toggle("on", (i === 1) === on);
+      b.setAttribute("aria-pressed", String((i === 1) === on));
+    });
     const root = this.host.view.root;
     root.classList.toggle("plan2d", on);
     if (on && !this.plan2d) {
@@ -860,14 +883,19 @@ export class Editor {
   }
 
   private render(): void {
-    this.el.querySelectorAll<HTMLElement>(".ed-tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === this.tab));
+    this.el.querySelectorAll<HTMLElement>(".ed-tab").forEach((b) => {
+      b.classList.toggle("on", b.dataset.tab === this.tab);
+      b.setAttribute("aria-pressed", String(b.dataset.tab === this.tab));
+    });
     this.el.querySelector<HTMLAnchorElement>(".ed-help a")?.setAttribute("href", guideAt(TAB_HELP[this.tab]));
-    this.body.replaceChildren(
+    // drawn again after every change: the focus stays on the field or button that had it
+    keepFocus(this.body, () => this.body.replaceChildren(
       this.tab === "home" ? this.homeTab() :
       this.tab === "rooms" ? this.roomsTab() :
       this.tab === "devices" ? this.devicesTab() :
       this.tab === "extensions" ? this.extensionsTab() : this.selectedTab(),
-    );
+    ));
+    nameFields(this.body);
     this.status.textContent = this.savedText();
   }
 
@@ -1075,6 +1103,8 @@ export class Editor {
       const p = proposals.get(m.entity);
       const others = this.entities((id) => domainOf(id) === domainOf(m.entity));
       const unlink: [string, string] = ["-", m.uses.every((u) => u.device) ? t("editor.removeFromPlan") : t("editor.relink.unlink")];
+      const pick = this.dropdown([unlink, ...others], "", (v) => v && relink([[m.entity, v === "-" ? null : v]]), t("editor.relink.pickAnother"));
+      pick.setAttribute("aria-label", `${m.uses[0].label}: ${t("editor.relink.pickAnother")}`);
       return h("div", { class: "ed-card" },
         h("div", { class: "ed-row" }, h("b", {}, m.uses[0].label), m.uses.length > 1 ? h("small", {}, `and ${m.uses.length - 1} more`) : null),
         h("small", { class: "ed-id" }, m.entity),
@@ -1082,7 +1112,7 @@ export class Editor {
           h("span", { class: "ed-col" }, `${p.why === "renamed" ? t("editor.relink.renamed") : t("editor.relink.likely")}: ${name(p.entity)}`, h("small", { class: "ed-id" }, p.why === "renamed" ? p.entity : `${p.entity} · ${why[p.why]}`)),
           h("button", { class: "ed-btn small", onclick: () => relink([[m.entity, p.entity]]) }, t("editor.relink.relink")),
         ) : registry !== undefined ? h("p", { class: "ed-hint" }, t("editor.relink.nothingLikeItFound")) : null,
-        h("div", { class: "ed-row" }, this.dropdown([unlink, ...others], "", (v) => v && relink([[m.entity, v === "-" ? null : v]]), t("editor.relink.pickAnother"))),
+        h("div", { class: "ed-row" }, pick),
       );
     });
     const out: (HTMLElement | null)[] = [
@@ -1471,7 +1501,7 @@ export class Editor {
     const haFloors = Object.values(this.hass.floors ?? {});
     return h("div", { class: "ed-card" },
       h("div", { class: "ed-row" },
-        h("input", { class: "ed-in", value: f.name, onchange: (e: Event) => this.change((p) => (p.floors[i].name = (e.target as HTMLInputElement).value)) }),
+        h("input", { class: "ed-in", value: f.name, "aria-label": t("editor.outdoor.name"), onchange: (e: Event) => this.change((p) => (p.floors[i].name = (e.target as HTMLInputElement).value)) }),
         this.plan.floors.length > 1 ? h("button", { class: "ed-ib small", title: t("editor.removeName", { name: f.name }), html: svg(mdiDelete), onclick: () => this.removeFloor(i) }) : null,
       ),
       h("div", { class: "ed-row" },
@@ -1577,7 +1607,7 @@ export class Editor {
       f.rooms.forEach((r, ri) => {
         box.append(h("div", { class: `ed-card ${this.sel?.kind === "room" && this.sel.id === r.id ? "on" : ""}` },
           h("div", { class: "ed-row" },
-            h("input", { class: "ed-in", value: r.name, onchange: (e: Event) => this.change((p) => (p.floors[fi].rooms[ri].name = (e.target as HTMLInputElement).value)) }),
+            h("input", { class: "ed-in", value: r.name, "aria-label": t("editor.outdoor.name"), onchange: (e: Event) => this.change((p) => (p.floors[fi].rooms[ri].name = (e.target as HTMLInputElement).value)) }),
             h("button", { class: "ed-btn ghost small", onclick: () => {
               this.host.view.viewer.selectRoom(fi, ri);
               this.select({ floor: fi, kind: "room", id: r.id });
@@ -3423,17 +3453,29 @@ export class Editor {
 
   /** An in-page confirmation (browser dialogs would block a wall tablet's view). */
   private confirm(text: string, action: string, onYes: () => void | Promise<void>): void {
-    const box = h("div", { class: "ed-confirm" },
+    // the focus goes to Cancel (Escape cancels too) and back to where it was afterwards
+    const from = focused();
+    const done = () => {
+      box.remove();
+      focusOn(from);
+    };
+    const cancel = h("button", { class: "ed-btn ghost", onclick: done }, t("editor.main.cancel"));
+    const box = h("div", { class: "ed-confirm", role: "alertdialog", "aria-label": text, onkeydown: (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      done();
+    } },
       h("p", {}, text),
       h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost", onclick: () => box.remove() }, t("editor.main.cancel")),
+        cancel,
         h("button", { class: "ed-btn danger", onclick: async () => {
-          box.remove();
+          done();
           await onYes();
         } }, action),
       ),
     );
     this.el.append(box);
+    focusOn(cancel);
   }
 
   private toastInDrawer(text: string): void {

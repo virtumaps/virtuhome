@@ -1,6 +1,6 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent, mdiPlay, mdiMagnify } from "@mdi/js";
-import { barChips, normalizePlan, spaces, type Plan, type Repair, type ThemeName } from "../model/plan";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent, mdiPlay, mdiMagnify, mdiViewList } from "@mdi/js";
+import { barChips, normalizePlan, spaces, type Plan, type Floor, type Repair, type Space, type ThemeName } from "../model/plan";
 import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
 import { HassLive, heatColour, initials, solarStep, toggleEntity, type Change, type ItemMark, type ItemMarks, type RoomText, type RoomTint } from "../live/live";
@@ -29,6 +29,7 @@ import { checkCounts, runChecks, type Check, type ServerChecks } from "./checks"
 import { callEach, errorBox, errorDetails, isolate, isStaleCode, logError, reportFrom, sendHeld } from "./errors";
 import { helpLink, HINT_CSS, showHint } from "./help";
 import { extNewsSeen, markExtNews, newsDue, NEWS_CSS, onKiosk, showNews } from "./news";
+import { A11Y_CSS, focused, focusOn, keepFocus, within } from "./a11y";
 
 export interface ViewConfig {
   /** Floor to open on (id, name or index); otherwise the whole house. */
@@ -62,6 +63,12 @@ export interface ViewConfig {
 }
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+/** A chip's small icon, in the chip's colour. */
+const chipIcon = (path: string) => `<svg width="16" height="16" style="fill:currentColor" viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+
+/** What a sheet's heading holds: its title (`title`, else filled in later as text), help and Close. */
+const sheetHead = (anchor: string, title = "") =>
+  `<span class="t">${title}</span>${helpLink(anchor)}<button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button>`;
 
 /** Why the plan can't be saved now, or null: a demo never saves, and nothing saves while the demo home shows. */
 export function saveRefused(config: ViewConfig, demoShown: boolean): string | null {
@@ -219,32 +226,40 @@ export class VhView {
   private unreport: () => void;
   /** The demo home shown over this view (Look at the demo home). */
   private demo: { close(): void } | null = null;
+  /** The List sheet is open (the house as a list), and the module that draws it. */
+  private sheetList = false;
+  private listMod: typeof import("./list") | null = null;
+  /** What had the focus before the sheet or the small menu opened: it gets it back when they close. */
+  private sheetFrom: HTMLElement | null = null;
+  private popFrom: HTMLElement | null = null;
 
   constructor(shadow: ShadowRoot, private config: ViewConfig, private fixedPlan?: Plan) {
     const style = document.createElement("style");
-    style.textContent = VIEW_CSS + ENERGY_CSS + SKY_CSS + HINT_CSS + NEWS_CSS;
+    style.textContent = VIEW_CSS + ENERGY_CSS + SKY_CSS + HINT_CSS + NEWS_CSS + A11Y_CSS;
     this.root = document.createElement("div");
     this.root.className = "vh-root";
     this.root.innerHTML = `
-      <div class="vh-canvas"></div>
+      <div class="vh-canvas" role="img" aria-label="${th("view.a11y.house")}"></div>
       <div class="vh-overlay"></div>
       <div class="vh-bar"></div>
+      <button class="vh-alert" hidden></button>
+      <div class="vh-status"></div>
       <div class="vh-tools">
+        <button class="vh-icon" data-act="list" title="${th("view.tool.list")}">${svg(mdiViewList)}</button>
         <button class="vh-icon" data-act="walls" title="${th("view.tool.walls")}">${svg(WALL_ICONS.smart)}</button>
-        <button class="vh-icon" data-act="roof" title="${th("view.tool.roof")}" hidden>${svg(mdiHomeRoof)}</button>
+        <button class="vh-icon" data-act="roof" title="${th("view.tool.roof")}" aria-pressed="true" hidden>${svg(mdiHomeRoof)}</button>
         <button class="vh-icon" data-act="theme" title="${th("view.tool.theme")}">${svg(mdiWeatherNight)}</button>
         <button class="vh-icon" data-act="sky" title="${th("view.tool.sky")}">${svg(mdiWeatherPartlyCloudy)}</button>
         <button class="vh-icon" data-act="frame" title="${th("view.tool.frame")}">${svg(mdiArrowExpandAll)}</button>
-        <button class="vh-icon" data-act="heat" title="${th("view.tool.heat")}">${svg(mdiThermometer)}</button>
+        <button class="vh-icon" data-act="heat" title="${th("view.tool.heat")}" aria-pressed="false">${svg(mdiThermometer)}</button>
         <button class="vh-icon" data-act="graphics" title="${th("view.tool.graphics")}">${svg(mdiTune)}</button>
       </div>
-      <button class="vh-alert" hidden></button>
-      <div class="vh-status"></div>
       <div class="vh-menu" hidden></div>
       <div class="vh-pop" hidden></div>
-      <div class="vh-sheet"></div>
+      <div class="vh-sheet" role="dialog" tabindex="-1"></div>
       <div class="vh-empty" hidden></div>
-      <div class="vh-toast"></div>
+      <div class="vh-toast" role="status"></div>
+      <div class="vh-sr vh-say" role="alert"></div>
       <div class="vh-legend" hidden></div>
       <button class="vh-updated" hidden></button>
       <div class="vh-stats" hidden></div>`;
@@ -336,7 +351,7 @@ export class VhView {
         if (held) return void (held = false);
         if (this.replayed) this.replayed.options.onHit?.({ floor, room: -1, entity: opens ?? null }, "tap");
         else if (opens && !this.editor && el.dataset.lock !== undefined) this.lockMenu(floor, el.dataset.lock, at);
-        else if (opens && !this.editor) void this.playPause(opens);
+        else if (opens && !this.editor) void this.tapEntity(opens);
         return;
       }
       // a reading opens its entity (in a replay, the replay hears of it as of a device)
@@ -358,13 +373,27 @@ export class VhView {
       if (act === "graphics") this.toggleGraphicsMenu();
       if (act === "heat") this.cycleMap();
       if (act === "sky") this.toggleSkyPanel();
+      if (act === "list") void this.openList();
+    });
+    // Escape closes the small menu, the graphics menu, the sun and weather panel or the sheet, and the
+    // focus goes back to where it was
+    this.root.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (!this.pop.hidden) {
+        this.pop.hidden = true;
+        focusOn(this.popFrom);
+      } else if (!this.menu.hidden) this.closeMenu(true);
+      else if (this.skyPanel.open) this.skyPanel.close();
+      else if (this.sheet.classList.contains("open")) this.closeSheet();
+      else return;
+      e.stopPropagation();
     });
     this.menu.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest<HTMLElement>("[data-tier]")?.dataset.tier;
       if (t) this.setGraphics(t as TierSetting);
     });
     this.root.addEventListener("pointerdown", (e) => {
-      if (!this.menu.hidden && !(e.target as HTMLElement).closest(".vh-menu, [data-act=graphics]")) this.menu.hidden = true;
+      if (!this.menu.hidden && !(e.target as HTMLElement).closest(".vh-menu, [data-act=graphics]")) this.closeMenu();
       if (!this.pop.hidden && !(e.target as HTMLElement).closest(".vh-pop")) this.pop.hidden = true;
     });
     if (config.stats) {
@@ -382,6 +411,8 @@ export class VhView {
         this.skyPick = p;
         this.updateSky();
         this.applyTheme();
+        // closed: its button says so, and has the focus back if it was in the panel
+        if (!this.skyPanel.open && within(this.skyPanel.el, focused())) focusOn(this.tools.querySelector('[data-act="sky"]'));
       },
       useRealistic: () => this.setGraphics("high"),
     });
@@ -810,9 +841,10 @@ export class VhView {
     this.sheetAlarm = true;
     this.alarmAsk = null;
     this.sheet.dataset.key = "";
+    this.sheetList = false;
     this.markAlarm(this._hass);
     this.renderAlarm();
-    this.sheet.classList.add("open");
+    this.showSheet();
   }
 
   /**
@@ -829,13 +861,13 @@ export class VhView {
     this.sheet.dataset.key = key;
     const name = (id: string) => String(h.states[id]?.attributes.friendly_name ?? id);
     const head = document.createElement("h3");
-    head.innerHTML = `<span class="t"></span>${helpLink("find-your-way-around")}<button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button>`;
+    head.innerHTML = sheetHead("find-your-way-around");
     head.querySelector(".t")!.textContent = t("alarm.title");
     head.querySelector<HTMLButtonElement>(".vh-close")!.onclick = () => this.closeSheet();
     const row = (text: string, onclick: () => void, state = "") => {
       const b = document.createElement("button");
       b.className = "vh-row";
-      b.innerHTML = `<span class="n"></span><span class="state"></span>`;
+      b.innerHTML = `<span class="n"></span> <span class="state"></span>`;
       b.querySelector(".n")!.textContent = text;
       b.querySelector(".state")!.textContent = state;
       b.onclick = onclick;
@@ -922,7 +954,7 @@ export class VhView {
       box.append(actions);
       parts.push(box);
     }
-    this.sheet.replaceChildren(...parts);
+    keepFocus(this.sheet, () => this.sheet.replaceChildren(...parts));
   }
 
 
@@ -945,6 +977,7 @@ export class VhView {
     if (changes.has("readings")) this.viewer.refreshReadings();
     if (changes.has("status") || changes.has("lighting")) this.renderStatus();
     if (this.sheetRoom && changes.size) this.renderSheet();
+    if (this.sheetList && changes.size) this.renderList();
   }
 
   // ------------------------------------------------------------------ status: alerts, lights, people
@@ -966,6 +999,8 @@ export class VhView {
         this.alertEl.innerHTML = `${svg(mdiAlert)}<span></span>`;
         this.alertEl.querySelector("span")!.textContent = alertText;
       }
+      // screen readers hear an alert once, when it comes or changes
+      this.root.querySelector(".vh-say")!.textContent = alertText;
       this.placeUnderBar();
     }
     const floor = this.viewer.mode === "floor" ? this.viewer.activeFloor : null;
@@ -979,7 +1014,7 @@ export class VhView {
     this.statusKey = key;
     const parts: string[] = [];
     if (energy) parts.push(energy);
-    if (on) parts.push(`<button class="vh-chip vh-lights" data-status="lights" title="${th("view.lights.turnOff")}">${svg(mdiLightbulbOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span>${th("view.lights.on", { n: on })}</span></button>`);
+    if (on) parts.push(`<button class="vh-chip vh-lights" data-status="lights" title="${th("view.lights.turnOff")}">${chipIcon(mdiLightbulbOutline)}<span>${th("view.lights.on", { n: on })}</span></button>`);
     for (const p of people) {
       parts.push(`<button class="vh-person ${p.home ? "home" : "away"}" data-status="${p.id}" title="">${p.picture ? `<img alt="" src="${p.picture.replace(/"/g, "")}">` : "<i></i>"}</button>`);
     }
@@ -987,6 +1022,8 @@ export class VhView {
     // names and places as text, never as markup
     this.statusEl.querySelectorAll<HTMLElement>(".vh-person").forEach((b, i) => {
       b.title = `${people[i].name}: ${people[i].room ?? people[i].where}`;
+      // a screen reader says the name, not the initials shown
+      b.setAttribute("aria-label", b.title);
       const letters = b.querySelector("i");
       if (letters) letters.textContent = initials(people[i].name);
     });
@@ -1097,7 +1134,7 @@ export class VhView {
   }
 
   private renderEnergy(): void {
-    renderEnergySheet(this.sheet, this.energy, this.energySections, () => this.closeSheet(), this.evActions);
+    keepFocus(this.sheet, () => renderEnergySheet(this.sheet, this.energy, this.energySections, () => this.closeSheet(), this.evActions));
   }
 
   /** Taps on a car's card: its charge mode, approving a charge, its charger's own dialog. */
@@ -1130,9 +1167,10 @@ export class VhView {
     if (!this.energy.now || this.editor) return;
     this.sheetRoom = null;
     this.sheetAlarm = false;
+    this.sheetList = false;
     this.sheetEnergy = true;
     this.renderEnergy();
-    this.sheet.classList.add("open");
+    this.showSheet();
     const refresh = () => this.energy.refreshToday().then(() => {
       if (this.sheetEnergy) this.renderEnergy();
     });
@@ -1214,6 +1252,7 @@ export class VhView {
     this.mapsKey = key;
     const b = this.root.querySelector<HTMLButtonElement>('[data-act="heat"]')!;
     b.classList.toggle("on", !!map);
+    b.setAttribute("aria-pressed", String(!!map));
     b.innerHTML = svg(MAP_ICONS[map ?? "temperature"]);
     b.title = t(maps.length > 1 ? "view.tool.maps" : "view.tool.heat");
     const legend = this.root.querySelector<HTMLElement>(".vh-legend")!;
@@ -1520,13 +1559,19 @@ export class VhView {
   }
 
   private toggleSkyPanel(): void {
-    if (this.skyPanel.open) {
-      this.skyPanel.close();
-      return;
-    }
-    this.closeSheet();
+    const open = !this.skyPanel.open;
+    if (open) {
+      this.closeSheet();
+      this.menu.hidden = true;
+      this.skyPanel.show();
+      focusOn(this.skyPanel.el);
+    } else this.skyPanel.close();
+  }
+
+  /** Closes the graphics menu; `back`: the focus goes back to its button, if it was in the menu. */
+  private closeMenu(back = false): void {
+    if (back && within(this.menu, focused())) focusOn(this.tools.querySelector('[data-act="graphics"]'));
     this.menu.hidden = true;
-    this.skyPanel.show();
   }
 
   // ------------------------------------------------------------------ looks
@@ -1602,21 +1647,18 @@ export class VhView {
     setDeviceTier(choice);
     const { tier, auto } = resolveTier(parseTierSetting(this.config.quality));
     this.tierAuto = auto;
-    this.menu.hidden = true;
+    this.closeMenu(true);
     this.viewer.setTier(tier);
     this.ensureLook();
     this.toast(t(auto ? "view.graphics.setAuto" : "view.graphics.set", { tier: tierName(tier) }));
   }
 
   private toggleGraphicsMenu(): void {
-    if (!this.menu.hidden) {
-      this.menu.hidden = true;
-      return;
-    }
+    if (!this.menu.hidden) return this.closeMenu();
     const picked = deviceTier();
     const autoTier = resolveTier(parseTierSetting(this.config.quality));
     const row = (value: TierSetting, name: string, hint: string) =>
-      `<button class="vh-menu-row${picked === value ? " on" : ""}" data-tier="${value}">
+      `<button class="vh-menu-row${picked === value ? " on" : ""}" data-tier="${value}" aria-pressed="${picked === value}">
         <span class="tick">${picked === value ? svg(mdiCheck) : ""}</span>
         <span><b>${name}</b><small>${hint}</small></span></button>`;
     const autoName = parseTierSetting(this.config.quality) !== "auto" ? th("view.graphics.cardSetting", { tier: tierName(autoTier.tier) }) : esc(tierName(autoTier.tier));
@@ -1624,6 +1666,7 @@ export class VhView {
       row("auto", th("view.graphics.auto"), autoName) +
       TIERS.map((tier: Tier) => row(tier, esc(tierName(tier)), esc(tierHint(tier)))).join("");
     this.menu.hidden = false;
+    focusOn(this.menu.querySelector(".on") ?? this.menu.querySelector("button"));
   }
 
   /** The device can't keep up: step down a tier (only when the tier was picked automatically). */
@@ -1662,6 +1705,7 @@ export class VhView {
 
   private updateRoofButton(): void {
     this.roofBtn.classList.toggle("on", this.viewer.roofOn);
+    this.roofBtn.setAttribute("aria-pressed", String(this.viewer.roofOn));
     this.roofBtn.title = t(this.viewer.roofOn ? "view.roof.onTap" : "view.roof.offTap");
   }
 
@@ -1683,7 +1727,7 @@ export class VhView {
       if (!this.canEdit() || this.editor) return;
       const b = document.createElement("button");
       b.className = `vh-chip vh-edit${this.problems ? " dot" : ""}`;
-      b.innerHTML = `${svg(mdiPencilOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}${th("view.edit")}`;
+      b.innerHTML = `${chipIcon(mdiPencilOutline)}${th("view.edit")}`;
       if (this.problems) b.title = t("view.editProblems");
       b.onclick = () => this.openEditor();
       const spacer = document.createElement("span");
@@ -1697,10 +1741,10 @@ export class VhView {
       return;
     }
     const house = this.viewer.mode === "house";
-    const parts = [`<button class="vh-chip ${house ? "on" : ""}" data-floor="-1">${svg(mdiHomeOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}${th("view.house")}</button>`];
+    const parts = [`<button class="vh-chip ${house ? "on" : ""}" data-floor="-1" aria-pressed="${house}">${chipIcon(mdiHomeOutline)}${th("view.house")}</button>`];
     this.plan.floors.forEach((_, i) => {
       const on = !house && this.viewer.activeFloor === i;
-      parts.push(`<button class="vh-chip ${on ? "on" : ""}" data-floor="${i}"></button>`);
+      parts.push(`<button class="vh-chip ${on ? "on" : ""}" data-floor="${i}" aria-pressed="${on}"></button>`);
     });
     this.chips.innerHTML = parts.join("");
     this.chips.querySelectorAll<HTMLButtonElement>("[data-floor]").forEach((b) => {
@@ -1735,7 +1779,7 @@ export class VhView {
     b.dataset.text = text;
     b.dataset.icon = icon;
     const path = (ICONS.find(([n]) => n === icon) ?? ICONS[0])[1];
-    b.innerHTML = `${svg(path).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span></span>`;
+    b.innerHTML = `${chipIcon(path)}<span></span>`;
     b.querySelector("span")!.textContent = text;
     b.title = String(h.states[id]?.attributes.friendly_name ?? id);
   }
@@ -1754,7 +1798,7 @@ export class VhView {
     const alert = s.state === "triggered" || s.state === "pending" || s.state === "arming";
     const b = document.createElement("button");
     b.className = `vh-chip vh-alarm ${armed ? "armed" : ""} ${alert ? "alert" : ""}`;
-    b.innerHTML = `${svg(alert ? mdiShieldAlert : armed ? mdiShieldHome : mdiShieldOffOutline).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span></span>`;
+    b.innerHTML = `${chipIcon(alert ? mdiShieldAlert : armed ? mdiShieldHome : mdiShieldOffOutline)}<span></span>`;
     const state = ALARM_STATES.find((x) => x === s.state);
     b.querySelector("span")!.textContent = state ? t(`alarm.${state}`) : s.state;
     b.onclick = () => this.openAlarm();
@@ -1950,16 +1994,66 @@ export class VhView {
       if (this.skyPanel.open) this.skyPanel.close();
       this.sheetEnergy = false;
       this.sheetAlarm = false;
+      this.sheetList = false;
       window.clearInterval(this.todayTimer);
       this.sheetRoom = { floor, room };
       this.renderSheet();
-      this.sheet.classList.add("open");
+      this.showSheet();
     }
   }
 
-  private closeSheet(): void {
+  /**
+   * Shows the sheet as it was just drawn: the focus moves into it, so a screen reader says its title,
+   * and goes back to what had it when the sheet closes.
+   */
+  private showSheet(): void {
+    if (!this.sheet.classList.contains("open")) this.sheetFrom = focused();
+    this.sheet.classList.add("open");
+    this.sheet.setAttribute("aria-label", this.sheet.querySelector("h3")?.textContent ?? "");
+    focusOn(this.sheet);
+  }
+
+  /** The List: the house as floors, rooms and their devices, each with what it shows now. */
+  private async openList(): Promise<void> {
+    if (this.editor || !this.plan) return;
+    this.listMod ??= await this.loadPart(() => import("./list"), "list");
+    if (!this.listMod || this.editor) return;
+    if (this.skyPanel.open) this.skyPanel.close();
+    window.clearInterval(this.todayTimer);
     this.sheetRoom = null;
     this.sheetEnergy = false;
+    this.sheetAlarm = false;
+    this.sheetList = true;
+    this.renderList();
+    this.showSheet();
+  }
+
+  private renderList(): void {
+    const h = this.shown;
+    const plan = this.plan;
+    if (!h || !plan || !this.listMod) return;
+    this.listMod.showList({
+      sheet: this.sheet,
+      plan,
+      head: `<h3>${sheetHead("keyboard-and-screen-readers", th("list.title"))}</h3><div class="sub">${th("list.hint")}</div>`,
+      place: (id) => this.live.place(id),
+      area: (area) => this.areaEntities(area),
+      line: (fi, ri) => this.roomWords(plan.floors[fi], spaces(plan.floors[fi])[ri]).filter(Boolean).join(" · "),
+      name: (id) => this.nameOf(id),
+      value: (id) => valueText(h, id),
+      keep: keepFocus,
+      close: () => this.closeSheet(),
+      // in a replay of the past nothing is switched, and the replay hears of the room
+      room: (floor, room) => (this.replayed ? this.replayed.options.onHit?.({ floor, room, entity: null }, "tap") : this.openRoom(floor, room)),
+      tap: (id) => this.replayed || this.tapEntity(id),
+    });
+  }
+
+  private closeSheet(): void {
+    const open = this.sheet.classList.contains("open");
+    this.sheetRoom = null;
+    this.sheetEnergy = false;
+    this.sheetList = false;
     if (this.sheetAlarm) {
       this.sheetAlarm = false;
       this.alarmAsk = null;
@@ -1967,6 +2061,7 @@ export class VhView {
     }
     window.clearInterval(this.todayTimer);
     this.sheet.classList.remove("open");
+    if (open && within(this.sheet, focused())) focusOn(this.sheetFrom);
   }
 
   private async onHit(hit: Hit, gesture: "tap" | "long" | "double"): Promise<void> {
@@ -2039,8 +2134,8 @@ export class VhView {
     }), at);
   }
 
-  /** Plays or pauses a TV or speaker; its dialog when it can't. */
-  private async playPause(id: string): Promise<void> {
+  /** Switches a device (plays or pauses a TV or speaker), as a tap on it does; its dialog when it can't. */
+  private async tapEntity(id: string): Promise<void> {
     const hass = this._hass;
     if (!hass) return;
     if (await toggleEntity(hass, id).catch(() => false)) this.toast(this.nameOf(id));
@@ -2104,8 +2199,10 @@ export class VhView {
   /** The small menu by the finger, kept inside the view. */
   private showPop(rows: HTMLElement[], at: [number, number] | undefined): void {
     const pop = this.pop;
+    if (pop.hidden) this.popFrom = focused();
     pop.replaceChildren(...rows);
     pop.hidden = false;
+    focusOn(pop.querySelector("input, button"));
     const [x, y] = at ?? [this.root.clientWidth / 2, this.root.clientHeight / 2];
     pop.style.left = `${Math.max(8, Math.min(this.root.clientWidth - pop.offsetWidth - 8, x - pop.offsetWidth / 2))}px`;
     pop.style.top = `${Math.max(8, Math.min(this.root.clientHeight - pop.offsetHeight - 8, y + 16))}px`;
@@ -2244,7 +2341,7 @@ export class VhView {
   private tileHelpers: Promise<{ createCardElement(c: Record<string, unknown>): HTMLElement & { hass?: unknown } }> | null = null;
   private scenesPart: typeof import("./room-scenes") | null = null;
   private scenesAsked = false;
-  private sceneHost: SceneHost = { hass: () => this._hass, name: (id) => this.nameOf(id), dialog: (id) => this.dialog(id), toast: (text) => this.toast(text), icon: svg(mdiPlay).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"') };
+  private sceneHost: SceneHost = { hass: () => this._hass, name: (id) => this.nameOf(id), dialog: (id) => this.dialog(id), toast: (text) => this.toast(text), icon: chipIcon(mdiPlay) };
 
   private renderSheet(): void {
     const hass = this._hass;
@@ -2253,8 +2350,7 @@ export class VhView {
     const room = floor ? spaces(floor)[this.sheetRoom.room] : undefined;
     if (!room) return this.closeSheet();
     const ids = this.areaEntities(room.area_id);
-    const text = this.live.roomText(floor, room);
-    const here = hereText(this.config.people === false || this.replayed ? [] : this.live.roomPeople(floor, room).map((p) => p.name));
+    const [text, here] = this.roomWords(floor, room);
     const lights = this.live.roomLights(floor, room);
     const anyOn = lights.some((id) => hass.states[id]?.state === "on");
     // the room's scenes and scripts: their code is fetched when a sheet first opens
@@ -2275,53 +2371,61 @@ export class VhView {
       this.updateRows(hass);
       return;
     }
-    this.sheet.dataset.key = key;
-    this.sheet.innerHTML = `
-      <h3><span class="t"></span>${helpLink("labels-and-readings")}<button class="vh-icon vh-close" style="width:32px;height:32px" title="${th("view.close")}">${svg(mdiClose)}</button></h3>
-      <div class="sub"></div>
-      <div class="actions"></div>
-      <div class="vh-tiles"></div>`;
-    this.sheet.querySelector(".t")!.textContent = room.name;
-    this.sheet.querySelector(".sub")!.textContent = [text, here, room.area_id ? null : t("view.room.notLinked")].filter(Boolean).join(" · ") || " ";
-    this.sheet.querySelector<HTMLButtonElement>(".vh-close")!.onclick = () => this.closeSheet();
-    const actions = this.sheet.querySelector(".actions")!;
-    if (lights.length) {
-      const b = document.createElement("button");
-      b.className = "vh-chip";
-      b.innerHTML = `${svg(anyOn ? mdiLightbulbGroupOff : mdiLightbulbGroup).replace("<svg", '<svg width="16" height="16" style="fill:currentColor"')}<span></span>`;
-      b.querySelector("span")!.textContent = t(anyOn ? "view.room.allOff" : "view.room.allOn");
-      b.onclick = () => this.toggleRoomLights(this.sheetRoom!.floor, this.sheetRoom!.room);
-      actions.appendChild(b);
-    }
-    if (sc && scenes.length) sc.sceneButtons(this.sceneHost, scenes, actions as HTMLElement);
-    const grid = this.sheet.querySelector(".vh-tiles")!;
-    // the demo's devices are pretend: Home Assistant's tiles would open its own dialogs for them
-    const helpers = this.config.demo ? undefined : (window as unknown as { loadCardHelpers?: () => Promise<never> }).loadCardHelpers;
-    if (helpers) {
-      this.tileHelpers ??= helpers();
-      this.tileHelpers.then((h) => {
-        if (this.sheet.dataset.key !== key) return;
-        for (const id of ids) {
-          const card = h.createCardElement({ type: "tile", entity: id });
-          card.dataset.tile = id;
-          card.hass = hass;
-          grid.appendChild(card);
-        }
-      });
-    } else {
-      for (const id of ids) {
-        const row = document.createElement("button");
-        row.className = "vh-row";
-        row.dataset.row = id;
-        row.innerHTML = `<span class="n"></span><span class="state"></span>`;
-        row.querySelector(".n")!.textContent = this.nameOf(id);
-        row.onclick = async () => {
-          if (!(await toggleEntity(hass, id).catch(() => false))) this.dialog(id);
-        };
-        grid.appendChild(row);
+    // redrawn, the focus stays where it was (on All on, say)
+    keepFocus(this.sheet, () => {
+      this.sheet.dataset.key = key;
+      this.sheet.innerHTML = `
+        <h3>${sheetHead("labels-and-readings")}</h3>
+        <div class="sub"></div>
+        <div class="actions"></div>
+        <div class="vh-tiles"></div>`;
+      this.sheet.querySelector(".t")!.textContent = room.name;
+      this.sheet.querySelector(".sub")!.textContent = [text, here, room.area_id ? null : t("view.room.notLinked")].filter(Boolean).join(" · ") || " ";
+      this.sheet.querySelector<HTMLButtonElement>(".vh-close")!.onclick = () => this.closeSheet();
+      const actions = this.sheet.querySelector(".actions")!;
+      if (lights.length) {
+        const b = document.createElement("button");
+        b.className = "vh-chip";
+        b.innerHTML = `${chipIcon(anyOn ? mdiLightbulbGroupOff : mdiLightbulbGroup)}<span></span>`;
+        b.querySelector("span")!.textContent = t(anyOn ? "view.room.allOff" : "view.room.allOn");
+        b.onclick = () => this.toggleRoomLights(this.sheetRoom!.floor, this.sheetRoom!.room);
+        actions.appendChild(b);
       }
-      this.updateRows(hass);
-    }
+      if (sc && scenes.length) sc.sceneButtons(this.sceneHost, scenes, actions as HTMLElement);
+      const grid = this.sheet.querySelector(".vh-tiles")!;
+      // the demo's devices are pretend: Home Assistant's tiles would open its own dialogs for them
+      const helpers = this.config.demo ? undefined : (window as unknown as { loadCardHelpers?: () => Promise<never> }).loadCardHelpers;
+      if (helpers) {
+        this.tileHelpers ??= helpers();
+        this.tileHelpers.then((h) => {
+          if (this.sheet.dataset.key !== key) return;
+          for (const id of ids) {
+            const card = h.createCardElement({ type: "tile", entity: id });
+            card.dataset.tile = id;
+            card.hass = hass;
+            grid.appendChild(card);
+          }
+        });
+      } else {
+        for (const id of ids) {
+          const row = document.createElement("button");
+          row.className = "vh-row";
+          row.dataset.row = id;
+          row.innerHTML = `<span class="n"></span> <span class="state"></span>`;
+          row.querySelector(".n")!.textContent = this.nameOf(id);
+          row.onclick = async () => {
+            if (!(await toggleEntity(hass, id).catch(() => false))) this.dialog(id);
+          };
+          grid.appendChild(row);
+        }
+        this.updateRows(hass);
+      }
+    });
+  }
+
+  /** What a room's label says, and who is in it, in words. */
+  private roomWords(floor: Floor, room: Space): (string | null)[] {
+    return [this.live.roomText(floor, room), hereText(this.config.people === false || this.replayed ? [] : this.live.roomPeople(floor, room).map((p) => p.name))];
   }
 
   private updateRows(hass: Hass): void {

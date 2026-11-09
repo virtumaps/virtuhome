@@ -5,6 +5,7 @@
 // `node build.mjs --dev` rebuilds on change and serves the dev harness (dev/index.html) on :5173.
 import * as esbuild from "esbuild";
 import { readFileSync, rmSync } from "node:fs";
+import { cssTemplates } from "./dev/css.mjs";
 
 const dev = process.argv.includes("--dev");
 // --dev --fast: the dev harness with minified code and no source maps (closer to what HA loads)
@@ -29,6 +30,8 @@ const common = {
   sourcemap: dev && !fast ? "inline" : false,
   legalComments: "none",
   define: { __VERSION__: JSON.stringify(version), __DEV__: String(dev), __NEWS__: JSON.stringify(news) },
+  // the CSS in the sources ships without comments and spare spaces (dev/css.mjs)
+  plugins: dev ? [] : [cssTemplates],
   logLevel: "info",
 };
 

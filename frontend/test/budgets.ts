@@ -19,5 +19,7 @@ export const LOADER_BYTES = 4 * 1024;
 // German and Dutch: four chunks of text, each fetched only by people using that language (1,961,053 measured)
 export const APP_BYTES = 1_800_000;
 // raised from 1,123,987 for the devices (switches, fans, air conditioners, heating, hot water: 1,245,350 measured),
-// then from 1,160,000 for the air quality maps and robots moving on the plan (1,277,740 measured)
-export const FIRST_LOAD_BYTES = 1_190_000;
+// then from 1,160,000 for the air quality maps and robots moving on the plan (1,277,740 measured), then from
+// 1,190,000 for accessibility: names, focus and Escape for sheets and menus, and live regions, which are needed
+// from the first frame (1,309,456 measured with the Tablet glass change; the CSS now ships minified, which won back about 4,500 bytes)
+export const FIRST_LOAD_BYTES = 1_200_000;

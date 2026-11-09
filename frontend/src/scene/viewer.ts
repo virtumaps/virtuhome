@@ -1457,6 +1457,8 @@ export class Viewer {
   refreshMarkers(): void {
     if (!this.live || !this.plan) return;
     const specs: MarkerSpec[] = [];
+    // with reduced motion nothing pulses (the colour still says what wants attention)
+    const calm = reducedMotion();
     this.floors.forEach((f, fi) => {
       if (this.mode === "floor" && fi !== this.activeFloor) return;
       for (const d of f.fb.floor.devices) {
@@ -1469,7 +1471,7 @@ export class Viewer {
         const pos = this.devicePosition(fi, d);
         // a camera's pin (live, motion, offline) floats over its model
         if (d.entity.startsWith("camera.")) pos[1] += 0.3;
-        specs.push({ key: d.id, pos, icon: look.icon, color: look.color, size: this.mode === "house" ? 22 : 30, pulse: look.pulse, alpha: 1 });
+        specs.push({ key: d.id, pos, icon: look.icon, color: look.color, size: this.mode === "house" ? 22 : 30, pulse: calm ? 0 : look.pulse, alpha: 1 });
       }
     });
     this.markers.set(specs.concat(this.overlayMarkers));
@@ -1669,6 +1671,7 @@ export class Viewer {
       if (this.mode === "house") {
         const el = document.createElement("div");
         el.className = "vh-label vh-floor-label";
+        el.setAttribute("role", "button");
         el.textContent = f.fb.floor.name;
         el.dataset.floor = String(fi);
         this.overlay.appendChild(el);
@@ -1691,6 +1694,8 @@ export class Viewer {
       f.fb.rooms.forEach((r, ri) => {
         const el = document.createElement("div");
         el.className = "vh-label";
+        // a screen reader's finger on it hears the room and its line, and can open it (the List is the keyboard's way)
+        el.setAttribute("role", "button");
         const parts = this.live?.roomLine(f.fb.floor, { id: r.id }) ?? [];
         el.innerHTML = `<b></b>${parts.length ? "<span></span>" : ""}`;
         (el.firstChild as HTMLElement).textContent = r.name;
@@ -2646,7 +2651,7 @@ function liftPart(from: Mesh, owner: number[], k: number): LiftedPart | null {
   return { from, geometry: src, index, saved, mesh };
 }
 
-/** prefers-reduced-motion: a new look shows at once. */
+/** prefers-reduced-motion: a new look shows at once, the camera jumps, nothing pulses or turns. */
 function reducedMotion(): boolean {
   try {
     return matchMedia("(prefers-reduced-motion: reduce)").matches;

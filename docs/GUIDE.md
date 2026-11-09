@@ -98,6 +98,7 @@ The same view is in the sidebar and in every VirtuHome card.
 | Button | What it does |
 |---|---|
 | **Search** | Finds a room, device, piece of furniture or scene by name (see **Search** below) |
+| **List of rooms and devices** | Shows the house as a list: each floor's rooms with what their labels say, and the devices in them with their states. Tap a room to open it, or a device to switch it as a tap on it does (see [Keyboard and screen readers](#keyboard-and-screen-readers)) |
 | **Walls** | Steps through smart cutaway (walls between you and a room slide away), low, and full height. Its picture shows the mode |
 | **Roof** | Only when the house has a roof: takes the roofs off to look in from above, or puts them back. Each device remembers its own choice |
 | **Day / night** | Switches between the day and night looks. Normally the look follows the sun, and the picture fades from one to the other |
@@ -123,8 +124,8 @@ The same view is in the sidebar and in every VirtuHome card.
   flying there (here and everywhere), and the marker holds still.
 
 **Help**
-- A **?** beside the close button of the room, energy, alarm and sun and weather sheets, and beside
-  the editor's tabs (for the tab shown), opens that part of this guide.
+- A **?** beside the close button of the room, energy, alarm, sun and weather sheets and the list of
+  rooms and devices, and beside the editor's tabs (for the tab shown), opens that part of this guide.
 - A hint shows once the first time you need it: in the sidebar panel how to switch and open
   devices, in the editor how to select and move things, in the 2D plan how to type a measurement.
   **Got it** puts it away for good on that browser. Edit → **Home** → **Show hints again** brings
@@ -214,6 +215,39 @@ whole-house view. Tap one for its dialog.
 A level picked here is for this device only, and wins over the card's `quality`.
 
 ![Realistic look by day](screenshots/day.jpg)
+
+### Keyboard and screen readers
+
+VirtuHome works with a keyboard and a screen reader (VoiceOver, TalkBack, NVDA, JAWS), in the
+sidebar and in a card.
+
+**With a keyboard**
+- **Tab** goes through the top bar, the row under it and the buttons on the right, with a ring
+  around the one you are on; **Enter** or **Space** presses it.
+- **List of rooms and devices** is the way into the house: **Tab** through its rooms and devices,
+  **Enter** on a room opens its sheet, on a device switches it. **/** opens **Search**.
+- A sheet, the **Graphics** menu or the sun and weather panel takes the focus when it opens.
+  **Escape** closes it, and the focus goes back to the button that opened it.
+- In the editor, the drawer keeps your place when a change redraws it, a question such as "Close
+  without saving?" starts on **Cancel** (**Escape** cancels too), and the 2D plan has its own keys
+  (see [Draw it in the 2D plan](#draw-it-in-the-2d-plan)).
+
+**With a screen reader**
+- Every button and field says what it is, and buttons that switch something (a floor, the roof,
+  a map) say whether it is on. The 3D view is described, and **List of rooms and devices** holds
+  what it shows in words: each room's temperature, who is there, and each device's state.
+- Exploring by touch, a room's label reads its name and line, and a double tap opens it.
+- A sheet says its name as it opens. What a tap did ("Kitchen light", "Walls: low") and a new alert
+  (a leak, smoke) are read out once, not on every change in the house.
+
+**Reduced motion**: with reduce motion turned on in the device's settings, the view jumps to a room
+or floor instead of flying there, markers and the alert banner don't pulse, sheets appear without
+sliding, the day and night looks change without fading, and rain, snow, lightning, plants and fans
+hold still.
+
+**Colours**: text on the buttons and labels is dark or light enough to read by day and by night,
+alerts say what is wrong in words as well as in red, and the [maps](#find-your-way-around) use
+colours told apart with any kind of colour blindness.
 
 ### The demo home
 
@@ -810,6 +844,9 @@ height: 440
 | `stats` | (YAML only) | `true` shows the frame rate and graphics level in a corner, for reporting a slow device | `false` |
 
 Extensions add their own sections to the visual editor (below).
+
+A card works with a keyboard and a screen reader as the sidebar does, with the **List of rooms and
+devices** among its buttons (see [Keyboard and screen readers](#keyboard-and-screen-readers)).
 
 ## Extensions and VirtuHome Pro
 

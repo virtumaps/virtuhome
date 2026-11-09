@@ -10,10 +10,17 @@
 - **Search** (the magnifier over the buttons on the right, or **/** on a keyboard) finds a room,
   device, piece of furniture or scene by its name in Home Assistant, an alias, its area or its entity
   id. Picking one goes there, opens the room's sheet and points the device out with a pulsing marker.
+- **List of rooms and devices**: a new button on the right shows the house as a list of floors and
+  rooms, with what their labels say, and the devices in them with their states. A room opens its
+  sheet and a device switches as a tap on it does. It is how a keyboard or a screen reader gets
+  around the house.
+- Keyboard and screen readers: a ring shows where the keyboard is, sheets, menus and the sun and
+  weather panel take the focus when they open and **Escape** closes them, every button and field
+  has a name, and what a tap did and new alerts are read out once.
 
 ### Changed
-- With reduced motion turned on in the device's settings, the view jumps to a room or floor instead of
-  flying there.
+- With reduce motion turned on in the device's settings, the view jumps instead of flying, markers
+  and the alert banner don't pulse and sheets don't slide.
 - **Tablet** graphics draws labels and buttons in nearly solid colours instead of frosted glass, and
   the labels that move with the house without shadows. Blurring the house behind each of them again
   on every frame costs a wall tablet's graphics a lot while the house turns, most of all in a floor,
@@ -21,6 +28,10 @@
 - `?bench` then turns the house again without the frosted glass, with nothing over the house and at
   half the resolution, and says what holds the device back: the pixels it draws (fill rate) or the
   labels and buttons put together over the house (compositing).
+- Text that was hard to read got darker or lighter: grey text and blue buttons by day, the red
+  alert banner, and buttons at night now have dark text on the light blue.
+- In the editor, the drawer keeps the focus on the field you changed, and **Close without saving?**
+  and the other questions start on **Cancel** and close with **Escape**.
 
 ## 0.18.0
 
