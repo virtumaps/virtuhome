@@ -8,7 +8,7 @@ const BEAT = 60 / BPM;
 const STEP = BEAT / 4;
 /** How loud the music is overall, and how far it dips while the host speaks. */
 const LEVEL = 0.85;
-const DUCKED = 0.42;
+const DUCKED = 0.3;
 
 // a bar each, MIDI notes: B minor, G, D, A
 const CHORDS = [[59, 62, 66], [55, 59, 62], [62, 66, 69], [57, 61, 64]];

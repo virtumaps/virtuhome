@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-# Kokoro's most natural voice; bf_emma is its best British one
-VOICE = "af_heart"
-LANG = "en-us"
+# Kokoro's best British voice (af_heart, with LANG "en-us", is its most natural American one)
+VOICE = "bf_emma"
+LANG = "en-gb"
 SPEED = 1.0
 
 
@@ -39,6 +39,11 @@ def main() -> None:
     lines = json.loads(subprocess.check_output(["node", str(HERE.parent / "lines.mjs")], text=True))
     index_file = HERE / "voices.json"
     index = json.loads(index_file.read_text()) if index_file.exists() else {}
+    # a different voice or speed records every line again
+    made_with = HERE / "made-with.txt"
+    settings = f"{VOICE} {LANG} {SPEED}\n"
+    if not made_with.exists() or made_with.read_text() != settings:
+        index = {}
     wanted = {voice_id(t): t for t in lines}
     kokoro = None
     for vid, text in wanted.items():
@@ -62,6 +67,7 @@ def main() -> None:
             (HERE / f"{vid}.mp3").unlink(missing_ok=True)
             print(f"removed {vid}")
     index_file.write_text(json.dumps(dict(sorted(index.items())), indent=1) + "\n")
+    made_with.write_text(settings)
     print(f"{len(index)} lines recorded")
 
 
