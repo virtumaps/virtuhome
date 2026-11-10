@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CHAPTERS, type Show } from "../dev/tour/script";
-import { voiceId } from "../dev/tour/tour";
+import { chapters, type Show } from "../dev/tour/script";
+import { spoken, voiceId } from "../dev/tour/tour";
+import { cued, detect, EN, load, NAMES, RECORDED, type DemoStrings } from "../dev/lang";
 import { tapKeys } from "../dev/tour/panels";
 import { demoHass } from "../src/demo/hass";
 import { DEMO_PLAN } from "../src/demo/plan";
@@ -10,8 +11,10 @@ import type { ItemMarks, RoomTint } from "../src/live/live";
 
 const plan = normalizePlan(structuredClone(DEMO_PLAN));
 
+const CHAPTERS = chapters(EN);
+
 /** The online demo's tour run against a stand-in: what it switches, flies to, tints and marks. */
-function run(trials: boolean) {
+function run(trials: boolean, S: DemoStrings = EN) {
   const hass = demoHass(plan, () => undefined);
   const entities: string[] = [];
   const tints: RoomTint[] = [];
@@ -58,13 +61,13 @@ function run(trials: boolean) {
     ring: () => undefined,
   };
   const said: string[] = [];
-  for (const ch of CHAPTERS) {
+  for (const ch of chapters(S)) {
     ch.start?.(show);
     for (const line of ch.lines) {
       if (line.when && !line.when(show)) continue;
       said.push(line.say);
       line.do?.(show);
-      for (const [, cue] of line.cues ?? []) cue(show);
+      for (const cue of Object.values(line.cues ?? {})) cue(show);
       line.after?.(show);
       if (line.replay) replays.push(line.replay);
     }
@@ -85,7 +88,7 @@ describe("the online demo's tour", () => {
   it("keeps every line short", () => {
     for (const line of CHAPTERS.flatMap((c) => c.lines)) {
       expect(line.say.trim().length).toBeGreaterThan(0);
-      expect(line.say.length).toBeLessThan(140);
+      expect(cued(line.say).text.length).toBeLessThan(140);
     }
   });
 
@@ -119,7 +122,8 @@ describe("the online demo's tour", () => {
     const keys = new Set(tapKeys());
     for (const key of taps) expect(keys.has(key), key).toBe(true);
     for (const line of CHAPTERS.flatMap((c) => c.lines)) {
-      for (const [word] of line.cues ?? []) expect(line.say.toLowerCase(), word).toContain(word.toLowerCase());
+      const marked = Object.keys(cued(line.say).cues).sort();
+      expect(marked, line.id).toEqual(Object.keys(line.cues ?? {}).sort());
     }
   });
 
@@ -151,5 +155,78 @@ describe("the online demo's tour", () => {
     expect(open.length).toBe(shut.length);
     expect(open.some((s) => /trial/.test(s))).toBe(true);
     expect(shut.some((s) => /trial/.test(s))).toBe(false);
+  });
+
+  it("has every text in every language, with the same placeholders and cues", async () => {
+    const holes = (t: string) => [...t.matchAll(/\{(\w+)\}|\[\[(\w+)\]\]|<b>/g)].map((m) => m[0]).sort();
+    const walk = (en: unknown, other: unknown, path: string, out: string[]) => {
+      if (typeof en === "string") {
+        if (typeof other !== "string" || !other.trim()) out.push(`${path}: missing`);
+        // a language says the what-if's saving in its money; English spells its pounds out
+        else if (path !== "lines.whatIf" && JSON.stringify(holes(en)) !== JSON.stringify(holes(other))) out.push(`${path}: ${holes(other)} for ${holes(en)}`);
+        return;
+      }
+      if (Array.isArray(en)) {
+        if (path === "sayAs") return;
+        en.forEach((v, i) => walk(v, (other as unknown[] | undefined)?.[i], `${path}[${i}]`, out));
+        return;
+      }
+      if (en && typeof en === "object") {
+        for (const [k, v] of Object.entries(en)) walk(v, (other as Record<string, unknown> | undefined)?.[k], path ? `${path}.${k}` : k, out);
+        for (const k of Object.keys((other ?? {}) as object)) if (!(k in (en as object))) out.push(`${path}.${k}: not in English`);
+      }
+    };
+    for (const code of Object.keys(NAMES)) {
+      const S = await load(code);
+      expect(S === EN, code).toBe(code === "en");
+      const out: string[] = [];
+      walk(EN, S, "", out);
+      expect(out, code).toEqual([]);
+      expect(S.lines.whatIf, code).toMatch(code === "en" ? /pounds/ : /\{saving\}/);
+      for (const line of chapters(S).flatMap((c) => c.lines)) {
+        expect(line.say, `${code} ${line.id}`).not.toMatch(/\{\w+\}/);
+        expect(cued(line.say).text.length, `${code} ${line.id}`).toBeLessThan(160);
+      }
+    }
+  });
+
+  it("runs the same in every language", async () => {
+    const en = run(false);
+    for (const code of Object.keys(NAMES)) {
+      const r = run(false, await load(code));
+      expect(r.taps, code).toEqual(en.taps);
+      expect(r.props, code).toEqual(en.props);
+    }
+  });
+
+  it("has a recording for every line of the languages it records, and none left over", async () => {
+    const dir = new URL("../dev/tour/voice/", import.meta.url).pathname;
+    const recorded = Object.keys(NAMES).filter((code) => readdirSync(dir).includes(code));
+    expect(new Set(recorded)).toEqual(RECORDED);
+    for (const code of recorded) {
+      const S = await load(code);
+      const want = new Set(chapters(S).flatMap((c) => c.lines).map((l) => voiceId(spoken(S, l.say))));
+      const index = JSON.parse(readFileSync(`${dir}${code}/voices.json`, "utf8")) as Record<string, number>;
+      expect(new Set(Object.keys(index)), code).toEqual(want);
+      const files = readdirSync(`${dir}${code}`).filter((f) => f.endsWith(".mp3")).map((f) => f.slice(0, -4));
+      expect(new Set(files), code).toEqual(want);
+    }
+  });
+
+  it("speaks the language picked, else the browser's, else where the viewer is", () => {
+    const d = (languages: string[], timeZone: string | null, saved: string | null = null, param: string | null = null) => detect({ languages, timeZone, saved, param });
+    expect(d(["de-DE", "en"], "Europe/London")).toBe("de");
+    expect(d(["en-US"], "Europe/Istanbul")).toBe("tr");
+    expect(d(["en-GB"], "Europe/London")).toBe("en");
+    expect(d(["en-US"], "America/New_York")).toBe("en");
+    expect(d(["en-US"], "Europe/Sofia")).toBe("bg");
+    expect(d(["ja-JP"], "Asia/Tokyo")).toBe("en");
+    expect(d(["ja-JP", "fr"], "Asia/Tokyo")).toBe("fr");
+    expect(d(["nn-NO"], "Europe/Oslo")).toBe("nb");
+    expect(d(["pt-BR"], "America/Sao_Paulo")).toBe("pt");
+    expect(d(["en-US"], "America/Argentina/Buenos_Aires")).toBe("es");
+    expect(d(["de-DE"], "Europe/Berlin", "en")).toBe("en");
+    expect(d(["de-DE"], "Europe/Berlin", "en", "pl")).toBe("pl");
+    expect(d(["de-DE"], "Europe/Berlin", null, "xx")).toBe("de");
   });
 });

@@ -4,13 +4,16 @@
 // beside it (props.ts: a camera clip, a phone, a wall tablet), from pretend numbers: the demo loads no
 // add-on. It leads with what impresses, and spends most of its time on the add-ons.
 //
-// A line: { say: "…" }, with
+// What is said and shown comes from the language (dev/lang): chapters(strings) builds the tour in it.
+//
+// A line: { id, say }, with
 //   mood           the host's face (cast.ts)
 //   do / after     what happens as the line starts / ends
 //   pause          a wait before it is said (ms), with `do` already done: time to watch
 //   gap            the pause after it (ms, default 250): time to see a change before the next line
 //   replay         where the replay's clock goes during the line ("10:15")
 //   when           left out when it returns false
+//   cues           what happens as the voice reaches a word: the line's [[name]] markers say which
 import {
   mdiCashMultiple, mdiClockOutline, mdiDishwasher, mdiHomeLightningBolt, mdiLightbulbGroup, mdiSolarPower, mdiTrashCan,
   mdiWaterPercent,
@@ -22,12 +25,10 @@ import type { Plan } from "../../src/model/plan";
 import type { WeatherPick } from "../../src/live/sky";
 import type { Mood } from "./cast";
 import type { ClipKind } from "./props";
+import { fill, money, num, type ChapterId, type DemoStrings, type LineId } from "../lang";
 
 /** The host's name (a placeholder). */
 export const HOST = "Pip";
-
-/** Words the voices say wrongly, and how to write them so they say them right (the subtitles keep the first). */
-export const SAY_AS: [RegExp, string][] = [[/VirtuHome/g, "Virtue Home"], [/LiDAR/g, "lidar"]];
 
 /** What shows beside the house: drawn props (props.ts), and panels as they look in the app (panels.ts). */
 export type Prop =
@@ -91,6 +92,8 @@ export interface Chip {
 }
 
 export interface Line {
+  id: LineId;
+  /** In the tour's language, with its cue markers. */
   say: string;
   mood?: Mood;
   pause?: number;
@@ -99,11 +102,12 @@ export interface Line {
   gap?: number;
   replay?: string;
   when?: (s: Show) => boolean;
-  /** What happens as the voice reaches a word of the line (the first word that has this in it). */
-  cues?: [string, (s: Show) => void][];
+  /** What happens as the voice reaches the word a [[name]] marker in the line is on. */
+  cues?: Record<string, (s: Show) => void>;
 }
 
 export interface Chapter {
+  id: ChapterId;
   title: string;
   kicker: string;
   /** A line on screen while the chapter's last line is said, as in an advert. */
@@ -151,7 +155,7 @@ function powerColour(kw: number): [number, number, number] {
 }
 
 /** The Energy add-on's power map on the demo house: every room coloured by what it uses, with what it costs an hour. */
-function energyRooms(s: Show, on: boolean): void {
+function energyRooms(s: Show, on: boolean, S: DemoStrings): void {
   const kwOf = (area: string | null, outdoor: boolean) => (area && !outdoor ? ROOM_KW[area] : undefined);
   s.view.setRoomTint(on ? (_f, sp) => {
     const kw = kwOf(sp.area_id, sp.outdoor);
@@ -160,9 +164,9 @@ function energyRooms(s: Show, on: boolean): void {
   s.view.setRoomText(on ? (_f, sp) => {
     const kw = kwOf(sp.area_id, sp.outdoor);
     if (kw === undefined) return null;
-    const watts = kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(1)} kW`;
+    const power = kw < 1 ? `${Math.round(kw * 1000)} W` : `${num(S, kw, 1)} kW`;
     // at 24.5p a unit
-    return `${watts} · ${(kw * 24.5).toFixed(kw < 0.2 ? 1 : 0)}p/h`;
+    return fill(S.props.roomPower, { power, cost: money(S, kw * 0.245, S.money.currency === "GBP" ? 0.001 : 0.01) });
   } : null);
   s.view.refreshRooms();
 }
@@ -210,8 +214,8 @@ const tintRoom = (s: Show, area: string, tint: RGBA | null, text: string | null)
   s.view.refreshRooms();
 };
 
-const dishwasher = (s: Show, on: boolean) => {
-  s.view.markItems(on ? (_f, item) => (item.type === "dishwasher" ? { glow: [0.25, 1, 0.55], text: "Done" } : null) : null);
+const dishwasher = (s: Show, on: boolean, text = "") => {
+  s.view.markItems(on ? (_f, item) => (item.type === "dishwasher" ? { glow: [0.25, 1, 0.55], text } : null) : null);
   s.view.refreshItems();
 };
 
@@ -236,242 +240,229 @@ const makeover = (step: number) => (plan: Plan) => {
   if (step >= 3) room.floor = "herringbone";
 };
 
-const CLIP: Prop = { kind: "clip", clip: "parcel", time: "10:12", caption: "Doorbell clip · yesterday, 10:12" };
+/** A sum in two figures ("260 €"), for saying. */
+const roughly = (S: DemoStrings, pounds: number) => {
+  const v = pounds * S.money.perPound;
+  return money(S, pounds, 10 ** Math.max(0, Math.floor(Math.log10(v)) - 1));
+};
 
 // ------------------------------------------------------------------ the tour
 
-export const CHAPTERS: Chapter[] = [
-  {
-    title: "VirtuHome",
-    kicker: "Your home, alive in 3D",
-    start: (s) => {
-      s.sky("night");
-      s.house(true);
-      s.push(1.45, 7000);
-      cascade(s);
+/** The tour in a language. */
+export function chapters(S: DemoStrings): Chapter[] {
+  const L = S.lines;
+  const C = (id: ChapterId) => ({ id, ...S.chapters[id] });
+  const clip: Prop = { kind: "clip", clip: "parcel", time: "10:12", caption: fill(S.props.clipCaption, { time: "10:12" }) };
+  return [
+    {
+      ...C("intro"),
+      start: (s) => {
+        s.sky("night");
+        s.house(true);
+        s.push(1.45, 7000);
+        cascade(s);
+      },
+      lines: [
+        { id: "imagine", say: L.imagine, mood: "excited", pause: 2800 },
+        { id: "pip", say: L.pip, mood: "happy" },
+      ],
     },
-    lines: [
-      { say: "Imagine this is your home. Alive, in 3D, right inside Home Assistant.", mood: "excited", pause: 2800 },
-      { say: "I'm Pip! Give me a couple of minutes, and I'll show you what it can do.", mood: "happy" },
-    ],
-  },
-  {
-    title: "Live, in 3D",
-    kicker: "Free, for every home",
-    chips: [{ icon: mdiLightbulbGroup, label: "Lights on", value: lightsOn }],
-    start: (s) => s.house(false),
-    end: (s) => s.props([]),
-    lines: [
-      { say: "Every light, door and window sits where it really is, and changes the moment it does." },
-      {
-        say: "And the little faces show who's home, room by room. That's Sam, in the kitchen!", mood: "happy",
-        do: (s) => {
-          s.quiet("person.alex", "home");
-          s.quiet("person.sam", "home");
-          s.quiet("sensor.sams_watch", "kitchen", { distance: 1.4 });
+    {
+      ...C("live"),
+      chips: [{ icon: mdiLightbulbGroup, label: S.chips.lightsOn, value: lightsOn }],
+      start: (s) => s.house(false),
+      end: (s) => s.props([]),
+      lines: [
+        { id: "everything", say: L.everything },
+        {
+          id: "faces", say: L.faces, mood: "happy",
+          do: (s) => {
+            s.quiet("person.alex", "home");
+            s.quiet("person.sam", "home");
+            s.quiet("sensor.sams_watch", "kitchen", { distance: 1.4 });
+          },
         },
-      },
-      {
-        say: "Set the scene. Movie night: the lights go down, and the telly comes on.", pause: 900, gap: 1100,
-        do: (s) => {
-          s.fly("light.living_room_downlights");
-          s.props([{ kind: "scenes" }]);
+        {
+          id: "scene", say: L.scene, pause: 900, gap: 1100,
+          do: (s) => {
+            s.fly("light.living_room_downlights");
+            s.props([{ kind: "scenes" }]);
+          },
+          cues: { movie: (s) => s.tap("movie", movieNight) },
         },
-        cues: [["Movie", (s) => s.tap("movie", movieNight)]],
-      },
-      { say: "Friends coming round? One tap, and it's bright and warm.", mood: "happy", gap: 1000, cues: [["One", (s) => s.tap("bright", bright)]] },
-      {
-        say: "Real sky, real weather: sunshine, rain, thunder, fog... and even snow!", mood: "excited", gap: 1800,
-        do: (s) => {
-          s.props([]);
-          s.house(true);
-          s.sky("day", "clear");
-          s.later(800, () => s.turn(150, 6500));
+        { id: "friends", say: L.friends, mood: "happy", gap: 1000, cues: { bright: (s) => s.tap("bright", bright) } },
+        {
+          id: "weather", say: L.weather, mood: "excited", gap: 1800,
+          do: (s) => {
+            s.props([]);
+            s.house(true);
+            s.sky("day", "clear");
+            s.later(800, () => s.turn(150, 6500));
+          },
+          cues: {
+            rain: (s) => s.sky("day", "rain"),
+            storm: (s) => s.sky("day", "storm"),
+            fog: (s) => s.sky("day", "fog"),
+            snow: (s) => s.sky("day", "snow"),
+          },
         },
-        cues: [
-          ["rain", (s) => s.sky("day", "rain")],
-          ["thunder", (s) => s.sky("day", "storm")],
-          ["fog", (s) => s.sky("day", "fog")],
-          ["snow", (s) => s.sky("day", "snow")],
-        ],
-      },
-    ],
-  },
-  {
-    title: "Make it yours",
-    kicker: "Finishes, furniture, and your own floor plan",
-    start: (s) => {
-      s.sky("day", "clear");
-      s.house(true);
+      ],
     },
-    end: (s) => {
-      s.props([]);
-      s.explode(false);
-      s.restyle(null);
-    },
-    lines: [
-      {
-        say: "Make it look like home. Change the bricks...", gap: 900,
-        do: (s) => s.props([{ kind: "editor", tab: "home" }]),
-        cues: [["bricks", (s) => s.tap("out:brick_buff", (s) => s.restyle(makeover(0)))]],
+    {
+      ...C("yours"),
+      start: (s) => {
+        s.sky("day", "clear");
+        s.house(true);
       },
-      {
-        say: "paint the walls, or paper them, and pick the flooring.", gap: 2200,
-        do: (s) => {
-          s.fly("light.living_room_downlights");
-          s.props([{ kind: "editor", tab: "room" }]);
+      end: (s) => {
+        s.props([]);
+        s.explode(false);
+        s.restyle(null);
+      },
+      lines: [
+        {
+          id: "bricks", say: L.bricks, gap: 900,
+          do: (s) => s.props([{ kind: "editor", tab: "home" }]),
+          cues: { bricks: (s) => s.tap("out:brick_buff", (s) => s.restyle(makeover(0))) },
         },
-        cues: [
-          ["paint", (s) => s.tap(`paint:${SAGE}`, (s) => s.restyle(makeover(1)))],
-          ["paper", (s) => s.tap("walls:wallpaper_leaves", (s) => s.restyle(makeover(2)))],
-          ["flooring", (s) => s.tap("floor:herringbone", (s) => s.restyle(makeover(3)))],
-        ],
-      },
-      {
-        say: "Got an iPhone with LiDAR? Scan your home room by room, and it's in 3D in minutes.",
-        do: (s) => {
-          s.restyle(null);
-          s.house(false);
-          s.explode(true);
-          s.props([{ kind: "scan" }]);
+        {
+          id: "paint", say: L.paint, gap: 2200,
+          do: (s) => {
+            s.fly("light.living_room_downlights");
+            s.props([{ kind: "editor", tab: "room" }]);
+          },
+          cues: {
+            paint: (s) => s.tap(`paint:${SAGE}`, (s) => s.restyle(makeover(1))),
+            paper: (s) => s.tap("walls:wallpaper_leaves", (s) => s.restyle(makeover(2))),
+            floor: (s) => s.tap("floor:herringbone", (s) => s.restyle(makeover(3))),
+          },
         },
-      },
-      { say: "Or start from a house type, or trace the estate agent's floor plan.", gap: 600 },
-    ],
-  },
-  {
-    title: "While you were out",
-    kicker: "Your day, played back on the house",
-    addOn: "Security add-on",
-    tagline: "Know what happened, not just that something did.",
-    start: (s) => {
-      s.sky("now");
-      s.house(false);
-      s.replay("07:40");
-    },
-    end: (s) => {
-      s.props([]);
-      s.endReplay();
-    },
-    lines: [
-      { say: "Now, the add-ons. Out all day? Security plays back what happened, right on the house.", replay: "08:28" },
-      { say: "Half past eight. Everyone's gone, and the alarm sets itself.", replay: "08:40" },
-      { say: "Ten past ten: a parcel. And here's the doorbell clip, playing right beside it.", do: (s) => s.props([CLIP]), replay: "10:13", gap: 700 },
-      { say: "One o'clock: the dog walker lets themselves in, and takes the dog out.", do: (s) => s.props([]), replay: "13:20" },
-      { say: "Twenty to six: Alex is home, and the heating's already on.", replay: "17:50" },
-      {
-        say: "And Alex's phone has the whole day, summed up.",
-        do: (s) => s.props([{ kind: "alert", time: "17:41", title: "While you were out", body: "A parcel at 10:12, and the dog walker at 1 o'clock. Tap to play it back." }]),
-        gap: 900,
-      },
-    ],
-  },
-  {
-    title: "Energy",
-    kicker: "What every room uses, and what it costs",
-    addOn: "Energy add-on",
-    tagline: "See where the money goes. Keep more of it.",
-    chips: [
-      { icon: mdiHomeLightningBolt, label: "House now", value: "2.8 kW" },
-      { icon: mdiCashMultiple, label: "Today so far", value: "£1.84" },
-      { icon: mdiClockOutline, label: "Cheapest power", value: "00:30 – 05:30" },
-      { icon: mdiSolarPower, label: "Best slope for panels", value: "98% of the best" },
-    ],
-    start: (s) => {
-      s.sky("day", "clear");
-      s.floor(0);
-      energyRooms(s, true);
-    },
-    end: (s) => {
-      s.props([]);
-      energyRooms(s, false);
-      solarRoof(s, false);
-    },
-    lines: [
-      { say: "The Energy add-on shows what every room is using, right now." },
-      { say: "The kitchen's the hungry one. Kettle's on!", mood: "happy", do: (s) => s.fly("media_player.kitchen_speaker") },
-      { say: "It knows when power's cheapest, and what today has cost so far.", do: (s) => s.floor(0) },
-      {
-        say: "Now, look up at the roof!", mood: "excited", gap: 1100,
-        after: (s) => {
-          energyRooms(s, false);
-          s.house(true);
-          solarRoof(s, true);
-          s.view.toast("Sun on the roof: the yellower, the better for panels");
+        {
+          id: "scan", say: L.scan,
+          do: (s) => {
+            s.restyle(null);
+            s.house(false);
+            s.explode(true);
+            s.props([{ kind: "scan" }]);
+          },
         },
-      },
-      { say: "It follows the sun over your roof all year, and scores every slope for panels.", do: (s) => s.props([{ kind: "energy" }]) },
-      {
-        say: "Want more? Try it first: three more panels would save about two hundred and twenty pounds a year, and pay back in under seven years.",
-        do: (s) => s.whatIf(), gap: 1200,
-      },
-    ],
-  },
-  {
-    title: "The everyday stuff",
-    kicker: "Appliances, bins, damp and mould",
-    addOn: "Household add-on",
-    tagline: "The chores that remember themselves.",
-    chips: [
-      { icon: mdiDishwasher, label: "Dishwasher", value: "Done" },
-      { icon: mdiTrashCan, label: "Bins", value: "Black bin tomorrow" },
-      { icon: mdiWaterPercent, label: "Bathroom", value: "Damp risk this week" },
-    ],
-    start: (s) => {
-      s.floor(0);
-      dishwasher(s, true);
+        { id: "plans", say: L.plans, gap: 600 },
+      ],
     },
-    end: (s) => {
-      dishwasher(s, false);
-      tintRoom(s, "bathroom", null, null);
+    {
+      ...C("security"),
+      start: (s) => {
+        s.sky("now");
+        s.house(false);
+        s.replay("07:40");
+      },
+      end: (s) => {
+        s.props([]);
+        s.endReplay();
+      },
+      lines: [
+        { id: "security", say: L.security, replay: "08:28" },
+        { id: "halfEight", say: L.halfEight, replay: "08:40" },
+        { id: "parcel", say: L.parcel, do: (s) => s.props([clip]), replay: "10:13", gap: 700 },
+        { id: "walker", say: L.walker, do: (s) => s.props([]), replay: "13:20" },
+        { id: "alexHome", say: L.alexHome, replay: "17:50" },
+        { id: "summary", say: L.summary, do: (s) => s.props([{ kind: "alert", time: "17:41", title: S.props.alertTitle, body: S.props.alertBody }]), gap: 900 },
+      ],
     },
-    lines: [
-      { say: "Household keeps an eye on the everyday stuff. The dishwasher's done, and it says so on every screen.", mood: "happy" },
-      {
-        say: "It tags the bin to put out the night before, and spots damp and mould, room by room.",
-        do: (s) => {
-          s.floor(1);
-          tintRoom(s, "bathroom", [0.3, 0.6, 1, 0.45], "Damp risk");
+    {
+      ...C("energy"),
+      chips: [
+        { icon: mdiHomeLightningBolt, label: S.chips.houseNow, value: `${num(S, 2.8, 1)} kW` },
+        { icon: mdiCashMultiple, label: S.chips.todaySoFar, value: money(S, 1.84, 0.01) },
+        { icon: mdiClockOutline, label: S.chips.cheapest, value: "00:30 – 05:30" },
+        { icon: mdiSolarPower, label: S.chips.bestSlope, value: fill(S.chips.bestSlopeValue, { pct: 98 }) },
+      ],
+      start: (s) => {
+        s.sky("day", "clear");
+        s.floor(0);
+        energyRooms(s, true, S);
+      },
+      end: (s) => {
+        s.props([]);
+        energyRooms(s, false, S);
+        solarRoof(s, false);
+      },
+      lines: [
+        { id: "energy", say: L.energy },
+        { id: "kettle", say: L.kettle, mood: "happy", do: (s) => s.fly("media_player.kitchen_speaker") },
+        { id: "cheap", say: L.cheap, do: (s) => s.floor(0) },
+        {
+          id: "roof", say: L.roof, mood: "excited", gap: 1100,
+          after: (s) => {
+            energyRooms(s, false, S);
+            s.house(true);
+            solarRoof(s, true);
+            s.view.toast(S.panels.toast);
+          },
         },
+        { id: "sun", say: L.sun, do: (s) => s.props([{ kind: "energy" }]) },
+        { id: "whatIf", say: fill(L.whatIf, { saving: roughly(S, 223) }), do: (s) => s.whatIf(), gap: 1200 },
+      ],
+    },
+    {
+      ...C("household"),
+      chips: [
+        { icon: mdiDishwasher, label: S.chips.dishwasher, value: S.chips.done },
+        { icon: mdiTrashCan, label: S.chips.bins, value: S.chips.binsValue },
+        { icon: mdiWaterPercent, label: S.chips.bathroom, value: S.chips.bathroomValue },
+      ],
+      start: (s) => {
+        s.floor(0);
+        dishwasher(s, true, S.props.dishwasherDone);
       },
-      { say: "It'll even tell you when to open a window. Nicely!", mood: "wink" },
-    ],
-  },
-  {
-    title: "On the wall",
-    kicker: "A screen by the front door",
-    addOn: "Wall Tablet add-on",
-    tagline: "Your whole home, by the front door.",
-    start: (s) => {
-      s.house(true);
-      s.props([{ kind: "tablet" }]);
+      end: (s) => {
+        dishwasher(s, false);
+        tintRoom(s, "bathroom", null, null);
+      },
+      lines: [
+        { id: "household", say: L.household, mood: "happy" },
+        {
+          id: "bins", say: L.bins,
+          do: (s) => {
+            s.floor(1);
+            tintRoom(s, "bathroom", [0.3, 0.6, 1, 0.45], S.props.damp);
+          },
+        },
+        { id: "window", say: L.window, mood: "wink" },
+      ],
     },
-    end: (s) => s.props([]),
-    lines: [
-      { say: "Got a spare tablet? Put it up by the front door, and the Wall Tablet add-on makes it your home's own screen." },
-      { say: "It wakes as you walk past, with the time, the weather, and who's home." },
-      { say: "Add a video doorbell, and its camera takes over the moment someone's there.", mood: "excited", gap: 1600, cues: [["camera", (s) => s.ring()]] },
-    ],
-  },
-  {
-    title: "Your turn",
-    kicker: "Get VirtuHome",
-    // the closing shot: round the back at night, every light on, the garden's too, behind the end card
-    start: (s) => {
-      s.sky("night");
-      s.house(true);
-      const lights = Object.keys(s.hass.states).filter((id) => id.startsWith("light.") || /^switch\.(deck|garden|patio)/.test(id));
-      lights.forEach((id, i) => s.later(i * 90, () => s.quiet(id, "on", id.startsWith("light.") ? { color_temp_kelvin: 2700, brightness: 220, rgb_color: undefined } : {})));
-      s.later(900, () => {
-        s.turn(155, 7000);
-        s.zoom(1.2, 7000);
-      });
+    {
+      ...C("wall"),
+      start: (s) => {
+        s.house(true);
+        s.props([{ kind: "tablet" }]);
+      },
+      end: (s) => s.props([]),
+      lines: [
+        { id: "tablet", say: L.tablet },
+        { id: "wakes", say: L.wakes },
+        { id: "doorbell", say: L.doorbell, mood: "excited", gap: 1600, cues: { ring: (s) => s.ring() } },
+      ],
     },
-    lines: [
-      { say: "VirtuHome is free, in the Home Assistant Community Store.", mood: "happy" },
-      { say: "And every add-on has a free fourteen-day trial. Go on, try them on your own home!", mood: "excited", when: (s) => s.trials },
-      { say: "And the add-ons are coming very soon. Don't miss them!", mood: "excited", when: (s) => !s.trials },
-      { say: "Thanks so much for watching. See you soon!", mood: "excited" },
-    ],
-  },
-];
+    {
+      ...C("end"),
+      // the closing shot: round the back at night, every light on, the garden's too, behind the end card
+      start: (s) => {
+        s.sky("night");
+        s.house(true);
+        const lights = Object.keys(s.hass.states).filter((id) => id.startsWith("light.") || /^switch\.(deck|garden|patio)/.test(id));
+        lights.forEach((id, i) => s.later(i * 90, () => s.quiet(id, "on", id.startsWith("light.") ? { color_temp_kelvin: 2700, brightness: 220, rgb_color: undefined } : {})));
+        s.later(900, () => {
+          s.turn(155, 7000);
+          s.zoom(1.2, 7000);
+        });
+      },
+      lines: [
+        { id: "free", say: L.free, mood: "happy" },
+        { id: "trials", say: L.trials, mood: "excited", when: (s) => s.trials },
+        { id: "soon", say: L.soon, mood: "excited", when: (s) => !s.trials },
+        { id: "thanks", say: L.thanks, mood: "excited" },
+      ],
+    },
+  ];
+}

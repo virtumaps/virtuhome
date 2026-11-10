@@ -6,7 +6,8 @@
 import { mdiClose, mdiLightbulbGroup, mdiPlay, mdiRedo, mdiUndo, mdiContentSave, mdiWhiteBalanceSunny } from "@mdi/js";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, PAINT_SWATCHES, WALL_FINISHES, type FinishDef } from "../../src/scene/finishes";
 import { finishPreview } from "../../src/scene/textures";
-import { t } from "../../src/i18n";
+import { esc } from "../../src/i18n";
+import { fill, num, money, type DemoStrings } from "../lang";
 import type { Clip } from "./props";
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`;
@@ -87,30 +88,31 @@ class Panel {
 
 /** The living room's sheet, as far as its buttons: the lights, and its scenes. */
 export class Scenes extends Panel {
-  constructor() {
-    super("vsheet scenes", `<div class="hd"><b>Living Room</b><small>19.4° · 55 %</small></div>
+  constructor(S: DemoStrings) {
+    const P = S.panels;
+    super("vsheet scenes", `<div class="hd"><b>${esc(S.house["Living Room"])}</b><small>${num(S, 19.4, 1)}° · 55 %</small></div>
       <div class="acts">
-        <button data-k="all">${svg(mdiLightbulbGroup)}All lights on</button>
-        <button data-k="bright" data-g="scene">${svg(mdiPlay)}Bright</button>
-        <button data-k="movie" data-g="scene">${svg(mdiPlay)}Movie night</button>
+        <button data-k="all">${svg(mdiLightbulbGroup)}${esc(P.allLightsOn)}</button>
+        <button data-k="bright" data-g="scene">${svg(mdiPlay)}${esc(P.bright)}</button>
+        <button data-k="movie" data-g="scene">${svg(mdiPlay)}${esc(P.movieNight)}</button>
       </div>`);
   }
 }
 
 // ------------------------------------------------------------------ the editor
 
-const tiles = (defs: Record<string, FinishDef>, keys: string[], group: string, current: string, tint: string | null = null) =>
+const tiles = (S: DemoStrings, defs: Record<string, FinishDef>, keys: string[], group: string, current: string, tint: string | null = null) =>
   `<div class="tiles">${keys.map((k) => {
     const d = defs[k];
     const colour = k === current && d.tintable && tint ? parseInt(tint.slice(1), 16) : d.color;
     const pic = finishPreview(d.tex, d.scale, colour, 64);
     return `<button class="tile${k === current ? " on" : ""}" data-k="${group}:${k}" data-g="${group}"${k === current ? " data-first" : ""}>` +
-      `<i style="background:${hexOf(colour)}${pic ? ` url(${pic}) center/cover` : ""}"></i>${t(d.label as never)}</button>`;
+      `<i style="background:${hexOf(colour)}${pic ? ` url(${pic}) center/cover` : ""}"></i>${esc(S.panels.finishes[`${group}.${k}`] ?? k)}</button>`;
   }).join("")}</div>`;
 
-const swatches = (group: string, current: string | null) => `<div class="sws">
-  <button class="sw none${current ? "" : " on"}" data-g="${group}"${current ? "" : " data-first"} aria-label="Plain white"></button>
-  ${PAINTS.map(([name, c]) => `<button class="sw${c === current ? " on" : ""}" data-k="${group}:${c}" data-g="${group}" style="--c:${c}" aria-label="${t(name as never)}"></button>`).join("")}
+const swatches = (S: DemoStrings, group: string, current: string | null) => `<div class="sws">
+  <button class="sw none${current ? "" : " on"}" data-g="${group}"${current ? "" : " data-first"} aria-label="${esc(S.panels.plainWhite)}"></button>
+  ${PAINTS.map(([, c]) => `<button class="sw${c === current ? " on" : ""}" data-k="${group}:${c}" data-g="${group}" style="--c:${c}" aria-hidden="true"></button>`).join("")}
   </div>`;
 
 // what the editor's panel offers
@@ -129,24 +131,25 @@ export function tapKeys(): string[] {
 
 /** The editor's panel: the outside walls on its Home tab, and a room's floor and walls. */
 export class Editor extends Panel {
-  constructor() {
-    const tab = (name: string, k: string) => `<span class="tab" data-tab="${k}">${name}</span>`;
-    super("vsheet day editor", `<div class="ehd"><b>Edit home</b><span class="hb">${svg(mdiUndo)}Undo</span><span class="hb">${svg(mdiRedo)}Redo</span>
-        <span class="save">${svg(mdiContentSave)}Save</span><span class="x">${svg(mdiClose)}</span></div>
-      <div class="modes"><span class="on">3D view</span><span>2D plan</span></div>
-      <div class="tabs">${tab("Home", "home")}${tab("Rooms", "rooms")}${tab("Devices", "devices")}${tab("Selected", "room")}${tab("Extras", "extras")}</div>
+  constructor(S: DemoStrings) {
+    const P = S.panels;
+    const tab = (name: string, k: string) => `<span class="tab" data-tab="${k}">${esc(name)}</span>`;
+    super("vsheet day editor", `<div class="ehd"><b>${esc(P.editHome)}</b><span class="hb">${svg(mdiUndo)}${esc(P.undo)}</span><span class="hb">${svg(mdiRedo)}${esc(P.redo)}</span>
+        <span class="save">${svg(mdiContentSave)}${esc(P.save)}</span><span class="x">${svg(mdiClose)}</span></div>
+      <div class="modes"><span class="on">${esc(P.view3d)}</span><span>${esc(P.plan2d)}</span></div>
+      <div class="tabs">${tab(P.tabHome, "home")}${tab(P.tabRooms, "rooms")}${tab(P.tabDevices, "devices")}${tab(P.tabSelected, "room")}${tab(P.tabExtras, "extras")}</div>
       <div class="body scroll">
         <section data-tab="home">
-          <h4>Outside walls</h4>
-          ${tiles(EXTERIOR_FINISHES, OUTSIDE, "out", "brick")}
+          <h4>${esc(P.outsideWalls)}</h4>
+          ${tiles(S, EXTERIOR_FINISHES, OUTSIDE, "out", "brick")}
         </section>
         <section data-tab="room">
-          <h4>Living Room</h4>
-          <div class="sub">Walls</div>
-          ${tiles(WALL_FINISHES, WALLS, "walls", "paint")}
-          ${swatches("paint", null)}
-          <div class="sub">Floor</div>
-          ${tiles(FLOOR_FINISHES, FLOORS, "floor", "oak")}
+          <h4>${esc(S.house["Living Room"])}</h4>
+          <div class="sub">${esc(P.walls)}</div>
+          ${tiles(S, WALL_FINISHES, WALLS, "walls", "paint")}
+          ${swatches(S, "paint", null)}
+          <div class="sub">${esc(P.floor)}</div>
+          ${tiles(S, FLOOR_FINISHES, FLOORS, "floor", "oak")}
         </section>
       </div>`);
     this.show("home");
@@ -200,62 +203,74 @@ function rampCss(pct: number): string {
   return "#fdf3a0";
 }
 
-// what the Energy add-on's Solar on the roof says for the demo house (its sun model, its shade, its panels)
-const SLOPES: [string, string, number][] = [
-  ["South slope, 35°", "First Floor roof · 24 m² · 997 kWh/kWp · 2% lost to shade", 98],
-  ["West slope, 35°", "First Floor roof · 21 m² · 840 kWh/kWp", 83],
-  ["West slope, 17°", "Ground Floor roof 2 · 11 m² · 607 kWh/kWp · 30% lost to shade", 60],
-  ["North slope, 35°", "First Floor roof · 24 m² · 554 kWh/kWp · 4% lost to shade", 55],
-  ["West slope, 17°", "Ground Floor roof 1 · 10 m² · 395 kWh/kWp · 54% lost to shade", 39],
+// what the Energy add-on's Solar on the roof says for the demo house (its sun model, its shade, its
+// panels): [slope, degrees, roof (0: the first floor's, else the ground floor's nth), m², kWh/kWp, % lost to shade, %]
+type Slope = ["south" | "west" | "north", number, number, number, number, number, number];
+const SLOPES: Slope[] = [
+  ["south", 35, 0, 24, 997, 2, 98],
+  ["west", 35, 0, 21, 840, 0, 83],
+  ["west", 17, 2, 11, 607, 30, 60],
+  ["north", 35, 0, 24, 554, 4, 55],
+  ["west", 17, 1, 10, 395, 54, 39],
 ];
-const ARRAYS: [string, string, number][] = [
-  ["3 panels, 1.29 kWp", "South slope, 35° · First Floor roof · 1,310 kWh a year", 100],
-  ["2 panels, 0.86 kWp", "South slope, 35° · First Floor roof · 872 kWh a year", 100],
-  ["3 panels, 1.29 kWp", "North slope, 35° · First Floor roof · 739 kWh a year", 56],
-];
+// its placed panels: [panels, kWp, slope, kWh a year, %]
+const ARRAYS: [number, number, "south" | "north", number, number][] = [[3, 1.29, "south", 1310, 100], [2, 0.86, "south", 872, 100], [3, 1.29, "north", 739, 56]];
 
-const row = ([name, small, pct]: [string, string, number]) =>
-  `<div class="srow"><div class="n"><b>${name}</b><small>${small}</small></div><div class="bar"><i style="width:${pct}%;background:${rampCss(pct)}"></i></div><span>${pct}%</span></div>`;
+const row = (name: string, small: string, pct: number) =>
+  `<div class="srow"><div class="n"><b>${esc(name)}</b><small>${esc(small)}</small></div><div class="bar"><i style="width:${pct}%;background:${rampCss(pct)}"></i></div><span>${pct}%</span></div>`;
 
 /** The Energy sheet's last two parts: Solar on the roof, and What if, with three more panels tried. */
 export class EnergySheet extends Panel {
-  constructor() {
-    super("vsheet day energy", `<h3>Energy</h3>
+  private readonly P: DemoStrings["panels"];
+
+  constructor(S: DemoStrings) {
+    const P = S.panels;
+    const n = (v: number, d = 0) => num(S, v, d);
+    const slope = (k: "south" | "west" | "north", deg: number) => fill(P.slope, { slope: P[k], deg });
+    const roof = (r: number) => (r ? fill(P.groundFloorRoof, { n: r }) : P.firstFloorRoof);
+    const rows = SLOPES.map(([k, deg, r, m2, per, shade, pct]) =>
+      row(slope(k, deg), [roof(r), `${m2} m²`, `${n(per)} kWh/kWp`, ...(shade >= 2 ? [fill(P.lostToShade, { pct: shade })] : [])].join(" · "), pct)).join("");
+    const arrays = ARRAYS.map(([count, kwp, k, kwh, pct]) =>
+      row(fill(P.panels, { n: count, kwp: n(kwp, 2) }), [slope(k, 35), roof(0), fill(P.kwhAYear, { kwh: n(kwh) })].join(" · "), pct)).join("");
+    const cash = (pounds: number) => money(S, pounds, S.money.perPound >= 10 ? 10 : 1);
+    const cell = (k: string, a: string, b: string, cls = "") => `<span class="n">${esc(k)}</span><span>${esc(a)}</span><span class="${cls}">${esc(b)}</span>`;
+    super("vsheet day energy", `<h3>${esc(P.energy)}</h3>
       <div class="body scroll">
-        <div class="sh"><span>Solar on the roof</span><button class="pill on" data-k="map">${svg(mdiWhiteBalanceSunny)}Shown on the roof</button></div>
-        <p class="best">Best: the south slope of the First Floor roof, at 98% of the best the sun allows here: about 997 kWh a year from each kWp of panels.</p>
-        ${SLOPES.map(row).join("")}
-        <div class="ssub">Your panels: about 2,921 kWh a year from 3.44 kWp</div>
-        ${ARRAYS.map(row).join("")}
+        <div class="sh"><span>${esc(P.solarOnRoof)}</span><button class="pill on" data-k="map">${svg(mdiWhiteBalanceSunny)}${esc(P.shownOnRoof)}</button></div>
+        <p class="best">${esc(fill(P.best, { pct: 98, kwh: n(997) }))}</p>
+        ${rows}
+        <div class="ssub">${esc(fill(P.yourPanels, { kwh: n(2921), kwp: n(3.44, 2) }))}</div>
+        ${arrays}
         <div class="key"><span>40%</span><i style="background:linear-gradient(90deg,${RAMP.map(([at, c]) => `${hexOf(c)} ${at * 100}%`).join(",")})"></i><span>100%</span></div>
-        <div class="sh" data-k="whatif-h"><span>What if</span><button class="pill go" data-k="try">Try it</button></div>
+        <div class="sh" data-k="whatif-h"><span>${esc(P.whatIf)}</span><button class="pill go" data-k="try">${esc(P.tryIt)}</button></div>
         <div class="wf" hidden>
-          <div class="fld"><label>Panels on</label><span class="in sel">South slope, 35° · First Floor roof</span></div>
-          <div class="fld"><label>How many</label><span class="pm">−</span><span class="in val" data-n>0</span><span class="pm" data-k="more">+</span><small>of</small><span class="in val">430</span><small>W</small>
-            <small class="room">room for about 3 more</small></div>
-          <div class="fld"><label>Add a battery</label><span class="pm">−</span><span class="in val">0</span><span class="pm">+</span><small>kWh</small></div>
-          <div class="fld"><label>Cost of the work</label><span class="in val wide">£1,500</span><small>for the payback</small></div>
+          <div class="fld"><label>${esc(P.panelsOn)}</label><span class="in sel">${esc(`${slope("south", 35)} · ${roof(0)}`)}</span></div>
+          <div class="fld"><label>${esc(P.howMany)}</label><span class="pm">−</span><span class="in val" data-n>0</span><span class="pm" data-k="more">+</span><small>${esc(P.of)}</small><span class="in val">430</span><small>W</small>
+            <small class="room">${esc(fill(P.roomFor, { n: 3 }))}</small></div>
+          <div class="fld"><label>${esc(P.addBattery)}</label><span class="pm">−</span><span class="in val">${n(0)}</span><span class="pm">+</span><small>kWh</small></div>
+          <div class="fld"><label>${esc(P.costOfWork)}</label><span class="in val wide">${esc(cash(1500))}</span><small>${esc(P.forPayback)}</small></div>
           <div class="wt">
-            <span class="n k">A year</span><span class="k">Now</span><span class="k">With them</span>
-            <span class="n">Solar, kWh</span><span>2,921</span><span>4,207</span>
-            <span class="n">Used at home</span><span>1,310 (45%)</span><span>1,630 (39%)</span>
-            <span class="n">Sold, kWh</span><span>1,611</span><span>2,577</span>
-            <span class="n">Bought, kWh</span><span>2,690</span><span>2,370</span>
-            <span class="n">Bill</span><span>£417</span><span>£194</span>
+            <span class="n k">${esc(P.aYear)}</span><span class="k">${esc(P.now)}</span><span class="k">${esc(P.withThem)}</span>
+            ${cell(P.solarKwh, n(2921), n(4207))}
+            ${cell(P.usedAtHome, `${n(1310)} (45%)`, `${n(1630)} (39%)`)}
+            ${cell(P.soldKwh, n(1611), n(2577))}
+            ${cell(P.boughtKwh, n(2690), n(2370))}
+            ${cell(P.bill, cash(417), cash(194))}
             <i class="rule"></i>
-            <span class="n">Saving</span><span></span><span class="good">£223 a year</span>
-            <span class="n">Cost of the work</span><span></span><span>£1,500</span>
-            <span class="n">Pays back in</span><span></span><span class="good">6.7 years</span>
+            ${cell(P.saving, "", fill(P.savingValue, { money: cash(223) }), "good")}
+            ${cell(P.costOfWork, "", cash(1500))}
+            ${cell(P.paysBackIn, "", fill(P.years, { n: n(6.7, 1) }), "good")}
           </div>
         </div>
       </div>`);
+    this.P = P;
   }
 
   /** What if → Try it, then three more panels, one tap at a time. */
   tryIt(onDone?: () => void): void {
     this.tap("try", () => {
       this.el.querySelector<HTMLElement>(".wf")!.hidden = false;
-      this.el.querySelector<HTMLElement>("[data-k=try]")!.textContent = "Close";
+      this.el.querySelector<HTMLElement>("[data-k=try]")!.textContent = this.P.close;
       this.el.querySelector<HTMLElement>(".wt")!.classList.remove("in");
       let n = 0;
       const more = () => {
@@ -279,7 +294,7 @@ export class EnergySheet extends Panel {
   reset(): void {
     super.reset();
     this.el.querySelector<HTMLElement>(".wf")!.hidden = true;
-    this.el.querySelector<HTMLElement>("[data-k=try]")!.textContent = "Try it";
+    this.el.querySelector<HTMLElement>("[data-k=try]")!.textContent = this.P.tryIt;
     this.el.querySelector<HTMLElement>("[data-n]")!.textContent = "0";
     this.el.querySelector<HTMLElement>(".wt")!.classList.remove("in");
     this.el.querySelector(".body")!.scrollTop = 0;
@@ -298,12 +313,13 @@ export class WallTablet {
   private video = document.createElement("video");
   private stream: MediaStream | null = null;
 
-  constructor(private clip: Clip) {
+  constructor(private clip: Clip, S: DemoStrings) {
     this.el.className = "panel walltab";
-    const day = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    const day = new Date().toLocaleDateString(S.locale, { weekday: "long", day: "numeric", month: "long" });
+    const P = S.panels;
     this.el.innerHTML = `<div class="frame"><div class="screen">
-        <div class="saver"><div class="time">17:41</div><div class="date">${day}</div>
-          <div class="more"><span>Partly cloudy, 12 °C</span><span>Alex and Sam home</span><span>19:00 Bins out</span></div></div>
+        <div class="saver"><div class="time">17:41</div><div class="date">${esc(day)}</div>
+          <div class="more"><span>${esc(P.weather)}</span><span>${esc(P.whoIsHome)}</span><span>${esc(P.nextEvent)}</span></div></div>
         <div class="pop"><div class="feed"></div><span class="x">${svg(mdiClose)}</span></div>
       </div><i class="cam"></i></div>`;
     this.video.muted = true;

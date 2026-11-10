@@ -10,6 +10,13 @@
   clip and a phone alert, every room's power, the roof's solar and a what-if as the Energy sheet shows
   them, and a wall tablet with its screensaver and the doorbell. The add-ons' parts are previews: the
   solar scores are the Energy add-on's for the demo house, the rest are pretend numbers.
+- The online demo and its tour speak 14 languages: English, German, Dutch, French, Italian, Spanish,
+  Portuguese, Swedish, Danish, Norwegian, Polish, Czech, Turkish and Bulgarian. It opens in the one
+  picked before, else the browser's, else the one where the viewer is (from the time zone, nothing is
+  looked up); the globe in its bar changes it. The host has a recorded voice in English, French,
+  Spanish, Italian and Portuguese, and speaks the others with the browser's voice (or in English with
+  subtitles where the browser has none). The demo house's rooms are named in the language, and
+  VirtuHome's own texts follow where the app has them (German, Dutch).
 - The editor's finishes are tiles that show what each looks like (bricks, wallpaper, herringbone…), the
   wallpapers in the colour picked, for floors, walls, the outside walls, upholstery, doors and windows,
   and roofs.

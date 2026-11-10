@@ -2,7 +2,8 @@
 // every line and chapter starts, screenshots the moments asked for, and reports the page's errors.
 //   node dev/tour/review.mjs <outdir> [width] [height] ["name=words in the line+ms after,..."]
 // e.g. node dev/tour/review.mjs /tmp/tour 1440 810 "clip=a parcel+3000,end=Thanks+1500"
-// END_WAIT=<ms> waits that long on the end card before its picture. Uses your local Chrome.
+// END_WAIT=<ms> waits that long on the end card before its picture; LANG_CODE=<code> plays it in that
+// language. Uses your local Chrome.
 import { chromium } from "playwright-core";
 const [OUT, W = "1440", H = "810", SHOTS = ""] = process.argv.slice(2);
 const want = SHOTS ? SHOTS.split(",").map((s) => { const [n, rest] = s.split("="); const [text, delay] = rest.split("+"); return { n, text, delay: Number(delay ?? 1200), done: false }; }) : [];
@@ -12,7 +13,7 @@ const page = await browser.newPage({ viewport: { width: Number(W), height: Numbe
 const logs = [];
 page.on("console", (m) => (m.type() === "error" || m.type() === "warning") && logs.push(`${m.type()}: ${m.text()}`));
 page.on("pageerror", (e) => logs.push(`pageerror: ${e.message}`));
-await page.goto("http://127.0.0.1:5181/virtuhome/demo/?tour");
+await page.goto(`http://127.0.0.1:5181/virtuhome/demo/?tour${process.env.LANG_CODE ? `&lang=${process.env.LANG_CODE}` : ""}`);
 await page.waitForTimeout(3500);
 const box = await page.evaluate(() => { const b = document.getElementById("vh-tour").shadowRoot.querySelector(".start").getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; });
 await page.mouse.click(box[0], box[1]);

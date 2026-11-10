@@ -1,8 +1,10 @@
 // The online demo's tour (dev/demo.ts opens it): a host talks viewers through the demo house, with
 // subtitles and music (music.ts), while the house and the 3D view do what she describes and props
-// (props.ts) show what the add-ons show beside it (script.ts). Her lines are recordings when
-// voice/voices.json lists them (voice/make.py makes them), else the browser's own voice. It ends on how
-// to get VirtuHome, and on the add-ons' free trials once the licence server offers them.
+// (props.ts, panels.ts) show what the add-ons show beside it (script.ts), all in the demo's language
+// (dev/lang). Her lines are recordings when voice/<language>/voices.json lists them (voice/make.py
+// makes them), else the browser's own voice in that language, else the English recordings with the
+// subtitles in the language. It ends on how to get VirtuHome, and on the add-ons' free trials once
+// the licence server offers them.
 import { mdiClose, mdiPause, mdiPlay, mdiReplay, mdiSkipNext, mdiVolumeHigh, mdiVolumeOff } from "@mdi/js";
 import type { ReplaySession, ViewHandle } from "../../src/ext/api";
 import type { DemoHass } from "../../src/demo/hass";
@@ -14,7 +16,8 @@ import { Music } from "./music";
 import { Clip, Phone, PROPS_CSS } from "./props";
 import { Editor, EnergySheet, PANELS_CSS, Scenes, WallTablet } from "./panels";
 import type { WeatherPick } from "../../src/live/sky";
-import { CHAPTERS, HOST, SAY_AS, type Chip, type Line, type Prop, type Show } from "./script";
+import { chapters, HOST, type Chip, type Line, type Prop, type Show } from "./script";
+import { cued, EN, fill, RECORDED, spokenAs, type DemoStrings } from "../lang";
 
 /** The demo page's house, as the tour needs it. */
 export interface DemoHouse {
@@ -24,6 +27,9 @@ export interface DemoHouse {
   sky(time: number | null, weather?: WeatherPick | null): void;
   /** Stops what the house does by itself during the tour, and starts it again after. */
   lively(on: boolean): void;
+  /** The demo's language ("de"), and what it says in it. */
+  language: string;
+  strings: DemoStrings;
 }
 
 const CATALOG = "https://license.virtumaps.com/v1/catalog";
@@ -36,8 +42,8 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const sleepMs = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 /** About how long a line takes to say, in seconds. */
 const est = (text: string) => text.split(/\s+/).length / 2.7 + 0.4;
-/** A line as the voice should say it. */
-export const spoken = (text: string) => SAY_AS.reduce((t, [word, as]) => t.replace(word, as), text);
+/** A line as the voice should say it: without its cues, the words the voice gets wrong written as it says them. */
+export const spoken = (S: DemoStrings, text: string) => spokenAs(S, cued(text).text);
 
 /** A recorded line's file name: a hash of what is said (FNV-1a, the same in voice/make.py). */
 export function voiceId(text: string): string {
@@ -163,8 +169,10 @@ ${PANELS_CSS}
 
 // ------------------------------------------------------------------ the browser's own voice
 
-// When there are no recordings: the most natural-sounding women's voices first (the "Online (Natural)",
-// "Premium" and "Enhanced" ones are neural), then the usual ones
+// When there are no recordings: in English, the most natural-sounding women's voices first (the
+// "Online (Natural)", "Premium" and "Enhanced" ones are neural), then the usual ones; in another
+// language, its neural voices first
+const NATURAL = /Natural|Neural|Premium|Enhanced|Online|Google/i;
 const PREFER = [
   "Sonia Online", "Libby Online", "Jenny Online", "Aria Online", "Maisie Online", "Natasha Online",
   "Serena (Premium)", "Kate (Premium)", "Stephanie (Premium)", "Serena (Enhanced)", "Kate (Enhanced)", "Martha (Enhanced)", "Samantha (Enhanced)",
@@ -173,6 +181,8 @@ const PREFER = [
 
 class Speech {
   private chosen: SpeechSynthesisVoice | null = null;
+  /** The language to speak ("de"). */
+  lang = "en";
   readonly ok = typeof speechSynthesis !== "undefined" && typeof SpeechSynthesisUtterance !== "undefined";
   private current: SpeechSynthesisUtterance | null = null;
 
@@ -197,9 +207,18 @@ class Speech {
 
   private choose(): void {
     if (!this.ok) return;
-    const all = speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang));
+    // Norwegian voices go by nb, no or nn
+    const codes = this.lang === "nb" ? ["nb", "no", "nn"] : [this.lang];
+    const all = speechSynthesis.getVoices().filter((v) => codes.includes(v.lang.toLowerCase().split(/[-_]/)[0]));
     const named = (name: string) => all.find((x) => x.name.toLowerCase().includes(name.toLowerCase()));
-    this.chosen = PREFER.map(named).find(Boolean) ?? all.find((x) => /GB/i.test(x.lang)) ?? all[0] ?? null;
+    this.chosen = this.lang === "en"
+      ? PREFER.map(named).find(Boolean) ?? all.find((x) => /GB/i.test(x.lang)) ?? all[0] ?? null
+      : all.find((x) => NATURAL.test(x.name)) ?? all[0] ?? null;
+  }
+
+  /** The browser has a voice in the language. */
+  get has(): boolean {
+    return !!this.chosen;
   }
 
   /** Says a line; `word` hears where each word starts. Resolves when it ends or is cancelled. */
@@ -208,7 +227,7 @@ class Speech {
     return new Promise((done) => {
       const u = new SpeechSynthesisUtterance(text);
       if (this.chosen) u.voice = this.chosen;
-      u.lang = this.chosen?.lang ?? "en-GB";
+      u.lang = this.chosen?.lang ?? this.lang;
       // her own pitch and pace: shifting them is what makes these voices sound robotic
       u.rate = 1;
       u.pitch = 1;
@@ -254,6 +273,11 @@ const timeOf = (hhmm: string) => {
  */
 export function openTour(house: DemoHouse, start: boolean, audio: AudioContext | null = null): void {
   if (document.getElementById("vh-tour")) return;
+  const S = house.strings;
+  const U = S.ui;
+  const CHAPTERS = chapters(S);
+  // the English tour: its recordings stand in when there is no voice in the language
+  const english = chapters(EN).flatMap((c) => c.lines);
   const host = document.createElement("div");
   host.id = "vh-tour";
   document.body.append(host);
@@ -271,15 +295,15 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       <div class="char"><canvas></canvas><span class="tag">${esc(HOST)}</span></div>
       <div class="subs glass" aria-live="polite"><div class="who"></div><p class="say"></p></div>
       <div class="controls glass">
-        <button class="mute" aria-label="Sound off">${svg(mdiVolumeHigh)}</button>
-        <button class="pause" aria-label="Pause">${svg(mdiPause)}</button>
-        <button class="skip" aria-label="Next line">${svg(mdiSkipNext)}</button>
-        <button class="close" aria-label="Close the tour">${svg(mdiClose)}</button>
+        <button class="mute" aria-label="${esc(U.soundOff)}">${svg(mdiVolumeHigh)}</button>
+        <button class="pause" aria-label="${esc(U.pause)}">${svg(mdiPause)}</button>
+        <button class="skip" aria-label="${esc(U.next)}">${svg(mdiSkipNext)}</button>
+        <button class="close" aria-label="${esc(U.close)}">${svg(mdiClose)}</button>
       </div>
       <div class="card glass intro">
-        <h2>Take the <b>tour</b></h2>
-        <p>${esc(HOST)} shows you round the demo house, and everything the add-ons can do, in about two and a half minutes. Turn your sound on.</p>
-        <div class="row"><button class="btn go start">${svg(mdiPlay)} Start the tour</button><button class="btn skipit">No thanks</button></div>
+        <h2>${U.introTitle}</h2>
+        <p>${esc(fill(U.introText, { host: HOST }))}</p>
+        <div class="row"><button class="btn go start">${svg(mdiPlay)} ${esc(U.start)}</button><button class="btn skipit">${esc(U.noThanks)}</button></div>
       </div>
       <div class="card glass outro"></div>
     </div>`;
@@ -308,7 +332,16 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   let lineStart = 0;
   let lineSecs = 1;
   let trials = false;
-  /** Recorded lines (voice/voices.json: id → seconds), when there are any. */
+  /**
+   * How Pip speaks: her recordings in the language, the browser's voice in it, or (with neither) her
+   * English recordings, with the subtitles still in the language.
+   */
+  let mode: "recorded" | "browser" | "english" = "browser";
+  /** The language of the recordings played (voice/<it>/). */
+  let voiceLang = house.language;
+  /** What each line waits for, as a share of the line's time. */
+  let cueAt: { at: number; fn: (s: Show) => void; done: boolean }[] = [];
+  /** Recorded lines (voice/<language>/voices.json: id → seconds), when there are any. */
   let recorded: Record<string, number> | null = null;
   const fetched = new Map<string, HTMLAudioElement>();
   let playing: HTMLAudioElement | null = null;
@@ -318,8 +351,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   const buffers = new Map<string, Promise<AudioBuffer | null>>();
   let push: { from: number; to: number; at: number; ms: number; dist: number } | null = null;
   let turning: { by: number; at: number; ms: number; done: number } | null = null;
-  /** The line's cues: the word each waits for, and whether it has happened. */
-  let cues: { word: number; fn: (s: Show) => void; done: boolean }[] = [];
+
   const level = new Float32Array(1024);
 
   // ---------------------------------------------------------------- the 3D view
@@ -363,7 +395,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     session.show(states, t);
     const hh = String(Math.floor(minute / 60)).padStart(2, "0");
     const mm = String(Math.floor(minute % 60)).padStart(2, "0");
-    $(".clock span").textContent = `Yesterday, ${hh}:${mm}`;
+    $(".clock span").textContent = fill(U.yesterdayAt, { time: `${hh}:${mm}` });
     $(".clock b").style.width = `${Math.max(0, Math.min(100, ((minute - DAY_FROM) / (DAY_TO - DAY_FROM)) * 100))}%`;
   };
 
@@ -371,15 +403,18 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
 
   const propsBox = $(".props");
   const clip = new Clip("parcel", "10:12");
+  clip.text = S.props;
   const clipBox = document.createElement("div");
   clipBox.className = "prop clipbox";
   clipBox.innerHTML = `<div class="cap"></div>`;
   const phone = new Phone();
+  phone.text = S.props;
+  phone.locale = S.locale;
   phone.el.classList.add("prop");
-  const scenes = new Scenes();
-  const editor = new Editor();
-  const energy = new EnergySheet();
-  const tablet = new WallTablet(clip);
+  const scenes = new Scenes(S);
+  const editor = new Editor(S);
+  const energy = new EnergySheet(S);
+  const tablet = new WallTablet(clip, S);
   propsBox.append(clipBox, phone.el, scenes.el, editor.el, energy.el, tablet.el);
   let shownProps: Prop[] = [];
 
@@ -641,36 +676,53 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
 
   // ---------------------------------------------------------------- lines
 
-  const subtitle = (text: string | null) => {
+  /** Where each word of a text starts, as a share of the time it takes to say (pauses at commas and stops count). */
+  const sharesOf = (list: string[]) => {
+    const weight = (w: string) => w.length + 1 + (/(\.\.\.|…)$/.test(w) ? 9 : /[.!?]$/.test(w) ? 7 : /[:;]$/.test(w) ? 5 : /,$/.test(w) ? 4 : 0);
+    const total = list.reduce((sum, w) => sum + weight(w), 0) || 1;
+    let run = 0;
+    return list.map((w) => ((run += weight(w)), (run - weight(w)) / total));
+  };
+
+  /**
+   * Shows a line (without its cue markers), and sets its cues off as the voice reaches their words.
+   * `heard` is the line as the voice says it (another language's when it stands in): the cues follow it.
+   */
+  const subtitle = (text: string | null, heard = text, cues: Line["cues"] = {}) => {
     const subs = $(".subs");
     if (text === null) {
       subs.classList.remove("show");
       return;
     }
     subs.classList.add("show");
-    $(".who").textContent = HOST;
-    const list = text.split(" ");
+    $(".who").textContent = mode === "english" ? `${HOST} · ${U.subtitled}` : HOST;
+    const list = cued(text).text.split(" ");
     let at = 0;
     starts = list.map((w) => ((at += w.length + 1), at - w.length - 1));
-    const weight = (w: string) => w.length + 1 + (/(\.\.\.|…)$/.test(w) ? 9 : /[.!?]$/.test(w) ? 7 : /[:;]$/.test(w) ? 5 : /,$/.test(w) ? 4 : 0);
-    const total = list.reduce((sum, w) => sum + weight(w), 0) || 1;
-    let run = 0;
-    shares = list.map((w) => ((run += weight(w)), (run - weight(w)) / total));
+    shares = sharesOf(list);
     $(".say").innerHTML = list.map((w) => `<span>${esc(w)}</span>`).join(" ");
     words = Array.from($(".say").querySelectorAll("span"));
+    // in another language's voice the words can't light up as she says them: the line shows whole
+    if (mode === "english") words.forEach((w) => w.classList.add("said"));
+    const ref = cued(heard ?? text);
+    const refShares = sharesOf(ref.text.split(" "));
+    cueAt = Object.entries(cues ?? {}).map(([name, fn]) => ({ at: refShares[ref.cues[name] ?? 0] ?? 0, fn, done: false }));
   };
-  /** Lights the first `n` words, and does what waits for them. */
-  const reach = (n: number) => {
-    words.forEach((w, i) => w.classList.toggle("said", i < n));
-    for (const c of cues) {
-      if (c.done || n <= c.word) continue;
+  /** Lights the words said up to a share of the line, and does what waits for them. */
+  const reach = (share: number) => {
+    if (mode !== "english") words.forEach((w, i) => w.classList.toggle("said", share >= 1 || shares[i] <= share + 0.015));
+    for (const c of cueAt) {
+      if (c.done || c.at > share + 0.015) continue;
       c.done = true;
       if (!stopped) c.fn(show);
     }
   };
   /** Lights the words said so far: up to a character, or a share of the line. */
-  const markSaid = (share: number) => reach(share >= 1 ? words.length : shares.filter((x) => x <= share + 0.015).length);
-  const markTo = (char: number) => reach(starts.filter((x) => x <= char).length);
+  const markSaid = (share: number) => reach(share);
+  const markTo = (char: number) => {
+    const n = starts.filter((x) => x <= char).length;
+    reach(n ? shares[n - 1] : 0);
+  };
 
   const sleep = async (ms: number) => {
     await new Promise<void>((done) => {
@@ -689,21 +741,26 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     for (const w of wakers.slice()) w();
   };
 
+  /** What the voice says for a line: the line, or in English when the English recordings stand in. */
+  const heardOf = (line: Line) => (mode === "english" ? english.find((l) => l.id === line.id)?.say ?? line.say : line.say);
+  const voiceOf = (line: Line) => spoken(mode === "english" ? EN : S, heardOf(line));
+  const file = (id: string) => `${VOICE}${voiceLang}/${id}.mp3`;
+
   /** Fetches a recorded line ahead of time: decoded, to play through the music's audio, else as an audio element. */
-  const fetchLine = (text: string) => {
-    const id = voiceId(spoken(text));
+  const fetchLine = (line: Line) => {
+    const id = voiceId(voiceOf(line));
     if (!recorded?.[id]) return;
     const ctx = music.running;
     if (ctx) {
       if (!buffers.has(id)) {
-        buffers.set(id, fetch(`${VOICE}${id}.mp3`).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).catch(() => null));
+        buffers.set(id, fetch(file(id)).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).catch(() => null));
       }
       return;
     }
     if (fetched.has(id)) return;
     const a = new Audio();
     a.preload = "auto";
-    a.src = `${VOICE}${id}.mp3`;
+    a.src = file(id);
     fetched.set(id, a);
   };
 
@@ -711,10 +768,10 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
    * Plays a recorded line through the music's audio (one tap starts both, which phones need); false when
    * that isn't running or the line didn't load, for the audio element to try.
    */
-  const playBuffer = async (id: string, text: string): Promise<boolean> => {
+  const playBuffer = async (id: string, line: Line): Promise<boolean> => {
     const ctx = music.running;
     if (!ctx) return false;
-    fetchLine(text);
+    fetchLine(line);
     const buf = await (buffers.get(id) ?? Promise.resolve(null));
     if (!buf || stopped) return !!stopped;
     await new Promise<void>((done) => {
@@ -747,7 +804,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
 
   /** Plays a recorded line; resolves when it ends, fails, is skipped or the tour stops. */
   const playLine = (id: string) => new Promise<void>((done) => {
-    const a = fetched.get(id) ?? Object.assign(new Audio(`${VOICE}${id}.mp3`), { preload: "auto" });
+    const a = fetched.get(id) ?? Object.assign(new Audio(file(id)), { preload: "auto" });
     fetched.delete(id);
     playing = a;
     meter = music.voice(a);
@@ -765,16 +822,15 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   });
 
   const say = async (line: Line, ahead: Line[]) => {
-    const text = line.say;
-    const voice = spoken(text);
+    const text = cued(line.say).text;
+    const voice = voiceOf(line);
     const id = voiceId(voice);
-    for (const next of ahead) fetchLine(next.say);
+    for (const next of ahead) fetchLine(next);
     face.mood = line.mood ?? "neutral";
     line.do?.(show);
     if (line.pause) await sleep(line.pause);
     if (stopped) return;
-    subtitle(text);
-    cues = (line.cues ?? []).map(([w, fn]) => ({ word: Math.max(0, words.findIndex((x) => x.textContent!.toLowerCase().includes(w.toLowerCase()))), fn, done: false }));
+    subtitle(line.say, heardOf(line), line.cues);
     talking = true;
     lastWord = 0;
     lineStart = performance.now();
@@ -796,7 +852,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     };
     if (muted && !recorded?.[id]) await sleep(lineSecs * 1000);
     else if (recorded?.[id]) {
-      if (!(await playBuffer(id, text))) await playLine(id);
+      if (!(await playBuffer(id, line))) await playLine(id);
     }
     else if (!speech.ok) await sleep(lineSecs * 1000);
     else {
@@ -888,21 +944,15 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     holdOrbit = Infinity;
     if (!stage.classList.contains("narrow")) window.setTimeout(() => slide(0.2, 1400), 1300);
     const card = $(".outro");
-    card.innerHTML = `<h2>Your home, <b>like this</b>.</h2>
-      <p>VirtuHome is free in the Home Assistant Community Store. ${trials
-        ? "Every add-on has a free 14-day trial: no card, no account."
-        : "The add-ons are coming soon."}</p>
-      <ul>
-        <li><b>Security</b>Your day played back, with the camera clips</li>
-        <li><b>Energy</b>Every room's power, and solar on your roof</li>
-        <li><b>Household</b>Appliances, bins, damp and mould</li>
-        <li><b>Wall Tablet</b>The 3D home on a screen by the door</li>
-      </ul>
+    const li = ([name, what]: [string, string]) => `<li><b>${esc(name)}</b>${esc(what)}</li>`;
+    card.innerHTML = `<h2>${U.outroTitle}</h2>
+      <p>${esc(U.outroFree)} ${esc(trials ? U.outroTrials : U.outroSoon)}</p>
+      <ul>${li(U.outroSecurity)}${li(U.outroEnergy)}${li(U.outroHousehold)}${li(U.outroWall)}</ul>
       <div class="row">
-        <a class="btn go" href="${INSTALL}">Get VirtuHome free</a>
-        <a class="btn" href="${ADD_ONS}">${trials ? "Try the add-ons free" : "About the add-ons"}</a>
-        <button class="btn again">${svg(mdiReplay)} Watch again</button>
-        <button class="btn explore">Explore the house</button>
+        <a class="btn go" href="${INSTALL}">${esc(U.getFree)}</a>
+        <a class="btn" href="${ADD_ONS}">${esc(trials ? U.tryAddOns : U.aboutAddOns)}</a>
+        <button class="btn again">${svg(mdiReplay)} ${esc(U.again)}</button>
+        <button class="btn explore">${esc(U.explore)}</button>
       </div>`;
     card.querySelector(".again")!.addEventListener("click", () => {
       card.classList.remove("show");
@@ -932,11 +982,23 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       .then((r) => r.json())
       .then((c: { extensions?: { trial_days?: number }[] }) => (trials = !!c.extensions?.some((e) => (e.trial_days ?? 0) > 0)))
       .catch(() => (trials = false));
-    const voices = fetch(`${VOICE}voices.json`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((v: Record<string, number> | null) => (recorded = v))
-      .catch(() => (recorded = null));
-    await Promise.race([Promise.all([speech.load(), voices]), sleepMs(2500)]);
+    // her recordings in the language, else the browser's voice in it, else her English recordings
+    const list = (code: string) => (!RECORDED.has(code) ? Promise.resolve(null) : fetch(`${VOICE}${code}/voices.json`)
+      .then((r) => (r.ok ? r.json() : null)))
+      .then((v: Record<string, number> | null) => (v && Object.keys(v).length ? v : null))
+      .catch(() => null);
+    speech.lang = house.language;
+    const voices = (async () => {
+      recorded = await list(house.language);
+      voiceLang = house.language;
+      if (recorded) return void (mode = "recorded");
+      await speech.load();
+      if (speech.has || house.language === "en") return void (mode = "browser");
+      recorded = await list("en");
+      voiceLang = "en";
+      mode = recorded ? "english" : "browser";
+    })();
+    await Promise.race([voices, sleepMs(3000)]);
     await sleepMs(Math.max(0, 380 - (performance.now() - began)));
     const all = CHAPTERS.flatMap((c) => c.lines);
     for (const [i, ch] of CHAPTERS.entries()) {
@@ -995,7 +1057,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     music.pause(paused);
     if (playing) void (paused ? playing.pause() : playing.play().catch(() => undefined));
     $(".pause").innerHTML = svg(paused ? mdiPlay : mdiPause);
-    $(".pause").setAttribute("aria-label", paused ? "Play" : "Pause");
+    $(".pause").setAttribute("aria-label", paused ? U.play : U.pause);
   };
   function key(e: KeyboardEvent) {
     if (e.key === "Escape") close();
@@ -1019,7 +1081,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     if (voiceOn) voiceOn.gain.gain.value = muted ? 0 : 1;
     music.mute(muted);
     $(".mute").innerHTML = svg(muted ? mdiVolumeOff : mdiVolumeHigh);
-    $(".mute").setAttribute("aria-label", muted ? "Sound on" : "Sound off");
+    $(".mute").setAttribute("aria-label", muted ? U.soundOn : U.soundOff);
   });
   $(".start").addEventListener("click", () => {
     speech.unlock();

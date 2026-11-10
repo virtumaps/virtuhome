@@ -90,12 +90,13 @@ export async function buildSite(out) {
   } else {
     console.warn(`No guide of a release before ${version} to publish beside it (are the tags fetched?)`);
   }
-  // the tour's recorded lines (dev/tour/voice/make.py), when there are any
+  // the tour's recorded lines in each language that has them (dev/tour/voice/make.py); the others
+  // speak with the browser's voice, or the English recordings under subtitles
   const voice = join(dev, "tour/voice");
-  // (an empty list without them, so the tour uses the browser's voice without a missing file)
-  const recordings = existsSync(join(voice, "voices.json"))
-    ? readdirSync(voice).filter((f) => /\.mp3$|^voices\.json$/.test(f)).map((f) => ({ name: `demo/voice/${f}`, data: readFileSync(join(voice, f)) }))
-    : [{ name: "demo/voice/voices.json", text: "{}\n" }];
+  const recordings = readdirSync(voice, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && /^[a-z]{2}$/.test(d.name) && existsSync(join(voice, d.name, "voices.json")))
+    .flatMap((d) => readdirSync(join(voice, d.name)).filter((f) => /\.mp3$|^voices\.json$/.test(f))
+      .map((f) => ({ name: `demo/voice/${d.name}/${f}`, data: readFileSync(join(voice, d.name, f)) })));
   // the picture a shared link to the demo shows
   const preview = [{ name: "demo/og.jpg", data: readFileSync(join(dev, "og.jpg")) }];
   const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text })), ...recordings, ...preview];

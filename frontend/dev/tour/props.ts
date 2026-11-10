@@ -2,11 +2,16 @@
 // doorbell camera's clip, and a phone with an alert or scanning a room. Pretend, like the rest of the
 // tour. VirtuHome's own panels and the add-ons' are in panels.ts.
 
+import { EN, type DemoStrings } from "../lang";
+
 const TAU = Math.PI * 2;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const ease = (k: number) => (k < 0 ? 0 : k > 1 ? 1 : k * k * (3 - 2 * k));
 
 export type ClipKind = "parcel" | "ring";
+
+/** What the props write, in the tour's language (dev/lang: props). */
+export type PropTexts = DemoStrings["props"];
 
 /** Film grain, made once and laid over the clips at a random offset each frame. */
 let grain: HTMLCanvasElement | null = null;
@@ -205,6 +210,7 @@ function streetView(): HTMLCanvasElement {
 export class Clip {
   readonly canvas = document.createElement("canvas");
   private from = performance.now();
+  text: PropTexts = EN.props;
 
   constructor(private kind: ClipKind, private time: string) {
     this.canvas.width = 640;
@@ -370,14 +376,14 @@ export class Clip {
       c.fillStyle = "#06121c";
       c.fillText(text, r[0] + 4, r[1] - 5);
     };
-    if (person && d > 0.15) tagBox(person, `Person ${this.kind === "parcel" ? 94 : 97}%`, "#5cf2c2");
-    if (box) tagBox(box, "Package 88%", "#ffd36b");
+    if (person && d > 0.15) tagBox(person, `${this.text.person} ${this.kind === "parcel" ? 94 : 97}%`, "#5cf2c2");
+    if (box) tagBox(box, `${this.text.parcel} 88%`, "#ffd36b");
 
     // the camera's name, the time and the recording light
     c.fillStyle = "rgba(0,0,0,0.5)";
-    c.fillRect(12, 12, 132, 24);
+    c.fillRect(12, 12, c.measureText(this.text.frontDoor).width + 32, 24);
     c.fillStyle = "#fff";
-    c.fillText("FRONT DOOR", 34, 29);
+    c.fillText(this.text.frontDoor, 34, 29);
     if (Math.floor(now / 600) % 2 === 0) {
       c.fillStyle = "#ff4d4d";
       c.beginPath();
@@ -386,7 +392,7 @@ export class Clip {
     }
     const sec = String(Math.floor(t) + 7).padStart(2, "0");
     // a recording from yesterday, or the doorbell's live picture
-    const stamp = this.kind === "ring" ? `LIVE  ${this.time}:${sec}` : `YESTERDAY ${this.time}:${sec}`;
+    const stamp = this.kind === "ring" ? `${this.text.live}  ${this.time}:${sec}` : `${this.text.yesterday} ${this.time}:${sec}`;
     const sw = c.measureText(stamp).width + 16;
     c.fillStyle = "rgba(0,0,0,0.5)";
     c.fillRect(W - 12 - sw, 12, sw, 24);
@@ -403,6 +409,8 @@ export class Phone {
   private mode: "alert" | "scan" = "alert";
   private from = 0;
   private time = "10:12";
+  text: PropTexts = EN.props;
+  locale = "en-GB";
 
   constructor() {
     this.el.className = "phone";
@@ -419,7 +427,8 @@ export class Phone {
     this.mode = "alert";
     this.time = time;
     this.from = performance.now();
-    this.card.innerHTML = `<div class="app"><i></i><span>VirtuHome</span><em>now</em></div><b></b><p></p>`;
+    this.card.innerHTML = `<div class="app"><i></i><span>VirtuHome</span><em></em></div><b></b><p></p>`;
+    this.card.querySelector("em")!.textContent = this.text.now;
     this.card.querySelector("b")!.textContent = title;
     this.card.querySelector("p")!.textContent = body;
     if (still) {
@@ -458,7 +467,7 @@ export class Phone {
       c.textAlign = "center";
       c.font = "500 18px system-ui, sans-serif";
       // the alert came yesterday: the lock screen shows that day
-      const day = new Date(Date.now() - 864e5).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+      const day = new Date(Date.now() - 864e5).toLocaleDateString(this.locale, { weekday: "long", day: "numeric", month: "long" });
       c.fillText(day.replace(",", ""), W / 2, 120);
       c.font = "200 86px system-ui, sans-serif";
       c.fillText(this.time, W / 2, 205);
@@ -555,7 +564,7 @@ export class Phone {
     line([0.9, -0.2, D], [0.9, 1.0, D], (t - 3.6) / 0.3, "#5cd0ff", 2);
     line([0.9, 1.0, D], [-0.9, 1.0, D], (t - 3.8) / 0.3, "#5cd0ff", 2);
     line([-0.9, 1.0, D], [-0.9, -0.2, D], (t - 4.0) / 0.3, "#5cd0ff", 2);
-    const boxes: [string, number, number, number, number, number, number][] = [["Sofa", -X + 0.05, F, 1.0, 0.85, 0.45, 1.6], ["Table", -0.4, F, 1.9, 0.9, 0.4, 0.6]];
+    const boxes: [string, number, number, number, number, number, number][] = [[this.text.sofa, -X + 0.05, F, 1.0, 0.85, 0.45, 1.6], [this.text.table, -0.4, F, 1.9, 0.9, 0.4, 0.6]];
     boxes.forEach(([name, x, y, z, w, h, dz], j) => {
       const k = (t - 4.2 - j * 0.5) / 0.5;
       if (k <= 0) return;
@@ -591,17 +600,17 @@ export class Phone {
     c.fillStyle = "#fff";
     c.font = "500 15px system-ui, sans-serif";
     c.textAlign = "center";
-    c.fillText(done ? "Room done. Next room?" : t < 2 ? "Move slowly round the room" : "Keep going…", W / 2, 86);
+    c.fillText(done ? this.text.scanDone : t < 2 ? this.text.scanMove : this.text.scanKeep, W / 2, 86, W - 100);
     c.textAlign = "left";
     c.fillStyle = "rgba(0,0,0,0.6)";
     rrect(c, 20, H - 168, W - 40, 128, 18);
     c.fill();
     c.fillStyle = "#fff";
     c.font = "600 22px system-ui, sans-serif";
-    c.fillText(done ? "Living room ✓" : "Scanning…", 40, H - 130);
+    c.fillText(done ? this.text.roomDone : this.text.scanning, 40, H - 130, W - 80);
     c.font = "400 16px system-ui, sans-serif";
     c.fillStyle = "rgba(255,255,255,0.82)";
-    c.fillText(t > 3.4 ? "4.2 × 3.6 m · 1 window · 1 door" : "Walls…", 40, H - 102);
+    c.fillText(t > 3.4 ? this.text.roomSize : this.text.walls, 40, H - 102, W - 80);
     c.fillStyle = "rgba(255,255,255,0.2)";
     c.fillRect(40, H - 84, W - 160, 6);
     c.fillStyle = "#5cd0ff";
