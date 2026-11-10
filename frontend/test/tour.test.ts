@@ -37,7 +37,7 @@ function run(trials: boolean) {
     ch.start?.(show);
     for (const line of ch.lines) {
       if (line.when && !line.when(show)) continue;
-      said.push((line.orb ?? line.blob)!);
+      said.push(line.say);
       line.do?.(show);
       line.after?.(show);
       if (line.replay) replays.push(line.replay);
@@ -49,10 +49,10 @@ function run(trials: boolean) {
 }
 
 describe("the online demo's tour", () => {
-  it("gives every line one speaker and keeps it short", () => {
+  it("keeps every line short", () => {
     for (const line of CHAPTERS.flatMap((c) => c.lines)) {
-      expect(!!line.orb !== !!line.blob).toBe(true);
-      expect((line.orb ?? line.blob)!.length).toBeLessThan(140);
+      expect(line.say.trim().length).toBeGreaterThan(0);
+      expect(line.say.length).toBeLessThan(140);
     }
   });
 

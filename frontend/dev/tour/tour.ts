@@ -1,13 +1,14 @@
-// The online demo's tour (dev/demo.ts opens it): two hosts talk viewers through the demo house in the
-// browser's own voices, with subtitles, while the house and the 3D view do what they describe
+// The online demo's tour (dev/demo.ts opens it): a host talks viewers through the demo house in the
+// browser's own voice, with subtitles and music (music.ts), while the house and the 3D view do what they describe
 // (script.ts). It ends on how to get VirtuHome, and on the add-ons' free trials once the licence
 // server offers them.
 import { mdiClose, mdiPause, mdiPlay, mdiReplay, mdiSkipNext, mdiVolumeHigh, mdiVolumeOff } from "@mdi/js";
 import type { ReplaySession, ViewHandle } from "../../src/ext/api";
 import type { Hass, HassEntity } from "../../src/live/hass";
 import { storyState } from "../../src/demo/history";
-import { Face, drawBlob, drawOrb, type Who } from "./cast";
-import { CHAPTERS, NAMES, type Chip, type Line, type Show } from "./script";
+import { Face, drawHost } from "./cast";
+import { Music } from "./music";
+import { CHAPTERS, HOST, SAY_AS, type Chip, type Line, type Show } from "./script";
 
 /** The demo page's house, as the tour needs it. */
 export interface DemoHouse {
@@ -36,20 +37,18 @@ const CSS = /* css */ `
 .on .shade { opacity: 1; }
 .glass { background: var(--glass); -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3); border: 1px solid var(--line); }
 button, a.btn { pointer-events: auto; font: inherit; cursor: pointer; }
-.char { position: absolute; bottom: 0; width: calc(var(--u) * 34); height: calc(var(--u) * 34); transition: transform .6s cubic-bezier(.2,.9,.3,1.25), opacity .6s; transform-origin: 50% 85%; }
-.char.orb { left: 1vw; } .char.blob { right: 1vw; }
+.char { position: absolute; right: 1vw; bottom: 0; width: calc(var(--u) * 34); height: calc(var(--u) * 34); transition: transform .6s cubic-bezier(.2,.9,.3,1.25), opacity .6s; transform-origin: 50% 85%; }
 .char canvas { width: 100%; height: 100%; display: block; }
 .char.talking { transform: scale(1.07); }
 .tag { position: absolute; bottom: 4%; left: 50%; transform: translateX(-50%); font-size: max(10px, calc(var(--u) * 1.4)); letter-spacing: .3em; padding-left: .3em;
   text-transform: uppercase; font-weight: 700; opacity: .55; transition: opacity .3s; }
-.orb .tag { color: var(--j); } .blob .tag { color: var(--m); } .talking .tag { opacity: 1; }
+.tag { color: var(--m); } .talking .tag { opacity: 1; }
 .stage:not(.on) .char { transform: translateY(110%); opacity: 0; }
 .subs { position: absolute; left: 50%; bottom: calc(var(--u) * 4); width: min(56vw, calc(var(--u) * 110)); transform: translate(-50%, 12px); text-align: center;
   border-radius: calc(var(--u) * 2.4); padding: calc(var(--u) * 1.8) calc(var(--u) * 3) calc(var(--u) * 2.2); box-sizing: border-box; opacity: 0;
   transition: opacity .3s, transform .4s cubic-bezier(.2,.9,.3,1); }
 .subs.show { opacity: 1; transform: translate(-50%, 0); }
-.who { font-size: max(10px, calc(var(--u) * 1.4)); letter-spacing: .3em; text-transform: uppercase; font-weight: 700; margin-bottom: .6em; }
-.subs.orb .who { color: var(--j); } .subs.blob .who { color: var(--m); }
+.who { font-size: max(10px, calc(var(--u) * 1.4)); letter-spacing: .3em; text-transform: uppercase; font-weight: 700; margin-bottom: .6em; color: var(--m); }
 .say { margin: 0; font-size: max(15px, calc(var(--u) * 3.1)); line-height: 1.38; font-weight: 500; }
 .say span { opacity: .36; transition: opacity .18s; } .say span.said { opacity: 1; }
 .chapter { position: absolute; top: calc(var(--u) * 3.5); left: 3vw; max-width: 46vw; opacity: 0; transform: translateY(-8px); transition: opacity .6s, transform .6s; }
@@ -107,15 +106,12 @@ svg { width: 55%; height: 55%; fill: currentColor; }
 
 // ------------------------------------------------------------------ voices
 
-// Preferred voices, by name, in order: a calm one for the orb and a bright one for the blob
-const PREFER: Record<Who, string[]> = {
-  orb: ["Ryan Online", "Thomas Online", "Daniel", "Google UK English Male", "Arthur", "George", "Oliver", "Guy Online", "Aaron", "Alex"],
-  blob: ["Sonia Online", "Libby Online", "Maisie Online", "Google UK English Female", "Kate", "Serena", "Martha", "Stephanie", "Hazel", "Jenny Online", "Samantha", "Karen"],
-};
-const STYLE: Record<Who, { rate: number; pitch: number }> = { orb: { rate: 1, pitch: 0.92 }, blob: { rate: 1.07, pitch: 1.18 } };
+// Preferred voices, by name, in order: bright British women's voices first
+const PREFER = ["Sonia Online", "Libby Online", "Maisie Online", "Google UK English Female", "Kate", "Serena", "Martha", "Stephanie", "Hazel", "Jenny Online", "Samantha", "Karen"];
+const STYLE = { rate: 1.07, pitch: 1.18 };
 
 class Voices {
-  private chosen: Partial<Record<Who, SpeechSynthesisVoice | null>> = {};
+  private chosen: SpeechSynthesisVoice | null = null;
   readonly ok = typeof speechSynthesis !== "undefined" && typeof SpeechSynthesisUtterance !== "undefined";
   private current: SpeechSynthesisUtterance | null = null;
 
@@ -141,27 +137,20 @@ class Voices {
   private choose(): void {
     if (!this.ok) return;
     const all = speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang));
-    const pick = (who: Who, not?: SpeechSynthesisVoice | null) => {
-      for (const name of PREFER[who]) {
-        const v = all.find((x) => x.name.toLowerCase().includes(name.toLowerCase()) && x !== not);
-        if (v) return v;
-      }
-      return all.find((x) => /GB/i.test(x.lang) && x !== not) ?? all.find((x) => x !== not) ?? all[0] ?? null;
-    };
-    this.chosen.orb = pick("orb");
-    this.chosen.blob = pick("blob", this.chosen.orb);
+    const named = (name: string) => all.find((x) => x.name.toLowerCase().includes(name.toLowerCase()));
+    this.chosen = PREFER.map(named).find(Boolean) ?? all.find((x) => /GB/i.test(x.lang)) ?? all[0] ?? null;
   }
 
   /** Says a line; `word` hears where each word starts. Resolves when it ends or is cancelled. */
-  say(who: Who, text: string, word: (at: number) => void): Promise<void> {
+  say(text: string, word: (at: number) => void): Promise<void> {
     if (!this.ok) return sleepMs(est(text) * 1000);
     return new Promise((done) => {
       const u = new SpeechSynthesisUtterance(text);
-      const voice = this.chosen[who];
+      const voice = this.chosen;
       if (voice) u.voice = voice;
       u.lang = voice?.lang ?? "en-GB";
-      u.rate = STYLE[who].rate;
-      u.pitch = STYLE[who].pitch;
+      u.rate = STYLE.rate;
+      u.pitch = STYLE.pitch;
       // some browsers never say they finished: give up well after it should have
       const t = setTimeout(finish, (est(text) * 2 + 4) * 1000);
       function finish() {
@@ -198,8 +187,11 @@ const timeOf = (hhmm: string) => {
   return h * 60 + m;
 };
 
-/** Opens the tour over the demo; `start` plays it at once (the opening click lets it speak). */
-export function openTour(house: DemoHouse, start: boolean): void {
+/**
+ * Opens the tour over the demo; `start` plays it at once (the opening click lets it speak), with
+ * `audio` made in that click for the music.
+ */
+export function openTour(house: DemoHouse, start: boolean, audio: AudioContext | null = null): void {
   if (document.getElementById("vh-tour")) return;
   const host = document.createElement("div");
   host.id = "vh-tour";
@@ -212,8 +204,7 @@ export function openTour(house: DemoHouse, start: boolean): void {
       <div class="big"><div class="t"></div></div>
       <div class="clock glass"><span></span><i><b></b></i></div>
       <div class="chips"></div>
-      <div class="char orb"><canvas></canvas><span class="tag">${esc(NAMES.orb)}</span></div>
-      <div class="char blob"><canvas></canvas><span class="tag">${esc(NAMES.blob)}</span></div>
+      <div class="char"><canvas></canvas><span class="tag">${esc(HOST)}</span></div>
       <div class="subs glass" aria-live="polite"><div class="who"></div><p class="say"></p></div>
       <div class="controls glass">
         <button class="mute" aria-label="Sound off">${svg(mdiVolumeHigh)}</button>
@@ -223,18 +214,19 @@ export function openTour(house: DemoHouse, start: boolean): void {
       </div>
       <div class="card glass intro">
         <h2>Take the <b>2-minute tour</b></h2>
-        <p>${esc(NAMES.orb)} and ${esc(NAMES.blob)} show you round the demo house, and what the add-ons do. With sound.</p>
+        <p>${esc(HOST)} shows you round the demo house, and what the add-ons do. With sound.</p>
         <div class="row"><button class="btn go start">${svg(mdiPlay)} Start the tour</button><button class="btn skipit">No thanks</button></div>
       </div>
       <div class="card glass outro"></div>
     </div>`;
   const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector(sel) as unknown as T;
   const stage = $(".stage");
-  const faces: Record<Who, Face> = { orb: new Face(), blob: new Face() };
-  const canvases: Record<Who, HTMLCanvasElement> = { orb: $(".orb canvas"), blob: $(".blob canvas") };
+  const face = new Face();
+  const canvas: HTMLCanvasElement = $(".char canvas");
   const voices = new Voices();
+  const music = new Music();
   const view = house.view;
-  let talking: Who | null = null;
+  let talking = false;
   let kick = 0;
   let lastWord = 0;
   let paused = false;
@@ -348,10 +340,8 @@ export function openTour(house: DemoHouse, start: boolean): void {
     host.style.setProperty("--u", `${Math.min(h, (w * 9) / 16) / 100}px`);
     stage.classList.toggle("narrow", w < 700);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    for (const cv of Object.values(canvases)) {
-      cv.width = Math.round(cv.clientWidth * dpr);
-      cv.height = Math.round(cv.clientHeight * dpr);
-    }
+    canvas.width = Math.round(canvas.clientWidth * dpr);
+    canvas.height = Math.round(canvas.clientHeight * dpr);
   };
   const resize = new ResizeObserver(size);
   resize.observe(host);
@@ -369,24 +359,20 @@ export function openTour(house: DemoHouse, start: boolean): void {
       // by time until the voice says where it is (some never do)
       if (muted || !voices.ok || !lastWord) markSaid((now - lineStart) / 1000 / lineSecs);
     }
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    for (const who of ["orb", "blob"] as Who[]) {
-      const f = faces[who];
-      const other: Who = who === "orb" ? "blob" : "orb";
-      f.talking = talking === who && !paused;
-      f.target = f.talking ? Math.min(1, chatter) : 0;
-      if (talking === other) f.gazeTo = who === "orb" ? 0.85 : -0.85;
-      else if (f.talking) f.gazeTo = Math.sin(t * 0.7) * 0.15;
-      else if (t > f.nextGlance) {
-        f.gazeTo = [0, 0, 0.35, -0.35, who === "orb" ? 0.85 : -0.85][Math.floor(Math.random() * 5)];
-        f.nextGlance = t + 1.6 + Math.random() * 3.4;
-      }
-      f.update(dt);
-      const cv = canvases[who];
-      const c = cv.getContext("2d");
-      if (!c || !cv.width) continue;
+    face.talking = talking && !paused;
+    face.target = face.talking ? Math.min(1, chatter) : 0;
+    // talking, mostly at the viewer; between lines it looks about, now and then over at the house
+    if (face.talking) face.gazeTo = Math.sin(t * 0.7) * 0.15;
+    else if (t > face.nextGlance) {
+      face.gazeTo = [0, 0, 0.35, -0.35, -0.8][Math.floor(Math.random() * 5)];
+      face.nextGlance = t + 1.6 + Math.random() * 3.4;
+    }
+    face.update(dt);
+    const c = canvas.getContext("2d");
+    if (c && canvas.width) {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      (who === "orb" ? drawOrb : drawBlob)(c, f, cv.width / dpr, cv.height / dpr, t, dt);
+      drawHost(c, face, canvas.width / dpr, canvas.height / dpr, t, dt);
     }
     // the replay's clock moves through the day as the line goes
     if (session?.active && clock !== clockTo && !paused) {
@@ -412,14 +398,14 @@ export function openTour(house: DemoHouse, start: boolean): void {
 
   // ---------------------------------------------------------------- lines
 
-  const subtitle = (who: Who | null, text = "") => {
+  const subtitle = (text: string | null) => {
     const subs = $(".subs");
-    if (!who) {
+    if (text === null) {
       subs.classList.remove("show");
       return;
     }
-    subs.className = `subs glass show ${who}`;
-    $(".who").textContent = NAMES[who];
+    subs.classList.add("show");
+    $(".who").textContent = HOST;
     const list = text.split(" ");
     let at = 0;
     starts = list.map((w) => ((at += w.length + 1), at - w.length - 1));
@@ -448,17 +434,17 @@ export function openTour(house: DemoHouse, start: boolean): void {
   };
 
   const say = async (line: Line) => {
-    const who: Who = line.orb ? "orb" : "blob";
-    const text = (line.orb ?? line.blob)!;
-    faces[who].mood = line.mood ?? "neutral";
-    faces[who === "orb" ? "blob" : "orb"].mood = line.react ?? "neutral";
+    const text = line.say;
+    const spoken = SAY_AS.reduce((t, [word, as]) => t.replace(word, as), text);
+    face.mood = line.mood ?? "neutral";
     line.do?.(show);
-    subtitle(who, text);
-    talking = who;
+    subtitle(text);
+    talking = true;
     lastWord = 0;
     lineStart = performance.now();
-    lineSecs = est(text) / STYLE[who].rate;
-    $(`.char.${who}`).classList.add("talking");
+    lineSecs = est(text) / STYLE.rate;
+    $(".char").classList.add("talking");
+    music.duck(true);
     if (line.replay && session?.active) {
       clockFrom = clock;
       clockTo = timeOf(line.replay);
@@ -468,25 +454,27 @@ export function openTour(house: DemoHouse, start: boolean): void {
     const word = (char: number) => {
       lastWord = performance.now();
       kick = 1;
-      markTo(char);
+      // where the voice is in what it says, as a place in what the subtitle shows
+      markTo((char * text.length) / spoken.length);
     };
     if (muted || !voices.ok) await sleep(lineSecs * 1000);
     else {
       let wake = () => undefined as void;
-      await Promise.race([voices.say(who, text, word), new Promise<void>((done) => wakers.push((wake = done)))]);
+      await Promise.race([voices.say(spoken, word), new Promise<void>((done) => wakers.push((wake = done)))]);
       wakers = wakers.filter((w) => w !== wake);
     }
     while (paused && !stopped) await sleepMs(150);
     markSaid(1);
-    talking = null;
-    $(`.char.${who}`).classList.remove("talking");
+    talking = false;
+    $(".char").classList.remove("talking");
+    music.duck(false);
     if (stopped) return;
     line.after?.(show);
     setTimeout(() => {
       if (!talking) subtitle(null);
     }, 900);
     await sleep(line.gap ?? 250);
-    faces.orb.mood = faces.blob.mood = "neutral";
+    face.mood = "neutral";
   };
 
   const chips = (list: Chip[] | undefined) => {
@@ -520,6 +508,7 @@ export function openTour(house: DemoHouse, start: boolean): void {
   // ---------------------------------------------------------------- start, end
 
   const ending = () => {
+    music.finish();
     const card = $(".outro");
     card.innerHTML = `<h2>Your home, <b>like this</b>.</h2>
       <p>VirtuHome is free in the Home Assistant Community Store. ${trials
@@ -541,6 +530,8 @@ export function openTour(house: DemoHouse, start: boolean): void {
   };
 
   const play = async () => {
+    // first, while this is still the click that started it: browsers start sound only then
+    music.start(audio);
     stopped = false;
     skipChapter = false;
     $(".intro").classList.remove("show");
@@ -557,6 +548,7 @@ export function openTour(house: DemoHouse, start: boolean): void {
       skipChapter = false;
       if (i === CHAPTERS.length - 1) await ask;
       chapterCard(i, CHAPTERS.length, ch.title, ch.kicker, ch.addOn);
+      music.section(i, CHAPTERS.length);
       ch.start?.(show);
       const values = chips(ch.chips);
       const live = setInterval(values, 1000);
@@ -582,6 +574,7 @@ export function openTour(house: DemoHouse, start: boolean): void {
     stopped = true;
     paused = false;
     interrupt();
+    music.stop();
     tidy();
     cinema.remove();
     house.lively(true);
@@ -594,6 +587,7 @@ export function openTour(house: DemoHouse, start: boolean): void {
   const togglePause = () => {
     paused = !paused;
     voices.pause(paused);
+    music.pause(paused);
     $(".pause").innerHTML = svg(paused ? mdiPlay : mdiPause);
     $(".pause").setAttribute("aria-label", paused ? "Play" : "Pause");
   };
@@ -615,6 +609,7 @@ export function openTour(house: DemoHouse, start: boolean): void {
   $(".mute").addEventListener("click", () => {
     muted = !muted;
     if (muted) voices.stop();
+    music.mute(muted);
     $(".mute").innerHTML = svg(muted ? mdiVolumeOff : mdiVolumeHigh);
     $(".mute").setAttribute("aria-label", muted ? "Sound on" : "Sound off");
   });

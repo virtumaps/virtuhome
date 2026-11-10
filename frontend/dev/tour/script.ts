@@ -1,16 +1,16 @@
-// The online demo's tour: what the two hosts say, and what the demo house and the 3D view do
-// meanwhile. tour.ts plays it. The add-ons' parts are previews drawn on the demo house with the same
-// hooks the add-ons use (room colours and texts, the roof's paint, marks on furniture, replays), from
-// pretend numbers: the demo loads no add-on.
+// The online demo's tour: what the host says, and what the demo house and the 3D view do meanwhile.
+// tour.ts plays it. The add-ons' parts are previews drawn on the demo house with the same hooks the
+// add-ons use (room colours and texts, the roof's paint, marks on furniture, replays), from pretend
+// numbers: the demo loads no add-on.
 //
-// A line: { orb: "…" } or { blob: "…" }, with
-//   mood / react   the speaker's and the listener's faces (cast.ts)
+// A line: { say: "…" }, with
+//   mood           the host's face (cast.ts)
 //   do / after     what happens as the line starts / ends
 //   gap            the pause after it (ms, default 250): time to see a change before the next line
 //   replay         where the replay's clock goes during the line ("10:15")
 //   when           left out when it returns false
 import {
-  mdiBattery10, mdiCashMultiple, mdiClockOutline, mdiDishwasher, mdiHomeLightningBolt, mdiLightbulbGroup, mdiSolarPower,
+  mdiCashMultiple, mdiClockOutline, mdiDishwasher, mdiDoorbellVideo, mdiHomeLightningBolt, mdiLightbulbGroup, mdiSolarPower,
   mdiTrashCan, mdiWaterPercent,
 } from "@mdi/js";
 import type { ViewHandle } from "../../src/ext/api";
@@ -18,8 +18,11 @@ import type { Hass } from "../../src/live/hass";
 import type { RGBA } from "../../src/live/live";
 import type { Mood } from "./cast";
 
-/** The hosts' names (placeholders). */
-export const NAMES = { orb: "Atlas", blob: "Pip" };
+/** The host's name (a placeholder). */
+export const HOST = "Pip";
+
+/** Words the voices say wrongly, and how to write them so they say them right (the subtitles keep the first). */
+export const SAY_AS: [RegExp, string][] = [[/VirtuHome/g, "Virtue Home"]];
 
 /** What a line or chapter can do with the house and the view. */
 export interface Show {
@@ -46,10 +49,8 @@ export interface Chip {
 }
 
 export interface Line {
-  orb?: string;
-  blob?: string;
+  say: string;
   mood?: Mood;
-  react?: Mood;
   do?: (s: Show) => void;
   after?: (s: Show) => void;
   gap?: number;
@@ -150,10 +151,8 @@ export const CHAPTERS: Chapter[] = [
     kicker: "Your home, live in 3D",
     start: (s) => s.house(true),
     lines: [
-      { blob: `Hi! I'm ${NAMES.blob}, and this is ${NAMES.orb}.`, mood: "excited" },
-      { orb: "Welcome to VirtuHome: your home, live in 3D, inside Home Assistant.", mood: "smile" },
-      { blob: "This is a pretend house. But everything you'll see works on yours.", mood: "happy" },
-      { orb: "Two minutes. Let's go.", mood: "dry", react: "wink" },
+      { say: `Hi! I'm ${HOST}. Welcome to VirtuHome: your home, live in 3D, inside Home Assistant.`, mood: "excited" },
+      { say: "This is a pretend house, but everything you'll see works on yours. Two minutes. Let's go!", mood: "happy" },
     ],
   },
   {
@@ -162,11 +161,11 @@ export const CHAPTERS: Chapter[] = [
     chips: [{ icon: mdiLightbulbGroup, label: "Lights on", value: lightsOn }],
     start: (s) => s.house(false),
     lines: [
-      { orb: "Every light, door and window sits where it really is, and changes the moment it does." },
-      { orb: "Watch the living room.", do: (s) => s.fly("light.living_room_downlights"), after: colour([40, 90, 255]), gap: 1400 },
-      { blob: "Ooh! Blue.", mood: "surprised", after: colour([255, 40, 170]), gap: 1200 },
-      { blob: "Pink! Now we're talking.", mood: "excited" },
-      { orb: "Tap anything to switch it. All of that is free.", after: warm },
+      { say: "Every light, door and window sits where it really is, and changes the moment it does." },
+      { say: "Watch the living room.", do: (s) => s.fly("light.living_room_downlights"), after: colour([40, 90, 255]), gap: 1400 },
+      { say: "Ooh! Blue.", mood: "surprised", after: colour([255, 40, 170]), gap: 1200 },
+      { say: "Pink! Now we're talking.", mood: "excited" },
+      { say: "Tap anything to switch it. And all of that is free.", mood: "happy", after: warm },
     ],
   },
   {
@@ -188,20 +187,19 @@ export const CHAPTERS: Chapter[] = [
       solarRoof(s, false);
     },
     lines: [
-      { orb: "With the Energy add-on, every room glows with what it's using, right now." },
-      { blob: "The kitchen's the hungry one. Kettle's on!", mood: "happy" },
-      { orb: "It knows when power is cheap, what the house has cost today, and when to charge the car." },
+      { say: "With the Energy add-on, every room glows with what it's using, right now." },
+      { say: "The kitchen's the hungry one. Kettle's on!", mood: "happy" },
+      { say: "It knows when power is cheap, what the house has cost today, and when to charge the car." },
       {
-        blob: "And look up!", mood: "excited", gap: 900,
+        say: "And look up!", mood: "excited", gap: 900,
         after: (s) => {
           energyRooms(s, false);
           s.house(true);
           solarRoof(s, true);
         },
       },
-      { orb: "It scores every part of the roof for solar panels, from the sun's path and the house's own shade." },
-      { orb: "The yellower, the better.", mood: "proud" },
-      { blob: "Before you spend a penny on panels.", mood: "wink", react: "smile" },
+      { say: "It scores every part of the roof for solar panels, from the sun's path and the house's own shade." },
+      { say: "The yellower, the better. Before you spend a penny on panels!", mood: "wink" },
     ],
   },
   {
@@ -214,12 +212,12 @@ export const CHAPTERS: Chapter[] = [
     },
     end: (s) => s.endReplay(),
     lines: [
-      { blob: "Been out all day? The Security add-on plays back what happened, right on the house.", replay: "08:28" },
-      { orb: "Half past eight: the house is empty, and the alarm sets itself.", replay: "08:40" },
-      { orb: "Around ten: a parcel at the front door.", replay: "10:20" },
-      { blob: "One o'clock: the dog walker lets themselves in, and takes the dog out.", replay: "13:20" },
-      { orb: "And at twenty to six, Alex is home. The heating came on in time.", replay: "17:50" },
-      { blob: "Camera clips play right beside it. And your phone tells you what happened while you were out.", mood: "happy" },
+      { say: "Been out all day? The Security add-on plays back what happened, right on the house.", replay: "08:28" },
+      { say: "Half past eight: the house is empty, and the alarm sets itself.", replay: "08:40" },
+      { say: "Around ten: a parcel at the front door.", replay: "10:20" },
+      { say: "One o'clock: the dog walker lets themselves in, and takes the dog out.", replay: "13:20" },
+      { say: "Twenty to six: Alex is home, and the heating came on in time.", replay: "17:50" },
+      { say: "Camera clips play right beside it. And your phone tells you what happened while you were out.", mood: "happy" },
     ],
   },
   {
@@ -240,37 +238,28 @@ export const CHAPTERS: Chapter[] = [
       tintRoom(s, "bathroom", null, null);
     },
     lines: [
-      { blob: "The Household add-on keeps an eye on the everyday stuff.", mood: "happy" },
-      { orb: "The dishwasher's done. It says so on every screen, and on your phone." },
+      { say: "The Household add-on keeps an eye on the everyday stuff.", mood: "happy" },
+      { say: "The dishwasher's done. It says so on every screen, and on your phone." },
       {
-        blob: "It tags the bin to put out the night before. And it watches for damp and mould, room by room.",
+        say: "It tags the bin to put out the night before. And it watches for damp and mould, room by room.",
         do: (s) => {
           s.floor(1);
           tintRoom(s, "bathroom", [0.3, 0.6, 1, 0.45], "Damp risk");
         },
       },
-      { orb: "Telling you to open a window, basically.", mood: "dry", react: "wink" },
-      { blob: "Nicely, though.", mood: "wink" },
+      { say: "It'll even tell you when to open a window. Nicely.", mood: "wink" },
     ],
   },
   {
     title: "On the wall",
-    kicker: "Wall tablets, and every device's health",
-    addOn: "Wall Tablet and Network add-ons",
-    chips: [{ icon: mdiBattery10, label: "Hall sensor", value: "Battery 8%" }],
+    kicker: "A screen by the front door",
+    addOn: "Wall Tablet add-on",
+    chips: [{ icon: mdiDoorbellVideo, label: "Front door", value: "Someone's there" }],
     start: (s) => s.house(true),
-    end: (s) => tintRoom(s, "hallway", null, null),
     lines: [
-      { orb: "Put it on a tablet on the wall. It wakes as you walk up, and shows the doorbell camera when someone rings." },
-      { blob: "Visitors always ask about that bit!", mood: "excited" },
-      {
-        orb: "And the Network add-on lights up any device that's offline, or running out of battery.",
-        do: (s) => {
-          s.floor(0);
-          tintRoom(s, "hallway", [1, 0.3, 0.3, 0.45], "Battery 8%");
-        },
-      },
-      { blob: "So you know which batteries to buy.", mood: "happy" },
+      { say: "And with the Wall Tablet add-on, it all goes on a tablet on the wall." },
+      { say: "It wakes as you walk up, and shows the doorbell camera the moment someone rings.", do: (s) => s.fly("camera.doorbell") },
+      { say: "Visitors always ask about that bit!", mood: "excited" },
     ],
   },
   {
@@ -278,11 +267,10 @@ export const CHAPTERS: Chapter[] = [
     kicker: "Get VirtuHome",
     start: (s) => s.house(true),
     lines: [
-      { orb: "VirtuHome is free, in the Home Assistant Community Store.", mood: "proud" },
-      { blob: "And every add-on has a free fourteen-day trial. Try them on your own house!", mood: "excited", when: (s) => s.trials },
-      { blob: "And the add-ons are coming very soon. Keep an eye out!", mood: "excited", when: (s) => !s.trials },
-      { orb: "Thanks for watching.", mood: "smile" },
-      { blob: "Bye!", mood: "excited" },
+      { say: "VirtuHome is free, in the Home Assistant Community Store.", mood: "happy" },
+      { say: "And every add-on has a free fourteen-day trial. Try them on your own house!", mood: "excited", when: (s) => s.trials },
+      { say: "And the add-ons are coming very soon. Keep an eye out!", mood: "excited", when: (s) => !s.trials },
+      { say: "Thanks for watching. Bye!", mood: "excited" },
     ],
   },
 ];

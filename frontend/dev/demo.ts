@@ -39,15 +39,15 @@ function start(): void {
       view.hass = hass;
     },
   };
-  const tour = (start: boolean) => import("./tour/tour").then((m) => m.openTour(house, start));
+  const tour = (start: boolean, audio: AudioContext | null = null) => import("./tour/tour").then((m) => m.openTour(house, start, audio));
   document.getElementById("tour")?.addEventListener("click", () => {
-    // some browsers only speak after a tap: start the voices now, while this is one
+    // some browsers only play sound after a tap: start the voice and the music's audio now, while this is one
     if (typeof speechSynthesis !== "undefined") {
       const u = new SpeechSynthesisUtterance(" ");
       u.volume = 0;
       speechSynthesis.speak(u);
     }
-    void tour(true);
+    void tour(true, typeof AudioContext !== "undefined" ? new AudioContext() : null);
   });
   if (q.has("tour")) void tour(false);
   window.dispatchEvent(new Event("virtuhome-ready"));

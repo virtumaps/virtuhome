@@ -3,8 +3,8 @@
 ## Unreleased
 
 ### New
-- **Take the tour** in the online demo: a two-minute tour with sound and subtitles. Two hosts show
-  you round the demo house, then what the Energy, Security, Household, Wall Tablet and Network add-ons
+- **Take the tour** in the online demo: a two-minute tour with a voice, music and subtitles. A host
+  shows you round the demo house, then what the Energy, Security, Household and Wall Tablet add-ons
   do, as previews on the demo house with pretend numbers.
 
 ### Changed

@@ -1,13 +1,12 @@
-// The online demo tour's two hosts, drawn on canvas each frame: a calm orb of light with turning rings,
-// and a bouncy blob with big eyes. Their faces follow how they speak (level), where they look (gaze),
-// blinking and a mood. The tour (tour.ts) owns the timing; this only draws.
+// The online demo tour's host, drawn on canvas each frame: a bouncy blob with big eyes. Its face follows
+// how it speaks (level), where it looks (gaze), blinking and a mood. The tour (tour.ts) owns the
+// timing; this only draws.
 
 const TAU = Math.PI * 2;
 
-export type Who = "orb" | "blob";
-export type Mood = "neutral" | "smile" | "dry" | "proud" | "happy" | "wink" | "surprised" | "excited" | "pout";
+export type Mood = "neutral" | "happy" | "wink" | "surprised" | "excited" | "pout";
 
-/** One host's face between frames. */
+/** The host's face between frames. */
 export class Face {
   /** How loud it speaks now (0..1), easing to `target`. */
   level = 0;
@@ -21,7 +20,6 @@ export class Face {
   private blinkLeft = 0;
   private nextBlink = 1 + Math.random() * 3;
   nextGlance = 2 + Math.random() * 2;
-  sweep = 0;
   sparks: { x: number; y: number; size: number; life: number; spin: number }[] = [];
 
   update(dt: number): void {
@@ -45,17 +43,6 @@ function ellipse(c: C, x: number, y: number, rx: number, ry: number, rot = 0): v
   c.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU);
 }
 
-function pill(c: C, x: number, y: number, w: number, h: number): void {
-  const r = Math.min(h / 2, w / 2);
-  c.beginPath();
-  c.moveTo(x + r, y);
-  c.arcTo(x + w, y, x + w, y + h, r);
-  c.arcTo(x + w, y + h, x, y + h, r);
-  c.arcTo(x, y + h, x, y, r);
-  c.arcTo(x, y, x + w, y, r);
-  c.closePath();
-}
-
 /** A smooth closed shape through the midpoints of `pts`. */
 function blobPath(c: C, pts: [number, number][]): void {
   const n = pts.length;
@@ -70,135 +57,8 @@ function blobPath(c: C, pts: [number, number][]): void {
   c.closePath();
 }
 
-/** The orb: calm and precise, rings turning, a ring that moves with its voice, visor eyes. */
-export function drawOrb(c: C, f: Face, W: number, H: number, t: number, dt: number): void {
-  const s = Math.min(W, H);
-  const cx = W / 2;
-  const cy = H * 0.45;
-  const R = s * 0.2;
-  const lv = f.level;
-  c.clearRect(0, 0, W, H);
-  c.lineCap = "round";
-
-  let g = c.createRadialGradient(cx, cy, R * 0.4, cx, cy, R * 2.6);
-  g.addColorStop(0, `rgba(70,190,255,${0.3 + lv * 0.25})`);
-  g.addColorStop(1, "rgba(70,190,255,0)");
-  c.fillStyle = g;
-  c.fillRect(0, 0, W, H);
-
-  // three arcs turning slowly, ticks turning the other way, a comet that speeds up as it talks
-  c.strokeStyle = "rgba(150,225,255,0.55)";
-  c.lineWidth = s * 0.007;
-  for (let k = 0; k < 3; k++) {
-    const a = t * 0.3 + (k * TAU) / 3;
-    c.beginPath();
-    c.arc(cx, cy, R * 1.33, a, a + 1.65);
-    c.stroke();
-  }
-  c.save();
-  c.translate(cx, cy);
-  c.rotate(-t * 0.07);
-  c.lineWidth = s * 0.0045;
-  for (let i = 0; i < 72; i++) {
-    const long = i % 6 === 0;
-    const a = (i / 72) * TAU;
-    const r0 = R * 1.56;
-    const r1 = r0 + s * (long ? 0.03 : 0.014);
-    c.strokeStyle = `rgba(150,225,255,${long ? 0.5 : 0.2})`;
-    c.beginPath();
-    c.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
-    c.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
-    c.stroke();
-  }
-  c.restore();
-  f.sweep += (0.7 + lv * 2.4) * dt;
-  c.lineWidth = s * 0.009;
-  for (let i = 0; i < 16; i++) {
-    c.strokeStyle = `rgba(200,244,255,${(1 - i / 16) * 0.8})`;
-    c.beginPath();
-    c.arc(cx, cy, R * 1.9, f.sweep - (i + 1) * 0.055, f.sweep - i * 0.055);
-    c.stroke();
-  }
-
-  // the voice ring
-  c.beginPath();
-  for (let i = 0; i <= 140; i++) {
-    const a = (i / 140) * TAU;
-    const w = 0.55 * Math.sin(a * 5 + t * 9) + 0.3 * Math.sin(a * 9 - t * 13) + 0.15 * Math.sin(a * 14 + t * 6);
-    const r = R * 1.11 + w * lv * R * 0.24 + lv * R * 0.05;
-    if (i) c.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-    else c.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-  }
-  c.strokeStyle = `rgba(130,220,255,${0.3 + lv * 0.65})`;
-  c.lineWidth = s * 0.006;
-  c.stroke();
-
-  // the core
-  const br = R * (1 + 0.013 * Math.sin(t * 1.4) + lv * 0.045);
-  g = c.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, br);
-  g.addColorStop(0, "#f4fdff");
-  g.addColorStop(0.32, "#a6e8ff");
-  g.addColorStop(0.72, "#2c9de2");
-  g.addColorStop(1, "#0c4778");
-  c.save();
-  c.shadowColor = "rgba(90,200,255,0.85)";
-  c.shadowBlur = s * 0.07;
-  c.fillStyle = g;
-  c.beginPath();
-  c.arc(cx, cy, br, 0, TAU);
-  c.fill();
-  c.restore();
-
-  const mood = f.mood;
-  const ey = cy - R * 0.08;
-  const gx = f.gaze * R * 0.15;
-  const ew = R * 0.29;
-  const eh = R * 0.15;
-  c.fillStyle = c.strokeStyle = "#06263f";
-  for (const side of [-1, 1]) {
-    const x = cx + side * R * 0.34 + gx;
-    if (mood === "smile" || mood === "proud") {
-      c.lineWidth = R * 0.085;
-      c.beginPath();
-      c.arc(x, ey + R * 0.07, ew * 0.42, Math.PI * 1.15, Math.PI * 1.85);
-      c.stroke();
-      continue;
-    }
-    let open = 1 - f.blink;
-    if (mood === "dry" && side === -1) open *= 0.42;
-    const h = Math.max(R * 0.025, eh * open);
-    pill(c, x - ew / 2, ey - h / 2 + (mood === "dry" && side === -1 ? eh * 0.22 : 0), ew, h);
-    c.fill();
-  }
-  if (mood === "dry") {
-    // one brow up
-    c.lineWidth = R * 0.05;
-    c.beginPath();
-    c.moveTo(cx + R * 0.2 + gx, ey - R * 0.2);
-    c.lineTo(cx + R * 0.48 + gx, ey - R * 0.27);
-    c.stroke();
-  }
-
-  // a small equaliser where a mouth would be
-  const by = cy + R * 0.38;
-  c.globalAlpha = 0.72;
-  for (let i = 0; i < 5; i++) {
-    const wob = 0.55 + 0.45 * Math.sin(t * 19 + i * 1.9) * Math.sin(t * 7.3 + i);
-    const h = R * (0.04 + lv * 0.26 * Math.abs(wob) * (1 - Math.abs(i - 2) * 0.18));
-    pill(c, cx + (i - 2) * R * 0.11 + gx * 0.3 - R * 0.03, by - h / 2, R * 0.06, h);
-    c.fill();
-  }
-  c.globalAlpha = 1;
-  if (mood === "proud" || (mood === "smile" && lv < 0.05)) {
-    c.lineWidth = R * 0.045;
-    c.beginPath();
-    c.arc(cx + gx * 0.3, by - R * 0.12, R * 0.2, Math.PI * 0.2, Math.PI * 0.8);
-    c.stroke();
-  }
-}
-
-/** The blob: warm and bouncy, big eyes, cheeks, and a mouth that moves as it talks. */
-export function drawBlob(c: C, f: Face, W: number, H: number, t: number, dt: number): void {
+/** The host: warm and bouncy, big eyes, cheeks, and a mouth that moves as it talks. */
+export function drawHost(c: C, f: Face, W: number, H: number, t: number, dt: number): void {
   const s = Math.min(W, H);
   const R = s * 0.22;
   const lv = f.level;
