@@ -401,6 +401,7 @@ export class Phone {
   private card = document.createElement("div");
   private mode: "alert" | "scan" = "alert";
   private from = 0;
+  private time = "10:12";
 
   constructor() {
     this.el.className = "phone";
@@ -413,8 +414,9 @@ export class Phone {
   }
 
   /** The lock screen, and an alert with a still from the clip. */
-  alert(title: string, body: string, still: HTMLCanvasElement | null): void {
+  alert(time: string, title: string, body: string, still: HTMLCanvasElement | null): void {
     this.mode = "alert";
+    this.time = time;
     this.from = performance.now();
     this.card.innerHTML = `<div class="app"><i></i><span>VirtuHome</span><em>now</em></div><b></b><p></p>`;
     this.card.querySelector("b")!.textContent = title;
@@ -458,7 +460,7 @@ export class Phone {
       const day = new Date(Date.now() - 864e5).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
       c.fillText(day.replace(",", ""), W / 2, 120);
       c.font = "200 86px system-ui, sans-serif";
-      c.fillText("10:12", W / 2, 205);
+      c.fillText(this.time, W / 2, 205);
       c.textAlign = "left";
       return;
     }
@@ -671,7 +673,7 @@ export const PROPS_CSS = /* css */ `
 .phone .note b { display: block; margin-top: .55em; font-size: 1.12em; }
 .phone .note p { margin: .25em 0 .6em; line-height: 1.3; color: #333; }
 .phone .note canvas { width: 100%; border-radius: .6em; display: block; }
-.tablet { left: 3vw; top: calc(var(--u) * 17); width: min(42vw, calc(var(--u) * 76)); border-radius: calc(var(--u) * 2.4); background: #111;
+.tablet { left: 3vw; top: calc(var(--u) * 21); width: min(42vw, calc(var(--u) * 76)); border-radius: calc(var(--u) * 2.4); background: #111;
   border: calc(var(--u) * 1.1) solid #0a0b0e; box-shadow: 0 2vh 6vh rgba(0,0,0,.5); overflow: hidden; color: #fff; }
 .tablet .bar { display: flex; align-items: center; gap: .7em; padding: .7em 1em; font-size: max(12px, calc(var(--u) * 1.6)); background: #1b1e25; }
 .tablet .bar i { width: .7em; height: .7em; border-radius: 50%; background: #ff4d4d; animation: blink 1s infinite; }

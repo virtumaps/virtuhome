@@ -96,7 +96,9 @@ export async function buildSite(out) {
   const recordings = existsSync(join(voice, "voices.json"))
     ? readdirSync(voice).filter((f) => /\.mp3$|^voices\.json$/.test(f)).map((f) => ({ name: `demo/voice/${f}`, data: readFileSync(join(voice, f)) }))
     : [{ name: "demo/voice/voices.json", text: "{}\n" }];
-  const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text })), ...recordings];
+  // the picture a shared link to the demo shows
+  const preview = [{ name: "demo/og.jpg", data: readFileSync(join(dev, "og.jpg")) }];
+  const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text })), ...recordings, ...preview];
   rmSync(out, { recursive: true, force: true });
   for (const f of all) {
     mkdirSync(dirname(join(out, f.name)), { recursive: true });

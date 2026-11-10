@@ -31,7 +31,7 @@ export const SAY_AS: [RegExp, string][] = [[/VirtuHome/g, "Virtue Home"]];
 /** What shows beside the house. */
 export type Prop =
   | { kind: "clip"; clip: ClipKind; time: string; caption: string }
-  | { kind: "alert"; title: string; body: string }
+  | { kind: "alert"; time: string; title: string; body: string }
   | { kind: "scan" }
   | { kind: "tablet"; time: string }
   | { kind: "whatif" };
@@ -117,14 +117,29 @@ const ROOM_KW: Record<string, number> = {
 
 const lin = (v: number) => (v / 255) ** 2.2;
 
+/** 0..1 on a log scale from 1 W to 2 kW, and its colour: green for a few watts, yellow around 150 W, red from 2 kW (as the Energy add-on has them). */
+const powerLevel = (kw: number) => Math.max(0, Math.min(1, Math.log10(Math.max(1, kw * 1000)) / Math.log10(2000)));
+function powerColour(kw: number): [number, number, number] {
+  const stops: [number, number, number][] = [[0.3, 0.85, 0.35], [0.75, 0.88, 0.25], [1, 0.8, 0.15], [1, 0.5, 0.12], [1, 0.25, 0.12]];
+  const f = powerLevel(kw) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(f));
+  const k = f - i;
+  return [0, 1, 2].map((c) => stops[i][c] + (stops[i + 1][c] - stops[i][c]) * k) as [number, number, number];
+}
+
+/** The Energy add-on's power map on the demo house: every room coloured by what it uses, with what it costs an hour. */
 function energyRooms(s: Show, on: boolean): void {
+  const kwOf = (area: string | null, outdoor: boolean) => (area && !outdoor ? ROOM_KW[area] : undefined);
   s.view.setRoomTint(on ? (_f, sp) => {
-    const kw = sp.area_id ? ROOM_KW[sp.area_id] : undefined;
-    return kw === undefined || sp.outdoor ? null : [1, 0.5, 0.12, 0.08 + 0.45 * Math.min(1, kw / 2.2)] as RGBA;
+    const kw = kwOf(sp.area_id, sp.outdoor);
+    return kw === undefined ? null : [...powerColour(kw), 0.14 + 0.3 * powerLevel(kw)] as RGBA;
   } : null);
   s.view.setRoomText(on ? (_f, sp) => {
-    const kw = sp.area_id && !sp.outdoor ? ROOM_KW[sp.area_id] : undefined;
-    return kw === undefined ? null : kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(1)} kW`;
+    const kw = kwOf(sp.area_id, sp.outdoor);
+    if (kw === undefined) return null;
+    const watts = kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(1)} kW`;
+    // at 24.5p a unit
+    return `${watts} · ${(kw * 24.5).toFixed(kw < 0.2 ? 1 : 0)}p/h`;
   } : null);
   s.view.refreshRooms();
 }
@@ -279,14 +294,14 @@ export const CHAPTERS: Chapter[] = [
     lines: [
       { say: "Now, the add-ons. Out all day? Security plays back what happened, right on the house.", replay: "08:28" },
       { say: "Half past eight. Everyone's gone, and the alarm sets itself.", replay: "08:40" },
-      { say: "Ten past ten: a parcel. And here's the doorbell clip, playing right beside it.", do: (s) => s.props([CLIP]), replay: "10:13" },
-      {
-        say: "Your phone had it too, the moment it happened.",
-        do: (s) => s.props([CLIP, { kind: "alert", title: "Parcel at the front door", body: "Left on the doormat at 10:12. Tap to watch." }]),
-        gap: 900,
-      },
+      { say: "Ten past ten: a parcel. And here's the doorbell clip, playing right beside it.", do: (s) => s.props([CLIP]), replay: "10:13", gap: 700 },
       { say: "One o'clock: the dog walker lets themselves in, and takes the dog out.", do: (s) => s.props([]), replay: "13:20" },
       { say: "Twenty to six: Alex is home, and the heating's already on.", replay: "17:50" },
+      {
+        say: "And Alex's phone has the whole day, summed up.",
+        do: (s) => s.props([{ kind: "alert", time: "17:41", title: "While you were out", body: "A parcel at 10:12, and the dog walker at 1 o'clock. Tap to play it back." }]),
+        gap: 900,
+      },
     ],
   },
   {
@@ -312,8 +327,8 @@ export const CHAPTERS: Chapter[] = [
     },
     lines: [
       { say: "The Energy add-on shows what every room is using, right now." },
-      { say: "The kitchen's the hungry one. Kettle's on!", mood: "happy" },
-      { say: "It knows when power is cheap, and the best time to charge the car." },
+      { say: "The kitchen's the hungry one. Kettle's on!", mood: "happy", do: (s) => s.fly("media_player.kitchen_speaker") },
+      { say: "It knows when power is cheap, and the best time to charge the car.", do: (s) => s.floor(0) },
       {
         say: "Now, look up at the roof!", mood: "excited", gap: 900,
         after: (s) => {
@@ -371,7 +386,13 @@ export const CHAPTERS: Chapter[] = [
   {
     title: "Your turn",
     kicker: "Get VirtuHome",
-    start: (s) => s.house(true),
+    // the closing shot: the house at night, every light on, behind the end card
+    start: (s) => {
+      s.sky("night");
+      s.house(true);
+      const lights = Object.keys(s.hass.states).filter((id) => id.startsWith("light."));
+      lights.forEach((id, i) => s.later(i * 90, () => s.quiet(id, "on", { color_temp_kelvin: 2700, brightness: 220, rgb_color: undefined })));
+    },
     lines: [
       { say: "VirtuHome is free, in the Home Assistant Community Store.", mood: "happy" },
       { say: "And every add-on has a free fourteen-day trial. Go on, try them on your own home!", mood: "excited", when: (s) => s.trials },

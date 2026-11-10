@@ -125,6 +125,11 @@ svg { width: 55%; height: 55%; fill: currentColor; }
 .card h2 { margin: 0 0 8px; font-size: 32px; font-weight: 300; letter-spacing: -.01em; }
 .card h2 b { font-weight: 600; background: linear-gradient(100deg, var(--j), #b59bff 55%, var(--m)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .card p { margin: 0 0 18px; color: var(--dim); font-size: 16px; line-height: 1.5; }
+/* the end card is an advert's end slate: on the left, the house lit up at night beside it */
+.card.outro { left: 4vw; top: 50%; transform: translateY(-50%); width: min(44vw, 600px); text-align: left; }
+.card.outro.show { animation: slate .7s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes slate { from { opacity: 0; transform: translate(-24px, -50%); } }
+.card.outro .row { justify-content: flex-start; }
 .card ul { list-style: none; margin: 0 0 20px; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; text-align: left; font-size: 14.5px; }
 .card li { padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.07); }
 .card li b { display: block; color: var(--j); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 2px; }
@@ -142,7 +147,7 @@ svg { width: 55%; height: 55%; fill: currentColor; }
 /* on a phone the top is a stack: the chapter, then the replay's clock, then what shows beside the house */
 .narrow .clock { top: 96px; font-size: 13px; }
 .narrow .card ul { grid-template-columns: 1fr; }
-.narrow .card { top: 64px; left: 4vw; right: 4vw; width: auto; transform: none; padding: 20px 18px; max-height: calc(100% - 76px); overflow-y: auto; }
+.narrow .card, .narrow .card.outro { top: 64px; left: 4vw; right: 4vw; width: auto; transform: none; padding: 20px 18px; max-height: calc(100% - 76px); overflow-y: auto; }
 .narrow .card.show { animation: fade .5s both; }
 @keyframes fade { from { opacity: 0; } }
 .narrow .card h2 { font-size: 26px; }
@@ -377,7 +382,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       tablet.el.querySelector(".feed")!.append(clip.canvas);
     }
     const a = has("alert");
-    if (a && a.kind === "alert" && !had("alert")) phone.alert(a.title, a.body, clip.canvas);
+    if (a && a.kind === "alert" && !had("alert")) phone.alert(a.time, a.title, a.body, clip.canvas);
     if (has("scan") && !had("scan")) phone.scan();
     clipBox.classList.toggle("show", !!c);
     tablet.el.classList.toggle("show", !!t);
@@ -491,8 +496,10 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   const size = () => {
     const w = host.clientWidth;
     const h = host.clientHeight;
-    host.style.setProperty("--u", `${Math.min(h, (w * 9) / 16) / 100}px`);
-    stage.classList.toggle("narrow", w < 700);
+    // phones and tablets held upright get the stacked layout, sized by their width
+    const narrow = w < 700 || h > w * 1.15;
+    host.style.setProperty("--u", `${narrow ? Math.min(h, w) * 0.0075 : Math.min(h, (w * 9) / 16) / 100}px`);
+    stage.classList.toggle("narrow", narrow);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(canvas.clientWidth * dpr);
     canvas.height = Math.round(canvas.clientHeight * dpr);
@@ -775,8 +782,41 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
 
   // ---------------------------------------------------------------- start, end
 
+  /** Slides the view sideways (a share of the camera's distance; positive: the house moves right), smoothly. */
+  const slide = (share: number, ms: number) => {
+    const v = view.viewer;
+    const cam = v.camera.position;
+    const tg = v.controls.target;
+    const dx = cam.x - tg.x;
+    const dz = cam.z - tg.z;
+    const flat = Math.hypot(dx, dz) || 1;
+    const by = Math.hypot(dx, cam.y - tg.y, dz) * share;
+    // the camera's left on the ground: moving the view that way moves the house right
+    const lx = (-dz / flat) * by;
+    const lz = (dx / flat) * by;
+    const from = performance.now();
+    let done = 0;
+    const step = () => {
+      if (stopped) return;
+      const k = Math.min(1, (performance.now() - from) / ms);
+      const e = 1 - (1 - k) ** 3;
+      const d = e - done;
+      done = e;
+      cam.x += lx * d;
+      cam.z += lz * d;
+      tg.x += lx * d;
+      tg.z += lz * d;
+      v.invalidate();
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+
   const ending = () => {
     music.finish();
+    // the house holds still to the right of the end slate (on a phone the slate is on top: no slide)
+    holdOrbit = Infinity;
+    if (!stage.classList.contains("narrow")) window.setTimeout(() => slide(0.2, 1400), 1300);
     const card = $(".outro");
     card.innerHTML = `<h2>Your home, <b>like this</b>.</h2>
       <p>VirtuHome is free in the Home Assistant Community Store. ${trials
@@ -807,6 +847,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     // first, while this is still the click that started it: browsers start sound only then
     music.start(audio);
     stopped = false;
+    holdOrbit = 0;
     skipChapter = false;
     $(".intro").classList.remove("show");
     $(".outro").classList.remove("show");
@@ -850,6 +891,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     }
     if (stopped) return;
     tidy();
+    show.sky("night");
     show.house(true);
     $(".chapter").classList.remove("show");
     subtitle(null);
