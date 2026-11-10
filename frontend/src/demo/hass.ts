@@ -1,6 +1,7 @@
 // A pretend Home Assistant for the dev harness and the online demo: states for every entity the
 // plan uses, areas taken from the plan's rooms, and services that flip states like the real thing.
 // It never reaches a real Home Assistant.
+import { PICTURES } from "./people";
 import type { Plan } from "../model/plan";
 import type { Hass, HassEntity, HassEntityReg } from "../live/hass";
 import { sunPosition } from "../live/sun";
@@ -148,8 +149,8 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
   }
   // two people and the alarm, where the pretend day (history.ts) has them now
   const story = (id: string, fallback: string) => storyState(id, Date.now())?.s ?? fallback;
-  put("person.alex", story("person.alex", "home"), { friendly_name: "Alex" });
-  put("person.sam", story("person.sam", "not_home"), { friendly_name: "Sam" });
+  put("person.alex", story("person.alex", "home"), { friendly_name: "Alex", entity_picture: PICTURES["person.alex"] });
+  put("person.sam", story("person.sam", "not_home"), { friendly_name: "Sam", entity_picture: PICTURES["person.sam"] });
   put("alarm_control_panel.home", story("alarm_control_panel.home", "disarmed"), { friendly_name: "Alarm", code_arm_required: false });
   // the cameras' own sensors, on their devices (a doorbell's ding is an occupancy sensor, as ring-mqtt has it)
   const devices: NonNullable<Hass["devices"]> = {

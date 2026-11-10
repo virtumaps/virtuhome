@@ -79,6 +79,8 @@ button, a.btn { pointer-events: auto; font: inherit; cursor: pointer; }
   transition: opacity .3s, transform .4s cubic-bezier(.2,.9,.3,1); }
 .subs.show { opacity: 1; transform: translate(-50%, 0); }
 .who { font-size: max(10px, calc(var(--u) * 1.4)); letter-spacing: .3em; text-transform: uppercase; font-weight: 700; margin-bottom: .6em; color: var(--m); }
+/* "narrated in English, with subtitles": quieter than her name */
+.who small { font-size: 1em; letter-spacing: 0; text-transform: none; font-weight: 500; color: var(--dim); margin-left: .6em; }
 .say { margin: 0; font-size: max(15px, calc(var(--u) * 3.1)); line-height: 1.38; font-weight: 500; }
 .say span { opacity: .42; transition: opacity .18s; } .say span.said { opacity: 1; }
 .chapter { position: absolute; top: calc(var(--u) * 3); left: 3vw; max-width: 44vw; padding: calc(var(--u) * 1.4) calc(var(--u) * 2.2); border-radius: calc(var(--u) * 2);
@@ -695,7 +697,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       return;
     }
     subs.classList.add("show");
-    $(".who").textContent = mode === "english" ? `${HOST} · ${U.subtitled}` : HOST;
+    $(".who").innerHTML = esc(HOST) + (mode === "english" ? `<small>${esc(U.subtitled)}</small>` : "");
     const list = cued(text).text.split(" ");
     let at = 0;
     starts = list.map((w) => ((at += w.length + 1), at - w.length - 1));
