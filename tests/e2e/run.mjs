@@ -364,7 +364,8 @@ async function run() {
     const during = sent.slice(from).map((m) => JSON.parse(m).type);
     const banned = during.filter((t) => t === "call_service" || t === "execute_script" || /^virtuhome\/(plan\/save|history\/restore)/.test(t));
     check(!banned.length, `the demo sent ${banned.join(", ")}`);
-    await page.locator(`${demo} button`, { hasText: "Close" }).click();
+    // the demo's own Close in its bar (a cover's popup in the room sheet has a Close too)
+    await page.locator(`${demo} .bar button.close`).click();
     await page.locator(demo).waitFor({ state: "detached" });
     await waitDrawn(page, panel);
     check(await page.locator(`${panel} .ed`).isVisible(), "the editor did not come back");
