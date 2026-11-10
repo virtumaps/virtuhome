@@ -12,3 +12,8 @@ frontend/dev/scans/
 frontend/dev/ext/
 frontend/dev/plans/home.json
 /site/
+# the tour's voice model and its Python (dev/tour/voice/make.py)
+frontend/dev/tour/voice/.venv/
+frontend/dev/tour/voice/*.onnx
+frontend/dev/tour/voice/voices-v1.0.bin
+frontend/dev/tour/voice/*.wav

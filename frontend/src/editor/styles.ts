@@ -68,6 +68,11 @@ a.ed-btn { display: inline-block; text-decoration: none; }
 }
 .ed-chip i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2); }
 .ed-chip.on { background: var(--vh-chip-on); box-shadow: inset 0 0 0 1.5px var(--vh-accent); font-weight: 600; }
+/* finishes as tiles: what each looks like, its name under it */
+.ed-chips.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; }
+.ed-chips.tiles .ed-chip { flex-direction: column; gap: 5px; padding: 5px 4px 6px; border-radius: 12px; white-space: normal; text-align: center; font-size: 11px; line-height: 1.2; }
+.ed-chips.tiles .ed-chip i { width: 100%; height: auto; aspect-ratio: 1; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15); }
+.ed-chips.tiles .ed-chip.on i { box-shadow: 0 0 0 2px var(--vh-accent); }
 .ed-swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .ed-sw {
   width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; position: relative;

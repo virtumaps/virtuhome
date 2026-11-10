@@ -8,7 +8,7 @@ const BEAT = 60 / BPM;
 const STEP = BEAT / 4;
 /** How loud the music is overall, and how far it dips while the host speaks. */
 const LEVEL = 0.85;
-const DUCKED = 0.42;
+const DUCKED = 0.3;
 
 // a bar each, MIDI notes: B minor, G, D, A
 const CHORDS = [[59, 62, 66], [55, 59, 62], [62, 66, 69], [57, 61, 64]];
@@ -126,6 +126,29 @@ export class Music {
     this.chime(t, 86);
     this.chime(t + 0.18, 90);
     this.out.gain.setTargetAtTime(0, t + 4, 1.4);
+  }
+
+  /** The audio everything plays through, once it is running (null before a tap starts it). */
+  get running(): AudioContext | null {
+    return this.ctx?.state === "running" ? this.ctx : null;
+  }
+
+  /**
+   * The host's recorded voice, played through the same audio so the mouth can follow it: its level
+   * meter, or null when it plays straight (no audio running yet).
+   */
+  voice(el: HTMLMediaElement): AnalyserNode | null {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== "running") return null;
+    try {
+      const src = ctx.createMediaElementSource(el);
+      const meter = ctx.createAnalyser();
+      meter.fftSize = 1024;
+      src.connect(meter).connect(ctx.destination);
+      return meter;
+    } catch {
+      return null;
+    }
   }
 
   pause(on: boolean): void {

@@ -3,12 +3,34 @@
 ## Unreleased
 
 ### New
-- **Take the tour** in the online demo: a two-minute tour with a voice, music and subtitles. A host
-  shows you round the demo house, then what the Energy, Security, Household and Wall Tablet add-ons
-  do, as previews on the demo house with pretend numbers.
+- **Take the tour** in the online demo: a tour of about two and a half minutes with a voice, music and
+  subtitles. A host shows you round the demo house at night: who's home, a room's scenes, then its sky
+  through sun, rain, thunder, fog and snow. She makes it over in the editor, scans a room, and shows
+  what the Security, Energy, Household and Wall Tablet add-ons do: the day played back with a doorbell
+  clip and a phone alert, every room's power, the roof's solar and a what-if as the Energy sheet shows
+  them, and a wall tablet with its screensaver and the doorbell. The add-ons' parts are previews: the
+  solar scores are the Energy add-on's for the demo house, the rest are pretend numbers.
+- The online demo and its tour speak 14 languages: English, German, Dutch, French, Italian, Spanish,
+  Portuguese, Swedish, Danish, Norwegian, Polish, Czech, Turkish and Bulgarian. It opens in the one
+  picked before, else the browser's, else the one where the viewer is (from the time zone, nothing is
+  looked up); the globe in its bar changes it. The host has a recorded voice in English, French,
+  Spanish, Italian and Portuguese; in the others she speaks English, with the subtitles in the
+  language (a browser's own voices sound robotic). The demo house's rooms are named in the language, and
+  VirtuHome's own texts follow where the app has them (German, Dutch).
+- The editor's finishes are tiles that show what each looks like (bricks, wallpaper, herringbone…), the
+  wallpapers in the colour picked, for floors, walls, the outside walls, upholstery, doors and windows,
+  and roofs.
+
+### Fixed
+- Labels no longer flicker as the view turns: one giving way to another fades, and once gone it comes
+  back only when there is room for it.
+- The demo house's drive runs up to the front of its side extension, where there was a gap outside the
+  side door. Its garden has a pergola over a patio at the end, with a table and lamps.
 
 ### Changed
-- The demo home's lights take the colour and brightness they are switched on with.
+- The demo home's lights take the colour and brightness they are switched on with, and a new colour
+  or brightness alone no longer makes a light pulse as if it had just been switched (as in Home
+  Assistant, only a change of state does).
 - A speaker or TV that's playing, and a robot that's cleaning or mowing, pulse only in their first
   minute, as everything else does; they still show over the whole house while they play or work.
   Music can play for hours, and its pulse kept a wall tablet drawing about ten frames a second all

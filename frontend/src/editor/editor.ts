@@ -23,6 +23,7 @@ import { areaScenes, idList, MAX_SCENES, needsDetails, runnable } from "../live/
 import { roomTrackers, sourcesOf } from "../live/presence";
 import { canInflate, ROBOT_DOMAINS, robotSources } from "../live/robots";
 import { BALUSTRADE_DEFAULT, BALUSTRADE_MATERIALS, BALUSTRADES, CAR_TYPES, carModel, CATEGORIES, EV_TYPES, FURNITURE, furnitureName, isUpholstered, styleOptions, type BalustradeMaterial, type BalustradeStyle, type Category } from "../scene/furniture-lib";
+import { finishPreview } from "../scene/textures";
 import { EXTERIOR_FINISHES, FLOOR_FINISHES, FURNITURE_SWATCHES, JOINERY_FINISHES, JOINERY_SWATCHES, PAINT_SWATCHES, ROOF_COVERINGS, ROOF_SWATCHES, TRIM_SWATCHES, UPHOLSTERY, WALL_FINISHES, type FinishDef, type Swatch } from "../scene/finishes";
 import {
   faceBearing, fitPanels, floorRoofs, fromRoofFrame, itemFrame, planeHeight, polyArea, ROOF_ITEM_DEFAULTS, ROOF_SHAPE_ORDER, ROOF_SHAPES, sunniestFace,
@@ -923,7 +924,7 @@ export class Editor {
       h("div", { class: "ed-report" }),
       h("h4", {}, t("editor.home.outsideWalls")),
       this.finishChips(EXTERIOR_FINISHES, this.plan.settings.exterior_finish ?? "render", (k) =>
-        this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, t("editor.home.outsideWallsName", { name: t((EXTERIOR_FINISHES as Record<string, FinishDef>)[k].label) }))),
+        this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, t("editor.home.outsideWallsName", { name: t((EXTERIOR_FINISHES as Record<string, FinishDef>)[k].label) })), this.plan.settings.exterior_color),
       (EXTERIOR_FINISHES as Record<string, FinishDef>)[this.plan.settings.exterior_finish ?? "render"]?.tintable
         ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, t("editor.home.outsideWallColour")))
         : null,
@@ -1706,7 +1707,7 @@ export class Editor {
       h("div", { class: "ed-sub" }, t("editor.floor")),
       this.finishChips(FLOOR_FINISHES, room.floor ?? "wood", (k) => updRoom(t("editor.nameFloor", { name: room.name }), (r) => (r.floor = k as FloorMaterial))),
       h("div", { class: "ed-sub" }, t("editor.room.walls")),
-      this.finishChips(WALL_FINISHES, wallFinish, (k) => updRoom(t("editor.room.nameWalls", { name: room.name }), (r) => (r.wall_finish = k as Room["wall_finish"]))),
+      this.finishChips(WALL_FINISHES, wallFinish, (k) => updRoom(t("editor.room.nameWalls", { name: room.name }), (r) => (r.wall_finish = k as Room["wall_finish"])), room.wall_color),
       (WALL_FINISHES as Record<string, FinishDef>)[wallFinish]?.tintable
         ? this.colourPicker(PAINT_SWATCHES, room.wall_color, (c) => updRoom(t("editor.room.nameWallColour", { name: room.name }), (r) => (r.wall_color = c)), t("editor.room.plainWhite"))
         : null,
@@ -2261,7 +2262,7 @@ export class Editor {
       h("div", { class: "ed-sub" }, t("editor.colour")),
       this.colourPicker(garden ? FENCE_SWATCHES : FURNITURE_SWATCHES, x.color, (c) => named(t("editor.furniture.recolour"))((y) => (y.color = c)), t("editor.original")),
       isUpholstered(x.type) ? h("div", { class: "ed-sub" }, t("editor.furniture.upholstery")) : null,
-      isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named(t("editor.furniture.reupholster"))((y) => (y.finish = k as Furniture["finish"]))) : null,
+      isUpholstered(x.type) ? this.finishChips(UPHOLSTERY, finish, (k) => named(t("editor.furniture.reupholster"))((y) => (y.finish = k as Furniture["finish"])), x.color) : null,
       ...(def?.family === "stairs" ? this.balustradeRows(x, named) : []),
       ...(garden ? this.gardenRows(x, named) : []),
       ...(GANG_TYPES.has(x.type) ? this.gangRows(x, upd, reshape) : []),
@@ -2479,10 +2480,14 @@ export class Editor {
   }
 
   /** Named finishes as chips with their colour. */
-  private finishChips(defs: Record<string, FinishDef>, current: string, onPick: (k: string) => void): HTMLElement {
-    return h("div", { class: "ed-chips" }, ...Object.entries(defs).map(([k, d]) =>
-      h("button", { class: `ed-chip${k === current ? " on" : ""}`, onclick: () => k !== current && onPick(k) },
-        h("i", { style: `background:${hexOf(d.color)}` }), t(d.label))));
+  /** Finishes as tiles showing what each looks like (the current one in `tint`, when it takes a colour). */
+  private finishChips(defs: Record<string, FinishDef>, current: string, onPick: (k: string) => void, tint?: string | null): HTMLElement {
+    return h("div", { class: "ed-chips tiles" }, ...Object.entries(defs).map(([k, d]) => {
+      const colour = k === current && d.tintable && tint ? parseInt(tint.slice(1), 16) : d.color;
+      const pic = finishPreview(d.tex, d.scale, colour);
+      return h("button", { class: `ed-chip${k === current ? " on" : ""}`, onclick: () => k !== current && onPick(k) },
+        h("i", { style: pic ? `background:${hexOf(colour)} url(${pic}) center/cover` : `background:${hexOf(colour)}` }), t(d.label));
+    }));
   }
 
   /** Colour swatches, any colour, or the default (null). */

@@ -188,8 +188,8 @@ const midnightOf = (t: number) => {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 };
 
-/** The story's state of an entity at a time (null: the story never changes it). */
-export function storyState(id: string, t: number): { s: string; a?: Attrs } | null {
+/** The story's state of an entity at a time, and when it changed to it if the day says (null: the story never changes it). */
+export function storyState(id: string, t: number): { s: string; a?: Attrs; t?: number } | null {
   const m0 = midnightOf(t);
   let found: Change | null = null;
   for (const c of dayChanges(m0)) if (c.id === id && c.t <= t) found = c;

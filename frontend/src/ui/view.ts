@@ -1558,6 +1558,13 @@ export class VhView {
     this.skyPanel.render();
   }
 
+  /** Shows the sky at another moment, as the sky panel does; null: now again (the online demo's tour sets it). */
+  pickSky(pick: SkyPick | null): void {
+    this.skyPick = pick;
+    this.updateSky();
+    this.applyTheme();
+  }
+
   private toggleSkyPanel(): void {
     const open = !this.skyPanel.open;
     if (open) {

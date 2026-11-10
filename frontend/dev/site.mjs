@@ -7,7 +7,7 @@
 // that handles a Home Assistant address or token, ends up in the demo, or if a link in the guide
 // leads nowhere.
 import * as esbuild from "esbuild";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, dirname, extname, join, normalize, resolve } from "node:path";
@@ -90,7 +90,18 @@ export async function buildSite(out) {
   } else {
     console.warn(`No guide of a release before ${version} to publish beside it (are the tags fetched?)`);
   }
-  const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text }))];
+  // the tour's recorded lines in each language that has them (dev/tour/voice/make.py); the others
+  // speak with the browser's voice, or the English recordings under subtitles
+  const voice = join(dev, "tour/voice");
+  const recordings = readdirSync(voice, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && /^[a-z]{2}$/.test(d.name) && existsSync(join(voice, d.name, "voices.json")))
+    .flatMap((d) => readdirSync(join(voice, d.name)).filter((f) => /\.mp3$|^voices\.json$/.test(f))
+      .map((f) => ({ name: `demo/voice/${d.name}/${f}`, data: readFileSync(join(voice, d.name, f)) })));
+  // which languages have them, for the tour to ask only for those
+  recordings.push({ name: "demo/voice/index.json", data: readFileSync(join(voice, "index.json")) });
+  // the picture a shared link to the demo shows
+  const preview = [{ name: "demo/og.jpg", data: readFileSync(join(dev, "og.jpg")) }];
+  const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text })), ...recordings, ...preview];
   rmSync(out, { recursive: true, force: true });
   for (const f of all) {
     mkdirSync(dirname(join(out, f.name)), { recursive: true });
@@ -101,7 +112,7 @@ export async function buildSite(out) {
 
 const TYPES = {
   ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
-  ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm",
+  ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg",
 };
 
 /** Serves the built site under /virtuhome/, as GitHub Pages does, on this computer only. */

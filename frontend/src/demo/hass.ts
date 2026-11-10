@@ -34,8 +34,8 @@ export interface DemoOptions {
   lively?: boolean;
 }
 
-/** The pretend Home Assistant; stop() ends what happens by itself. */
-export type DemoHass = Hass & { stop(): void };
+/** The pretend Home Assistant; stop() ends what happens by itself, set() changes a state (the online demo's tour sets the sky and the weather). */
+export type DemoHass = Hass & { stop(): void; set(id: string, state: string, attributes?: HassEntity["attributes"], changed?: string): void };
 
 /** The demo's covers that aren't plain blinds: the driveway gate (no position), the awning, a venetian blind. */
 const COVERS: Record<string, [string, HassEntity["attributes"]]> = {
@@ -253,7 +253,9 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
           if (typeof d.brightness === "number") attrs.brightness = d.brightness;
           else if (typeof d.brightness_pct === "number") attrs.brightness = Math.round(d.brightness_pct * 2.55);
         }
-        states[id] = { ...s, state: next, attributes: attrs, last_changed: new Date().toISOString() };
+        // as in Home Assistant, a new colour or brightness alone isn't a change of state
+        const at = new Date().toISOString();
+        states[id] = { ...s, state: next, attributes: attrs, last_changed: next === s.state ? s.last_changed : at, last_updated: at };
       }
       Object.assign(hass, { states: { ...states } });
       onChange({ ...hass, states: { ...states } });
@@ -367,6 +369,14 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
     stop() {
       for (const t of timers) clearTimeout(t);
       timers.clear();
+    },
+    /** `changed`: when it changed (a time in the past changes it without the pulse a new change gets). */
+    set(id: string, state: string, attributes: HassEntity["attributes"] = {}, changed?: string) {
+      const was = states[id];
+      const at = new Date().toISOString();
+      const since = changed ?? (was?.state === state ? was.last_changed : at);
+      states[id] = { entity_id: id, state, attributes: { ...(was?.attributes ?? {}), ...attributes }, last_changed: since, last_updated: changed ?? at };
+      publish();
     },
   });
 }

@@ -17,9 +17,9 @@ floors, and open **Edit** to change the plan in 3D or the **2D plan**. The demo 
 **Save** button stays off and a reload brings the house back as it was. Once VirtuHome is
 installed, the same house is in Home Assistant too: see [The demo home](#the-demo-home).
 
-**Take the tour** in the demo's bar plays a two-minute tour with a voice, music and subtitles: a host
-shows you round the demo house, then what the add-ons of [VirtuHome Pro](#extensions-and-virtuhome-pro)
-do. Their parts are previews drawn on the demo house with pretend numbers. To end on the add-ons'
+**Take the tour** in the demo's bar plays a tour of under three minutes with a voice, music and
+subtitles: a host shows you round the demo house, then what the add-ons of
+[VirtuHome Pro](#extensions-and-virtuhome-pro) do. Their parts are previews drawn on the demo house with pretend numbers. To end on the add-ons'
 free trials only while they are open, it asks VirtuMaps' licence server, and sends nothing else. The
 voice is your browser's own, and the browser plays the music as it goes. The buttons at the top
 right turn the sound off, pause, skip a line or close the tour (**Esc**); the space bar pauses and
@@ -621,9 +621,9 @@ stay out of the replays of the past: a replay shows people home or away, never w
 ## Make it look like home
 
 Tap a room in 3D (or **Show** in **Rooms**):
-- **Floor**: the finish.
-- **Walls**: paint or wallpaper and a colour. **Use these walls everywhere** copies them to every
-  room.
+- **Floor**: the finish. Each finish is a tile showing what it looks like.
+- **Walls**: paint or wallpaper and a colour; the tiles show the wallpapers in the colour picked.
+  **Use these walls everywhere** copies them to every room.
 - **Add furniture and decor**: search ("plant, sofa, dumbbells…") or pick a category, then tap an
   item. **In this room** lists what is there.
 
