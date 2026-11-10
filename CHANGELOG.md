@@ -24,6 +24,8 @@
 ### Fixed
 - Labels no longer flicker as the view turns: one giving way to another fades, and once gone it comes
   back only when there is room for it.
+- The demo home's people have pictures (drawn portraits), as a Home Assistant user's own photos show
+  in the rooms they are in and among who is home, instead of their initials.
 - The demo house's drive runs up to the front of its side extension, where there was a gap outside the
   side door. Its garden has a pergola over a patio at the end, with a table and lamps.
 
