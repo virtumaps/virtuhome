@@ -128,6 +128,11 @@ export class Music {
     this.out.gain.setTargetAtTime(0, t + 4, 1.4);
   }
 
+  /** The audio everything plays through, once it is running (null before a tap starts it). */
+  get running(): AudioContext | null {
+    return this.ctx?.state === "running" ? this.ctx : null;
+  }
+
   /**
    * The host's recorded voice, played through the same audio so the mouth can follow it: its level
    * meter, or null when it plays straight (no audio running yet).

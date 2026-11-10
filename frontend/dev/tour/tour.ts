@@ -90,7 +90,9 @@ button, a.btn { pointer-events: auto; font: inherit; cursor: pointer; }
   text-shadow: 0 1px 8px rgba(0,0,0,.7); }
 .big .k:empty { display: none; }
 .big.show { animation: big 2.4s cubic-bezier(.2,.8,.2,1) both; }
-.big.hero.show { animation-duration: 4.2s; }
+.big.hero { place-content: start center; padding-top: 11vh; }
+.big.hero::before { top: calc(11vh + calc(var(--u) * 7)); }
+.big.hero.show { animation-duration: 6s; }
 @keyframes big { 0% { opacity: 0; transform: scale(.94); } 18% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(1.03); } }
 .controls { position: absolute; top: calc(var(--u) * 3); right: 3vw; display: flex; gap: 6px; padding: 5px; border-radius: 999px; opacity: 0; transition: opacity .5s; }
 .on .controls { opacity: 1; }
@@ -106,6 +108,11 @@ svg { width: 55%; height: 55%; fill: currentColor; }
   background: rgba(92,208,255,.16); border-radius: calc(var(--u) * 1.4); }
 .chip .l { font-size: max(10px, calc(var(--u) * 1.35)); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
 .chip .v { font-size: max(14px, calc(var(--u) * 2.6)); font-weight: 600; margin-top: .15em; }
+.super { position: absolute; left: 50%; bottom: calc(var(--u) * 18.5); transform: translate(-50%, 10px); max-width: 70vw; text-align: center; padding: .55em 1.3em;
+  border-radius: 999px; font-size: max(16px, calc(var(--u) * 3)); font-weight: 600; letter-spacing: -.01em; opacity: 0; transition: opacity .6s, transform .7s cubic-bezier(.2,.9,.3,1); }
+.super.show { opacity: 1; transform: translate(-50%, 0); }
+.super span { background: linear-gradient(100deg, #fff, #cdeeff 50%, #ffd0d0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.narrow .super { bottom: calc(25vw + 92px); max-width: 90vw; font-size: 15px; }
 .clock { position: absolute; left: 50%; top: calc(var(--u) * 3); transform: translateX(-50%); padding: .55em 1.1em; border-radius: 999px; font-size: max(13px, calc(var(--u) * 2.2));
   font-weight: 600; font-variant-numeric: tabular-nums; display: none; min-width: 11em; text-align: center; }
 .clock.show { display: block; }
@@ -131,8 +138,14 @@ svg { width: 55%; height: 55%; fill: currentColor; }
 .narrow .subs { width: auto; left: 3vw; right: 3vw; transform: translateY(12px); bottom: calc(25vw - 6px); }
 .narrow .subs.show { transform: none; }
 .narrow .chips, .narrow .kicker { display: none; }
-.narrow .chapter { max-width: 58vw; }
+.narrow .chapter { max-width: 54vw; top: 10px; padding: 8px 12px; }
+/* on a phone the top is a stack: the chapter, then the replay's clock, then what shows beside the house */
+.narrow .clock { top: 96px; font-size: 13px; }
 .narrow .card ul { grid-template-columns: 1fr; }
+.narrow .card { top: 64px; left: 4vw; right: 4vw; width: auto; transform: none; padding: 20px 18px; max-height: calc(100% - 76px); overflow-y: auto; }
+.narrow .card.show { animation: fade .5s both; }
+@keyframes fade { from { opacity: 0; } }
+.narrow .card h2 { font-size: 26px; }
 @media (prefers-reduced-motion: reduce) { .big.show { animation-duration: .01s; } .char, .chip, .subs { transition: none; } }
 ${PROPS_CSS}
 `;
@@ -241,6 +254,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       <div class="chapter glass"><div class="num"></div><div class="title"></div><div class="kicker"></div><div class="badge"></div></div>
       <div class="big"><div class="t"></div><div class="k"></div></div>
       <div class="clock glass"><span></span><i><b></b></i></div>
+      <div class="super glass"><span></span></div>
       <div class="chips"></div>
       <div class="char"><canvas></canvas><span class="tag">${esc(HOST)}</span></div>
       <div class="subs glass" aria-live="polite"><div class="who"></div><p class="say"></p></div>
@@ -285,6 +299,10 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   const fetched = new Map<string, HTMLAudioElement>();
   let playing: HTMLAudioElement | null = null;
   let meter: AnalyserNode | null = null;
+  /** A recorded line playing through the music's audio: when it started (audio time) and how long it is. */
+  let voiceOn: { ctx: AudioContext; from: number; secs: number; stop(): void; gain: GainNode } | null = null;
+  const buffers = new Map<string, Promise<AudioBuffer | null>>();
+  let push: { from: number; at: number; ms: number; dist: number } | null = null;
   const level = new Float32Array(1024);
 
   // ---------------------------------------------------------------- the 3D view
@@ -441,6 +459,14 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       holdOrbit = performance.now() + 2500;
     },
     props: setProps,
+    push(from, ms) {
+      const cam = view.viewer.camera.position;
+      const tg = view.viewer.controls.target;
+      // after the flight to the whole house has settled
+      window.setTimeout(() => {
+        push = { from, at: performance.now(), ms, dist: Math.hypot(cam.x - tg.x, cam.y - tg.y, cam.z - tg.z) };
+      }, 50);
+    },
   };
 
   /** Takes every preview off the house, and gives the view back. */
@@ -484,14 +510,15 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     // her mouth: the recording's loudness when there is one, else a kick on every word the voice reaches
     kick = Math.max(0, kick - dt * 5);
     let mouth = now - lastWord > 700 ? 0.3 + 0.4 * Math.abs(Math.sin(t * 9.5)) : 0.3 + 0.55 * kick;
-    if (playing && meter) {
+    if ((voiceOn || playing) && meter) {
       meter.getFloatTimeDomainData(level);
       let sum = 0;
       for (const v of level) sum += v * v;
       mouth = Math.min(1, Math.max(0, (Math.sqrt(sum / level.length) - 0.01) * 6));
     }
     if (talking && !paused) {
-      if (playing) markSaid(playing.currentTime / (playing.duration || lineSecs));
+      if (voiceOn) markSaid((voiceOn.ctx.currentTime - voiceOn.from) / voiceOn.secs);
+      else if (playing) markSaid(playing.currentTime / (playing.duration || lineSecs));
       // by time until the voice says where it is (some never do)
       else if (muted || !speech.ok || !lastWord) markSaid((now - lineStart) / 1000 / lineSecs);
     }
@@ -524,6 +551,17 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
         clockDrawn = now;
         drawPast(k === 1 ? (clock = clockTo) : clock);
       }
+    }
+    // the opening's slow push in: the camera's distance eases from far out to where the view put it
+    if (push && !paused) {
+      const k = Math.min(1, (now - push.at) / push.ms);
+      const dist = push.dist * (push.from + (1 - push.from) * (1 - (1 - k) ** 3));
+      const cam = view.viewer.camera.position;
+      const tg = view.viewer.controls.target;
+      const len = Math.hypot(cam.x - tg.x, cam.y - tg.y, cam.z - tg.z) || 1;
+      cam.set(tg.x + ((cam.x - tg.x) / len) * dist, tg.y + ((cam.y - tg.y) / len) * dist, tg.z + ((cam.z - tg.z) / len) * dist);
+      view.viewer.invalidate();
+      if (k === 1) push = null;
     }
     // the house turns slowly, except just after a flight
     if (stage.classList.contains("on") && !paused && now > holdOrbit) {
@@ -575,14 +613,60 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     for (const w of wakers.slice()) w();
   };
 
-  /** Fetches a recorded line ahead of time. */
+  /** Fetches a recorded line ahead of time: decoded, to play through the music's audio, else as an audio element. */
   const fetchLine = (text: string) => {
     const id = voiceId(spoken(text));
-    if (!recorded?.[id] || fetched.has(id)) return;
+    if (!recorded?.[id]) return;
+    const ctx = music.running;
+    if (ctx) {
+      if (!buffers.has(id)) {
+        buffers.set(id, fetch(`${VOICE}${id}.mp3`).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).catch(() => null));
+      }
+      return;
+    }
+    if (fetched.has(id)) return;
     const a = new Audio();
     a.preload = "auto";
     a.src = `${VOICE}${id}.mp3`;
     fetched.set(id, a);
+  };
+
+  /**
+   * Plays a recorded line through the music's audio (one tap starts both, which phones need); false when
+   * that isn't running or the line didn't load, for the audio element to try.
+   */
+  const playBuffer = async (id: string, text: string): Promise<boolean> => {
+    const ctx = music.running;
+    if (!ctx) return false;
+    fetchLine(text);
+    const buf = await (buffers.get(id) ?? Promise.resolve(null));
+    if (!buf || stopped) return !!stopped;
+    await new Promise<void>((done) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const gain = ctx.createGain();
+      gain.gain.value = muted ? 0 : 1;
+      meter = ctx.createAnalyser();
+      meter.fftSize = 1024;
+      src.connect(gain).connect(meter).connect(ctx.destination);
+      const finish = () => {
+        src.onended = null;
+        try {
+          src.stop();
+        } catch {
+          // it had already ended
+        }
+        wakers = wakers.filter((w) => w !== finish);
+        voiceOn = null;
+        meter = null;
+        done();
+      };
+      voiceOn = { ctx, from: ctx.currentTime, secs: buf.duration, stop: finish, gain };
+      src.onended = finish;
+      wakers.push(finish);
+      src.start();
+    });
+    return true;
   };
 
   /** Plays a recorded line; resolves when it ends, fails, is skipped or the tour stops. */
@@ -624,7 +708,8 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       clockFrom = clock;
       clockTo = timeOf(line.replay);
       clockAt = performance.now();
-      clockFor = lineSecs * 1000 * 0.9;
+      // it gets there early in the line ("Ten past ten: a parcel" with the clock at ten past ten), then holds
+      clockFor = Math.min(lineSecs * 0.45, 2) * 1000;
     }
     const word = (char: number) => {
       lastWord = performance.now();
@@ -632,8 +717,10 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       // where the voice is in what it says, as a place in what the subtitle shows
       markTo((char * text.length) / voice.length);
     };
-    if (muted) await sleep(lineSecs * 1000);
-    else if (recorded?.[id]) await playLine(id);
+    if (muted && !recorded?.[id]) await sleep(lineSecs * 1000);
+    else if (recorded?.[id]) {
+      if (!(await playBuffer(id, text))) await playLine(id);
+    }
     else if (!speech.ok) await sleep(lineSecs * 1000);
     else {
       let wake = () => undefined as void;
@@ -669,14 +756,14 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     const card = $(".chapter");
     card.classList.remove("show");
     const hero = i === 0;
-    // the opening is the title card itself: the small card waits until it has gone
-    setTimeout(() => {
+    // the opening's big title is its card
+    if (!hero) setTimeout(() => {
       $(".num").textContent = `${String(i + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`;
       $(".title").textContent = title;
       $(".kicker").textContent = kicker;
       $(".badge").textContent = addOn;
       card.classList.add("show");
-    }, hero ? 4000 : 1700);
+    }, 1700);
     const big = $(".big");
     $(".big .t").textContent = title;
     $(".big .k").textContent = hero ? kicker : addOn;
@@ -746,12 +833,17 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       const values = chips(ch.chips);
       const live = setInterval(values, 1000);
       await sleep(i ? 1700 : 600);
-      for (const line of ch.lines) {
+      const lines = ch.lines.filter((l) => !l.when || l.when(show));
+      for (const line of lines) {
         if (stopped || skipChapter) break;
-        if (line.when && !line.when(show)) continue;
+        if (ch.tagline && line === lines[lines.length - 1]) {
+          $(".super span").textContent = ch.tagline;
+          $(".super").classList.add("show");
+        }
         const at = all.indexOf(line);
         await say(line, all.slice(at + 1, at + 3));
       }
+      $(".super").classList.remove("show");
       clearInterval(live);
       ch.end?.(show);
       $(".chips").innerHTML = "";
@@ -805,10 +897,9 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   $(".close").addEventListener("click", close);
   $(".mute").addEventListener("click", () => {
     muted = !muted;
-    if (muted) {
-      speech.stop();
-      if (playing) playing.muted = true;
-    } else if (playing) playing.muted = false;
+    if (muted) speech.stop();
+    if (playing) playing.muted = muted;
+    if (voiceOn) voiceOn.gain.gain.value = muted ? 0 : 1;
     music.mute(muted);
     $(".mute").innerHTML = svg(muted ? mdiVolumeOff : mdiVolumeHigh);
     $(".mute").setAttribute("aria-label", muted ? "Sound on" : "Sound off");

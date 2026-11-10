@@ -62,6 +62,8 @@ export interface Show {
   restyle(fn: ((plan: Plan) => void) | null): void;
   /** The floors apart, one above the other, or back together. */
   explode(on: boolean): void;
+  /** Starts the camera `from` times as far out, and moves it in to where it is over `ms`. */
+  push(from: number, ms: number): void;
   /** Exactly these beside the house (an empty list: none). */
   props(list: Prop[]): void;
   /** Switches like `call` would, without the pulse a fresh change gets (for many things at once). */
@@ -88,6 +90,8 @@ export interface Line {
 export interface Chapter {
   title: string;
   kicker: string;
+  /** A line on screen while the chapter's last line is said, as in an advert. */
+  tagline?: string;
   /** The add-on it shows, on a badge. */
   addOn?: string;
   chips?: Chip[];
@@ -199,6 +203,7 @@ export const CHAPTERS: Chapter[] = [
     start: (s) => {
       s.sky("night");
       s.house(true);
+      s.push(1.45, 7000);
       cascade(s);
     },
     lines: [
@@ -214,7 +219,7 @@ export const CHAPTERS: Chapter[] = [
     lines: [
       { say: "Every light, door and window sits where it really is, and changes the moment it does." },
       { say: "Watch the living room.", do: (s) => s.fly("light.living_room_downlights"), after: colour([40, 90, 255]), gap: 1500 },
-      { say: "Ooh, blue!", mood: "surprised", after: colour([255, 40, 170]), gap: 1300 },
+      { say: "Ooh, look! It's gone blue.", mood: "surprised", after: colour([255, 40, 170]), gap: 1300 },
       { say: "Pink! Now we're talking.", mood: "excited", after: warm },
       { say: "Real sky, real weather. Even snow!", mood: "excited", do: (s) => {
         s.house(true);
@@ -261,6 +266,7 @@ export const CHAPTERS: Chapter[] = [
     title: "While you were out",
     kicker: "Your day, played back on the house",
     addOn: "Security add-on",
+    tagline: "Know what happened, not just that something did.",
     start: (s) => {
       s.sky("now");
       s.house(false);
@@ -287,6 +293,7 @@ export const CHAPTERS: Chapter[] = [
     title: "Energy",
     kicker: "What every room uses, and what it costs",
     addOn: "Energy add-on",
+    tagline: "See where the money goes. Keep more of it.",
     chips: [
       { icon: mdiHomeLightningBolt, label: "House now", value: "2.8 kW" },
       { icon: mdiCashMultiple, label: "Today so far", value: "£1.84" },
@@ -308,7 +315,7 @@ export const CHAPTERS: Chapter[] = [
       { say: "The kitchen's the hungry one. Kettle's on!", mood: "happy" },
       { say: "It knows when power is cheap, and the best time to charge the car." },
       {
-        say: "And look up!", mood: "excited", gap: 900,
+        say: "Now, look up at the roof!", mood: "excited", gap: 900,
         after: (s) => {
           energyRooms(s, false);
           s.house(true);
@@ -323,6 +330,7 @@ export const CHAPTERS: Chapter[] = [
     title: "The everyday stuff",
     kicker: "Appliances, bins, damp and mould",
     addOn: "Household add-on",
+    tagline: "The chores that remember themselves.",
     chips: [
       { icon: mdiDishwasher, label: "Dishwasher", value: "Done" },
       { icon: mdiTrashCan, label: "Bins", value: "Black bin tomorrow" },
@@ -352,6 +360,7 @@ export const CHAPTERS: Chapter[] = [
     title: "On the wall",
     kicker: "A screen by the front door",
     addOn: "Wall Tablet add-on",
+    tagline: "Your whole home, by the front door.",
     start: (s) => s.house(true),
     end: (s) => s.props([]),
     lines: [
@@ -367,7 +376,7 @@ export const CHAPTERS: Chapter[] = [
       { say: "VirtuHome is free, in the Home Assistant Community Store.", mood: "happy" },
       { say: "And every add-on has a free fourteen-day trial. Go on, try them on your own home!", mood: "excited", when: (s) => s.trials },
       { say: "And the add-ons are coming very soon. Don't miss them!", mood: "excited", when: (s) => !s.trials },
-      { say: "Thanks for watching!", mood: "excited" },
+      { say: "Thanks so much for watching. See you soon!", mood: "excited" },
     ],
   },
 ];

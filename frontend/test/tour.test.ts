@@ -44,6 +44,7 @@ function run(trials: boolean) {
       restyled.push(copy);
     },
     explode: () => undefined,
+    push: () => undefined,
     props: (list) => props.push(...list.map((p) => p.kind)),
     quiet: (id) => entities.push(id),
   };
