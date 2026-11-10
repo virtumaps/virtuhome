@@ -621,9 +621,9 @@ stay out of the replays of the past: a replay shows people home or away, never w
 ## Make it look like home
 
 Tap a room in 3D (or **Show** in **Rooms**):
-- **Floor**: the finish.
-- **Walls**: paint or wallpaper and a colour. **Use these walls everywhere** copies them to every
-  room.
+- **Floor**: the finish. Each finish is a tile showing what it looks like.
+- **Walls**: paint or wallpaper and a colour; the tiles show the wallpapers in the colour picked.
+  **Use these walls everywhere** copies them to every room.
 - **Add furniture and decor**: search ("plant, sofa, dumbbells…") or pick a category, then tap an
   item. **In this room** lists what is there.
 

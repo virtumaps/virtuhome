@@ -3,11 +3,22 @@
 ## Unreleased
 
 ### New
-- **Take the tour** in the online demo: a tour of under three minutes with a voice, music and subtitles.
-  A host shows you round the demo house at night and in the snow, makes it over and scans a room, then
+- **Take the tour** in the online demo: a tour of about two and a half minutes with a voice, music and
+  subtitles. A host shows you round the demo house at night: who's home, a room's scenes, then its sky
+  through sun, rain, thunder, fog and snow. She makes it over in the editor, scans a room, and shows
   what the Security, Energy, Household and Wall Tablet add-ons do: the day played back with a doorbell
-  clip and a phone alert, every room's power, the roof's solar and a what-if, and the doorbell on a
-  wall tablet. The add-ons' parts are previews with pretend numbers.
+  clip and a phone alert, every room's power, the roof's solar and a what-if as the Energy sheet shows
+  them, and a wall tablet with its screensaver and the doorbell. The add-ons' parts are previews: the
+  solar scores are the Energy add-on's for the demo house, the rest are pretend numbers.
+- The editor's finishes are tiles that show what each looks like (bricks, wallpaper, herringbone…), the
+  wallpapers in the colour picked, for floors, walls, the outside walls, upholstery, doors and windows,
+  and roofs.
+
+### Fixed
+- Labels no longer flicker as the view turns: one giving way to another fades, and once gone it comes
+  back only when there is room for it.
+- The demo house's drive runs up to the front of its side extension, where there was a gap outside the
+  side door. Its garden has a pergola over a patio at the end, with a table and lamps.
 
 ### Changed
 - The demo home's lights take the colour and brightness they are switched on with, and a new colour

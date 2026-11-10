@@ -18,10 +18,20 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-# Kokoro's best British voice (af_heart, with LANG "en-us", is its most natural American one)
-VOICE = "bf_emma"
+# Pip: Kokoro's liveliest British voice (bf_alice: about twice the rise and fall of bf_emma's) with some
+# of its most natural one (af_heart), said the British way, a little quicker than its own pace.
+# One voice ("bf_emma") or a mix ("bf_alice:0.6+af_heart:0.4").
+VOICE = "bf_alice:0.6+af_heart:0.4"
 LANG = "en-gb"
-SPEED = 1.0
+SPEED = 1.05
+
+
+def style(kokoro, voice: str):
+    """A voice by name, or a mix of voices by weight."""
+    if "+" not in voice and ":" not in voice:
+        return voice
+    parts = [p.split(":") for p in voice.split("+")]
+    return sum(kokoro.get_voice_style(name) * float(weight or 1) for name, weight in parts)
 
 
 def voice_id(text: str) -> str:
@@ -50,7 +60,7 @@ def main() -> None:
         if vid in index and (HERE / f"{vid}.mp3").exists():
             continue
         kokoro = kokoro or Kokoro(str(HERE / "kokoro-v1.0.onnx"), str(HERE / "voices-v1.0.bin"))
-        samples, rate = kokoro.create(text, voice=VOICE, speed=SPEED, lang=LANG)
+        samples, rate = kokoro.create(text, voice=style(kokoro, VOICE), speed=SPEED, lang=LANG)
         # trim the silence either side, keeping a breath
         loud = np.nonzero(np.abs(samples) > 0.01)[0]
         if len(loud):

@@ -5,6 +5,7 @@
 import { normalizePlan } from "../src/model/plan";
 import { VhView } from "../src/ui/view";
 import type { Quality, WallMode } from "../src/scene/viewer";
+import type { WeatherPick } from "../src/live/sky";
 import { DEMO_PLAN } from "../src/demo/plan";
 import { demoHass } from "../src/demo/hass";
 
@@ -32,7 +33,7 @@ function start(): void {
   const house = {
     view: view.handle(),
     hass: () => hass,
-    sky: (time: number | null) => view.pickSky(time === null ? null : { time, weather: null }),
+    sky: (time: number | null, weather: WeatherPick | null = null) => view.pickSky(time === null && !weather ? null : { time, weather }),
     lively(on: boolean) {
       hass.stop();
       if (!on) return;

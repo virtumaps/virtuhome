@@ -1,6 +1,6 @@
 // What the online demo's tour shows beside the 3D house, drawn here so the demo needs no recordings: a
-// doorbell camera's clip, a phone with an alert or scanning a room, a wall tablet taken over by the
-// doorbell, and the Energy add-on's what-if. Pretend, like the rest of the tour.
+// doorbell camera's clip, and a phone with an alert or scanning a room. Pretend, like the rest of the
+// tour. VirtuHome's own panels and the add-ons' are in panels.ts.
 
 const TAU = Math.PI * 2;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -385,7 +385,8 @@ export class Clip {
       c.fill();
     }
     const sec = String(Math.floor(t) + 7).padStart(2, "0");
-    const stamp = `YESTERDAY ${this.time}:${sec}`;
+    // a recording from yesterday, or the doorbell's live picture
+    const stamp = this.kind === "ring" ? `LIVE  ${this.time}:${sec}` : `YESTERDAY ${this.time}:${sec}`;
     const sw = c.measureText(stamp).width + 16;
     c.fillStyle = "rgba(0,0,0,0.5)";
     c.fillRect(W - 12 - sw, 12, sw, 24);
@@ -620,36 +621,6 @@ export class Phone {
   }
 }
 
-/** A wall tablet in its frame: the doorbell camera has taken over the screen. */
-export class Tablet {
-  readonly el = document.createElement("div");
-
-  constructor(clip: Clip) {
-    this.el.className = "tablet";
-    this.el.innerHTML = `<div class="bar"><i></i><b>Front door</b><span>Someone's at the door</span><em>17:42</em></div><div class="feed"></div>
-      <div class="acts"><span>Talk</span><span>Unlock</span><span>Dismiss</span></div>`;
-    this.el.querySelector(".feed")!.append(clip.canvas);
-  }
-}
-
-/** The Energy add-on's what-if, for a few more panels on the best slope. */
-export function whatIf(): HTMLElement {
-  const el = document.createElement("div");
-  el.className = "whatif";
-  // a year of what they'd make, month by month (kWh)
-  const months = [38, 62, 110, 150, 185, 192, 188, 160, 122, 78, 44, 30];
-  const top = Math.max(...months);
-  el.innerHTML = `<div class="k">What if</div><h3>4 more panels on the south slope</h3>
-    <div class="rows">
-      <div><b>1,520 kWh</b><span>made a year</span></div>
-      <div><b>£285</b><span>saved a year</span></div>
-      <div><b>7 years</b><span>to pay back</span></div>
-    </div>
-    <div class="bars">${months.map((m) => `<i style="height:${Math.round((m / top) * 100)}%"></i>`).join("")}</div>
-    <div class="m"><span>Jan</span><span>Jun</span><span>Dec</span></div>`;
-  return el;
-}
-
 export const PROPS_CSS = /* css */ `
 .props { position: absolute; inset: 0; pointer-events: none; }
 .prop { position: absolute; opacity: 0; transform: translateY(16px) scale(.97); transition: opacity .5s, transform .6s cubic-bezier(.2,.9,.3,1); }
@@ -673,27 +644,6 @@ export const PROPS_CSS = /* css */ `
 .phone .note b { display: block; margin-top: .55em; font-size: 1.12em; }
 .phone .note p { margin: .25em 0 .6em; line-height: 1.3; color: #333; }
 .phone .note canvas { width: 100%; border-radius: .6em; display: block; }
-.tablet { left: 3vw; top: calc(var(--u) * 21); width: min(42vw, calc(var(--u) * 76)); border-radius: calc(var(--u) * 2.4); background: #111;
-  border: calc(var(--u) * 1.1) solid #0a0b0e; box-shadow: 0 2vh 6vh rgba(0,0,0,.5); overflow: hidden; color: #fff; }
-.tablet .bar { display: flex; align-items: center; gap: .7em; padding: .7em 1em; font-size: max(12px, calc(var(--u) * 1.6)); background: #1b1e25; }
-.tablet .bar i { width: .7em; height: .7em; border-radius: 50%; background: #ff4d4d; animation: blink 1s infinite; }
-.tablet .bar span { color: #ffb4b4; } .tablet .bar em { margin-left: auto; font-style: normal; color: #aaa; }
-.tablet .feed canvas { display: block; width: 100%; height: auto; }
-.tablet .acts { display: flex; gap: .6em; padding: .7em; justify-content: center; font-size: max(12px, calc(var(--u) * 1.5)); background: #1b1e25; }
-.tablet .acts span { padding: .5em 1.2em; border-radius: 99px; background: rgba(255,255,255,.12); }
-.tablet .acts span:first-child { background: #2fb36d; }
-@keyframes blink { 50% { opacity: .2; } }
-.whatif { left: 3vw; top: calc(var(--u) * 22); width: min(34vw, calc(var(--u) * 56)); padding: calc(var(--u) * 2.4); border-radius: calc(var(--u) * 2.2);
-  background: rgba(10,14,26,.8); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.16); color: #fff; }
-.whatif .k { font-size: max(10px, calc(var(--u) * 1.35)); letter-spacing: .25em; text-transform: uppercase; color: #ffd36b; font-weight: 700; }
-.whatif h3 { margin: .3em 0 .8em; font-size: max(16px, calc(var(--u) * 2.6)); font-weight: 500; }
-.whatif .rows { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6em; }
-.whatif .rows b { display: block; font-size: max(16px, calc(var(--u) * 2.8)); }
-.whatif .rows span { font-size: max(11px, calc(var(--u) * 1.4)); color: rgba(238,244,255,.7); }
-.whatif .bars { display: flex; align-items: flex-end; gap: 4%; height: calc(var(--u) * 9); margin-top: 1.2em; }
-.whatif .bars i { flex: 1; border-radius: 3px 3px 0 0; background: linear-gradient(#ffd36b, #ef6a2b); }
-.whatif .m { display: flex; justify-content: space-between; font-size: max(10px, calc(var(--u) * 1.2)); color: rgba(238,244,255,.6); margin-top: .4em; }
-.narrow .clipbox, .narrow .tablet, .narrow .whatif { left: 4vw; right: 4vw; width: auto; top: 140px; }
-.narrow .whatif { padding: 14px; }
+.narrow .clipbox { left: 4vw; right: 4vw; width: auto; top: 140px; }
 .narrow .phone { right: 4vw; top: auto; bottom: calc(25vw + 120px); width: 30vw; }
 `;

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CHAPTERS, type Show } from "../dev/tour/script";
 import { voiceId } from "../dev/tour/tour";
+import { tapKeys } from "../dev/tour/panels";
 import { demoHass } from "../src/demo/hass";
 import { DEMO_PLAN } from "../src/demo/plan";
 import { normalizePlan, spaces, type Plan } from "../src/model/plan";
@@ -18,6 +19,7 @@ function run(trials: boolean) {
   const replays: string[] = [];
   const restyled: Plan[] = [];
   const props: string[] = [];
+  const taps: string[] = [];
   const view = {
     setRoomTint: (fn: RoomTint | null) => fn && tints.push(fn),
     markItems: (fn: ItemMarks | null) => fn && marks.push(fn),
@@ -35,7 +37,7 @@ function run(trials: boolean) {
     replay: (at) => replays.push(at),
     endReplay: () => undefined,
     sky: () => undefined,
-    weather: () => undefined,
+    turn: () => undefined,
     later: (_ms, fn) => fn(),
     restyle: (fn) => {
       if (!fn) return;
@@ -45,8 +47,15 @@ function run(trials: boolean) {
     },
     explode: () => undefined,
     push: () => undefined,
+    zoom: () => undefined,
     props: (list) => props.push(...list.map((p) => p.kind)),
     quiet: (id) => entities.push(id),
+    tap: (key, then) => {
+      taps.push(key);
+      then?.(show);
+    },
+    whatIf: () => undefined,
+    ring: () => undefined,
   };
   const said: string[] = [];
   for (const ch of CHAPTERS) {
@@ -55,13 +64,14 @@ function run(trials: boolean) {
       if (line.when && !line.when(show)) continue;
       said.push(line.say);
       line.do?.(show);
+      for (const [, cue] of line.cues ?? []) cue(show);
       line.after?.(show);
       if (line.replay) replays.push(line.replay);
     }
     ch.end?.(show);
   }
   hass.stop();
-  return { hass, entities, tints, marks, replays, said, restyled, props };
+  return { hass, entities, tints, marks, replays, said, restyled, props, taps };
 }
 
 describe("the online demo's tour", () => {
@@ -100,7 +110,17 @@ describe("the online demo's tour", () => {
     expect(restyled.length).toBeGreaterThan(0);
     const room = restyled[restyled.length - 1].floors[0].rooms.find((r) => r.area_id === "living_room");
     expect(room?.floor).toBe("herringbone");
-    expect(new Set(props)).toEqual(new Set(["scan", "clip", "alert", "tablet", "whatif"]));
+    expect(new Set(props)).toEqual(new Set(["scenes", "editor", "scan", "clip", "alert", "energy", "tablet"]));
+  });
+
+  it("only taps what the panels have, and only waits for words its lines say", () => {
+    const { taps } = run(false);
+    expect(taps.length).toBeGreaterThan(3);
+    const keys = new Set(tapKeys());
+    for (const key of taps) expect(keys.has(key), key).toBe(true);
+    for (const line of CHAPTERS.flatMap((c) => c.lines)) {
+      for (const [word] of line.cues ?? []) expect(line.say.toLowerCase(), word).toContain(word.toLowerCase());
+    }
   });
 
   it("plays the day back forwards", () => {

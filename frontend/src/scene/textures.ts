@@ -800,6 +800,44 @@ function hashString(s: string): number {
   return h >>> 0;
 }
 
+const previews = new Map<string, string>();
+
+/**
+ * A finish as a small square picture for the editor's pickers (a data URL): its texture over about
+ * a hand's width of it (a few bricks, a strip of herringbone), in `color` (sRGB) where the texture is
+ * a detail map the colour shows through. "" where there is no canvas to draw it with.
+ */
+export function finishPreview(recipe: string, scale: number, color: number, px = 56): string {
+  const key = `${recipe}@${scale}/${color}/${px}`;
+  const hit = previews.get(key);
+  if (hit !== undefined) return hit;
+  const r = recipeFor(recipe);
+  const canvas = typeof document === "undefined" ? null : document.createElement("canvas");
+  const ctx = canvas?.getContext("2d");
+  if (!r || !canvas || !ctx) return "";
+  canvas.width = canvas.height = px;
+  const pixel = r.make(rng(hashString(recipe)));
+  // a tile is `scale` metres: show about 0.9 m of it, but never less than a third of the pattern
+  const span = Math.min(1, Math.max(0.33, 0.9 / scale));
+  const tint = hex(color);
+  const img = ctx.createImageData(px, px);
+  for (let j = 0; j < px; j++) {
+    for (let i = 0; i < px; i++) {
+      const [a, b, c] = pixel(((i + 0.5) / px) * span, 1 - ((j + 0.5) / px) * span);
+      const o = (j * px + i) * 4;
+      const rgb = r.detail ? [a, b, c].map((d, k) => tint[k] * Math.max(0, d) ** (1 / 2.2)) : [a, b, c];
+      img.data[o] = clamp01(rgb[0]) * 255;
+      img.data[o + 1] = clamp01(rgb[1]) * 255;
+      img.data[o + 2] = clamp01(rgb[2]) * 255;
+      img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const url = canvas.toDataURL();
+  previews.set(key, url);
+  return url;
+}
+
 /** Frees every baked texture (when the realistic look goes away). */
 export function disposeTextures(): void {
   for (const p of cache.values()) {

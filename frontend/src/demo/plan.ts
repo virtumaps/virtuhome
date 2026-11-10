@@ -147,12 +147,14 @@ const ground: Floor = {
   outdoor: [
     { id: "garden", name: "Garden", kind: "lawn", area_id: "garden", points: rect(-3.24, -10, 6.39, -0.14) },
     { id: "deck", name: "Deck", kind: "deck", area_id: "garden", points: rect(3.0, -3.2, 6.39, -0.14) },
-    { id: "front", name: "Driveway", kind: "driveway", area_id: null, points: rect(-3.24, 7.54, 6.39, 13) },
+    { id: "patio", name: "Patio", kind: "patio", area_id: "garden", points: rect(2.8, -9.86, 6.25, -6.4) },
+    // the drive runs up to the side extension's front too, where its side door opens
+    { id: "front", name: "Driveway", kind: "driveway", area_id: null, points: [[-3.24, 5.44], [-0.14, 5.44], [-0.14, 7.54], [6.39, 7.54], [6.39, 13], [-3.24, 13]] },
   ],
   fences: [
     // round the back garden with a gate at the end, and low walls either side of the drive
     { id: "fence_garden", points: [[-3.24, -0.14], [-3.24, -10], [6.39, -10], [6.39, -0.14]], style: "closeboard", height: 1.8, gates: [{ at: 14.68, width: 0.9 }] },
-    { id: "wall_left", points: [[-3.24, 7.54], [-3.24, 13], [-0.6, 13]], style: "brick_wall", height: 0.9, gates: [] },
+    { id: "wall_left", points: [[-3.24, 5.44], [-3.24, 13], [-0.6, 13]], style: "brick_wall", height: 0.9, gates: [] },
     { id: "wall_right", points: [[3.4, 13], [6.39, 13], [6.39, 7.54]], style: "brick_wall", height: 0.9, gates: [] },
     // an electric driveway gate between the walls' piers, opening in towards the house
     { id: "drive_gate", points: [[-0.39, 13], [3.19, 13]], style: "railings", height: 1.2, gates: [{ at: 1.79, width: 3.58, double: true, swing: "back", entity: "cover.driveway_gate" }] },
@@ -164,13 +166,22 @@ const ground: Floor = {
 ground.furniture.push(
   f("ac_outdoor", 2.55, -0.45, 180, 0.8, 0.3, 0.55, { entity: "climate.bedroom_2_air_conditioner" }),
   f("lamp_garden", -2.7, -9.4, 0, 0.15, 0.15, 0.6, { entity: "switch.garden_spot_lights" }),
-  f("lamp_garden", 5.9, -9.4, 0, 0.15, 0.15, 0.6, { entity: "switch.deck_lights" }),
+  f("lamp_garden", 2.95, -6.55, 0, 0.15, 0.15, 0.6, { entity: "switch.deck_lights" }),
   f("lamp_garden", 3.3, -0.6, 0, 0.15, 0.15, 0.6, { entity: "switch.deck_lights" }),
   f("lamp_garden", 6.0, -2.8, 0, 0.15, 0.15, 0.6, { entity: "switch.deck_lights" }),
   f("lamp_garden", -2.8, -4.5, 0, 0.15, 0.15, 0.6, { entity: "light.garden_post" }),
   f("lamp_wall", 4.65, -0.2, 180, 0.25, 0.12, 0.2, { y: 2.1, entity: "switch.patio_wall_light" }),
   // an awning over the deck that runs out with its motor
   f("awning", 4.7, -1.39, 180, 3.0, 2.5, 0.7, { y: 2.0, entity: "cover.patio_awning" }),
+  // at the end of the garden, a slatted pergola on a patio, a table under it and lamps either side
+  f("pergola", 4.55, -8.15, 0, 3.0, 3.0, 2.5, { canopy: "slats" }),
+  f("garden_table", 4.55, -8.15, 0, 1.2, 1.2, 0.72),
+  f("garden_chair", 4.55, -7.35, 180, 0.55, 0.6, 0.85),
+  f("garden_chair", 4.55, -8.95, 0, 0.55, 0.6, 0.85),
+  f("garden_chair", 3.75, -8.15, -90, 0.55, 0.6, 0.85),
+  f("garden_chair", 5.35, -8.15, 90, 0.55, 0.6, 0.85),
+  f("lamp_post", 2.9, -9.55, 0, 0.3, 0.3, 2.2, { entity: "light.pergola_lamps" }),
+  f("lamp_post", 6.1, -6.6, 0, 0.3, 0.3, 2.2, { entity: "light.pergola_lamps" }),
 );
 
 // ---------------------------------------------------------------- first floor

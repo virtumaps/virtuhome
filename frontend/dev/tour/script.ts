@@ -19,6 +19,7 @@ import type { ViewHandle } from "../../src/ext/api";
 import type { Hass } from "../../src/live/hass";
 import type { RGBA } from "../../src/live/live";
 import type { Plan } from "../../src/model/plan";
+import type { WeatherPick } from "../../src/live/sky";
 import type { Mood } from "./cast";
 import type { ClipKind } from "./props";
 
@@ -26,15 +27,17 @@ import type { ClipKind } from "./props";
 export const HOST = "Pip";
 
 /** Words the voices say wrongly, and how to write them so they say them right (the subtitles keep the first). */
-export const SAY_AS: [RegExp, string][] = [[/VirtuHome/g, "Virtue Home"]];
+export const SAY_AS: [RegExp, string][] = [[/VirtuHome/g, "Virtue Home"], [/LiDAR/g, "lidar"]];
 
-/** What shows beside the house. */
+/** What shows beside the house: drawn props (props.ts), and panels as they look in the app (panels.ts). */
 export type Prop =
   | { kind: "clip"; clip: ClipKind; time: string; caption: string }
   | { kind: "alert"; time: string; title: string; body: string }
   | { kind: "scan" }
-  | { kind: "tablet"; time: string }
-  | { kind: "whatif" };
+  | { kind: "scenes" }
+  | { kind: "editor"; tab: "home" | "room" }
+  | { kind: "energy" }
+  | { kind: "tablet" };
 
 /** What a line or chapter can do with the house and the view. */
 export interface Show {
@@ -52,10 +55,13 @@ export interface Show {
   /** Starts showing the pretend day from a time ("07:45"). */
   replay(at: string): void;
   endReplay(): void;
-  /** The sky at night (the lights glow), by day, or as it is now (a replay shows the sky of its moment then). */
-  sky(when: "night" | "day" | "now"): void;
-  /** The weather ("snowy", "rainy", "partlycloudy"). */
-  weather(state: string): void;
+  /**
+   * The sky at night (the lights glow), by day, or as it is now (a replay shows the sky of its moment
+   * then), with the weather picked as the sun and weather panel picks it (null: the house's own).
+   */
+  sky(when: "night" | "day" | "now", weather?: WeatherPick | null): void;
+  /** Turns the camera round the house by `deg` (positive: anticlockwise, seen from above) over `ms`. */
+  turn(deg: number, ms: number): void;
   /** Runs `fn` after `ms`, unless the tour stops first. */
   later(ms: number, fn: () => void): void;
   /** Shows the plan as `fn` changes it (finishes, colours), in 3D only and never saved; null shows it as it is. */
@@ -64,8 +70,16 @@ export interface Show {
   explode(on: boolean): void;
   /** Starts the camera `from` times as far out, and moves it in to where it is over `ms`. */
   push(from: number, ms: number): void;
+  /** Moves the camera `by` times as far out (or in) as it is, over `ms`. */
+  zoom(by: number, ms: number): void;
   /** Exactly these beside the house (an empty list: none). */
   props(list: Prop[]): void;
+  /** Taps what `key` names in the panel showing; `then` runs as it is pressed. */
+  tap(key: string, then?: (s: Show) => void): void;
+  /** The Energy sheet's What if: Try it, then three more panels. */
+  whatIf(): void;
+  /** The doorbell rings on the wall tablet. */
+  ring(): void;
   /** Switches like `call` would, without the pulse a fresh change gets (for many things at once). */
   quiet(id: string, state: string, attributes?: Record<string, unknown>): void;
 }
@@ -85,6 +99,8 @@ export interface Line {
   gap?: number;
   replay?: string;
   when?: (s: Show) => boolean;
+  /** What happens as the voice reaches a word of the line (the first word that has this in it). */
+  cues?: [string, (s: Show) => void][];
 }
 
 export interface Chapter {
@@ -103,12 +119,19 @@ export interface Chapter {
 
 // ------------------------------------------------------------------ the demo house
 
-const LIVING = ["light.living_room_downlights", "light.living_room_floor_lamp", "light.fireplace_strip"];
-const colour = (rgb: [number, number, number]) => (s: Show) => {
-  s.call("light", "turn_on", LIVING, { rgb_color: rgb, brightness: 230 });
-  s.call("light", "turn_on", "light.living_room_ceiling", { brightness: 40 });
+const LIVING = ["light.living_room_downlights", "light.living_room_floor_lamp", "light.fireplace_strip", "light.living_room_ceiling"];
+
+/** Movie night, as the demo's scene sets it, with the strip by the fireplace a deep violet and the lamp turned down. */
+const movieNight = (s: Show) => {
+  s.call("scene", "turn_on", "scene.movie_night");
+  s.call("light", "turn_on", "light.fireplace_strip", { rgb_color: [120, 60, 255], brightness: 210 });
+  s.call("light", "turn_on", "light.living_room_floor_lamp", { color_temp_kelvin: 2200, brightness: 70 });
 };
-const warm = (s: Show) => s.call("light", "turn_on", [...LIVING, "light.living_room_ceiling"], { color_temp_kelvin: 2700, brightness: 190 });
+/** Friends round: every light in the room on, warm and bright. */
+const bright = (s: Show) => {
+  s.call("scene", "turn_on", "scene.living_room_bright");
+  s.call("light", "turn_on", LIVING, { color_temp_kelvin: 2700, brightness: 235 });
+};
 
 /** What each room uses in the Energy preview, kW (the kettle is on). */
 const ROOM_KW: Record<string, number> = {
@@ -159,7 +182,17 @@ function ramp(v: number): [number, number, number] {
   return [mix(16), mix(8), mix(0)];
 }
 
-/** The roof's sun, roughly: how square each slope faces the sun at a typical British height. */
+/**
+ * The roof's sun as the Energy add-on scores it for the demo house (% of the best the sun allows there):
+ * the main roof's south, west and north slopes, and the two lean-tos of the side extension.
+ */
+function slopeScore(face: { floor: number; roof: string; tilt: number; azimuth: number }): number {
+  if (face.floor === 0) return face.roof === "roof1" ? 39 : 60;
+  const az = ((face.azimuth % 360) + 360) % 360;
+  return az > 135 && az < 225 ? 98 : az >= 225 && az < 315 ? 83 : az >= 45 && az <= 135 ? 83 : 55;
+}
+
+/** The roof painted with its score for panels, as the Energy add-on paints it. */
 function solarRoof(s: Show, on: boolean): void {
   if (!on) {
     s.view.paintRoofs(null);
@@ -167,13 +200,8 @@ function solarRoof(s: Show, on: boolean): void {
     return;
   }
   s.view.showRoofs(true);
-  const sun = (38 * Math.PI) / 180;
-  s.view.paintRoofs((face) => {
-    const tilt = (face.tilt * Math.PI) / 180;
-    const facing = Math.cos(((face.azimuth - 180) * Math.PI) / 180);
-    const d = Math.cos(tilt) * Math.sin(sun) + Math.sin(tilt) * Math.cos(sun) * facing;
-    return ramp(0.25 + 0.75 * Math.max(0, d));
-  }, 0.3);
+  // 40 % and under is the ramp's bottom, 100 % its top
+  s.view.paintRoofs((face) => ramp((slopeScore(face) - 40) / 60), 0.3);
 }
 
 const tintRoom = (s: Show, area: string, tint: RGBA | null, text: string | null) => {
@@ -197,14 +225,15 @@ function cascade(s: Show): void {
   lights.forEach((id, i) => s.later(700 + i * 170, () => s.quiet(id, "on", warmWhite)));
 }
 
-/** The demo house made over: rendered white outside, then the living room's walls and floor. */
+/** The demo house made over: buff bricks outside, then the living room's walls painted, papered, and its floor. */
+const SAGE = "#b3bfa3";
 const makeover = (step: number) => (plan: Plan) => {
-  plan.settings.exterior_finish = "render";
+  plan.settings.exterior_finish = "brick_buff";
   const room = plan.floors[0]?.rooms.find((r) => r.area_id === "living_room");
   if (!room || step < 1) return;
   room.wall_finish = step >= 2 ? "wallpaper_leaves" : "paint";
-  room.wall_color = "#7f9c8b";
-  room.floor = "herringbone";
+  room.wall_color = SAGE;
+  if (step >= 3) room.floor = "herringbone";
 };
 
 const CLIP: Prop = { kind: "clip", clip: "parcel", time: "10:12", caption: "Doorbell clip · yesterday, 10:12" };
@@ -223,7 +252,7 @@ export const CHAPTERS: Chapter[] = [
     },
     lines: [
       { say: "Imagine this is your home. Alive, in 3D, right inside Home Assistant.", mood: "excited", pause: 2800 },
-      { say: "I'm Pip! Give me two minutes, and I'll show you what it can do.", mood: "happy" },
+      { say: "I'm Pip! Give me a couple of minutes, and I'll show you what it can do.", mood: "happy" },
     ],
   },
   {
@@ -231,23 +260,48 @@ export const CHAPTERS: Chapter[] = [
     kicker: "Free, for every home",
     chips: [{ icon: mdiLightbulbGroup, label: "Lights on", value: lightsOn }],
     start: (s) => s.house(false),
+    end: (s) => s.props([]),
     lines: [
       { say: "Every light, door and window sits where it really is, and changes the moment it does." },
-      { say: "Watch the living room.", do: (s) => s.fly("light.living_room_downlights"), after: colour([40, 90, 255]), gap: 1500 },
-      { say: "Ooh, look! It's gone blue.", mood: "surprised", after: colour([255, 40, 170]), gap: 1300 },
-      { say: "Pink! Now we're talking.", mood: "excited", after: warm },
-      { say: "Real sky, real weather. Even snow!", mood: "excited", do: (s) => {
-        s.house(true);
-        s.weather("snowy");
-      }, gap: 2200 },
+      {
+        say: "And the little faces show who's home, room by room. That's Sam, in the kitchen!", mood: "happy",
+        do: (s) => {
+          s.quiet("person.alex", "home");
+          s.quiet("person.sam", "home");
+          s.quiet("sensor.sams_watch", "kitchen", { distance: 1.4 });
+        },
+      },
+      {
+        say: "Set the scene. Movie night: the lights go down, and the telly comes on.", pause: 900, gap: 1100,
+        do: (s) => {
+          s.fly("light.living_room_downlights");
+          s.props([{ kind: "scenes" }]);
+        },
+        cues: [["Movie", (s) => s.tap("movie", movieNight)]],
+      },
+      { say: "Friends coming round? One tap, and it's bright and warm.", mood: "happy", gap: 1000, cues: [["One", (s) => s.tap("bright", bright)]] },
+      {
+        say: "Real sky, real weather: sunshine, rain, thunder, fog... and even snow!", mood: "excited", gap: 1800,
+        do: (s) => {
+          s.props([]);
+          s.house(true);
+          s.sky("day", "clear");
+          s.later(800, () => s.turn(150, 6500));
+        },
+        cues: [
+          ["rain", (s) => s.sky("day", "rain")],
+          ["thunder", (s) => s.sky("day", "storm")],
+          ["fog", (s) => s.sky("day", "fog")],
+          ["snow", (s) => s.sky("day", "snow")],
+        ],
+      },
     ],
   },
   {
     title: "Make it yours",
     kicker: "Finishes, furniture, and your own floor plan",
     start: (s) => {
-      s.weather("partlycloudy");
-      s.sky("day");
+      s.sky("day", "clear");
       s.house(true);
     },
     end: (s) => {
@@ -256,14 +310,22 @@ export const CHAPTERS: Chapter[] = [
       s.restyle(null);
     },
     lines: [
-      { say: "Make it look like home. Change the bricks...", do: (s) => s.restyle(makeover(0)), gap: 600 },
       {
-        say: "paint the walls, pick the floors, and bring in your own furniture.",
+        say: "Make it look like home. Change the bricks...", gap: 900,
+        do: (s) => s.props([{ kind: "editor", tab: "home" }]),
+        cues: [["bricks", (s) => s.tap("out:brick_buff", (s) => s.restyle(makeover(0)))]],
+      },
+      {
+        say: "paint the walls, or paper them, and pick the flooring.", gap: 2200,
         do: (s) => {
           s.fly("light.living_room_downlights");
-          s.restyle(makeover(1));
-          s.later(2200, () => s.restyle(makeover(2)));
+          s.props([{ kind: "editor", tab: "room" }]);
         },
+        cues: [
+          ["paint", (s) => s.tap(`paint:${SAGE}`, (s) => s.restyle(makeover(1)))],
+          ["paper", (s) => s.tap("walls:wallpaper_leaves", (s) => s.restyle(makeover(2)))],
+          ["flooring", (s) => s.tap("floor:herringbone", (s) => s.restyle(makeover(3)))],
+        ],
       },
       {
         say: "Got an iPhone with LiDAR? Scan your home room by room, and it's in 3D in minutes.",
@@ -313,10 +375,10 @@ export const CHAPTERS: Chapter[] = [
       { icon: mdiHomeLightningBolt, label: "House now", value: "2.8 kW" },
       { icon: mdiCashMultiple, label: "Today so far", value: "£1.84" },
       { icon: mdiClockOutline, label: "Cheapest power", value: "00:30 – 05:30" },
-      { icon: mdiSolarPower, label: "Best slope for panels", value: "97% of the best" },
+      { icon: mdiSolarPower, label: "Best slope for panels", value: "98% of the best" },
     ],
     start: (s) => {
-      s.sky("day");
+      s.sky("day", "clear");
       s.floor(0);
       energyRooms(s, true);
     },
@@ -328,17 +390,21 @@ export const CHAPTERS: Chapter[] = [
     lines: [
       { say: "The Energy add-on shows what every room is using, right now." },
       { say: "The kitchen's the hungry one. Kettle's on!", mood: "happy", do: (s) => s.fly("media_player.kitchen_speaker") },
-      { say: "It knows when power is cheap, and the best time to charge the car.", do: (s) => s.floor(0) },
+      { say: "It knows when power's cheapest, and what today has cost so far.", do: (s) => s.floor(0) },
       {
-        say: "Now, look up at the roof!", mood: "excited", gap: 900,
+        say: "Now, look up at the roof!", mood: "excited", gap: 1100,
         after: (s) => {
           energyRooms(s, false);
           s.house(true);
           solarRoof(s, true);
+          s.view.toast("Sun on the roof: the yellower, the better for panels");
         },
       },
-      { say: "It scores every part of your roof for solar panels, from the sun's path and the house's own shade." },
-      { say: "Then it asks: what if? Four more panels would pay for themselves in seven years.", do: (s) => s.props([{ kind: "whatif" }]), gap: 900 },
+      { say: "It follows the sun over your roof all year, and scores every slope for panels.", do: (s) => s.props([{ kind: "energy" }]) },
+      {
+        say: "Want more? Try it first: three more panels would save about two hundred and twenty pounds a year, and pay back in under seven years.",
+        do: (s) => s.whatIf(), gap: 1200,
+      },
     ],
   },
   {
@@ -376,22 +442,30 @@ export const CHAPTERS: Chapter[] = [
     kicker: "A screen by the front door",
     addOn: "Wall Tablet add-on",
     tagline: "Your whole home, by the front door.",
-    start: (s) => s.house(true),
+    start: (s) => {
+      s.house(true);
+      s.props([{ kind: "tablet" }]);
+    },
     end: (s) => s.props([]),
     lines: [
-      { say: "And the Wall Tablet add-on puts it all on a screen by the door." },
-      { say: "When someone rings, the doorbell camera takes over. Visitors love that bit!", mood: "excited", do: (s) => s.props([{ kind: "tablet", time: "17:42" }]), gap: 1200 },
+      { say: "Got a spare tablet? Put it up by the front door, and the Wall Tablet add-on makes it your home's own screen." },
+      { say: "It wakes as you walk past, with the time, the weather, and who's home." },
+      { say: "Add a video doorbell, and its camera takes over the moment someone's there.", mood: "excited", gap: 1600, cues: [["camera", (s) => s.ring()]] },
     ],
   },
   {
     title: "Your turn",
     kicker: "Get VirtuHome",
-    // the closing shot: the house at night, every light on, behind the end card
+    // the closing shot: round the back at night, every light on, the garden's too, behind the end card
     start: (s) => {
       s.sky("night");
       s.house(true);
-      const lights = Object.keys(s.hass.states).filter((id) => id.startsWith("light."));
-      lights.forEach((id, i) => s.later(i * 90, () => s.quiet(id, "on", { color_temp_kelvin: 2700, brightness: 220, rgb_color: undefined })));
+      const lights = Object.keys(s.hass.states).filter((id) => id.startsWith("light.") || /^switch\.(deck|garden|patio)/.test(id));
+      lights.forEach((id, i) => s.later(i * 90, () => s.quiet(id, "on", id.startsWith("light.") ? { color_temp_kelvin: 2700, brightness: 220, rgb_color: undefined } : {})));
+      s.later(900, () => {
+        s.turn(155, 7000);
+        s.zoom(1.2, 7000);
+      });
     },
     lines: [
       { say: "VirtuHome is free, in the Home Assistant Community Store.", mood: "happy" },

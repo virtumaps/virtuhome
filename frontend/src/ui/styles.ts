@@ -41,6 +41,9 @@ export const VIEW_CSS = /* css */ `
 .vh-tag { font-weight: 600; }
 .vh-tag.lit { background: #f2b33a; color: #1d232b; box-shadow: 0 1px 10px rgba(242,179,58,0.5); }
 .vh-label[hidden] { display: none; }
+/* a label giving way to another (or back again) fades */
+.vh-label { transition: opacity .2s, visibility 0s; }
+.vh-label.vh-gone { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .2s, visibility 0s .2s; }
 /* what a TV or speaker plays: its artwork or icon, and the title */
 .vh-media span { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
 .vh-media img { width: 26px; height: 26px; border-radius: 4px; object-fit: cover; flex: none; margin: -1px 0; }

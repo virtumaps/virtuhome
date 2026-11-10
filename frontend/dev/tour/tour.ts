@@ -11,15 +11,17 @@ import type { Plan } from "../../src/model/plan";
 import { storyState } from "../../src/demo/history";
 import { Face, drawHost } from "./cast";
 import { Music } from "./music";
-import { Clip, Phone, PROPS_CSS, Tablet, whatIf } from "./props";
+import { Clip, Phone, PROPS_CSS } from "./props";
+import { Editor, EnergySheet, PANELS_CSS, Scenes, WallTablet } from "./panels";
+import type { WeatherPick } from "../../src/live/sky";
 import { CHAPTERS, HOST, SAY_AS, type Chip, type Line, type Prop, type Show } from "./script";
 
 /** The demo page's house, as the tour needs it. */
 export interface DemoHouse {
   view: ViewHandle;
   hass(): DemoHass;
-  /** Shows the sky at a moment (ms), as the sky panel does; null: now. */
-  sky(time: number | null): void;
+  /** Shows the sky at a moment (ms) with a weather, as the sky panel does; null and null: as it is now. */
+  sky(time: number | null, weather?: WeatherPick | null): void;
   /** Stops what the house does by itself during the tour, and starts it again after. */
   lively(on: boolean): void;
 }
@@ -53,6 +55,9 @@ const CSS = /* css */ `
 .shade { position: absolute; inset: 0; opacity: 0; transition: opacity .8s;
   background: linear-gradient(180deg, rgba(5,8,16,.62), rgba(5,8,16,.18) 20%, rgba(5,8,16,0) 34%, rgba(5,8,16,0) 58%, rgba(5,8,16,.5) 80%, rgba(5,8,16,.82)); }
 .on .shade { opacity: 1; }
+/* the opening fades up from black, the camera already where the push in starts */
+.curtain { position: absolute; inset: 0; background: #04060b; opacity: 0; transition: opacity 1.6s ease-in-out; }
+.curtain.on { opacity: 1; transition: opacity .35s; }
 .glass { background: var(--glass); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); border: 1px solid var(--line);
   box-shadow: 0 .8vh 3vh rgba(0,0,0,.25); }
 button, a.btn { pointer-events: auto; font: inherit; cursor: pointer; }
@@ -153,6 +158,7 @@ svg { width: 55%; height: 55%; fill: currentColor; }
 .narrow .card h2 { font-size: 26px; }
 @media (prefers-reduced-motion: reduce) { .big.show { animation-duration: .01s; } .char, .chip, .subs { transition: none; } }
 ${PROPS_CSS}
+${PANELS_CSS}
 `;
 
 // ------------------------------------------------------------------ the browser's own voice
@@ -255,6 +261,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   root.innerHTML = `<style>${CSS}</style>
     <div class="stage">
       <div class="shade"></div>
+      <div class="curtain"></div>
       <div class="props"></div>
       <div class="chapter glass"><div class="num"></div><div class="title"></div><div class="kicker"></div><div class="badge"></div></div>
       <div class="big"><div class="t"></div><div class="k"></div></div>
@@ -270,8 +277,8 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
         <button class="close" aria-label="Close the tour">${svg(mdiClose)}</button>
       </div>
       <div class="card glass intro">
-        <h2>Take the <b>2-minute tour</b></h2>
-        <p>${esc(HOST)} shows you round the demo house, and everything the add-ons can do. Turn your sound on.</p>
+        <h2>Take the <b>tour</b></h2>
+        <p>${esc(HOST)} shows you round the demo house, and everything the add-ons can do, in about two and a half minutes. Turn your sound on.</p>
         <div class="row"><button class="btn go start">${svg(mdiPlay)} Start the tour</button><button class="btn skipit">No thanks</button></div>
       </div>
       <div class="card glass outro"></div>
@@ -296,6 +303,8 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   let timers: number[] = [];
   let words: HTMLElement[] = [];
   let starts: number[] = [];
+  /** Where each word starts, as a share of the line's time (pauses at commas and stops count). */
+  let shares: number[] = [];
   let lineStart = 0;
   let lineSecs = 1;
   let trials = false;
@@ -307,13 +316,18 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   /** A recorded line playing through the music's audio: when it started (audio time) and how long it is. */
   let voiceOn: { ctx: AudioContext; from: number; secs: number; stop(): void; gain: GainNode } | null = null;
   const buffers = new Map<string, Promise<AudioBuffer | null>>();
-  let push: { from: number; at: number; ms: number; dist: number } | null = null;
+  let push: { from: number; to: number; at: number; ms: number; dist: number } | null = null;
+  let turning: { by: number; at: number; ms: number; done: number } | null = null;
+  /** The line's cues: the word each waits for, and whether it has happened. */
+  let cues: { word: number; fn: (s: Show) => void; done: boolean }[] = [];
   const level = new Float32Array(1024);
 
   // ---------------------------------------------------------------- the 3D view
 
   const cinema = document.createElement("style");
-  cinema.textContent = ".vh-tools, .vh-bar, .vh-tiles, .vh-stats, .vh-legend, .vh-status, .vh-updated { display: none !important; }";
+  // the view without its controls, and its toasts up top, clear of the subtitles
+  cinema.textContent = ".vh-tools, .vh-bar, .vh-tiles, .vh-stats, .vh-legend, .vh-status, .vh-updated { display: none !important; }" +
+    ".vh-toast { top: 92px !important; bottom: auto !important; }";
 
   let session: ReplaySession | null = null;
   let clock = 0;
@@ -329,6 +343,8 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   const DAY_FROM = timeOf("07:00");
   const DAY_TO = timeOf("19:00");
   let restyled = false;
+  /** The floors are apart (putting them back together flies the camera back to the start). */
+  let exploded = false;
 
   /** The house at a minute of yesterday, from the pretend day's story. */
   const drawPast = (minute: number) => {
@@ -360,11 +376,11 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   clipBox.innerHTML = `<div class="cap"></div>`;
   const phone = new Phone();
   phone.el.classList.add("prop");
-  const tablet = new Tablet(clip);
-  tablet.el.classList.add("prop");
-  const plan = whatIf();
-  plan.classList.add("prop");
-  propsBox.append(clipBox, phone.el, tablet.el, plan);
+  const scenes = new Scenes();
+  const editor = new Editor();
+  const energy = new EnergySheet();
+  const tablet = new WallTablet(clip);
+  propsBox.append(clipBox, phone.el, scenes.el, editor.el, energy.el, tablet.el);
   let shownProps: Prop[] = [];
 
   const setProps = (list: Prop[]) => {
@@ -376,20 +392,26 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       clipBox.prepend(clip.canvas);
       clipBox.querySelector(".cap")!.textContent = c.caption;
     }
-    const t = has("tablet");
-    if (t && t.kind === "tablet" && !had("tablet")) {
-      clip.restart("ring", t.time);
-      tablet.el.querySelector(".feed")!.append(clip.canvas);
-    }
     const a = has("alert");
     if (a && a.kind === "alert" && !had("alert")) phone.alert(a.time, a.title, a.body, clip.canvas);
     if (has("scan") && !had("scan")) phone.scan();
+    const e = has("editor");
+    if (e && e.kind === "editor") editor.show(e.tab);
+    if (has("tablet") && !had("tablet")) tablet.start(view.viewer.renderer.domElement);
+    if (!has("tablet") && had("tablet")) tablet.stop();
+    if (!has("energy") && had("energy")) window.setTimeout(() => energy.reset(), 600);
+    if (!has("editor") && had("editor")) window.setTimeout(() => editor.reset(), 600);
+    if (!has("scenes") && had("scenes")) window.setTimeout(() => scenes.reset(), 600);
     clipBox.classList.toggle("show", !!c);
-    tablet.el.classList.toggle("show", !!t);
     phone.el.classList.toggle("show", !!a || !!has("scan"));
-    plan.classList.toggle("show", !!has("whatif"));
+    scenes.el.classList.toggle("show", !!has("scenes"));
+    editor.el.classList.toggle("show", !!e);
+    energy.el.classList.toggle("show", !!has("energy"));
+    tablet.el.classList.toggle("show", !!has("tablet"));
     shownProps = list;
   };
+  /** The panel showing that a tap goes to. */
+  const panel = () => (shownProps.some((p) => p.kind === "editor") ? editor : shownProps.some((p) => p.kind === "energy") ? energy : scenes);
 
   const show: Show = {
     view,
@@ -432,14 +454,23 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       session = null;
       $(".clock").classList.remove("show");
     },
-    sky(when) {
+    sky(when, weather = null) {
       // today at half past eight in the evening, or at one, whatever the time is where the viewer is
       const at = new Date();
       at.setHours(when === "night" ? 20 : 13, when === "night" ? 30 : 0, 0, 0);
-      house.sky(when === "now" ? null : at.getTime());
+      house.sky(when === "now" ? null : at.getTime(), weather);
     },
-    weather(state) {
-      house.hass().set("weather.forecast_home", state, { temperature: /snow/.test(state) ? -1 : 12, cloud_coverage: /snow|rain/.test(state) ? 100 : 45 });
+    turn(deg, ms) {
+      turning = { by: (deg * Math.PI) / 180, at: performance.now(), ms, done: 0 };
+    },
+    tap(key, then) {
+      panel().tap(key, then && (() => !stopped && then(show)));
+    },
+    whatIf() {
+      energy.tryIt();
+    },
+    ring() {
+      tablet.ring(true);
     },
     later(ms, fn) {
       timers.push(window.setTimeout(() => {
@@ -460,6 +491,8 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       restyled = true;
     },
     explode(on) {
+      if (on === exploded) return;
+      exploded = on;
       view.viewer.setExplode(on);
       holdOrbit = performance.now() + 2500;
     },
@@ -467,10 +500,16 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     push(from, ms) {
       const cam = view.viewer.camera.position;
       const tg = view.viewer.controls.target;
-      // after the flight to the whole house has settled
-      window.setTimeout(() => {
-        push = { from, at: performance.now(), ms, dist: Math.hypot(cam.x - tg.x, cam.y - tg.y, cam.z - tg.z) };
-      }, 50);
+      // once the flight to the whole house has landed (behind the opening's curtain), then up it goes
+      timers.push(window.setTimeout(() => {
+        push = { from, to: 1, at: performance.now(), ms, dist: Math.hypot(cam.x - tg.x, cam.y - tg.y, cam.z - tg.z) };
+        requestAnimationFrame(() => requestAnimationFrame(() => $(".curtain").classList.remove("on")));
+      }, 820));
+    },
+    zoom(by, ms) {
+      const cam = view.viewer.camera.position;
+      const tg = view.viewer.controls.target;
+      push = { from: 1, to: by, at: performance.now(), ms, dist: Math.hypot(cam.x - tg.x, cam.y - tg.y, cam.z - tg.z) };
     },
   };
 
@@ -479,8 +518,10 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     show.endReplay();
     house.sky(null);
     setProps([]);
+    turning = null;
+    $(".curtain").classList.remove("on");
     show.restyle(null);
-    view.viewer.setExplode(false);
+    show.explode(false);
     view.setRoomTint(null);
     view.setRoomText(null);
     view.refreshRooms();
@@ -562,13 +603,28 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     // the opening's slow push in: the camera's distance eases from far out to where the view put it
     if (push && !paused) {
       const k = Math.min(1, (now - push.at) / push.ms);
-      const dist = push.dist * (push.from + (1 - push.from) * (1 - (1 - k) ** 3));
+      const dist = push.dist * (push.from + (push.to - push.from) * (1 - (1 - k) ** 3));
       const cam = view.viewer.camera.position;
       const tg = view.viewer.controls.target;
       const len = Math.hypot(cam.x - tg.x, cam.y - tg.y, cam.z - tg.z) || 1;
       cam.set(tg.x + ((cam.x - tg.x) / len) * dist, tg.y + ((cam.y - tg.y) / len) * dist, tg.z + ((cam.z - tg.z) / len) * dist);
       view.viewer.invalidate();
       if (k === 1) push = null;
+    }
+    // a turn round the house, eased at both ends
+    if (turning && !paused) {
+      const k = Math.min(1, (now - turning.at) / turning.ms);
+      const e = k * k * (3 - 2 * k);
+      const a = turning.by * (e - turning.done);
+      turning.done = e;
+      const cam = view.viewer.camera.position;
+      const tg = view.viewer.controls.target;
+      const dx = cam.x - tg.x;
+      const dz = cam.z - tg.z;
+      cam.x = tg.x + dx * Math.cos(a) - dz * Math.sin(a);
+      cam.z = tg.z + dx * Math.sin(a) + dz * Math.cos(a);
+      view.viewer.invalidate();
+      if (k === 1) turning = null;
     }
     // the house turns slowly, except just after a flight
     if (stage.classList.contains("on") && !paused && now > holdOrbit) {
@@ -596,12 +652,25 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     const list = text.split(" ");
     let at = 0;
     starts = list.map((w) => ((at += w.length + 1), at - w.length - 1));
+    const weight = (w: string) => w.length + 1 + (/(\.\.\.|…)$/.test(w) ? 9 : /[.!?]$/.test(w) ? 7 : /[:;]$/.test(w) ? 5 : /,$/.test(w) ? 4 : 0);
+    const total = list.reduce((sum, w) => sum + weight(w), 0) || 1;
+    let run = 0;
+    shares = list.map((w) => ((run += weight(w)), (run - weight(w)) / total));
     $(".say").innerHTML = list.map((w) => `<span>${esc(w)}</span>`).join(" ");
     words = Array.from($(".say").querySelectorAll("span"));
   };
+  /** Lights the first `n` words, and does what waits for them. */
+  const reach = (n: number) => {
+    words.forEach((w, i) => w.classList.toggle("said", i < n));
+    for (const c of cues) {
+      if (c.done || n <= c.word) continue;
+      c.done = true;
+      if (!stopped) c.fn(show);
+    }
+  };
   /** Lights the words said so far: up to a character, or a share of the line. */
-  const markSaid = (share: number) => words.forEach((w, i) => w.classList.toggle("said", i < Math.ceil(share * words.length + 0.3)));
-  const markTo = (char: number) => words.forEach((w, i) => w.classList.toggle("said", starts[i] <= char));
+  const markSaid = (share: number) => reach(share >= 1 ? words.length : shares.filter((x) => x <= share + 0.015).length);
+  const markTo = (char: number) => reach(starts.filter((x) => x <= char).length);
 
   const sleep = async (ms: number) => {
     await new Promise<void>((done) => {
@@ -705,6 +774,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     if (line.pause) await sleep(line.pause);
     if (stopped) return;
     subtitle(text);
+    cues = (line.cues ?? []).map(([w, fn]) => ({ word: Math.max(0, words.findIndex((x) => x.textContent!.toLowerCase().includes(w.toLowerCase()))), fn, done: false }));
     talking = true;
     lastWord = 0;
     lineStart = performance.now();
@@ -851,6 +921,10 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     skipChapter = false;
     $(".intro").classList.remove("show");
     $(".outro").classList.remove("show");
+    // dark first: the camera goes to where the opening starts unseen (the first chapter's push lifts it)
+    const began = performance.now();
+    $(".curtain").classList.add("on");
+    timers.push(window.setTimeout(() => $(".curtain").classList.remove("on"), 3200));
     stage.classList.add("on");
     view.root.append(cinema);
     house.lively(false);
@@ -863,6 +937,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       .then((v: Record<string, number> | null) => (recorded = v))
       .catch(() => (recorded = null));
     await Promise.race([Promise.all([speech.load(), voices]), sleepMs(2500)]);
+    await sleepMs(Math.max(0, 380 - (performance.now() - began)));
     const all = CHAPTERS.flatMap((c) => c.lines);
     for (const [i, ch] of CHAPTERS.entries()) {
       if (stopped) break;
@@ -891,8 +966,8 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     }
     if (stopped) return;
     tidy();
+    // the last chapter's shot stays: the house at night, from the garden
     show.sky("night");
-    show.house(true);
     $(".chapter").classList.remove("show");
     subtitle(null);
     ending();

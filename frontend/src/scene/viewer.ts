@@ -285,6 +285,8 @@ export class Viewer {
   private renewals = 0;
   /** Measured once per label element (reading sizes every frame would force layouts). */
   private labelSize = new WeakMap<HTMLElement, number[]>();
+  /** Whether each label shows, and since when (ms). */
+  private labelShown = new WeakMap<HTMLElement, { on: boolean; at: number }>();
 
   constructor(private container: HTMLElement, private overlay: HTMLElement, opts: { tier: Tier; realistic?: RealisticModule | null; theme?: "day" | "night" }) {
     this.tier = opts.tier;
@@ -1939,8 +1941,10 @@ export class Viewer {
     }
     items.sort((a, b) => b.prio - a.prio);
     const placed: number[][] = this.keepOut.slice();
+    const now = performance.now();
     for (const it of items) {
       let hide = it.hidden;
+      const was = this.labelShown.get(it.el);
       if (!hide) {
         let size = this.labelSize.get(it.el);
         if (!size) {
@@ -1954,14 +1958,25 @@ export class Viewer {
           it.y = Math.round(Math.min(this.height - size[1] / 2 - 4, Math.max(size[1] / 2 + 4, it.y)));
         }
         const r = [it.x - size[0] / 2 - 3, it.y - size[1] / 2 - 2, it.x + size[0] / 2 + 3, it.y + size[1] / 2 + 2];
-        if (!inView || (it.prio < 1e10 && placed.some((p) => r[0] < p[2] && r[2] > p[0] && r[1] < p[3] && r[3] > p[1]))) hide = true;
+        // as the camera moves, a label showing may be overlapped a little before it goes, and one gone needs
+        // clear room before it comes back: labels don't blink on and off at the edge of touching
+        const m = was?.on ? -Math.min(8, size[0] / 6, size[1] / 4) : 6;
+        const test = [r[0] - m, r[1] - m, r[2] + m, r[3] + m];
+        let overlaps = it.prio < 1e10 && placed.some((p) => test[0] < p[2] && test[2] > p[0] && test[1] < p[3] && test[3] > p[1]);
+        // and having just come or gone, it stays a moment
+        if (inView && was && was.on === overlaps && now - was.at < 400) overlaps = !was.on;
+        if (!inView || overlaps) hide = true;
         else placed.push(r);
       }
+      if (!was || was.on === hide) this.labelShown.set(it.el, { on: !hide, at: now });
       const key = hide ? "h" : `${it.x},${it.y}`;
       if (it.el.dataset.at === key) continue;
       it.el.dataset.at = key;
       if (!hide) it.el.style.transform = `translate3d(${it.x}px, ${it.y}px, 0) translate(-50%, -50%)`;
-      it.el.style.visibility = hide ? "hidden" : "visible";
+      // fading, not blinking (a label that had never shown just appears)
+      it.el.classList.toggle("vh-gone", hide);
+      if (!was) it.el.style.visibility = hide ? "hidden" : "visible";
+      else it.el.style.visibility = "";
     }
   }
 
