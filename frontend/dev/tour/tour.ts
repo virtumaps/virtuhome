@@ -17,7 +17,7 @@ import { Clip, Phone, PROPS_CSS } from "./props";
 import { Editor, EnergySheet, PANELS_CSS, Scenes, WallTablet } from "./panels";
 import type { WeatherPick } from "../../src/live/sky";
 import { chapters, HOST, type Chip, type Line, type Prop, type Show } from "./script";
-import { cued, EN, fill, RECORDED, spokenAs, type DemoStrings } from "../lang";
+import { cued, EN, fill, spokenAs, type DemoStrings } from "../lang";
 
 /** The demo page's house, as the tour needs it. */
 export interface DemoHouse {
@@ -982,21 +982,22 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
       .then((r) => r.json())
       .then((c: { extensions?: { trial_days?: number }[] }) => (trials = !!c.extensions?.some((e) => (e.trial_days ?? 0) > 0)))
       .catch(() => (trials = false));
-    // her recordings in the language, else the browser's voice in it, else her English recordings
-    const list = (code: string) => (!RECORDED.has(code) ? Promise.resolve(null) : fetch(`${VOICE}${code}/voices.json`)
-      .then((r) => (r.ok ? r.json() : null)))
+    // her recordings in the language, else her English ones with the subtitles in the language (a
+    // human voice in another language beats a robotic one in yours), else the browser's own voice
+    const index = fetch(`${VOICE}index.json`).then((r) => (r.ok ? r.json() : [])).catch(() => []) as Promise<string[]>;
+    const list = async (code: string) => ((await index).includes(code) ? fetch(`${VOICE}${code}/voices.json`)
+      .then((r) => (r.ok ? r.json() : null))
       .then((v: Record<string, number> | null) => (v && Object.keys(v).length ? v : null))
-      .catch(() => null);
+      .catch(() => null) : null);
     speech.lang = house.language;
     const voices = (async () => {
-      recorded = await list(house.language);
-      voiceLang = house.language;
-      if (recorded) return void (mode = "recorded");
+      for (const code of [house.language, "en"]) {
+        recorded = await list(code);
+        voiceLang = code;
+        if (recorded) return void (mode = code === house.language ? "recorded" : "english");
+      }
       await speech.load();
-      if (speech.has || house.language === "en") return void (mode = "browser");
-      recorded = await list("en");
-      voiceLang = "en";
-      mode = recorded ? "english" : "browser";
+      mode = "browser";
     })();
     await Promise.race([voices, sleepMs(3000)]);
     await sleepMs(Math.max(0, 380 - (performance.now() - began)));

@@ -97,6 +97,8 @@ export async function buildSite(out) {
     .filter((d) => d.isDirectory() && /^[a-z]{2}$/.test(d.name) && existsSync(join(voice, d.name, "voices.json")))
     .flatMap((d) => readdirSync(join(voice, d.name)).filter((f) => /\.mp3$|^voices\.json$/.test(f))
       .map((f) => ({ name: `demo/voice/${d.name}/${f}`, data: readFileSync(join(voice, d.name, f)) })));
+  // which languages have them, for the tour to ask only for those
+  recordings.push({ name: "demo/voice/index.json", data: readFileSync(join(voice, "index.json")) });
   // the picture a shared link to the demo shows
   const preview = [{ name: "demo/og.jpg", data: readFileSync(join(dev, "og.jpg")) }];
   const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text })), ...recordings, ...preview];

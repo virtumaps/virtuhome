@@ -14,9 +14,6 @@ export const NAMES: Record<string, string> = {
   sv: "Svenska", da: "Dansk", nb: "Norsk", pl: "Polski", cs: "Čeština", tr: "Türkçe", bg: "Български",
 };
 
-/** The languages Pip has recordings in (dev/tour/voice/<code>/); the others use the browser's voice. */
-export const RECORDED = new Set(["en", "fr", "es", "it", "pt"]);
-
 const LOAD: Record<string, () => Promise<DemoStrings>> = {
   en: async () => EN,
   de: () => import("./de").then((m) => m.DE),

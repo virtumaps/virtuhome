@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { chapters, type Show } from "../dev/tour/script";
 import { spoken, voiceId } from "../dev/tour/tour";
-import { cued, detect, EN, load, NAMES, RECORDED, type DemoStrings } from "../dev/lang";
+import { cued, detect, EN, load, NAMES, type DemoStrings } from "../dev/lang";
 import { tapKeys } from "../dev/tour/panels";
 import { demoHass } from "../src/demo/hass";
 import { DEMO_PLAN } from "../src/demo/plan";
@@ -202,7 +202,9 @@ describe("the online demo's tour", () => {
   it("has a recording for every line of the languages it records, and none left over", async () => {
     const dir = new URL("../dev/tour/voice/", import.meta.url).pathname;
     const recorded = Object.keys(NAMES).filter((code) => readdirSync(dir).includes(code));
-    expect(new Set(recorded)).toEqual(RECORDED);
+    // the list the tour reads to know which languages have recordings (make.py writes it)
+    expect(new Set(JSON.parse(readFileSync(`${dir}index.json`, "utf8")) as string[])).toEqual(new Set(recorded));
+    expect(recorded).toContain("en");
     for (const code of recorded) {
       const S = await load(code);
       const want = new Set(chapters(S).flatMap((c) => c.lines).map((l) => voiceId(spoken(S, l.say))));
