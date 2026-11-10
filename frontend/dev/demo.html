@@ -16,8 +16,10 @@
       padding: 0 16px env(safe-area-inset-bottom, 0px); display: flex; align-items: center; justify-content: center; gap: 12px;
       font: 14px/1 Roboto, system-ui, sans-serif; color: #c4cfdf; background: #0c1220; border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
-    #bar a { color: #0c1220; background: #56c7ff; border-radius: 999px; padding: 6px 12px; font-weight: 600; text-decoration: none; white-space: nowrap; }
-    #bar a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    #bar a, #bar button { color: #0c1220; background: #56c7ff; border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-weight: 600; text-decoration: none; white-space: nowrap; cursor: pointer; }
+    #bar button { color: #eef3fb; background: rgba(255, 255, 255, 0.12); }
+    #bar a:focus-visible, #bar button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    @media (max-width: 440px) { #bar { gap: 8px; padding-left: 8px; padding-right: 8px; font-size: 13px; } #bar a, #bar button { padding: 6px 10px; } }
     #failed { position: fixed; inset: 0 0 var(--bar); margin: 0; padding: 24px; color: #eef3fb; font: 16px/1.5 system-ui, sans-serif; }
   </style>
 </head>
@@ -27,7 +29,8 @@
   <noscript><p style="color:#eef3fb;font:16px system-ui;padding:24px">The demo needs JavaScript.</p></noscript>
   <div id="bar">
     <span>This is a demo.</span>
-    <a href="https://github.com/virtumaps/virtuhome#install-hacs-custom-repository">Get VirtuHome</a>
+    <button id="tour" type="button">&#9654; Take the tour</button>
+    <a href="https://github.com/virtumaps/virtuhome#install-hacs">Get VirtuHome</a>
   </div>
   <script type="module" src="demo.js"></script>
 </body>
