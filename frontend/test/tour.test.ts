@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CHAPTERS, type Show } from "../dev/tour/script";
 import { demoHass } from "../src/demo/hass";
@@ -75,6 +76,22 @@ describe("the online demo's tour", () => {
     const minutes = run(false).replays.map((at) => Number(at.slice(0, 2)) * 60 + Number(at.slice(3)));
     expect(minutes.length).toBeGreaterThan(2);
     for (let i = 1; i < minutes.length; i++) expect(minutes[i]).toBeGreaterThan(minutes[i - 1]);
+  });
+
+  it("stays out of what Home Assistant downloads", () => {
+    // the integration's frontend is built from src/ alone (build.mjs): nothing there may import dev/
+    const src = new URL("../src/", import.meta.url).pathname;
+    for (const f of readdirSync(src, { recursive: true }).filter((f) => f.endsWith(".ts"))) {
+      expect(readFileSync(src + f, "utf8"), f).not.toMatch(/(from|import\()\s*["'][^"']*\/dev\//);
+    }
+    // and the committed build has none of the tour in it
+    const out = new URL("../../custom_components/virtuhome/frontend/", import.meta.url).pathname;
+    const built = readdirSync(out, { recursive: true }).filter((f) => f.endsWith(".js"));
+    expect(built.length).toBeGreaterThan(0);
+    for (const f of built) {
+      const text = readFileSync(out + f, "utf8");
+      for (const word of ["SpeechSynthesisUtterance", "license.virtumaps.com/v1/catalog", "Take the tour"]) expect(text, f).not.toContain(word);
+    }
   });
 
   it("ends on the trials only while they are open", () => {
