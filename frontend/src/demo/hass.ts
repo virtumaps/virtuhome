@@ -239,7 +239,20 @@ export function demoHass(plan: Plan, onChange: (h: Hass) => void, opts: DemoOpti
         if (domain === "lock") next = service === "lock" ? "locked" : service === "open" ? "open" : "unlocked";
         if (service === "media_play_pause") next = s.state === "playing" ? "paused" : "playing";
         const attrs = { ...s.attributes };
-        if (domain === "light" && next === "on" && attrs.brightness === undefined) Object.assign(attrs, { brightness: 220, color_temp_kelvin: 2900 });
+        if (domain === "light" && next === "on") {
+          if (attrs.brightness === undefined) Object.assign(attrs, { brightness: 220, color_temp_kelvin: 2900 });
+          // a colour or a white, and a brightness, as the call asks (the online demo's tour sets them)
+          const d = _data ?? {};
+          if (Array.isArray(d.rgb_color)) {
+            attrs.rgb_color = d.rgb_color as [number, number, number];
+            delete attrs.color_temp_kelvin;
+          } else if (typeof d.color_temp_kelvin === "number") {
+            attrs.color_temp_kelvin = d.color_temp_kelvin;
+            delete attrs.rgb_color;
+          }
+          if (typeof d.brightness === "number") attrs.brightness = d.brightness;
+          else if (typeof d.brightness_pct === "number") attrs.brightness = Math.round(d.brightness_pct * 2.55);
+        }
         states[id] = { ...s, state: next, attributes: attrs, last_changed: new Date().toISOString() };
       }
       Object.assign(hass, { states: { ...states } });

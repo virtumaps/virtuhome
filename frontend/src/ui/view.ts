@@ -630,8 +630,8 @@ export class VhView {
     return { floor: p.floor, room: p.room, floorName: floor.name, roomName: room?.name ?? null };
   }
 
-  /** What extensions get to see and do with this view. */
-  private handle(): ViewHandle {
+  /** What extensions get to see and do with this view (and the online demo's tour, which has none). */
+  handle(): ViewHandle {
     const self = this;
     return {
       root: this.root,

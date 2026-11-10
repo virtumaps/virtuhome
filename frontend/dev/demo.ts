@@ -1,7 +1,7 @@
 // The online demo: the demo house with pretend states, in any browser. dev/site.mjs builds it into
 // site/demo/. Unlike the harness (main.ts) it has no live mode and no way to save: nothing in it
 // talks to a Home Assistant, and the site build fails if anything that could ends up in it.
-//   ?theme=night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra
+//   ?theme=night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?tour
 import { normalizePlan } from "../src/model/plan";
 import { VhView } from "../src/ui/view";
 import type { Quality, WallMode } from "../src/scene/viewer";
@@ -21,10 +21,35 @@ function start(): void {
   }, plan);
   // it opens in daylight; the day / night button (or ?theme=night) shows the lights at night.
   // Its devices change by themselves, as in the demo home inside Home Assistant.
-  view.hass = demoHass(plan, (h) => (view.hass = h), { night: q.get("theme") === "night", lively: true });
+  const pretend = () => demoHass(plan, (h) => (view.hass = h), { night: q.get("theme") === "night", lively: true });
+  let hass = pretend();
+  view.hass = hass;
   const floor = q.get("floor");
   if (floor !== null) view.showFloor(Number(floor));
   (window as unknown as { vh: VhView }).vh = view;
+
+  // the tour (dev/tour): Take the tour in the bar, or ?tour to open on its start card. Fetched when asked for.
+  const house = {
+    view: view.handle(),
+    hass: () => hass,
+    lively(on: boolean) {
+      hass.stop();
+      if (!on) return;
+      hass = pretend();
+      view.hass = hass;
+    },
+  };
+  const tour = (start: boolean) => import("./tour/tour").then((m) => m.openTour(house, start));
+  document.getElementById("tour")?.addEventListener("click", () => {
+    // some browsers only speak after a tap: start the voices now, while this is one
+    if (typeof speechSynthesis !== "undefined") {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      speechSynthesis.speak(u);
+    }
+    void tour(true);
+  });
+  if (q.has("tour")) void tour(false);
   window.dispatchEvent(new Event("virtuhome-ready"));
 }
 

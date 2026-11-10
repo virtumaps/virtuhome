@@ -5,7 +5,7 @@ rooms, doors swing with their contact sensors, blinds follow their covers, camer
 show where they are, and walls between you and a room slide out of the way.
 
 **[Try the online demo](https://virtumaps.github.io/virtuhome/demo/)**: turn the house, switch the
-lights and open the editor in your browser, no Home Assistant needed.
+lights and open the editor in your browser, no Home Assistant needed. Or take its two-minute tour.
 
 ![The ground floor at night, Ultra graphics](docs/screenshots/night.jpg)
 

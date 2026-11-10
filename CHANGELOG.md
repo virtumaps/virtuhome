@@ -2,7 +2,13 @@
 
 ## Unreleased
 
+### New
+- **Take the tour** in the online demo: a two-minute tour with sound and subtitles. Two hosts show
+  you round the demo house, then what the Energy, Security, Household, Wall Tablet and Network add-ons
+  do, as previews on the demo house with pretend numbers.
+
 ### Changed
+- The demo home's lights take the colour and brightness they are switched on with.
 - A speaker or TV that's playing, and a robot that's cleaning or mowing, pulse only in their first
   minute, as everything else does; they still show over the whole house while they play or work.
   Music can play for hours, and its pulse kept a wall tablet drawing about ten frames a second all
