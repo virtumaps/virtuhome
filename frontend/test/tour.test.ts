@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CHAPTERS, type Show } from "../dev/tour/script";
+import { voiceId } from "../dev/tour/tour";
 import { demoHass } from "../src/demo/hass";
 import { DEMO_PLAN } from "../src/demo/plan";
-import { normalizePlan, spaces } from "../src/model/plan";
+import { normalizePlan, spaces, type Plan } from "../src/model/plan";
 import type { ItemMarks, RoomTint } from "../src/live/live";
 
 const plan = normalizePlan(structuredClone(DEMO_PLAN));
@@ -15,6 +16,8 @@ function run(trials: boolean) {
   const tints: RoomTint[] = [];
   const marks: ItemMarks[] = [];
   const replays: string[] = [];
+  const restyled: Plan[] = [];
+  const props: string[] = [];
   const view = {
     setRoomTint: (fn: RoomTint | null) => fn && tints.push(fn),
     markItems: (fn: ItemMarks | null) => fn && marks.push(fn),
@@ -31,6 +34,18 @@ function run(trials: boolean) {
     fly: (entity) => entities.push(entity),
     replay: (at) => replays.push(at),
     endReplay: () => undefined,
+    sky: () => undefined,
+    weather: () => undefined,
+    later: (_ms, fn) => fn(),
+    restyle: (fn) => {
+      if (!fn) return;
+      const copy = structuredClone(plan);
+      fn(copy);
+      restyled.push(copy);
+    },
+    explode: () => undefined,
+    props: (list) => props.push(...list.map((p) => p.kind)),
+    quiet: (id) => entities.push(id),
   };
   const said: string[] = [];
   for (const ch of CHAPTERS) {
@@ -45,10 +60,17 @@ function run(trials: boolean) {
     ch.end?.(show);
   }
   hass.stop();
-  return { hass, entities, tints, marks, replays, said };
+  return { hass, entities, tints, marks, replays, said, restyled, props };
 }
 
 describe("the online demo's tour", () => {
+  it("names a recorded line as voice/make.py does", () => {
+    // the same three as make.py's voice_id() gives
+    expect(voiceId("Hi!")).toBe("325d0001");
+    expect(voiceId("Imagine this is your home. Alive, in 3D, right inside Home Assistant.")).toBe("8635cb4f");
+    expect(voiceId("Virtue Home £")).toBe("de4fa9ee");
+  });
+
   it("keeps every line short", () => {
     for (const line of CHAPTERS.flatMap((c) => c.lines)) {
       expect(line.say.trim().length).toBeGreaterThan(0);
@@ -70,6 +92,14 @@ describe("the online demo's tour", () => {
       expect(hit).toBe(true);
     }
     for (const mark of marks) expect(plan.floors.some((f) => f.furniture.some((item) => mark(f, item)))).toBe(true);
+  });
+
+  it("makes over rooms the demo house has, and shows every prop", () => {
+    const { restyled, props } = run(false);
+    expect(restyled.length).toBeGreaterThan(0);
+    const room = restyled[restyled.length - 1].floors[0].rooms.find((r) => r.area_id === "living_room");
+    expect(room?.floor).toBe("herringbone");
+    expect(new Set(props)).toEqual(new Set(["scan", "clip", "alert", "tablet", "whatif"]));
   });
 
   it("plays the day back forwards", () => {

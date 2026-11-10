@@ -32,6 +32,7 @@ function start(): void {
   const house = {
     view: view.handle(),
     hass: () => hass,
+    sky: (time: number | null) => view.pickSky(time === null ? null : { time, weather: null }),
     lively(on: boolean) {
       hass.stop();
       if (!on) return;

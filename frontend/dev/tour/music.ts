@@ -128,6 +128,24 @@ export class Music {
     this.out.gain.setTargetAtTime(0, t + 4, 1.4);
   }
 
+  /**
+   * The host's recorded voice, played through the same audio so the mouth can follow it: its level
+   * meter, or null when it plays straight (no audio running yet).
+   */
+  voice(el: HTMLMediaElement): AnalyserNode | null {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== "running") return null;
+    try {
+      const src = ctx.createMediaElementSource(el);
+      const meter = ctx.createAnalyser();
+      meter.fftSize = 1024;
+      src.connect(meter).connect(ctx.destination);
+      return meter;
+    } catch {
+      return null;
+    }
+  }
+
   pause(on: boolean): void {
     if (!this.ctx) return;
     void (on ? this.ctx.suspend() : this.ctx.resume());

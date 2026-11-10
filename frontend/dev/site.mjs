@@ -7,7 +7,7 @@
 // that handles a Home Assistant address or token, ends up in the demo, or if a link in the guide
 // leads nowhere.
 import * as esbuild from "esbuild";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, dirname, extname, join, normalize, resolve } from "node:path";
@@ -90,7 +90,13 @@ export async function buildSite(out) {
   } else {
     console.warn(`No guide of a release before ${version} to publish beside it (are the tags fetched?)`);
   }
-  const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text }))];
+  // the tour's recorded lines (dev/tour/voice/make.py), when there are any
+  const voice = join(dev, "tour/voice");
+  // (an empty list without them, so the tour uses the browser's voice without a missing file)
+  const recordings = existsSync(join(voice, "voices.json"))
+    ? readdirSync(voice).filter((f) => /\.mp3$|^voices\.json$/.test(f)).map((f) => ({ name: `demo/voice/${f}`, data: readFileSync(join(voice, f)) }))
+    : [{ name: "demo/voice/voices.json", text: "{}\n" }];
+  const all = [...guide.files, ...older, ...pages, ...files.map((f) => ({ name: `demo/${f.name}`, text: f.text })), ...recordings];
   rmSync(out, { recursive: true, force: true });
   for (const f of all) {
     mkdirSync(dirname(join(out, f.name)), { recursive: true });
@@ -101,7 +107,7 @@ export async function buildSite(out) {
 
 const TYPES = {
   ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
-  ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm",
+  ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg",
 };
 
 /** Serves the built site under /virtuhome/, as GitHub Pages does, on this computer only. */
