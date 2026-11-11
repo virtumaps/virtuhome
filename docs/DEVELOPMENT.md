@@ -255,10 +255,30 @@ Maintainers only:
 3. `cd frontend && npm run build` (the loader carries the version) and commit.
 4. Wait for CI on `main`, then try it on a real Home Assistant: update through HACS, restart, open the
    panel and a wall tablet, and check an old plan still loads.
-5. Tag `vX.Y.Z` and publish the GitHub release with the changelog section as its notes.
+5. Publish the release with `virtuhome.zip` attached, in one command. Put the changelog section in a
+   file, then:
+
+   ```bash
+   git fetch origin --tags
+   python3 tools/release_zip.py release vX.Y.Z --target <SHA of the release commit on main> --notes-file notes.md
+   ```
+
+   It builds the zip from that commit (the files of `custom_components/virtuhome/` as git has them, at
+   the zip's root; the same commit always makes the same bytes), checks it, and runs
+   `gh release create` with it, which uploads the zip before the release is published. HACS installs
+   every release from this zip (`zip_release` and `filename` in `hacs.json`) and counts its
+   downloads, so a release without it can't be installed through HACS. Don't publish a release from
+   GitHub's website or a plain `gh release create`, and never replace a published release's zip. The
+   Release zip workflow checks each published release: it attaches the zip when one is missing and
+   fails when the attached zip differs from the tag.
 6. Publishing the release runs the Pages workflow, which rebuilds the
    [user guide's website](https://virtumaps.github.io/virtuhome/) and the
    [online demo](https://virtumaps.github.io/virtuhome/demo/) from the tag. Check that both open.
+
+`python3 tools/release_zip.py build vX.Y.Z` makes the zip of any tag in `tools/out/` (to install it
+by hand, unzip it in place of `custom_components/virtuhome/`), `check <zip> vX.Y.Z` compares a zip
+with a tag, and `backfill --upload` attaches the zip to every earlier release that lacks one (without
+`--upload` it only builds and checks them).
 
 ## Roadmap
 
