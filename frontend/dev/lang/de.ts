@@ -116,7 +116,7 @@ export const DE: DemoStrings = {
     cheap: "Es weiß, wann Strom am günstigsten ist, und was der Tag bisher gekostet hat.",
     roof: "Und jetzt: Schau mal aufs Dach!",
     sun: "Es folgt der Sonne übers Dach, das ganze Jahr, und bewertet jede Dachseite für Module.",
-    whatIf: "Lust auf mehr? Erst ausprobieren: Drei Module mehr sparen rund {saving} im Jahr und rechnen sich in unter sieben Jahren.",
+    whatIf: "Lust auf mehr? Erst ausprobieren: Drei Module mehr sparen rund {saving} im Jahr und rechnen sich in unter acht Jahren.",
     household: "Household behält den Alltag im Blick. Die Spülmaschine ist fertig, und das steht auf jedem Bildschirm.",
     bins: "Es markiert am Vorabend die Tonne, die rausmuss, und erkennt Feuchte und Schimmel, Raum für Raum.",
     window: "Es sagt dir sogar, wann du lüften solltest. Ganz freundlich!",

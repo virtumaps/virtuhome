@@ -145,15 +145,17 @@ const ground: Floor = {
   ],
   walls: [],
   outdoor: [
-    { id: "garden", name: "Garden", kind: "lawn", area_id: "garden", points: rect(-3.24, -10, 6.39, -0.14) },
+    // the lawn runs into the side return behind the WC and store too
+    { id: "garden", name: "Garden", kind: "lawn", area_id: "garden", points: [[-3.24, -10], [6.39, -10], [6.39, -0.14], [-2.19, -0.14], [-2.19, 2.81], [-3.24, 2.81]] },
     { id: "deck", name: "Deck", kind: "deck", area_id: "garden", points: rect(3.0, -3.2, 6.39, -0.14) },
     { id: "patio", name: "Patio", kind: "patio", area_id: "garden", points: rect(2.8, -9.86, 6.25, -6.4) },
     // the drive runs up to the side extension's front too, where its side door opens
     { id: "front", name: "Driveway", kind: "driveway", area_id: null, points: [[-3.24, 5.44], [-0.14, 5.44], [-0.14, 7.54], [6.39, 7.54], [6.39, 13], [-3.24, 13]] },
   ],
   fences: [
-    // round the back garden with a gate at the end, and low walls either side of the drive
-    { id: "fence_garden", points: [[-3.24, -0.14], [-3.24, -10], [6.39, -10], [6.39, -0.14]], style: "closeboard", height: 1.8, gates: [{ at: 14.68, width: 0.9 }] },
+    // round the back garden from the side extension's back corner, with a gate at the end, and low
+    // walls either side of the drive
+    { id: "fence_garden", points: [[-3.24, 2.81], [-3.24, -10], [6.39, -10], [6.39, -0.14]], style: "closeboard", height: 1.8, gates: [{ at: 17.63, width: 0.9 }] },
     { id: "wall_left", points: [[-3.24, 5.44], [-3.24, 13], [-0.6, 13]], style: "brick_wall", height: 0.9, gates: [] },
     { id: "wall_right", points: [[3.4, 13], [6.39, 13], [6.39, 7.54]], style: "brick_wall", height: 0.9, gates: [] },
     // an electric driveway gate between the walls' piers, opening in towards the house
@@ -201,11 +203,12 @@ const panels = (x: number, z: number, cols: number, rows: number, entity: string
 const mainRoof: Roof = {
   id: "main_roof", x: 3.125, z: 3.7, w: 6.25, d: 7.4, rotation: 0, shape: "hip", pitch: 35, party: "right", covering: "concrete_tiles",
   items: [
-    panels(3.8, 6.88, 3, 1, "sensor.solar_pv1_power"),
-    panels(4.5, 5.45, 2, 1, "sensor.solar_pv1_power"),
-    panels(3.75, 1.2, 3, 1, "sensor.solar_pv2_power"),
+    // on the south slope: three, and two above them where the hip narrows it, clear of its edges
+    panels(4.25, 6.73, 3, 1, "sensor.solar_pv1_power"),
+    panels(4.25, 5.3, 2, 1, "sensor.solar_pv1_power"),
     { id: "chimney", kind: "chimney", x: 6.0, z: 3.7, w: 0.9, d: 0.55, h: 0.9, pots: 2 },
-    { id: "roof_window", kind: "window", x: 1.5, z: 1.1, w: 0.78, d: 0.98, cover: "cover.roof_window_blind" },
+    // over the bathroom on the back slope, clear of the hip
+    { id: "roof_window", kind: "window", x: 1.85, z: 0.7, w: 0.78, d: 0.98, cover: "cover.roof_window_blind" },
   ],
 };
 

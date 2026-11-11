@@ -28,6 +28,10 @@
   in the rooms they are in and among who is home, instead of their initials.
 - The demo house's drive runs up to the front of its side extension, where there was a gap outside the
   side door. Its garden has a pergola over a patio at the end, with a table and lamps.
+- The demo house's solar panels are all on the south slope, three with two above them, instead of
+  some on the north slope. Its roof window sits on the back slope clear of the hip, where it stuck out
+  past it, and the garden fence closes the gap beside the side extension. The tour's what-if tries
+  three more panels on the west slope.
 
 ### Changed
 - The demo home's lights take the colour and brightness they are switched on with, and a new colour

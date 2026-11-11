@@ -116,7 +116,7 @@ export const NB: DemoStrings = {
     cheap: "Det vet når strømmen er billigst, og hva dagen har kostet så langt.",
     roof: "Se opp på taket nå!",
     sun: "Det følger sola over taket ditt hele året, og gir hver takflate en score for solceller.",
-    whatIf: "Vil du ha mer? Prøv først: tre paneler til ville spart rundt {saving} i året, og tjent seg inn på under sju år.",
+    whatIf: "Vil du ha mer? Prøv først: tre paneler til ville spart rundt {saving} i året, og tjent seg inn på under åtte år.",
     household: "Household holder et øye med hverdagen. Oppvaskmaskinen er ferdig, og det står på alle skjermer.",
     bins: "Det merker hvilken dunk som skal ut kvelden før, og finner fukt og mugg, rom for rom.",
     window: "Det sier til og med fra når du bør lufte. Pent og pyntelig!",

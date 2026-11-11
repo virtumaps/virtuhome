@@ -3,8 +3,9 @@ import { DEFAULT_SETTINGS, normalizePlan, solarSize, type Floor, type Plan, type
 import { buildFloor } from "../src/scene/build";
 import { DAY } from "../src/scene/palette";
 import {
-  abutting, faceAt, faceNormal, itemFrame, planeHeight, polyArea, profile, ridgeHeight, roofHeight, roofModel, ROOF_SHAPE_ORDER, type RoofModel,
+  abutting, faceAt, faceNormal, floorRoofs, itemFrame, planeHeight, polyArea, profile, ridgeHeight, roofHeight, roofModel, ROOF_SHAPE_ORDER, toRoofFrame, type RoofModel,
 } from "../src/scene/roofs";
+import { pointInPolygon } from "../src/model/geom";
 
 const roof = (extra: Partial<Roof> = {}): Roof => ({ id: "r", x: 0, z: 0, w: 8, d: 6, rotation: 0, shape: "gable", pitch: 45, covering: "concrete_tiles", ...extra });
 /** Walls 0.28 thick: the roof reaches their outside faces, 0.14 past the middle. */
@@ -270,10 +271,24 @@ describe("roofs for extensions", async () => {
 
   it("lists the panels with their power and the way they face", () => {
     const arrays = solarArrays(plan);
-    expect(arrays.map((a) => a.panels)).toEqual([3, 2, 3]);
+    expect(arrays.map((a) => a.panels)).toEqual([3, 2]);
     expect(arrays[0].kwp).toBeCloseTo(1.29, 6);
-    expect(Math.round(arrays[0].azimuth)).toBe(180);
-    expect(Math.round(arrays[2].azimuth)).toBe(0);
+    // both on the south slope
+    expect(arrays.map((a) => Math.round(a.azimuth))).toEqual([180, 180]);
+  });
+
+  it("keeps the demo's roof windows and panels inside their slopes", () => {
+    plan.floors.forEach((floor, fi) => floorRoofs(plan, fi).forEach((m) => {
+      for (const it of m.roof.items ?? []) {
+        if (it.kind !== "window" && it.kind !== "solar") continue;
+        const fr = itemFrame(m, it)!;
+        const { w, d } = it.kind === "solar" ? solarSize(it) : it;
+        for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          const p: [number, number] = [fr.c[0] + (fr.e1[0] * a * w) / 2 + (fr.e2[0] * b * d) / 2, fr.c[2] + (fr.e1[2] * a * w) / 2 + (fr.e2[2] * b * d) / 2];
+          expect(pointInPolygon(toRoofFrame(m, p), fr.face.poly), `${floor.name} ${it.id}`).toBe(true);
+        }
+      }
+    }));
   });
 
   it("hands over what can shade the roofs, panels left out", () => {

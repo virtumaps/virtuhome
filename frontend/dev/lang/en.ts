@@ -116,7 +116,7 @@ export const EN: DemoStrings = {
     cheap: "It knows when power's cheapest, and what today has cost so far.",
     roof: "Now, look up at the roof!",
     sun: "It follows the sun over your roof all year, and scores every slope for panels.",
-    whatIf: "Want more? Try it first: three more panels would save about two hundred and twenty pounds a year, and pay back in under seven years.",
+    whatIf: "Want more? Try it first: three more panels would save about a hundred and ninety pounds a year, and pay back in under eight years.",
     household: "Household keeps an eye on the everyday stuff. The dishwasher's done, and it says so on every screen.",
     bins: "It tags the bin to put out the night before, and spots damp and mould, room by room.",
     window: "It'll even tell you when to open a window. Nicely!",
