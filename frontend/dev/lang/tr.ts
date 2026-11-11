@@ -127,7 +127,7 @@ export const TR: DemoStrings = {
     cheap: "Elektriğin en ucuz saatlerini ve bugün şimdiye kadar ne tuttuğunu biliyor.",
     roof: "Şimdi çatıya bir bak!",
     sun: "Güneşi yıl boyunca çatının üzerinde takip ediyor ve her yüzeye panel puanı veriyor.",
-    whatIf: "Daha fazlası mı? Önce dene: üç panel daha yılda yaklaşık {saving} kazandırır, yedi yıl dolmadan da kendini amorti eder.",
+    whatIf: "Daha fazlası mı? Önce dene: üç panel daha yılda yaklaşık {saving} kazandırır, sekiz yıl dolmadan da kendini amorti eder.",
     household: "Household gündelik işlere göz kulak oluyor. Bulaşık makinesi bitti ve bunu her ekranda söylüyor.",
     bins: "Hangi çöp kutusunun çıkacağını bir akşam önceden işaretliyor, nemi ve küfü oda oda buluyor.",
     window: "Hatta pencereyi ne zaman açacağını bile söylüyor. Kibarca!",

@@ -208,13 +208,13 @@ function rampCss(pct: number): string {
 type Slope = ["south" | "west" | "north", number, number, number, number, number, number];
 const SLOPES: Slope[] = [
   ["south", 35, 0, 24, 997, 2, 98],
-  ["west", 35, 0, 21, 840, 0, 83],
+  ["west", 35, 0, 21, 841, 0, 83],
   ["west", 17, 2, 11, 607, 30, 60],
-  ["north", 35, 0, 24, 554, 4, 55],
+  ["north", 35, 0, 24, 554, 4, 54],
   ["west", 17, 1, 10, 395, 54, 39],
 ];
 // its placed panels: [panels, kWp, slope, kWh a year, %]
-const ARRAYS: [number, number, "south" | "north", number, number][] = [[3, 1.29, "south", 1310, 100], [2, 0.86, "south", 872, 100], [3, 1.29, "north", 739, 56]];
+const ARRAYS: [number, number, "south" | "west", number, number][] = [[3, 1.29, "south", 1310, 100], [2, 0.86, "south", 872, 100]];
 
 const row = (name: string, small: string, pct: number) =>
   `<div class="srow"><div class="n"><b>${esc(name)}</b><small>${esc(small)}</small></div><div class="bar"><i style="width:${pct}%;background:${rampCss(pct)}"></i></div><span>${pct}%</span></div>`;
@@ -239,27 +239,27 @@ export class EnergySheet extends Panel {
         <div class="sh"><span>${esc(P.solarOnRoof)}</span><button class="pill on" data-k="map">${svg(mdiWhiteBalanceSunny)}${esc(P.shownOnRoof)}</button></div>
         <p class="best">${esc(fill(P.best, { pct: 98, kwh: n(997) }))}</p>
         ${rows}
-        <div class="ssub">${esc(fill(P.yourPanels, { kwh: n(2921), kwp: n(3.44, 2) }))}</div>
+        <div class="ssub">${esc(fill(P.yourPanels, { kwh: n(2181), kwp: n(2.15, 2) }))}</div>
         ${arrays}
         <div class="key"><span>40%</span><i style="background:linear-gradient(90deg,${RAMP.map(([at, c]) => `${hexOf(c)} ${at * 100}%`).join(",")})"></i><span>100%</span></div>
         <div class="sh" data-k="whatif-h"><span>${esc(P.whatIf)}</span><button class="pill go" data-k="try">${esc(P.tryIt)}</button></div>
         <div class="wf" hidden>
-          <div class="fld"><label>${esc(P.panelsOn)}</label><span class="in sel">${esc(`${slope("south", 35)} · ${roof(0)}`)}</span></div>
+          <div class="fld"><label>${esc(P.panelsOn)}</label><span class="in sel">${esc(`${slope("west", 35)} · ${roof(0)}`)}</span></div>
           <div class="fld"><label>${esc(P.howMany)}</label><span class="pm">−</span><span class="in val" data-n>0</span><span class="pm" data-k="more">+</span><small>${esc(P.of)}</small><span class="in val">430</span><small>W</small>
             <small class="room">${esc(fill(P.roomFor, { n: 3 }))}</small></div>
           <div class="fld"><label>${esc(P.addBattery)}</label><span class="pm">−</span><span class="in val">${n(0)}</span><span class="pm">+</span><small>kWh</small></div>
           <div class="fld"><label>${esc(P.costOfWork)}</label><span class="in val wide">${esc(cash(1500))}</span><small>${esc(P.forPayback)}</small></div>
           <div class="wt">
             <span class="n k">${esc(P.aYear)}</span><span class="k">${esc(P.now)}</span><span class="k">${esc(P.withThem)}</span>
-            ${cell(P.solarKwh, n(2921), n(4207))}
-            ${cell(P.usedAtHome, `${n(1310)} (45%)`, `${n(1630)} (39%)`)}
-            ${cell(P.soldKwh, n(1611), n(2577))}
-            ${cell(P.boughtKwh, n(2690), n(2370))}
-            ${cell(P.bill, cash(417), cash(194))}
+            ${cell(P.solarKwh, n(2181), n(3267))}
+            ${cell(P.usedAtHome, `${n(1090)} (50%)`, `${n(1420)} (43%)`)}
+            ${cell(P.soldKwh, n(1091), n(1847))}
+            ${cell(P.boughtKwh, n(2910), n(2580))}
+            ${cell(P.bill, cash(549), cash(355))}
             <i class="rule"></i>
-            ${cell(P.saving, "", fill(P.savingValue, { money: cash(223) }), "good")}
+            ${cell(P.saving, "", fill(P.savingValue, { money: cash(194) }), "good")}
             ${cell(P.costOfWork, "", cash(1500))}
-            ${cell(P.paysBackIn, "", fill(P.years, { n: n(6.7, 1) }), "good")}
+            ${cell(P.paysBackIn, "", fill(P.years, { n: n(7.7, 1) }), "good")}
           </div>
         </div>
       </div>`);

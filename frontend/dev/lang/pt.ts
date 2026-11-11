@@ -127,7 +127,7 @@ export const PT: DemoStrings = {
     cheap: "Sabe quando a energia é mais barata, e quanto o dia de hoje já custou.",
     roof: "Agora, olhe para o telhado!",
     sun: "Acompanha o sol no seu telhado o ano inteiro, e avalia cada lado para painéis solares.",
-    whatIf: "Quer mais? Teste primeiro: mais três painéis poupariam cerca de {saving} por ano, e o investimento volta em menos de sete anos.",
+    whatIf: "Quer mais? Teste primeiro: mais três painéis poupariam cerca de {saving} por ano, e o investimento volta em menos de oito anos.",
     household: "O Household cuida do dia a dia. A máquina de lavar louça terminou, e todos os dispositivos avisam.",
     bins: "Marca na véspera qual lixo vai para a rua, e encontra humidade e bolor em cada espaço da casa.",
     window: "Até diz quando abrir uma janela. Com jeitinho!",

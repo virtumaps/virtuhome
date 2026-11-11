@@ -116,7 +116,7 @@ export const NL: DemoStrings = {
     cheap: "De add-on weet wanneer stroom het goedkoopst is, en wat je vandaag al kwijt bent.",
     roof: "En kijk nu eens naar het dak!",
     sun: "Hij volgt de zon het hele jaar over je dak, en geeft elk dakvlak een score voor panelen.",
-    whatIf: "Meer willen? Probeer het eerst: drie extra panelen besparen zo'n {saving} per jaar en zijn binnen zeven jaar terugverdiend.",
+    whatIf: "Meer willen? Probeer het eerst: drie extra panelen besparen zo'n {saving} per jaar en zijn binnen acht jaar terugverdiend.",
     household: "Household houdt de dagelijkse dingen in de gaten. De vaatwasser is klaar, en dat zie je op elk scherm.",
     bins: "Household markeert de avond ervoor welke container eruit moet, en ziet vocht en schimmel, per kamer.",
     window: "Hij zegt zelfs wanneer je even moet luchten. Heel vriendelijk!",

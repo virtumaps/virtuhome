@@ -193,7 +193,7 @@ function ramp(v: number): [number, number, number] {
 function slopeScore(face: { floor: number; roof: string; tilt: number; azimuth: number }): number {
   if (face.floor === 0) return face.roof === "roof1" ? 39 : 60;
   const az = ((face.azimuth % 360) + 360) % 360;
-  return az > 135 && az < 225 ? 98 : az >= 225 && az < 315 ? 83 : az >= 45 && az <= 135 ? 83 : 55;
+  return az > 135 && az < 225 ? 98 : az >= 225 && az < 315 ? 83 : az >= 45 && az <= 135 ? 83 : 54;
 }
 
 /** The roof painted with its score for panels, as the Energy add-on paints it. */
@@ -401,7 +401,7 @@ export function chapters(S: DemoStrings): Chapter[] {
           },
         },
         { id: "sun", say: L.sun, do: (s) => s.props([{ kind: "energy" }]) },
-        { id: "whatIf", say: fill(L.whatIf, { saving: roughly(S, 223) }), do: (s) => s.whatIf(), gap: 1200 },
+        { id: "whatIf", say: fill(L.whatIf, { saving: roughly(S, 194) }), do: (s) => s.whatIf(), gap: 1200 },
       ],
     },
     {

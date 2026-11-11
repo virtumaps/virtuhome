@@ -126,7 +126,7 @@ export const FR: DemoStrings = {
     cheap: "Il sait quand l’électricité est la moins chère, et ce que la journée a déjà coûté.",
     roof: "Et maintenant, levez les yeux vers le toit !",
     sun: "Il suit le soleil sur votre toit toute l’année, et note chaque pan pour les panneaux.",
-    whatIf: "Envie de plus ? Testez d’abord : trois panneaux de plus, c’est environ {saving} d’économie par an, remboursés en moins de sept ans.",
+    whatIf: "Envie de plus ? Testez d’abord : trois panneaux de plus, c’est environ {saving} d’économie par an, remboursés en moins de huit ans.",
     household: "Household veille sur le quotidien. Le lave-vaisselle a fini, et tous les écrans le disent.",
     bins: "Il signale la poubelle à sortir la veille, et repère l’humidité et la moisissure, pièce par pièce.",
     window: "Il vous dit même quand ouvrir une fenêtre. Gentiment !",

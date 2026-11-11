@@ -126,7 +126,7 @@ export const CS: DemoStrings = {
     cheap: "Ví, kdy je proud nejlevnější, a kolik dnešek zatím stál.",
     roof: "A teď se podívej na střechu!",
     sun: "Sleduje slunce nad tvou střechou celý rok a hodnotí každou stranu pro panely.",
-    whatIf: "Chceš víc? Nejdřív si to zkus: tři panely navíc ušetří zhruba {saving} ročně a zaplatí se za necelých sedm let.",
+    whatIf: "Chceš víc? Nejdřív si to zkus: tři panely navíc ušetří zhruba {saving} ročně a zaplatí se za necelých osm let.",
     household: "Household hlídá každodenní věci. Myčka dodělala a všechny obrazovky to hned hlásí.",
     bins: "Večer předem označí popelnici, kterou máš vyndat, a hledá vlhkost a plíseň, místnost po místnosti.",
     window: "Dokonce ti řekne, kdy otevřít okno. Hezky slušně!",
