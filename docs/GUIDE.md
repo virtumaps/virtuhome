@@ -85,7 +85,9 @@ Install it, restart Home Assistant and reload the page. Your plan stays as it is
 The same view is in the sidebar and in every VirtuHome card.
 
 **Top bar**
-- **House** shows every storey; a button for each floor shows that floor alone.
+- **House** shows every storey; a button for each floor shows that floor alone. With the house shut
+  under its roofs, what goes on inside (motion, an open door) isn't marked on the roof: take the roofs
+  off to see it. A leak, smoke or an alarm going off still shows.
 - The alarm chip (**Disarmed**, **Armed home**, **Armed away**…) shows your alarm panel. Tap it for
   the **Alarm** sheet:
   - each panel with its state and what it covers: the rooms of its area, or **The whole home** for a
@@ -121,12 +123,15 @@ The same view is in the sidebar and in every VirtuHome card.
 | **Search** | Finds a room, device, piece of furniture or scene by name (see **Search** below) |
 | **List of rooms and devices** | Shows the house as a list: each floor's rooms with what their labels say, and the devices in them with their states. Tap a room to open it, or a device to switch it as a tap on it does (see [Keyboard and screen readers](#keyboard-and-screen-readers)) |
 | **Walls** | Steps through smart cutaway (walls between you and a room slide away), low, and full height. Its picture shows the mode |
-| **Roof** | Only when the house has a roof: takes the roofs off to look in from above, or puts them back. Each device remembers its own choice |
+| **Roof** | Only when the house has a roof: takes the roofs off to look in from above, or puts them back. Each device remembers its own choice. A home you have just set up opens with its roofs off, once, on the device it was set up on, so its rooms and devices are the first thing you see |
 | **Day / night** | Switches between the day and night looks. Normally the look follows the sun, and the picture fades from one to the other |
 | **Sun and weather** | Opens the [sun and weather panel](#sun-and-weather) |
 | **Show all** | Fits the house on the screen, with its garden, driveway and fences (a long garden is cut short, so the house stays big) |
 | **Temperature map** | Colours the rooms by their temperature: blue is cold, red is warm. With air quality sensors it is **Maps**, and each tap shows the next map (see **Maps** below) |
 | **Graphics** | Picks the graphics on this device (below) |
+
+On a phone the buttons keep behind one, **More buttons**, at the bottom of the row, so the house has
+the screen; **Search** stays out. Tap it for the others, and again (**Fewer buttons**) to put them away.
 
 **Search**
 - **Search** opens a box at the top: type a name such as "lamp", "kitchen" or "front door". It
@@ -150,12 +155,12 @@ The same view is in the sidebar and in every VirtuHome card.
 - A hint shows once the first time you need it: in the sidebar panel how to switch and open
   devices, in the editor how to select and move things, in the 2D plan how to type a measurement
   (the editor's two once the home has a room).
-  **Got it** puts it away for good on that browser. Edit → **Home** → **Show hints again** brings
+  **Got it** puts it away for good on that browser. Edit → **Home** → **Help** → **Show hints again** brings
   them back.
 - After VirtuHome updates, the first time an administrator opens it in the sidebar it says **What's
   new in VirtuHome 0.17.0**: the new things, each with **More** where the guide explains it, and
   **Got it**. It never shows on dashboard cards (wall tablets), on a Fully Kiosk tablet or with
-  `?kiosk`, nor on a first install. Edit → **Home** → **What's new** shows it again; under it is the
+  `?kiosk`, nor on a first install. Edit → **Home** → **Help** → **What's new** shows it again; under it is the
   version, with **Everything that changed**.
 
 **Maps**
@@ -274,7 +279,8 @@ colours told apart with any kind of colour blindness.
 ### The demo home
 
 To see what VirtuHome does with a finished house before you draw yours, tap **Look at the demo
-home** under **Let's get your home in**, or in Edit → **Home** (administrators). The demo house
+home** under **Let's get your home in**, or in Edit → **Home** → **Demo home, house type, import**
+(administrators). The demo house
 opens in the sidebar with pretend lights, doors, windows, blinds, sensors and people that change by
 themselves, under the sky where your home is. (The house turning behind **Let's get your home in**
 is the same one, as a picture: it shows early evening whatever the time, can't be tapped, and holds
@@ -294,6 +300,13 @@ There are five ways, and they mix: start from a house type, scan it, draw it in 
 an estate agent's floor plan, or import it from another program. Everything here is in **Edit**.
 
 ### Getting started
+
+The Home tab's parts fold under their headings (**Getting started**, **Check my setup**, **Demo
+home, house type, import**, **Devices**, **Outside walls**, **Roof**, **Sun and weather**,
+**Floors**, **Energy**, **People**, **Top bar**, **Plan file**, **Help**): tap a heading to open its
+part, and again to fold it. Getting started is open while it has steps left, Check my setup while it
+has found something. What the last step did (a house type, an import, Smart Setup) is listed at the
+top of the tab.
 
 Until a new home is set up, Edit → **Home** starts with **Getting started**: the steps left, each
 with a button that does it or goes to where it is done.
@@ -322,15 +335,23 @@ Most homes are one of a handful of layouts. A house type gives you a whole home 
 storeys, rooms named like Home Assistant's usual areas (Living Room, Kitchen, Hallway, Landing,
 Bedroom 1…), doors, windows, stairs, a garden and a roof. Then you drag the walls to fit.
 
-1. Edit → **Home** → **Start from a house type…** (on a new home: **Start from a house type**, or
-   **House type** in Getting started).
+1. Edit → **Home** → **Demo home, house type, import** → **Start from a house type…** (on a new
+   home: **Start from a house type**, or **House type** in Getting started).
 2. Pick the one most like your home: **Two-bed mid-terrace**, **Three-bed semi-detached**,
-   **Four-bed detached**, **Two-bed bungalow**, **Two-bed flat** or **Open-plan single storey**.
+   **Four-bed detached**, **Two-bed bungalow**, **Two-bed flat** or **Open-plan single storey**. The
+   3D view shows it at once, its roofs off, as it would go in. Nothing is changed yet: pick another
+   to compare, or close the picker to have your plan back.
 3. **Fit to my home**: type your home's outside **Width** and **Depth** in metres, as an estate
    agent's listing gives them. The rooms, garden and roof stretch with the walls; doors, windows and
    stairs keep their size and stay on their walls. **Mirror left to right** turns it the other way
-   round; for the semi, pick whether it **Joins next door on the** **Left** or **Right**.
-4. **Use this house type**. If the plan already has rooms, it asks before replacing them.
+   round; for the semi, pick whether it **Joins next door on the** **Left** or **Right**. The 3D view
+   follows each change.
+4. **With furniture** (ticked to start with) puts a sofa and a TV in the living room, a table and
+   chairs, a run of kitchen units with a sink and a cooker, beds, wardrobes and a bath or shower, each
+   against a wall that is free for it at the size you gave: never across a door, nothing tall over a
+   window, and left out where a room is too small. It is ordinary furniture, to move, swap or delete.
+   Untick it for bare rooms.
+5. **Use this house type**. If the plan already has rooms, it asks before replacing them.
 
 Smart Setup then runs by itself: storeys are linked to Home Assistant's floors, rooms to the areas
 named like them, and devices go into their rooms (see [Smart Setup](#smart-setup)). What it did is
@@ -354,7 +375,7 @@ While scanning with House Scan:
 - Allow the location: the app notes which way the phone's compass points, so the plan faces north
   from the start.
 
-To import: Edit → **Home** → **Import** → **Import a scan or plan…**, and choose the scan's files together:
+To import: Edit → **Home** → **Demo home, house type, import** → **Import a scan or plan…**, and choose the scan's files together:
 `house.json`, `manifest.json` (room names) and `detections.json` (decoration). Rooms, doors,
 windows, furniture and decor come from the scan, with the walls straightened. Importing replaces the
 plan you have, after asking.
@@ -363,7 +384,7 @@ Then go on to [Place your devices](#place-your-devices).
 
 ### Import from another program
 
-Edit → **Home** → **Import** → **Import a scan or plan…** also takes plan files from other
+Edit → **Home** → **Demo home, house type, import** → **Import a scan or plan…** also takes plan files from other
 programs:
 
 - **Sweet Home 3D** (`.sh3d` files saved by version 5.3 or later; open an older one in Sweet Home 3D
@@ -480,8 +501,8 @@ Edit → **Home** → **Floors** lists each storey: its name, the Home Assistant
 - **Save** writes the plan to Home Assistant. Closing with changes asks first (**Discard**).
 - If someone else saved meanwhile, VirtuHome asks before saving over it (**Save mine**).
 - **Restore points:** every save keeps the version before it; the last 20 are in Edit → **Home** →
-  **Restore points** (**Restore**).
-- **Plan file:** Edit → **Home** → **Download** saves the plan as a file; **Load…** replaces the plan
+  **Plan file** → **Restore points** (**Restore**).
+- **Plan file:** Edit → **Home** → **Plan file** → **Download** saves the plan as a file; **Load…** replaces the plan
   with one. The plan also goes into Home Assistant's own backups.
 
 ## Place your devices

@@ -93,6 +93,12 @@ export const VIEW_CSS = /* css */ `
   justify-content: flex-end; align-content: flex-start; gap: 8px; pointer-events: none;
 }
 .vh-tools > * { pointer-events: auto; }
+/* a phone: the tools keep behind one button, so the house has the screen; Search stays out */
+.vh-tools > .vh-more { display: none; }
+@media (max-width: 600px) {
+  .vh-tools > .vh-more { display: grid; }
+  .vh-tools:not(.open) > :not(.vh-more):not(.vh-find-btn) { display: none; }
+}
 .vh-icon {
   width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
   background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);

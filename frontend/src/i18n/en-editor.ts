@@ -12,6 +12,7 @@ export const EN_EDITOR = {
   "editor.houses.left": "Left",
   "editor.houses.right": "Right",
   "editor.houses.mirror": "Mirror left to right",
+  "editor.houses.furnished": "With furniture (a sofa, beds, kitchen units…)",
   "editor.houses.use": "Use this house type",
   "editor.houses.fit": "Fit to my home",
   "editor.houses.fitHint": "Your home's outside width and depth, as an estate agent's listing gives them. Doors, windows and stairs keep their size.",
@@ -128,6 +129,7 @@ export const EN_EDITOR = {
   // ---------------------------------------------------------------- the editor: home
   "editor.home.aReadyMadeHome": "A ready-made home with its rooms, doors, windows, stairs and roof, fitted to your home's size.",
   "editor.home.startFromAHouse": "Start from a house type…",
+  "editor.home.waysIn": "Demo home, house type, import",
   "editor.home.import": "Import",
   "editor.home.aHouseScanScan": "A House Scan scan: choose house.json, manifest.json (room names) and detections.json (decor) together. Or a plan from another program: a Sweet Home 3D file (.sh3d), or a file in the simple plan format (.json).",
   "editor.home.linksRoomsToAreas": "Links rooms to areas, contacts to doors and windows, and puts lights, cameras and sensors into their rooms. Keeps what is already placed.",

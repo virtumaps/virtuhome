@@ -11,6 +11,8 @@ export const EN = {
   "view.tool.frame": "Show all",
   "view.tool.heat": "Temperature map",
   "view.tool.graphics": "Graphics",
+  "view.tool.more": "More buttons",
+  "view.tool.fewer": "Fewer buttons",
   "view.tool.search": "Search",
   "search.placeholder": "Find a room, device or scene",
   "search.results": "Results",

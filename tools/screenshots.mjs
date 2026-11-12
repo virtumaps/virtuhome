@@ -24,6 +24,11 @@ async function openEditor(page) {
   await page.locator(".vh-edit").click();
   await page.locator(".ed").waitFor();
 }
+/** Opens a part of the editor's Home tab (they fold under their headings). */
+async function openPart(page, title) {
+  const head = page.locator(".ed-sec-h").filter({ hasText: title });
+  if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+}
 /** The editor's selection (the drawer then shows Selected). */
 const select = (page, sel) => page.evaluate((s) => window.vh.editor.select(s), sel);
 /** The view's chrome left out, for pictures of the house alone. */
@@ -98,6 +103,7 @@ export const SHOTS = [
     async steps(page) {
       await openEditor(page);
       const chooser = page.waitForEvent("filechooser");
+      await openPart(page, "Demo home, house type, import");
       await button(page, "Import a scan or plan…").click();
       await (await chooser).setFiles(join(FIXTURES, "import/house.sh3d"));
       await button(page, "Replace").click();

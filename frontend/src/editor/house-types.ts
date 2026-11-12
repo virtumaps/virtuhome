@@ -30,9 +30,13 @@ function thumbnail(plan: Plan): string {
 
 export class HouseTypes {
   readonly el = el("div", "ed-houses");
-  private size = { width: 0, depth: 0, mirror: false };
+  private size = { width: 0, depth: 0, mirror: false, furnished: true };
 
-  constructor(private host: { use(plan: Plan, name: string): void; close(): void; reveal(el: HTMLElement): void }) {
+  /**
+   * `preview` shows a plan in the 3D view while it is being chosen, without putting it on the plan (null:
+   * nothing is being chosen any more).
+   */
+  constructor(private host: { use(plan: Plan, name: string): void; close(): void; reveal(el: HTMLElement): void; preview(plan: Plan | null): void }) {
     const close = el("button", "ed-ib small");
     close.title = t("editor.close");
     close.innerHTML = `<svg viewBox="0 0 24 24"><path d="${mdiClose}"/></svg>`;
@@ -64,7 +68,10 @@ export class HouseTypes {
       minWidth: up(Math.max(own.minWidth, own.width * 0.7)), maxWidth: up(own.width * 1.6),
       minDepth: up(Math.max(own.minDepth, own.depth * 0.7)), maxDepth: up(own.depth * 1.6),
     };
-    this.size = { width: own.width, depth: own.depth, mirror: false };
+    this.size = { width: own.width, depth: own.depth, mirror: false, furnished: this.size.furnished };
+    // the house as it would go in, in 3D, at every change of its size, side or furniture
+    const made = () => m.starterPlan(s.id, { width: this.size.width, depth: this.size.depth, mirror: this.size.mirror }, this.size.furnished);
+    const show = () => this.host.preview(made());
     const num = (key: "width" | "depth", label: string) => {
       const input = el("input", "ed-in num");
       const [lo, hi] = key === "width" ? [range.minWidth, range.maxWidth] : [range.minDepth, range.maxDepth];
@@ -74,6 +81,7 @@ export class HouseTypes {
         const v = Number(input.value);
         this.size[key] = isFinite(v) && v > 0 ? Math.min(hi, Math.max(lo, v)) : own[key];
         input.value = String(Math.round(this.size[key] * 100) / 100);
+        show();
       };
       return el("label", "ed-houses-num", label, input, "m");
     };
@@ -87,6 +95,7 @@ export class HouseTypes {
           this.size.mirror = mirror;
           side.querySelectorAll(".ed-chip").forEach((x) => x.classList.toggle("on", x === c));
           thumb()?.classList.toggle("flip", mirror);
+          show();
         };
         return c;
       };
@@ -97,21 +106,28 @@ export class HouseTypes {
       box2.onchange = () => {
         this.size.mirror = box2.checked;
         thumb()?.classList.toggle("flip", box2.checked);
+        show();
       };
       side = el("label", "ed-check", box2, t("editor.houses.mirror"));
     }
     thumb()?.classList.remove("flip");
-    const use = el("button", "ed-btn", t("editor.houses.use"));
-    use.onclick = () => {
-      const { width, depth, mirror } = this.size;
-      this.host.use(m.starterPlan(s.id, { width, depth, mirror }), t(s.name));
+    const furnished = el("input", "");
+    furnished.type = "checkbox";
+    furnished.checked = this.size.furnished;
+    furnished.onchange = () => {
+      this.size.furnished = furnished.checked;
+      show();
     };
+    const use = el("button", "ed-btn", t("editor.houses.use"));
+    use.onclick = () => this.host.use(made(), t(s.name));
     box.replaceChildren(
       el("h4", "", t("editor.houses.fit")),
       el("p", "ed-hint", t("editor.houses.fitHint")),
       el("div", "ed-row", num("width", t("editor.houses.width")), num("depth", t("editor.houses.depth"))),
       side,
+      el("label", "ed-check", furnished, t("editor.houses.furnished")),
       el("div", "ed-row", use),
     );
+    show();
   }
 }

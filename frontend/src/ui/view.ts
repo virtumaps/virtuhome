@@ -1,5 +1,5 @@
 // The live 3D view with its controls, shared by the dashboard card and the sidebar panel.
-import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent, mdiPlay, mdiMagnify, mdiViewList } from "@mdi/js";
+import { mdiArrowExpandAll, mdiHomeOutline, mdiHomeRoof, mdiWall, mdiWeatherNight, mdiWeatherSunny, mdiWeatherPartlyCloudy, mdiClose, mdiTune, mdiCheck, mdiThermometer, mdiAlert, mdiLightbulbOutline, mdiLightbulbGroup, mdiLightbulbGroupOff, mdiPencilOutline, mdiShieldHome, mdiShieldOffOutline, mdiShieldAlert, mdiMoleculeCo2, mdiWaterPercent, mdiBlur, mdiScent, mdiPlay, mdiMagnify, mdiViewList, mdiDotsHorizontal } from "@mdi/js";
 import { barChips, normalizePlan, spaces, type Plan, type Floor, type Repair, type Space, type ThemeName } from "../model/plan";
 import { canFollow, entityRegistry, followRenames } from "../model/links";
 import { areaOf, domainOf, moreInfo, type Hass } from "../live/hass";
@@ -259,6 +259,7 @@ export class VhView {
         <button class="vh-icon" data-act="frame" title="${th("view.tool.frame")}">${svg(mdiArrowExpandAll)}</button>
         <button class="vh-icon" data-act="heat" title="${th("view.tool.heat")}" aria-pressed="false">${svg(mdiThermometer)}</button>
         <button class="vh-icon" data-act="graphics" title="${th("view.tool.graphics")}">${svg(mdiTune)}</button>
+        <button class="vh-icon vh-more" data-act="more" title="${th("view.tool.more")}" aria-expanded="false">${svg(mdiDotsHorizontal)}</button>
       </div>
       <div class="vh-menu" hidden></div>
       <div class="vh-pop" hidden></div>
@@ -384,6 +385,7 @@ export class VhView {
       if (act === "heat") this.cycleMap();
       if (act === "sky") this.toggleSkyPanel();
       if (act === "list") void this.openList();
+      if (act === "more") this.toggleTools();
     });
     // Escape closes the small menu, the graphics menu, the sun and weather panel or the sheet, and the
     // focus goes back to where it was
@@ -1708,6 +1710,34 @@ export class VhView {
     this.toast(t(`view.walls.${this.viewer.walls}`));
   }
 
+  /**
+   * A home just set up shows what is in it: its roofs come off, once, on the device it was set up on,
+   * as if the roof button had been pressed (which puts them back). Not if that device has made its
+   * choice before, and not for a home that has no roof.
+   */
+  private openUp(): void {
+    if (this.config.demo || isNewHome(this.plan) || !this.viewer.hasRoofs || !this.viewer.roofOn || roofSetting() !== null) return;
+    this.viewer.setRoof(false);
+    try {
+      localStorage.setItem(ROOF_KEY, "0");
+    } catch {
+      // private windows: the roofs stay off until the page closes
+    }
+    this.updateRoofButton();
+    this.viewer.frame(true);
+    this.toast(t("view.roof.off"));
+  }
+
+  /** On a phone the tools keep behind one button (Search stays out): this shows them all, or puts them away again. */
+  private toggleTools(): void {
+    const open = !this.tools.classList.contains("open");
+    this.tools.classList.toggle("open", open);
+    const b = this.tools.querySelector<HTMLElement>(".vh-more")!;
+    b.setAttribute("aria-expanded", String(open));
+    b.title = t(open ? "view.tool.fewer" : "view.tool.more");
+    b.innerHTML = svg(open ? mdiClose : mdiDotsHorizontal);
+  }
+
   /** Puts the roofs on or takes them off as the roof button does, without saying so or keeping it (the online demo opens the house by itself). */
   showRoof(on: boolean): void {
     if (on === this.viewer.roofOn) return;
@@ -1839,7 +1869,9 @@ export class VhView {
     this.endReplay();
     this.closeSheet();
     this.hideFirstRun();
-    this.showBlank(isNewHome(this.plan));
+    // a home that gets its first rooms in this sitting opens up when the editor closes
+    const wasNew = isNewHome(this.plan);
+    this.showBlank(wasNew);
     const [mod] = await Promise.all([this.loadPart(() => import("../editor/editor"), "editor"), useEditorLanguage()]);
     if (!mod || this.editor || !this._hass) return;
     const { Editor } = mod;
@@ -1881,6 +1913,7 @@ export class VhView {
         else if (this.plan && !this.plan.floors.length) this.applyPlan(this.plan);
         this.renderChips();
         this.updateChecks();
+        if (wasNew) this.openUp();
       },
     });
     this.editor = editor;

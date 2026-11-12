@@ -68,6 +68,13 @@ async function step(name, fn) {
   }
 }
 
+/** Opens a part of the editor's Home tab (they fold under their headings). */
+async function openPart(page, panel, title) {
+  const head = page.locator(`${panel} .ed-sec-h`, { hasText: title });
+  await head.waitFor({ state: "visible", timeout: 30_000 });
+  if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+}
+
 async function until(fn, what, timeout = 30_000) {
   const end = Date.now() + timeout;
   let last;
@@ -295,6 +302,7 @@ async function run() {
     await page.locator(`${panel} .vh-edit`).click();
     const save = page.locator(`${panel} .ed-save`);
     await save.waitFor({ state: "visible", timeout: 30_000 });
+    await openPart(page, panel, "Outside walls");
     await page.locator(`${panel} .ed-chip`, { hasText: "Buff brick" }).first().click();
     await save.click();
     await until(async () => ({ ok: (await page.locator(`${panel} .ed-status`).textContent()) === "Saved" }), "the editor did not say Saved");
@@ -314,6 +322,7 @@ async function run() {
     await page.reload();
     await waitDrawn(page, panel);
     await page.locator(`${panel} .vh-edit`).click();
+    await openPart(page, panel, "Outside walls");
     const on = page.locator(`${panel} .ed-chip.on`, { hasText: "Buff brick" });
     await on.waitFor({ state: "visible", timeout: 30_000 });
     await page.locator(`${panel} .ed-head button[title="Close"]`).click();
@@ -346,6 +355,7 @@ async function run() {
     await page.reload();
     await waitDrawn(page, panel);
     await page.locator(`${panel} .vh-edit`).click();
+    await openPart(page, panel, "Demo home, house type, import");
     await page.locator(`${panel} .ed-btn`, { hasText: "Look at the demo home" }).click();
     const demo = `${panel} .vh-demo`;
     await page.locator(`${demo} .bar`).waitFor({ state: "visible", timeout: 30_000 });

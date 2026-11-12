@@ -11,6 +11,8 @@ export const DE: Translation = {
   "view.tool.frame": "Alles zeigen",
   "view.tool.heat": "Temperaturkarte",
   "view.tool.graphics": "Grafik",
+  "view.tool.more": "Mehr Schaltflächen",
+  "view.tool.fewer": "Weniger Schaltflächen",
   "view.tool.search": "Suchen",
   "search.placeholder": "Raum, Gerät oder Szene finden",
   "search.results": "Ergebnisse",

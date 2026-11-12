@@ -600,7 +600,7 @@ export class HassLive implements LiveSource {
     if (dom === "light") return null;
     const dc = s?.attributes.device_class;
     const look = (icon: string, color: number, pulse = 0, busy = false): MarkerLook => ({
-      icon: iconIndex(icon), color, pulse, attention: busy || pulse > 0 || color === C.alert || color === C.open,
+      icon: iconIndex(icon), color, pulse, attention: busy || pulse > 0 || color === C.alert || color === C.open, urgent: color === C.alert,
     });
     // attention fades: pulsing only during the first minute after a change. Music or a robot's run can
     // go on for hours, and a pulse makes a wall tablet draw all that time, so those stay shown over the

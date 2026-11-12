@@ -11,6 +11,8 @@ export const NL: Translation = {
   "view.tool.frame": "Alles tonen",
   "view.tool.heat": "Temperatuurkaart",
   "view.tool.graphics": "Graphics",
+  "view.tool.more": "Meer knoppen",
+  "view.tool.fewer": "Minder knoppen",
   "view.tool.search": "Zoeken",
   "search.placeholder": "Zoek een kamer, apparaat of scène",
   "search.results": "Resultaten",
