@@ -139,13 +139,14 @@ describe("the online demo's tour", () => {
     for (const f of readdirSync(src, { recursive: true }).filter((f) => f.endsWith(".ts"))) {
       expect(readFileSync(src + f, "utf8"), f).not.toMatch(/(from|import\()\s*["'][^"']*\/dev\//);
     }
-    // and the committed build has none of the tour in it
+    // and the committed build has none of the tour in it (What's new quotes the changelog, which
+    // names Take the tour, so look for the tour's own buttons)
     const out = new URL("../../custom_components/virtuhome/frontend/", import.meta.url).pathname;
     const built = readdirSync(out, { recursive: true }).filter((f) => f.endsWith(".js"));
     expect(built.length).toBeGreaterThan(0);
     for (const f of built) {
       const text = readFileSync(out + f, "utf8");
-      for (const word of ["SpeechSynthesisUtterance", "license.virtumaps.com/v1/catalog", "Take the tour"]) expect(text, f).not.toContain(word);
+      for (const word of ["SpeechSynthesisUtterance", "license.virtumaps.com/v1/catalog", "Start the tour", "Close the tour"]) expect(text, f).not.toContain(word);
     }
   });
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.0
 
 ### New
 - **Take the tour** in the online demo: a tour of about two and a half minutes with a voice, music and
