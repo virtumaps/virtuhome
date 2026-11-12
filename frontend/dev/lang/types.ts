@@ -38,6 +38,8 @@ export interface DemoStrings {
     getIt: string;
     language: string;
     failed: string;
+    /** What to try, shown over the house until it is touched. */
+    hint: string;
   };
 
   /** The demo house's rooms, floors and garden, by their English names. */

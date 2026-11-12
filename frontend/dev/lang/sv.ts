@@ -15,6 +15,7 @@ export const SV: DemoStrings = {
     getIt: "Skaffa VirtuHome",
     language: "Språk",
     failed: "Demon kunde inte starta i den här webbläsaren.",
+    hint: "Dra för att vrida huset. Tryck på en lampa, en dörr eller ett rum.",
   },
 
   house: {

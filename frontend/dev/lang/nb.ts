@@ -15,6 +15,7 @@ export const NB: DemoStrings = {
     getIt: "Hent VirtuHome",
     language: "Språk",
     failed: "Demoen kunne ikke starte i denne nettleseren.",
+    hint: "Dra for å snu huset. Trykk på en lampe, en dør eller et rom.",
   },
 
   house: {

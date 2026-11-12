@@ -2,6 +2,7 @@
 // site/demo/. Unlike the harness (main.ts) it has no live mode and no way to save: nothing in it
 // talks to a Home Assistant, and the site build fails if anything that could ends up in it.
 //   ?theme=night  ?walls=smart|low|full  ?floor=<index>  ?quality=low|medium|high|ultra  ?tour  ?lang=<code>
+//   ?still: without the opening (the roofs coming off, the slow turn and the hint)
 // It speaks the viewer's language (dev/lang): the one picked in its bar before, else the browser's,
 // else where they are; VirtuHome's own texts are in it where the app has them (src/i18n).
 import { normalizePlan, type Plan } from "../src/model/plan";
@@ -59,6 +60,55 @@ function page(code: string, S: DemoStrings): void {
   });
 }
 
+/**
+ * The opening, for someone seeing the demo for the first time: the house turns slowly, its roofs come off
+ * to show the rooms and who is in them, and a line says what to try. The first touch, key or wheel ends
+ * all of it and leaves the house as it stands; the roofs stay on if the visitor got to the button first.
+ * No turning on Tablet graphics or for people who asked for less motion.
+ */
+function opening(view: VhView, host: HTMLElement, hint: string): () => void {
+  const note = document.getElementById("hint");
+  const timers: number[] = [];
+  let frame = 0;
+  let over = false;
+  const end = () => {
+    if (over) return;
+    over = true;
+    cancelAnimationFrame(frame);
+    timers.forEach((id) => window.clearTimeout(id));
+    note?.classList.remove("on");
+    for (const type of ["pointerdown", "wheel", "keydown"]) window.removeEventListener(type, touched, true);
+  };
+  // touching the house or pressing a key: theirs now (the bar under it doesn't count)
+  const touched = (e: Event) => {
+    if (e.type === "keydown" || e.composedPath().includes(host)) end();
+  };
+  for (const type of ["pointerdown", "wheel", "keydown"]) window.addEventListener(type, touched, true);
+  timers.push(window.setTimeout(() => view.showRoof(false), 1500));
+  if (note) {
+    note.textContent = hint;
+    timers.push(window.setTimeout(() => note.classList.add("on"), 2600), window.setTimeout(() => note.classList.remove("on"), 16_000));
+  }
+  const v = view.viewer;
+  if (v.tier !== "low" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    let last = performance.now();
+    const turn = (now: number) => {
+      frame = requestAnimationFrame(turn);
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      // not while the view flies (to the whole house at first, and again as the roofs come off)
+      if (v.flying) return;
+      const cam = v.camera.position, tg = v.controls.target;
+      const a = dt * 0.05, dx = cam.x - tg.x, dz = cam.z - tg.z;
+      cam.x = tg.x + dx * Math.cos(a) - dz * Math.sin(a);
+      cam.z = tg.z + dx * Math.sin(a) + dz * Math.cos(a);
+      v.invalidate();
+    };
+    frame = requestAnimationFrame(turn);
+  }
+  return end;
+}
+
 async function start(): Promise<void> {
   let saved: string | null = null;
   try {
@@ -93,6 +143,8 @@ async function start(): Promise<void> {
   const floor = q.get("floor");
   if (floor !== null) view.showFloor(Number(floor));
   (window as unknown as { vh: VhView }).vh = view;
+  // a plain visit gets the opening; a link to a floor or to the tour, or ?still, doesn't
+  const endOpening = floor === null && !q.has("tour") && !q.has("still") ? opening(view, host, strings.page.hint) : () => {};
 
   // the tour (dev/tour): Take the tour in the bar, or ?tour to open on its start card. Fetched when asked for.
   const house = {
@@ -116,6 +168,7 @@ async function start(): Promise<void> {
       u.volume = 0;
       speechSynthesis.speak(u);
     }
+    endOpening();
     void tour(true, typeof AudioContext !== "undefined" ? new AudioContext() : null);
   });
   if (q.has("tour")) void tour(false);

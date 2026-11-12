@@ -3,11 +3,14 @@
     "step": {
       "user": {
         "title": "VirtuHome",
-        "description": "Adds the VirtuHome 3D view to the sidebar and the VirtuHome card to your dashboards. Open VirtuHome in the sidebar afterwards to import a scan or draw your home."
+        "description": "Adds the VirtuHome 3D view to the sidebar and the VirtuHome card to your dashboards. Then open VirtuHome in the sidebar to get your home in: trace a floor plan picture, start from a house type, import a scan or draw it."
       }
     },
     "abort": {
       "single_instance_allowed": "VirtuHome is already set up."
+    },
+    "create_entry": {
+      "default": "VirtuHome is in the sidebar now. Open it to get your home in."
     }
   },
   "issues": {

@@ -33,11 +33,20 @@
     #lang-box:focus-within { outline: 2px solid #fff; outline-offset: 2px; }
     @media (max-width: 560px) { #demo-note { display: none; } }
     @media (max-width: 440px) { #bar { gap: 8px; padding-left: 8px; padding-right: 8px; font-size: 13px; } #bar a, #bar button { padding: 6px 10px; } }
+    /* what to try: over the house until it is touched */
+    #hint {
+      position: fixed; left: 50%; bottom: calc(var(--bar) + 14px); transform: translate(-50%, 8px); margin: 0; max-width: min(92vw, 520px); box-sizing: border-box;
+      padding: 9px 16px; border-radius: 999px; color: #eef3fb; background: rgba(12, 18, 32, 0.86); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+      font: 14px/1.35 Roboto, system-ui, sans-serif; text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.5s, transform 0.5s;
+    }
+    #hint.on { opacity: 1; transform: translate(-50%, 0); }
+    @media (max-width: 520px) { #hint { border-radius: 16px; } }
     #failed { position: fixed; inset: 0 0 var(--bar); margin: 0; padding: 24px; color: #eef3fb; font: 16px/1.5 system-ui, sans-serif; }
   </style>
 </head>
 <body>
   <div id="view"></div>
+  <p id="hint" role="note"></p>
   <p id="failed" hidden></p>
   <noscript><p style="color:#eef3fb;font:16px system-ui;padding:24px">The demo needs JavaScript.</p></noscript>
   <div id="bar">

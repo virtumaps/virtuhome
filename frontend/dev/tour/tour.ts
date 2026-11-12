@@ -93,9 +93,9 @@ button, a.btn { pointer-events: auto; font: inherit; cursor: pointer; }
   color: #071022; background: linear-gradient(120deg, #6fd8ff, #b59bff 55%, #ff9fb0); }
 .badge:empty { display: none; }
 .big { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; opacity: 0; }
-/* a dark halo behind the big title, for daylight */
-.big::before { content: ""; position: absolute; left: 50%; top: 50%; width: 80vw; height: 40vh; transform: translate(-50%, -50%);
-  background: radial-gradient(closest-side, rgba(5,8,16,.62), rgba(5,8,16,0)); }
+/* a chapter's title dims the whole house behind it for its moment: over a floor full of labels in daylight a halo alone left it unreadable */
+.big::before { content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(5,8,16,.84) 0%, rgba(5,8,16,.66) 42%, rgba(5,8,16,.42) 100%); }
 .big .t { position: relative; font-size: max(30px, calc(var(--u) * 9)); font-weight: 300; letter-spacing: -.02em;
   background: linear-gradient(100deg, #fff 30%, #d6f2ff 60%, #ffd6d6); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 2px 14px rgba(0,0,0,.45)); }
@@ -104,7 +104,9 @@ button, a.btn { pointer-events: auto; font: inherit; cursor: pointer; }
 .big .k:empty { display: none; }
 .big.show { animation: big 2.4s cubic-bezier(.2,.8,.2,1) both; }
 .big.hero { place-content: start center; padding-top: 11vh; }
-.big.hero::before { top: calc(11vh + calc(var(--u) * 7)); }
+/* the opening's title stands over the night sky above the house: a halo is enough, and the house stays bright */
+.big.hero::before { inset: auto; left: 50%; top: calc(11vh + calc(var(--u) * 7)); width: 80vw; height: 40vh; transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(5,8,16,.62), rgba(5,8,16,0)); }
 .big.hero.show { animation-duration: 6s; }
 @keyframes big { 0% { opacity: 0; transform: scale(.94); } 18% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(1.03); } }
 .controls { position: absolute; top: calc(var(--u) * 3); right: 3vw; display: flex; gap: 6px; padding: 5px; border-radius: 999px; opacity: 0; transition: opacity .5s; }
@@ -466,7 +468,12 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     },
     house(roof = null) {
       view.closeSheet();
-      view.showRoofs(roof);
+      // from close up in a room, the roofs go back on once the view has pulled away: put on at once, they filled the screen for a moment
+      if (roof && view.viewer.mode === "floor") {
+        timers.push(window.setTimeout(() => {
+          if (!stopped) view.showRoofs(roof);
+        }, 550));
+      } else view.showRoofs(roof);
       view.showHouse();
       holdOrbit = performance.now() + 2500;
     },

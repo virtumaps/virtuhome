@@ -226,7 +226,8 @@ function cascade(s: Show): void {
   const lights = Object.keys(s.hass.states).filter((id) => id.startsWith("light.")).sort();
   for (const id of lights) s.quiet(id, "off");
   const warmWhite = { color_temp_kelvin: 2700, brightness: 210, rgb_color: undefined };
-  lights.forEach((id, i) => s.later(700 + i * 170, () => s.quiet(id, "on", warmWhite)));
+  // one by one, slowly enough to watch each room come on
+  lights.forEach((id, i) => s.later(1400 + i * 260, () => s.quiet(id, "on", warmWhite)));
 }
 
 /** The demo house made over: buff bricks outside, then the living room's walls painted, papered, and its floor. */
@@ -258,7 +259,8 @@ export function chapters(S: DemoStrings): Chapter[] {
       ...C("intro"),
       start: (s) => {
         s.sky("night");
-        s.house(true);
+        // the roofs off from the first moment: the rooms light up one by one, not just their windows
+        s.house(false);
         s.push(1.45, 7000);
         cascade(s);
       },

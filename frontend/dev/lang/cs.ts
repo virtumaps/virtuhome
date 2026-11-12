@@ -25,6 +25,7 @@ export const CS: DemoStrings = {
     getIt: "Získat VirtuHome",
     language: "Jazyk",
     failed: "Demo se v tomto prohlížeči nepodařilo spustit.",
+    hint: "Tažením dům otočíš. Klepni na světlo, dveře nebo místnost.",
   },
 
   house: {

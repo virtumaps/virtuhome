@@ -3,11 +3,14 @@
     "step": {
       "user": {
         "title": "VirtuHome",
-        "description": "Fügt die VirtuHome-3D-Ansicht zur Seitenleiste und die VirtuHome-Karte zu deinen Dashboards hinzu. Öffne danach VirtuHome in der Seitenleiste, um einen Scan zu importieren oder dein Zuhause zu zeichnen."
+        "description": "Fügt die VirtuHome-3D-Ansicht zur Seitenleiste und die VirtuHome-Karte zu deinen Dashboards hinzu. Öffne danach VirtuHome in der Seitenleiste, um dein Zuhause anzulegen: einen Grundriss nachzeichnen, mit einem Haustyp beginnen, einen Scan importieren oder selbst zeichnen."
       }
     },
     "abort": {
       "single_instance_allowed": "VirtuHome ist schon eingerichtet."
+    },
+    "create_entry": {
+      "default": "VirtuHome ist jetzt in der Seitenleiste. Öffne es, um dein Zuhause anzulegen."
     }
   },
   "issues": {

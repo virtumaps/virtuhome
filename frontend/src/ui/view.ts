@@ -19,7 +19,7 @@ import { Viewer, type Hit, type Quality, type RealisticModule, type WallMode } f
 import { autoTierInfo, capTier, clearCap, deviceTier, parseTierSetting, resolveTier, setDeviceTier, tierHint, tierName, tierNameEn, TIERS, type Tier, type TierSetting } from "../scene/tier";
 import { ENERGY_CSS, energyChip, renderEnergySheet, type EnergySection, type EvActions } from "./energy";
 import { CAR_TYPES, EV_TYPES } from "../scene/furniture-lib";
-import { isNewHome, START_CHOICES, type StartKind } from "./setup";
+import { isNewHome, type StartKind } from "./setup";
 import { esc, language, t, th, useEditorLanguage } from "../i18n";
 import { VIEW_CSS } from "./styles";
 import { location as skyLocation, SkyLive, skyKey, type Sky } from "../live/sky";
@@ -63,6 +63,8 @@ export interface ViewConfig {
 }
 
 const svg = (path: string) => `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+/** From this width the first run's choices stand beside the demo house instead of under it. */
+const WIDE_START = 860;
 /** A chip's small icon, in the chip's colour. */
 const chipIcon = (path: string) => `<svg width="16" height="16" style="fill:currentColor" viewBox="0 0 24 24"><path d="${path}"/></svg>`;
 
@@ -226,6 +228,10 @@ export class VhView {
   private unreport: () => void;
   /** The demo home shown over this view (Look at the demo home). */
   private demo: { close(): void } | null = null;
+  /** The editor is open on a home with no room yet: a note stands where the house will. */
+  private blank = false;
+  /** The demo house turning behind the first run's choices. */
+  private backdrop: { close(): void } | null = null;
   /** The List sheet is open (the house as a list), and the module that draws it. */
   private sheetList = false;
   private listMod: typeof import("./list") | null = null;
@@ -281,9 +287,13 @@ export class VhView {
     this.tools = this.root.querySelector(".vh-tools")!;
     // the status row and the alert sit under the top bar, however many lines its chips take
     if (typeof ResizeObserver !== "undefined") {
-      this.barWatch = new ResizeObserver(() => this.placeUnderBar());
+      this.barWatch = new ResizeObserver(() => {
+        this.placeUnderBar();
+        this.empty.classList.toggle("wide", this.root.clientWidth >= WIDE_START);
+      });
       this.barWatch.observe(this.chips);
       this.barWatch.observe(this.statusEl);
+      this.barWatch.observe(this.root);
     }
     this.alertEl.onclick = () => {
       const first = this.live.alerts()[0];
@@ -1411,7 +1421,8 @@ export class VhView {
   }
 
   applyPlan(plan: Plan): void {
-    const first = !this.plan;
+    // the first plan, or the first rooms of a new home: the view goes to the whole house
+    const first = !this.plan || (isNewHome(this.plan) && !isNewHome(plan));
     this.plan = plan;
     this.energy.setSettings(plan.settings.energy);
     this.skyLive.settings = plan.settings.sky ?? {};
@@ -1425,7 +1436,7 @@ export class VhView {
       if (!this.replayed) this.watchRobots(true);
     }
     if (!plan.floors.length) {
-      if (this.editor) return;
+      if (this.editor) return this.showBlank(true);
       this.showFirstRun();
       this.renderChips();
       return;
@@ -1433,6 +1444,7 @@ export class VhView {
     // floors but no rooms yet (a picture to trace, an empty storey): still the first run
     if (isNewHome(plan) && !this.editor) this.showFirstRun();
     else this.hideFirstRun();
+    this.showBlank(!!this.editor && isNewHome(plan));
     this.hasPanels = plan.floors.some((f) => f.furniture.some((x) => x.type === "solar_panels")
       || (f.roofs ?? []).some((r) => (r.items ?? []).some((it) => it.kind === "solar")));
     this.roofBtn.hidden = !plan.floors.some((f) => (f.roofs ?? []).length > 0);
@@ -1513,6 +1525,7 @@ export class VhView {
   /** Lets go of everything: its timers, Home Assistant, the extensions, the scene and its WebGL context. */
   destroy(): void {
     this.destroyed = true;
+    this.closeBackdrop();
     this.endReplay();
     window.clearTimeout(this.themeTimer);
     window.clearTimeout(this.serverTimer);
@@ -1695,6 +1708,14 @@ export class VhView {
     this.toast(t(`view.walls.${this.viewer.walls}`));
   }
 
+  /** Puts the roofs on or takes them off as the roof button does, without saying so or keeping it (the online demo opens the house by itself). */
+  showRoof(on: boolean): void {
+    if (on === this.viewer.roofOn) return;
+    this.viewer.setRoof(on);
+    this.updateRoofButton();
+    this.viewer.frame(true);
+  }
+
   /** The roof button: roofs over the house, or the house open to the sky. Kept per device. */
   private toggleRoof(): void {
     const on = !this.viewer.roofOn;
@@ -1818,6 +1839,7 @@ export class VhView {
     this.endReplay();
     this.closeSheet();
     this.hideFirstRun();
+    this.showBlank(isNewHome(this.plan));
     const [mod] = await Promise.all([this.loadPart(() => import("../editor/editor"), "editor"), useEditorLanguage()]);
     if (!mod || this.editor || !this._hass) return;
     const { Editor } = mod;
@@ -1851,7 +1873,10 @@ export class VhView {
       },
       close: () => {
         this.editor = null;
+        this.showBlank(false);
         this.root.classList.remove("editing");
+        // a hint about editing goes with the editor
+        this.root.querySelector(".vh-hint")?.remove();
         if (this.savedPlan) this.applyPlan(this.savedPlan);
         else if (this.plan && !this.plan.floors.length) this.applyPlan(this.plan);
         this.renderChips();
@@ -1943,6 +1968,8 @@ export class VhView {
    * else the first-time hint. Never on dashboard cards (wall tablets), in the demos or while measuring.
    */
   private welcome(): void {
+    // not over the editor or the first run's choices: it comes once the house shows by itself
+    if (this.editor || this.firstRun) return;
     this.welcomed = true;
     if (!this.config.editable || this.config.demo || this.config.bench || !this._hass) return;
     if (this._hass.user?.is_admin && newsDue(__VERSION__)) return showNews(this.root, __VERSION__, __NEWS__);
@@ -2256,11 +2283,38 @@ export class VhView {
   private hideFirstRun(): void {
     this.firstRun = "";
     this.empty.hidden = true;
+    this.empty.classList.remove("vh-welcome");
     this.root.classList.remove("vh-new");
+    this.closeBackdrop();
+  }
+
+  /** While editing a home with no room yet, where the house will stand says so, instead of showing bare ground. */
+  private showBlank(on: boolean): void {
+    if (on) {
+      this.blank = true;
+      this.root.classList.add("vh-new");
+      this.empty.classList.remove("vh-welcome");
+      this.empty.hidden = false;
+      this.empty.innerHTML = `<div class="vh-blank">${svg(mdiHomeOutline)}<h2>${th("view.blank.title")}</h2><p>${th("view.blank.text")}</p></div>`;
+    } else if (this.blank) {
+      this.blank = false;
+      this.root.classList.remove("vh-new");
+      this.empty.hidden = true;
+    }
+  }
+
+  private closeBackdrop(): void {
+    this.backdrop?.close();
+    this.backdrop = null;
   }
 
   private showFirstRun(): void {
-    this.firstRun = this.firstRunKey();
+    const key = this.firstRunKey();
+    // already up for the same person: the demo house behind the choices carries on turning
+    if (this.firstRun === key && !this.empty.hidden && (!this.canEdit() || this.empty.querySelector(".vh-hero"))) return;
+    this.firstRun = key;
+    this.blank = false;
+    this.closeBackdrop();
     // nothing to see yet: the ground alone looks broken behind the choices
     this.root.classList.add("vh-new");
     if (!this.canEdit()) {
@@ -2268,30 +2322,52 @@ export class VhView {
       return;
     }
     this.empty.hidden = false;
-    const box = document.createElement("div");
-    box.className = "vh-start";
-    box.innerHTML = `<h2>${th("start.title")}</h2><p>${th("start.text")}</p>`;
-    for (const kind of START_CHOICES) {
-      const b = document.createElement("button");
-      b.className = "vh-start-choice";
-      b.innerHTML = `<b></b><span></span>`;
-      b.querySelector("b")!.textContent = t(`start.${kind}.title`);
-      b.querySelector("span")!.textContent = t(`start.${kind}.text`);
-      b.onclick = () => void this.openEditor().then(() => this.editor?.startSetup(kind));
-      box.append(b);
+    this.empty.classList.add("vh-welcome");
+    this.empty.classList.toggle("wide", this.root.clientWidth >= WIDE_START);
+    // the house turning behind the choices is the demo home
+    const hero = document.createElement("div");
+    hero.className = "vh-hero";
+    hero.setAttribute("aria-hidden", "true");
+    this.empty.replaceChildren(hero);
+    void this.showChoices(key, hero);
+  }
+
+  /** The first run's choices, once their part has loaded (unless the first run has gone meanwhile), and the demo house behind them. */
+  private async showChoices(key: string, hero: HTMLElement): Promise<void> {
+    const mod = await this.loadPart(() => import("./start"), "start");
+    if (!mod || this.destroyed || this.firstRun !== key || !hero.isConnected) return;
+    if (!this.root.querySelector("style.vh-start-css")) {
+      const css = document.createElement("style");
+      css.className = "vh-start-css";
+      css.textContent = mod.START_CSS;
+      this.root.append(css);
     }
-    if (!this.config.demo) {
-      const demo = document.createElement("button");
-      demo.className = "vh-start-demo";
-      demo.textContent = t("start.demo.title");
-      demo.title = t("start.demo.text");
-      demo.onclick = () => void this.openDemo();
-      box.append(demo);
-    }
-    this.empty.replaceChildren(box);
+    const pick = (kind: StartKind) => void this.openEditor().then(() => this.editor?.startSetup(kind));
+    this.empty.append(mod.startBox(pick, this.config.demo ? null : () => void this.openDemo()));
+    if (!this.config.demo) void this.openBackdrop(hero);
+  }
+
+  /** The demo house behind the first run's choices, once its part has loaded (unless the choices have gone). */
+  private async openBackdrop(into: HTMLElement): Promise<void> {
+    const mod = await this.loadPart(() => import("./demo"), "demo");
+    if (!mod || this.backdrop || this.destroyed || !into.isConnected) return;
+    const c = this._hass?.config;
+    const place = typeof c?.latitude === "number" && typeof c.longitude === "number" ? { latitude: c.latitude, longitude: c.longitude, time_zone: c.time_zone } : undefined;
+    // on a wide screen the choices stand on the left: the house stands in the middle of what is left, and
+    // further off where that is narrow
+    this.backdrop = mod.openBackdrop(VhView, into, this.config, place, () => {
+      const w = this.root.clientWidth;
+      if (w < WIDE_START) return { shift: 0, away: 1 };
+      const taken = Math.min(64, Math.max(20, w * 0.05)) + 400;
+      return { shift: Math.round((taken / (2 * w)) * 100) / 100, away: Math.round(Math.min(1.5, Math.max(1, (0.62 * w) / (w - taken))) * 20) / 20 };
+    });
+    // it fades in once it has drawn
+    window.setTimeout(() => into.classList.add("on"), 250);
   }
 
   private showEmpty(title: string, text: string): void {
+    this.closeBackdrop();
+    this.empty.classList.remove("vh-welcome");
     this.empty.hidden = false;
     this.empty.innerHTML = `<div><h2></h2><p></p></div>`;
     this.empty.querySelector("h2")!.textContent = title;

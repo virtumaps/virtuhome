@@ -104,6 +104,8 @@ export const EN = {
   "view.scene.details": "Needs details first: opens its dialog",
   "view.notSetUp.title": "VirtuHome is not set up",
   "view.notSetUp.text": "Add the VirtuHome integration under Settings → Devices & services. ({error})",
+  "view.blank.title": "Your home will show here",
+  "view.blank.text": "Once it has its first room. The steps to get it in are in the Home tab.",
   "view.noHome.title": "No home yet",
   "view.noHome.admin": "Open VirtuHome in the sidebar and tap Edit to get your home in.",
   "view.noHome.user": "An admin of this Home Assistant can set VirtuHome up, from VirtuHome in the sidebar.",
@@ -700,7 +702,8 @@ export const EN = {
   "start.starter.title": "Start from a house type",
   "start.starter.text": "A terrace, semi, detached, bungalow or flat, fitted to your home's size.",
   "start.scan.title": "Import a scan or plan",
-  "start.scan.text": "A scan from the House Scan app, or a plan from Sweet Home 3D or another program.",
+  "start.scan.text": "An iPhone or iPad LiDAR scan (RoomPlan), or a plan from Sweet Home 3D or another program.",
+  "start.quickest": "Quickest",
   "start.draw.title": "Draw it myself",
   "start.draw.text": "Drag out the rooms in the 2D plan and type their sizes.",
   // in the first-run choices and in Edit → Home

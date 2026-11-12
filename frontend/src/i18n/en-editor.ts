@@ -83,9 +83,8 @@ export const EN_EDITOR = {
   "editor.box": "Box",
   "editor.hipped": "Hipped",
   "editor.gable": "Gable",
-  "editor.nDevicesPlacedN2": "{n} devices placed, {n2} linked to doors, windows and TVs, {n3} rooms linked to areas.",
   "editor.replace": "Replace",
-  "editor.nDevicesAreIn": "{n} devices are in areas without a room in the plan.",
+  "editor.nDevicesAreIn": { one: "{n} device is in an area without a room in the plan.", other: "{n} devices are in areas without a room in the plan." },
 
   // ---------------------------------------------------------------- the editor: main
   "editor.main.editHome": "Edit home",
@@ -748,10 +747,13 @@ export const EN_EDITOR = {
   "editor.import.thatIsAVirtuhome": "That is a VirtuHome plan file: load it with Plan file → Load…",
   "editor.import.noneOfTheFiles": "None of the files is a scan or a plan VirtuHome can import.",
   "editor.import.importWhat": "Import {what}",
+  "editor.import.setup": "Smart Setup: {parts}.",
+  "editor.import.setupPlaced": { one: "{n} device placed", other: "{n} devices placed" },
+  "editor.import.setupOnOpenings": { one: "{n} linked to a door, window or TV", other: "{n} linked to doors, windows and TVs" },
+  "editor.import.setupRooms": { one: "{n} room linked to its area", other: "{n} rooms linked to their areas" },
   "editor.import.replaceTheWholePlan": "Replace the whole plan with the imported one? Until you save, Undo or closing without saving brings yours back; after saving, Restore points does.",
 
   // ---------------------------------------------------------------- the editor: autoPlace
-  "editor.autoPlace.nDevicesPlacedN2": "{n} devices placed, {n2} linked, {n3} rooms linked to areas.",
 
   // ---------------------------------------------------------------- the editor: houseType
   "editor.houseType.startFromName": "Start from {name}",
@@ -960,8 +962,16 @@ export const EN_EDITOR = {
   // ---------------------------------------------------------------- the editor: the 2D plan's picture, and importing
   "editor.plan.imageHint": "Drag the picture to move it. Set its scale from a wall you know the length of, then find the rooms or draw them over it.",
   "editor.plan.found": "Found {rooms}{doors}. Tick the rooms to keep; nothing is added until you add them.",
+  "editor.plan.severalPlans": "This picture shows {n} plans. One's rooms are ticked: pick the plan that is this floor, then Add these rooms.",
+  "editor.plan.whichPlan": "The picture shows {n} plans. Which one is this floor?",
+  "editor.plan.planMiddle": "Middle",
+  "editor.plan.planBottom": "Bottom",
+  "editor.plan.planN": "Plan {n}",
+  "editor.plan.otherPlan": "The picture also shows another storey (the {plan} plan). It can go on a floor of its own, over this one.",
+  "editor.plan.addAsFloorAbove": "Add it as the floor above",
+  "editor.plan.addedAbove": "{name} added with {rooms}, over the floor below (shown faintly). Undo takes it away again.",
   "editor.plan.andDoors": { one: "and {n} door", other: "and {n} doors" },
-  "editor.plan.added": "Added {rooms}. Rename them and link them to areas in the editor; Undo takes them all away again.",
+  "editor.plan.added": "Added {rooms}. Tap a room to name it and link it to its area; Undo takes them all away again.",
   "editor.import.room.livingRoom": "Living Room",
   "editor.import.room.bedroom": "Bedroom",
   "editor.import.room.bathroom": "Bathroom",

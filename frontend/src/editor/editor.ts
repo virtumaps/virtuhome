@@ -243,6 +243,9 @@ export class Editor {
   private houseTypes: HouseTypes | null = null;
   /** A house type is going in: not a first room drawn by hand. */
   private starting = false;
+  private closed = false;
+  /** How far the house reached when the 2D plan opened. */
+  private extentIn2d = "";
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
@@ -278,7 +281,7 @@ export class Editor {
     );
     const viewer = host.view.viewer;
     viewer.editMode = true;
-    showHint(host.view.root, "editor.select", t("editor.hint.select"));
+    this.hint();
     viewer.onDrag = (hit, x, z, phase) => this.onDrag(hit, x, z, phase);
     viewer.canDrag = (hit) => this.isHandle(hit);
     window.addEventListener("keydown", this.onKey);
@@ -325,6 +328,7 @@ export class Editor {
     root.classList.toggle("plan2d", on);
     if (on && !this.plan2d) {
       const viewer = this.host.view.viewer;
+      this.extentIn2d = this.extent();
       this.plan2d = new Plan2D({
         plan: () => this.plan,
         selection: () => this.sel,
@@ -346,6 +350,7 @@ export class Editor {
         },
         floor: () => (viewer.mode === "floor" ? viewer.activeFloor : 0),
         setFloor: (i) => this.host.view.showFloor(i),
+        newFloor: () => this.newFloor(),
         status: (text) => (this.status.textContent = text),
         images: {
           upload: (floorId, image, progress) => uploadImage(this.hass, floorId, image, progress),
@@ -354,12 +359,35 @@ export class Editor {
       });
       root.append(this.plan2d.el);
       root.querySelector(".vh-hint")?.remove();
-      showHint(root, "editor.measure", t("editor.hint.measure"));
+      this.hint();
       this.status.textContent = t("editor.main.selectSomethingThenDrag");
     } else if (!on && this.plan2d) {
       this.plan2d.dispose();
       this.plan2d = null;
+      root.querySelector(".vh-hint")?.remove();
+      this.hint();
+      // the house grew or shrank while it was drawn from above: the 3D view goes to all of it again
+      if (this.extent() !== this.extentIn2d) this.host.view.viewer.frame(true);
     }
+  }
+
+  /** How far the house reaches (rooms and garden, every storey), to the nearest half metre. */
+  private extent(): string {
+    const pts = this.plan.floors.flatMap((f) => [...f.rooms, ...(f.outdoor ?? [])].flatMap((r) => r.points));
+    if (!pts.length) return "";
+    const b = bounds(pts);
+    return [b.minX, b.minZ, b.maxX, b.maxZ].map((v) => Math.round(v * 2)).join(",");
+  }
+
+  /**
+   * The first-time hint for what is on screen: selecting in 3D, measurements in the 2D plan (at the bottom,
+   * clear of its tools). Not before there is a room: an empty plan has nothing to select or measure.
+   */
+  private hint(): void {
+    if (this.closed || !this.plan.floors.some((f) => f.rooms.length > 0)) return;
+    const root = this.host.view.root;
+    if (this.plan2d) showHint(root, "editor.measure", t("editor.hint.measure"), "bottom");
+    else showHint(root, "editor.select", t("editor.hint.select"));
   }
 
   /**
@@ -439,6 +467,7 @@ export class Editor {
     if (!quiet) this.render();
     this.status.textContent = this.savedText();
     this.updateHistoryButtons();
+    this.hint();
   }
 
   private updateHistoryButtons(): void {
@@ -563,6 +592,8 @@ export class Editor {
     viewer.editRoof(false);
     cancelAnimationFrame(this.dragRaf);
     window.removeEventListener("keydown", this.onKey);
+    this.closed = true;
+    this.host.view.root.querySelector(".vh-hint")?.remove();
     this.plan2d?.dispose();
     this.plan2d = null;
     this.host.view.root.classList.remove("plan2d");
@@ -1620,7 +1651,7 @@ export class Editor {
           ),
           h("div", { class: "ed-row" },
             h("label", {}, t("editor.area")),
-            this.dropdown(areas.map((a) => [a.area_id, a.name]), r.area_id ?? "", (v) => this.change((p) => (p.floors[fi].rooms[ri].area_id = v || null)), t("editor.notLinked")),
+            this.dropdown(areas.map((a) => [a.area_id, a.name]), r.area_id ?? "", (v) => this.linkRoom(fi, r.id, v || null), t("editor.notLinked")),
           ),
           h("div", { class: "ed-row" },
             h("label", {}, t("editor.floor")),
@@ -1695,6 +1726,24 @@ export class Editor {
     return this.furniturePanel(fi, f.furniture.find((x) => x.id === s.id));
   }
 
+  /** A room still called what it was made as (Room 3, New room), or nothing. */
+  private unnamed(name: string): boolean {
+    const text = name.trim();
+    const made = (pattern: string) => new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("§", "\\d+")}$`, "i").test(text);
+    return !text || text === t("editor.add.newRoom") || made(t("editor.plan.roomN", { n: "§" })) || made(t("editor.findRooms.roomX", { x: "§" }));
+  }
+
+  /** Links a room to an area (or to none). A room that has no name of its own yet takes the area's. */
+  private linkRoom(fi: number, id: string, area: string | null): void {
+    const name = area ? this.hass.areas?.[area]?.name : null;
+    this.change((p) => {
+      const r = p.floors[fi]?.rooms.find((x) => x.id === id);
+      if (!r) return;
+      r.area_id = area;
+      if (name && this.unnamed(r.name)) r.name = name;
+    });
+  }
+
   private roomPanel(fi: number, room: Room | undefined): HTMLElement {
     if (!room) return h("div", {});
     const f = this.plan.floors[fi];
@@ -1705,8 +1754,19 @@ export class Editor {
     const updRoom = (label: string, fn: (r: Room) => void) => this.change((p) => fn(p.floors[fi].rooms.find((r) => r.id === room.id)!), false, label);
     const wallFinish = room.wall_finish ?? "paint";
     const inRoom = f.furniture.filter((x) => pointInPolygon([x.x, x.z], room.points));
+    // the areas no room has yet come first: they are the ones still to give out
+    const taken = new Set(this.plan.floors.flatMap((x) => x.rooms).filter((r) => r.id !== room.id).map((r) => r.area_id));
+    const areas = Object.values(this.hass.areas ?? {}).sort((a, b) => Number(taken.has(a.area_id)) - Number(taken.has(b.area_id)) || a.name.localeCompare(b.name));
     return h("div", {},
       h("h4", {}, room.name),
+      h("div", { class: "ed-row" },
+        h("label", {}, t("editor.outdoor.name")),
+        h("input", { class: "ed-in", value: room.name, "aria-label": t("editor.outdoor.name"), onchange: (e: Event) => updRoom(t("editor.main.change"), (r) => (r.name = (e.target as HTMLInputElement).value)) }),
+      ),
+      h("div", { class: "ed-row" },
+        h("label", {}, t("editor.area")),
+        this.dropdown(areas.map((a) => [a.area_id, a.name]), room.area_id ?? "", (v) => this.linkRoom(fi, room.id, v || null), t("editor.notLinked")),
+      ),
       h("div", { class: "ed-sub" }, t("editor.floor")),
       this.finishChips(FLOOR_FINISHES, room.floor ?? "wood", (k) => updRoom(t("editor.nameFloor", { name: room.name }), (r) => (r.floor = k as FloorMaterial))),
       h("div", { class: "ed-sub" }, t("editor.room.walls")),
@@ -3099,7 +3159,7 @@ export class Editor {
       this.host.view.viewer.setMode("house");
       this.showReport([
         ...lines,
-        t("editor.nDevicesPlacedN2", { n: placed.report.placed.length, n2: placed.report.linked.length, n3: placed.report.roomsLinked.length }),
+        this.setupLine(placed.report),
       ], ".ed-scan");
     };
     if (this.plan.floors.some((f) => f.rooms.length)) {
@@ -3107,11 +3167,21 @@ export class Editor {
     } else go();
   }
 
+  /** What Smart Setup did, in a sentence: each count in its own words for one and for more. */
+  private setupLine(r: { placed: unknown[]; linked: unknown[]; roomsLinked: unknown[] }): string {
+    const parts = [
+      t("editor.import.setupPlaced", { n: r.placed.length }),
+      ...(r.linked.length ? [t("editor.import.setupOnOpenings", { n: r.linked.length })] : []),
+      ...(r.roomsLinked.length ? [t("editor.import.setupRooms", { n: r.roomsLinked.length })] : []),
+    ];
+    return t("editor.import.setup", { parts: parts.join(", ") });
+  }
+
   private runAutoPlace(): void {
     const { plan, report } = autoPlace(this.plan, this.hass);
     this.change((p) => Object.assign(p, plan));
     this.showReport([
-      t("editor.autoPlace.nDevicesPlacedN2", { n: report.placed.length, n2: report.linked.length, n3: report.roomsLinked.length }),
+      this.setupLine(report),
       ...(report.unplaced.length ? [t("editor.nDevicesAreIn", { n: report.unplaced.length })] : []),
       ...report.placed.slice(0, 30),
     ]);
@@ -3157,7 +3227,7 @@ export class Editor {
       const r = placed.report;
       this.showReport([
         t("editor.houseType.summary", { name, rooms, n: floors.length, openings }),
-        t("editor.nDevicesPlacedN2", { n: r.placed.length, n2: r.linked.length, n3: r.roomsLinked.length }),
+        this.setupLine(r),
         ...(r.unplaced.length ? [t("editor.nDevicesAreIn", { n: r.unplaced.length })] : []),
         ...r.roomsLinked.slice(0, 20),
       ]);
@@ -3179,6 +3249,14 @@ export class Editor {
 
   /** A storey on top of the house: as high as the one below, linked to the Home Assistant floor of its level when there is one. */
   private addFloor(): void {
+    const floor = this.newFloor();
+    this.change((p) => p.floors.push(floor), false, t("editor.addName", { name: floor.name }));
+    this.select(null);
+    this.host.view.showFloor(this.plan.floors.length - 1);
+  }
+
+  /** A storey for the top of the house, not yet on the plan: named, as high as the one below, linked to the Home Assistant floor of its level. */
+  private newFloor(): Floor {
     const floors = this.plan.floors;
     const top = floors.reduce<Floor | null>((a, f) => (!a || f.elevation >= a.elevation ? f : a), null);
     const n = floors.length;
@@ -3192,9 +3270,7 @@ export class Editor {
       elevation: top ? Math.round((top.elevation + top.height) * 100) / 100 : 0, height: top?.height ?? 2.6,
       rooms: [], openings: [], furniture: [], devices: [], walls: [], outdoor: [], fences: [], roofs: [],
     };
-    this.change((p) => p.floors.push(floor), false, t("editor.addName", { name }));
-    this.select(null);
-    this.host.view.showFloor(this.plan.floors.length - 1);
+    return floor;
   }
 
   /** Takes a storey out with everything on it; the others keep their levels. */

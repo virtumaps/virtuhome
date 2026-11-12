@@ -12,7 +12,9 @@ them.
 
 To look around before installing, open the [online demo](https://virtumaps.github.io/virtuhome/demo/):
 a house with pretend lights, sensors and people that change by themselves, in any browser, on a
-phone or a computer. Turn the house, tap the lights, try the graphics levels, day and night and the
+phone or a computer. It opens by itself: the house turns slowly and its roofs come off to show the
+rooms, with a line on what to try, until you touch it. Turn the house, tap the lights, try the
+graphics levels, day and night and the
 floors, and open **Edit** to change the plan in 3D or the **2D plan**. The demo can't save, so its
 **Save** button stays off and a reload brings the house back as it was. Once VirtuHome is
 installed, the same house is in Home Assistant too: see [The demo home](#the-demo-home).
@@ -63,11 +65,11 @@ You need Home Assistant 2025.4 or later. From 2026.11, Home Assistant has HACS b
    opened its setup already. One Home Assistant has one VirtuHome.
 3. Reload the page in your browser. **VirtuHome** is now in the sidebar, and the VirtuHome card is
    in your dashboards' card picker.
-4. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
-   floor plan picture**, **Start from a house type**, **Import a scan or plan** or **Draw it
-   myself**, and the editor opens on that step
-   (see [Get your home in](#get-your-home-in)). To see a finished home first, tap **Look at the
-   demo home** (see [The demo home](#the-demo-home)). People who aren't administrators see who can
+4. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**, with the demo
+   house turning behind it in the evening, its lights on: pick **Trace a floor plan picture**,
+   **Start from a house type** (the quickest), **Import a scan or plan** or **Draw it myself**, and
+   the editor opens on that step (see [Get your home in](#get-your-home-in)). To try a finished
+   home first, tap **Look at the demo home** (see [The demo home](#the-demo-home)). People who aren't administrators see who can
    set it up.
 
 ![Let's get your home in](screenshots/first-run.jpg)
@@ -146,7 +148,8 @@ The same view is in the sidebar and in every VirtuHome card.
 - A **?** beside the close button of the room, energy, alarm, sun and weather sheets and the list of
   rooms and devices, and beside the editor's tabs (for the tab shown), opens that part of this guide.
 - A hint shows once the first time you need it: in the sidebar panel how to switch and open
-  devices, in the editor how to select and move things, in the 2D plan how to type a measurement.
+  devices, in the editor how to select and move things, in the 2D plan how to type a measurement
+  (the editor's two once the home has a room).
   **Got it** puts it away for good on that browser. Edit → **Home** → **Show hints again** brings
   them back.
 - After VirtuHome updates, the first time an administrator opens it in the sidebar it says **What's
@@ -273,7 +276,9 @@ colours told apart with any kind of colour blindness.
 To see what VirtuHome does with a finished house before you draw yours, tap **Look at the demo
 home** under **Let's get your home in**, or in Edit → **Home** (administrators). The demo house
 opens in the sidebar with pretend lights, doors, windows, blinds, sensors and people that change by
-themselves, under the sky where your home is.
+themselves, under the sky where your home is. (The house turning behind **Let's get your home in**
+is the same one, as a picture: it shows early evening whatever the time, can't be tapped, and holds
+still on Tablet graphics and for people who asked their device for less motion.)
 
 - Tap a lamp or a device to switch it, and open the rooms, the floors, the **Temperature map**, day
   and night and the graphics levels, as in your own home. Long-presses open no dialogs: the devices
@@ -405,8 +410,12 @@ what they do when you point at them:
   other way), **Delete** removes it, **Esc** cancels drawing.
 - With more than one storey, buttons with the floors' names switch between them.
 
-Name the rooms and link them to Home Assistant areas in Edit → **Rooms** (each room has a name box
-and **Area**). **Add a room** there puts a 3 × 3 m room beside the house.
+Name the rooms and link them to Home Assistant areas: tap a room, and **Selected** starts with its
+**Name** and **Area** (the areas no room has yet come first). A room still called Room 3 or New room
+takes the area's name when you link it. Edit → **Rooms** lists every room with the same two boxes.
+**Add a room** there puts a 3 × 3 m room beside the house.
+
+Until the home has its first room, the 3D view says **Your home will show here**.
 
 For an upstairs, [add a floor](#storeys): the floor below shows faintly in the 2D plan, to draw the
 new floor's rooms over.
@@ -426,7 +435,18 @@ No LiDAR phone? Almost every home has an estate agent's floor plan.
    it out (rooms over ones you have already drawn start unticked). **Add these rooms** puts the ticked
    ones on the plan as Room 1, Room 2…, with their doors and windows, and one **Undo** takes them all
    away again; **Cancel** adds nothing.
-4. Draw any rooms it missed with the room tools, then name the rooms and link them to areas as usual.
+4. Draw any rooms it missed with the room tools, then tap each room to give it its **Name** and
+   **Area** (picking the area names a room still called Room 3).
+
+**A picture that shows every storey**, as most estate agents' plans do: **Find the rooms** tells the
+drawings apart and asks **Which one is this floor?** (**Left** and **Right**, **Top** and **Bottom**,
+or **Plan 1**, **Plan 2**…). The first one's rooms start ticked, and the paper between two drawings
+is left out. After **Add these rooms**, the panel offers the next drawing: **Add it as the floor
+above** puts a new storey on top with that drawing's rooms, moved to stand over the rooms below, and
+the same picture under them, moved the same way (the floor below shows faintly, to check). One
+**Undo** takes the storey away again; **Not now** leaves it. Drawings side by side are taken to be
+drawn level, so the storey only moves sideways (one above the other: only up or down), to where most
+of it stands over the rooms below; if that's not right, drag its rooms in the 2D plan.
 
 ![Rooms found in a floor plan picture, ticked to keep, then added](screenshots/find-rooms.jpg)
 

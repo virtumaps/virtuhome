@@ -26,6 +26,7 @@ export const TR: DemoStrings = {
     getIt: "VirtuHome'u edin",
     language: "Dil",
     failed: "Demo bu tarayıcıda başlatılamadı.",
+    hint: "Evi döndürmek için sürükle. Bir ışığa, kapıya veya odaya dokun.",
   },
 
   house: {
