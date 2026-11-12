@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Let's get your home in**, the first thing a new home shows, has the demo house turning behind it
+  in the evening with its lights on, and its ways to start as buttons with a picture each (**Start
+  from a house type** says it is the quickest). It holds still on Tablet graphics and with reduced
+  motion.
+- **A floor plan picture that shows every storey** (as most estate agents' plans do): **Find the
+  rooms** tells the drawings apart, asks **Which one is this floor?**, and leaves out the paper
+  between them. After **Add these rooms**, **Add it as the floor above** puts the next drawing on a
+  new storey, its rooms and the picture moved to stand over the floor below.
+- The online demo opens by itself: the house turns slowly and its roofs come off to show the rooms and
+  who is in them, with a line on what to try (in its 14 languages), until it is touched. Its tour opens
+  on the open house, its rooms lighting up one by one, and a chapter's title dims the house behind it
+  so it can be read over a floor full of labels.
+- After setting VirtuHome up, Home Assistant's dialog says where it is (the sidebar), and the setup
+  text names the ways to get a home in.
+- **House types come furnished and show in 3D while you choose.** Picking a house type shows it in
+  the 3D view at once, its roofs off, and follows the width, depth and side as you set them; nothing
+  changes until **Use this house type**. **With furniture** (on to start with) puts a sofa and TV,
+  a table and chairs, kitchen units with a sink and cooker, beds, wardrobes and a bath or shower in
+  their rooms, against walls that are free for them at the home's size.
+- **The editor's Home tab folds into parts** under their headings (Getting started, Check my setup,
+  Demo home, house type, import, Devices, Outside walls, Roof, Sun and weather, Floors, Energy,
+  People, Top bar, Plan file, Help), instead of one long page. What the last step did is listed at
+  the top.
+- **A home just set up opens with its roofs off**, once, on the device it was set up on, so its rooms
+  and devices are the first thing seen. The Roof button puts them back.
+- **On a phone the buttons on the right keep behind one** (**More buttons**), leaving the screen to
+  the house; Search stays out.
+- A selected room starts with its **Name** and **Area**, in 3D and in the 2D plan, so rooms traced
+  from a picture are named where they are tapped. A room still called Room 3 or New room takes the
+  area's name when it is linked.
+
+### Fixed
+- First-time hints show where they belong: the editor's no longer stays after the editor closes, the
+  one about tapping lights no longer shows over the editor, they keep clear of the editor's panel,
+  and the editor's wait until the home has a room.
+- The 3D view goes to the whole house when a new home gets its first rooms (rooms added from a floor
+  plan picture used to leave it looking at a wall from close up), and again after the house grew or
+  shrank in the 2D plan.
+- The editor's 3D view on a home with no room yet says **Your home will show here** instead of
+  showing an empty disc of ground.
+- With the house shut under its roofs, motion and open doors inside are no longer marked on the roof.
+  A leak, smoke or an alarm going off still shows.
+- What Smart Setup did reads right for one device, door or room ("1 device is in an area without a
+  room in the plan").
+
 ## 0.20.0
 
 ### New

@@ -24,6 +24,7 @@ export const PL: DemoStrings = {
     getIt: "Pobierz VirtuHome",
     language: "Język",
     failed: "Nie udało się uruchomić demo w tej przeglądarce.",
+    hint: "Przeciągnij, aby obrócić dom. Dotknij światła, drzwi lub pokoju.",
   },
 
   house: {

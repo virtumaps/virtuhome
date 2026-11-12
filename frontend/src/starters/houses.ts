@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS, newId, normalizePlan, type ExteriorFinish, type Fence
 import { suggestRoofs, type RoofChoice } from "../auto/roof";
 import { fitPlan, fitRange, type Fit } from "../model/fit";
 import { t, type EditorPlainKey } from "../i18n/editor";
+import { furnish, type RoomKind } from "./furnish";
 
 export interface Starter {
   id: string;
@@ -329,13 +330,29 @@ export const STARTERS: Starter[] = [
   { id: "open", name: "editor.houses.open.name", text: "editor.houses.open.text", joins: "none", plan: openPlan },
 ];
 
-/** A house type fitted to a home: as drawn unless a size or mirroring is given. */
-export function starterPlan(id: string, fit: Partial<Fit> = {}): Plan {
+/** What a room is for, from the name the house types give it (in the language they were made in). */
+function roomKinds(): (name: string) => RoomKind | null {
+  const kinds: [EditorPlainKey, RoomKind][] = [
+    ["editor.import.room.livingRoom", "living"], ["editor.import.room.diningRoom", "dining"], ["editor.import.room.kitchen", "kitchen"],
+    ["editor.bedroom1", "main-bedroom"], ["editor.bedroom2", "bedroom"], ["editor.bedroom3", "bedroom"], ["editor.houses.bedroom4", "bedroom"],
+    ["editor.import.room.bathroom", "bathroom"], ["editor.houses.enSuite", "ensuite"], ["editor.houses.wc", "wc"],
+    ["editor.houses.study", "study"], ["editor.utility", "utility"],
+  ];
+  const byName = new Map(kinds.map(([key, kind]) => [t(key), kind]));
+  return (name) => byName.get(name) ?? null;
+}
+
+/**
+ * A house type fitted to a home: as drawn unless a size or mirroring is given, and furnished (a sofa,
+ * beds, kitchen units...) unless `furnished` is false.
+ */
+export function starterPlan(id: string, fit: Partial<Fit> = {}, furnished = true): Plan {
   const s = STARTERS.find((x) => x.id === id) ?? STARTERS[0];
-  const plan = s.plan();
-  const own = fitRange(plan);
-  if (!own) return plan;
-  return normalizePlan(fitPlan(plan, { width: fit.width ?? own.width, depth: fit.depth ?? own.depth, mirror: fit.mirror ?? false }));
+  const drawn = s.plan();
+  const own = fitRange(drawn);
+  const plan = own ? normalizePlan(fitPlan(drawn, { width: fit.width ?? own.width, depth: fit.depth ?? own.depth, mirror: fit.mirror ?? false })) : drawn;
+  if (furnished) furnish(plan, roomKinds());
+  return plan;
 }
 
 export { fitRange };

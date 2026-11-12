@@ -26,6 +26,7 @@ export const PT: DemoStrings = {
     getIt: "Obter o VirtuHome",
     language: "Idioma",
     failed: "Não foi possível iniciar a demonstração neste navegador.",
+    hint: "Arraste para rodar a casa. Toque numa luz, numa porta ou numa divisão.",
   },
 
   house: {

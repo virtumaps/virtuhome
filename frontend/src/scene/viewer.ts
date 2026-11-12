@@ -41,6 +41,8 @@ export interface MarkerLook {
   pulse: number;
   /** Shown in the whole-house view too (motion, alerts, open doors, a triggered alarm). */
   attention?: boolean;
+  /** Can't wait (a leak, smoke, an alarm going off): shown even over the house shut under its roofs. */
+  urgent?: boolean;
 }
 
 export interface LiveSource {
@@ -1472,6 +1474,9 @@ export class Viewer {
         // the whole house shows only what wants attention: through the floors above, the rest is noise
         if (this.mode === "house" && !look.attention) continue;
         const pos = this.devicePosition(fi, d);
+        // the house shut under its roofs: what goes on inside can't be seen, and its pin would sit on the
+        // roof. Only what can't wait still shows there
+        if (!look.urgent && this.shutIn(fi, pos)) continue;
         // a camera's pin (live, motion, offline) floats over its model
         if (d.entity.startsWith("camera.")) pos[1] += 0.3;
         specs.push({ key: d.id, pos, icon: look.icon, color: look.color, size: this.mode === "house" ? 22 : 30, pulse: calm ? 0 : look.pulse, alpha: 1 });

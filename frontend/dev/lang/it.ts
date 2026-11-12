@@ -25,6 +25,7 @@ export const IT: DemoStrings = {
     getIt: "Scarica VirtuHome",
     language: "Lingua",
     failed: "Non è stato possibile avviare la demo in questo browser.",
+    hint: "Trascina per ruotare la casa. Tocca una luce, una porta o una stanza.",
   },
 
   house: {

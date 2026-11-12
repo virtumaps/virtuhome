@@ -93,6 +93,12 @@ export const VIEW_CSS = /* css */ `
   justify-content: flex-end; align-content: flex-start; gap: 8px; pointer-events: none;
 }
 .vh-tools > * { pointer-events: auto; }
+/* a phone: the tools keep behind one button, so the house has the screen; Search stays out */
+.vh-tools > .vh-more { display: none; }
+@media (max-width: 600px) {
+  .vh-tools > .vh-more { display: grid; }
+  .vh-tools:not(.open) > :not(.vh-more):not(.vh-find-btn) { display: none; }
+}
 .vh-icon {
   width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
   background: var(--vh-glass); color: var(--vh-text); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
@@ -130,22 +136,12 @@ export const VIEW_CSS = /* css */ `
   pointer-events: none;
 }
 .vh-empty h2 { margin: 0 0 8px; font-size: 20px; }
+/* the editor on a home with no room yet: the note keeps to where the house will stand, beside the editor's panel */
+.vh-blank svg { width: 44px; height: 44px; fill: var(--vh-dim); opacity: 0.7; }
+.vh-blank h2 { margin-top: 6px; }
+@media (min-width: 601px) { .vh-root.editing .vh-empty { right: min(380px, 100%); } }
+@media (max-width: 600px) { .vh-root.editing .vh-empty { bottom: 62%; } }
 .vh-empty p { margin: 0 0 14px; color: var(--vh-dim); max-width: 440px; }
-.vh-start {
-  pointer-events: auto; width: min(460px, 100%); max-height: 100%; overflow: auto; box-sizing: border-box;
-  display: flex; flex-direction: column; gap: 8px; align-items: stretch; padding: 4px;
-}
-.vh-start p { margin: 0 auto 6px; }
-.vh-start-choice {
-  border: 0; border-radius: 14px; padding: 12px 16px; font: inherit; text-align: left; cursor: pointer;
-  background: var(--vh-chip); color: var(--vh-text); box-shadow: inset 0 0 0 1px var(--vh-line);
-  display: flex; flex-direction: column; gap: 2px;
-}
-.vh-start-choice b { font-size: 15px; }
-.vh-start-choice span { color: var(--vh-dim); font-size: 13px; line-height: 1.35; }
-.vh-start-choice:hover, .vh-start-choice:focus-visible { box-shadow: inset 0 0 0 1.5px var(--vh-accent); background: var(--vh-chip-on); outline: none; }
-.vh-start-demo { align-self: center; border: 0; background: none; padding: 8px; font: inherit; font-size: 14px; color: var(--vh-accent); cursor: pointer; }
-.vh-start-demo:hover, .vh-start-demo:focus-visible { text-decoration: underline; outline: none; }
 /* the demo home covers the view, which stays hidden (and draws nothing) underneath */
 .vh-root.vh-demo-on > :not(.vh-demo) { display: none !important; }
 .vh-toast {

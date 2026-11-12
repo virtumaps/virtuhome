@@ -19,7 +19,8 @@ import { fenceStyle } from "../scene/fences";
 import { styleOf } from "../scene/joinery";
 import { greyPixels, imageCorners, insideImage, parseLength, placeImage, prepareImage, rescale } from "./background";
 import type { FindResult } from "./roomfind";
-import { foundToPlan, startTicks } from "./roomfind-apply";
+import { foundToPlan, startTicks, SURE } from "./roomfind-apply";
+import { drawingsOf, moveOver, type Drawings } from "./roomfind-groups";
 import { findRoomsAside } from "./roomfind-client";
 import { Collider, settle } from "./collide";
 import { t } from "../i18n/editor";
@@ -59,6 +60,8 @@ export interface Plan2DHost {
   dragEnd(label: string): void;
   floor(): number;
   setFloor(i: number): void;
+  /** A storey to go on top of the others, not yet on the plan: named, as high as the one below, linked to its Home Assistant floor. */
+  newFloor(): Floor;
   status(text: string): void;
   /** Floor plan images kept by Home Assistant: store one for a floor (gives its file name), and where to load one from. */
   images: {
@@ -148,7 +151,13 @@ export class Plan2D {
   /** Looking for the rooms in the picture (stopped by Cancel or leaving the tool). */
   private finding: AbortController | null = null;
   /** The rooms found, each ticked to keep or not, for the picture where it was then (moving it drops them). */
-  private found: { res: FindResult; keep: boolean[]; floor: number; at: string } | null = null;
+  private found: { res: FindResult; keep: boolean[]; floor: number; at: string; drawings: Drawings } | null = null;
+  /**
+   * A picture that shows several storeys, once one of its drawings is on a floor: the drawings still to
+   * place, each offered as the floor above. `bg` is the picture where the first drawing was found; the
+   * offer shows on `floor` while its picture stays where it is (`at`).
+   */
+  private rest: { res: FindResult; drawings: Drawings; done: number[]; base: number; bg: FloorBackground; floor: number; at: string } | null = null;
 
   constructor(private host: Plan2DHost) {
     this.el = document.createElement("div");
@@ -669,7 +678,7 @@ export class Plan2D {
     const bg = this.floor?.background ?? null;
     const found = this.liveFound();
     const key = this.tool !== "image" ? "" : [bg?.file ?? "", bg?.scaled, this.uploading !== null, this.measure?.length ?? -1, this.bgMissing, this.imageError,
-      !!this.finding, found ? found.keep.map(Number).join("") : "-"].join("|");
+      !!this.finding, found ? found.keep.map(Number).join("") : "-", this.liveRest() ? this.rest!.done.join(",") : "-"].join("|");
     if (key !== this.panelKey) {
       this.panelKey = key;
       this.renderPanel();
@@ -745,11 +754,29 @@ export class Plan2D {
         const kept = keep.filter(Boolean).length;
         const add = button(t("editor.plan.addTheseRooms"), "ed-btn small", () => this.addFound());
         add.disabled = !kept;
-        panel.append(
-          node("p", "", t("editor.plan.found", { rooms: t("editor.import.rooms", { n: res.rooms.length }), doors: doors ? ` ${t("editor.plan.andDoors", { n: doors })}` : "" })),
-          row(add, button(t("editor.main.cancel"), "ed-btn ghost small", () => this.dropFound())),
-        );
+        panel.append(node("p", "", t("editor.plan.found", { rooms: t("editor.import.rooms", { n: res.rooms.length }), doors: doors ? ` ${t("editor.plan.andDoors", { n: doors })}` : "" })));
+        // a picture of several storeys: which drawing is this floor
+        const { drawings } = this.liveFound()!;
+        if (drawings.list.length > 1) {
+          const picked = this.pickedDrawing();
+          panel.append(
+            node("p", "", t("editor.plan.whichPlan", { n: drawings.list.length })),
+            row(...drawings.list.map((_, k) => button(this.drawingName(drawings, k), `ed-btn small${k === picked ? "" : " ghost"}`, () => this.pickDrawing(k)))),
+          );
+        }
+        panel.append(row(add, button(t("editor.main.cancel"), "ed-btn ghost small", () => this.dropFound())));
       } else {
+        const rest = this.liveRest();
+        if (rest) {
+          const next = rest.drawings.list.findIndex((_, k) => !rest.done.includes(k));
+          panel.append(
+            node("p", "", t("editor.plan.otherPlan", { plan: this.drawingName(rest.drawings, next).toLowerCase() })),
+            row(button(t("editor.plan.addAsFloorAbove"), "ed-btn small", () => this.addAbove()), button(t("automations.notNow"), "ed-btn ghost small", () => {
+              this.rest = null;
+              this.render();
+            })),
+          );
+        }
         const find = button(t("editor.plan.findTheRooms"), "ed-btn ghost small", () => void this.findRooms());
         if (bg.scaled === false) {
           find.disabled = true;
@@ -882,10 +909,13 @@ export class Plan2D {
       const px = await greyPixels(await this.host.images.url(bg.file), 2000);
       const res = await findRoomsAside({ ...px, scale: (bg.scale * bg.width) / px.width, place: { x: bg.x, z: bg.z, rotation: bg.rotation } }, stop.signal);
       if (this.finding !== stop) return;
-      this.found = { res, keep: startTicks(this.host.plan().floors[fi], res), floor: fi, at: placement(bg) };
-      this.host.status(res.rooms.length
-        ? t("editor.plan.tickTheRoomsTo")
-        : t("editor.plan.noRoomsFoundCheck"));
+      // a picture of several storeys: the first drawing's rooms start ticked, and never the paper between two
+      const drawings = drawingsOf(res);
+      const several = drawings.list.length > 1;
+      const keep = startTicks(this.host.plan().floors[fi], res).map((on, i) => on && drawings.of[i] === (several ? 0 : drawings.of[i]) && drawings.of[i] >= 0);
+      this.found = { res, keep, floor: fi, at: placement(bg), drawings };
+      this.rest = null;
+      this.host.status(!res.rooms.length ? t("editor.plan.noRoomsFoundCheck") : several ? t("editor.plan.severalPlans", { n: drawings.list.length }) : t("editor.plan.tickTheRoomsTo"));
     } catch (err) {
       if (this.finding !== stop) return;
       this.imageError = String((err as { message?: string })?.message ?? err);
@@ -905,11 +935,47 @@ export class Plan2D {
     this.render();
   }
 
+  /** What a drawing in a picture of several is called: by where it stands, else by its number. */
+  private drawingName(d: Drawings, k: number): string {
+    const n = d.list.length;
+    if (d.lie && n <= 3) {
+      const ends = d.lie === "row" ? [t("editor.houses.left"), t("editor.houses.right")] : [t("editor.garden.top"), t("editor.plan.planBottom")];
+      return k === 0 ? ends[0] : k === n - 1 ? ends[1] : t("editor.plan.planMiddle");
+    }
+    return t("editor.plan.planN", { n: k + 1 });
+  }
+
+  /** The one drawing whose rooms are ticked (and nothing of another), or -1. */
+  private pickedDrawing(): number {
+    const found = this.liveFound();
+    if (!found) return -1;
+    const of = new Set(found.keep.flatMap((on, i) => (on ? [found.drawings.of[i]] : [])));
+    return of.size === 1 ? [...of][0] : -1;
+  }
+
+  /** Ticks the rooms of one drawing in the picture and no others. */
+  private pickDrawing(k: number): void {
+    const found = this.liveFound();
+    if (!found) return;
+    const sure = startTicks(this.host.plan().floors[found.floor], found.res);
+    found.keep = sure.map((on, i) => on && found.drawings.of[i] === k);
+    this.render();
+  }
+
+  /** The rest of a picture of several storeys, while its picture is where the first drawing was found. */
+  private liveRest(): Plan2D["rest"] {
+    const bg = this.floor?.background;
+    const r = this.rest;
+    return r && bg && r.floor === this.floorIndex && r.at === placement(bg) && r.done.length < r.drawings.list.length ? r : null;
+  }
+
   /** The ticked rooms go on the plan with their doors and windows, as one change (one undo). */
   private addFound(): void {
     const found = this.liveFound();
     if (!found) return;
     const fi = found.floor;
+    const bg = this.host.plan().floors[fi]?.background;
+    const picked = this.pickedDrawing();
     const { rooms, openings } = foundToPlan(this.host.plan().floors[fi], found.res, found.keep);
     this.found = null;
     if (rooms.length) {
@@ -918,7 +984,42 @@ export class Plan2D {
         p.floors[fi].openings.push(...openings);
       }, rooms.length === 1 ? t("editor.plan.addARoomFrom") : t("editor.plan.addTheRoomsFrom"));
       this.host.status(t("editor.plan.added", { rooms: t("editor.import.rooms", { n: rooms.length }) }));
+      // one drawing of several went on: the others are offered as the floors above
+      if (bg && picked >= 0 && found.drawings.list.length > 1) {
+        this.rest = { res: found.res, drawings: found.drawings, done: [picked], base: picked, bg: structuredClone(bg), floor: fi, at: found.at };
+      }
     }
+    this.render();
+  }
+
+  /**
+   * The picture's next drawing goes on a new storey on top: its rooms moved to stand over the first
+   * drawing's, and the same picture under them, moved the same way. One change, so one undo.
+   */
+  private addAbove(): void {
+    const rest = this.liveRest();
+    if (!rest) return;
+    const next = rest.drawings.list.findIndex((_, k) => !rest.done.includes(k));
+    const [dx, dz] = moveOver(rest.res, rest.drawings.list[next], rest.drawings.list[rest.base], rest.drawings.lie);
+    const moved: FindResult = {
+      ...rest.res,
+      rooms: rest.res.rooms.map((r) => ({ ...r, points: r.points.map(([x, z]): Vec2 => [x + dx, z + dz]) })),
+      gaps: rest.res.gaps.map((g) => ({ ...g, at: [g.at[0] + dx, g.at[1] + dz] })),
+    };
+    const keep = rest.res.rooms.map((r, i) => rest.drawings.of[i] === next && r.confidence >= SURE);
+    const { rooms, openings } = foundToPlan(undefined, moved, keep);
+    const floor = this.host.newFloor();
+    floor.rooms = rooms;
+    floor.openings = openings;
+    floor.background = { ...structuredClone(rest.bg), x: r3(rest.bg.x + dx), z: r3(rest.bg.z + dz) };
+    const index = this.host.plan().floors.length;
+    this.host.change((p) => p.floors.push(floor), t("editor.addName", { name: floor.name }));
+    rest.done.push(next);
+    // any drawing still left is offered on the new storey
+    rest.floor = index;
+    rest.at = placement(floor.background);
+    this.host.setFloor(index);
+    this.host.status(t("editor.plan.addedAbove", { name: floor.name, rooms: t("editor.import.rooms", { n: rooms.length }) }));
     this.render();
   }
 

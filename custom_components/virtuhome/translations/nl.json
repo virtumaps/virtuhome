@@ -3,11 +3,14 @@
     "step": {
       "user": {
         "title": "VirtuHome",
-        "description": "Voegt de VirtuHome-3D-weergave toe aan de zijbalk en de VirtuHome-kaart aan je dashboards. Open daarna VirtuHome in de zijbalk om een scan te importeren of je huis te tekenen."
+        "description": "Voegt de VirtuHome-3D-weergave toe aan de zijbalk en de VirtuHome-kaart aan je dashboards. Open daarna VirtuHome in de zijbalk om je huis toe te voegen: een plattegrond overtrekken, beginnen met een woningtype, een scan importeren of zelf tekenen."
       }
     },
     "abort": {
       "single_instance_allowed": "VirtuHome is al ingesteld."
+    },
+    "create_entry": {
+      "default": "VirtuHome staat nu in de zijbalk. Open het om je huis toe te voegen."
     }
   },
   "issues": {

@@ -30,6 +30,7 @@ export const BG: DemoStrings = {
     getIt: "Вземи VirtuHome",
     language: "Език",
     failed: "Демото не успя да стартира в този браузър.",
+    hint: "Плъзни, за да завъртиш къщата. Докосни лампа, врата или стая.",
   },
 
   house: {

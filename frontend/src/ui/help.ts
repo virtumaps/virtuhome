@@ -44,7 +44,7 @@ export function resetHints(): void {
  * explains). Returns a function that takes it away. Nothing shows if it was seen already.
  */
 export function showHint(root: HTMLElement, id: HintId, text: string, where: "top" | "bottom" = "top"): () => void {
-  if (hintSeen(id) || root.querySelector(".vh-hint")) return () => {};
+  if (root.querySelector(".vh-hint") || hintSeen(id)) return () => {};
   const el = document.createElement("div");
   el.className = `vh-hint ${where}`;
   el.innerHTML = `<span>${esc(text)}</span><button>${th("hint.gotIt")}</button>`;
@@ -68,6 +68,9 @@ export const HINT_CSS = /* css */ `
   font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
 .vh-hint.top { top: 62px; }
 .vh-hint.bottom { bottom: 14px; }
+/* while editing it keeps to the house, clear of the editor's panel (beside it, or under it on a phone) */
+@media (min-width: 601px) { .vh-root.editing .vh-hint { left: calc((100% - min(380px, 100%)) / 2); max-width: min(calc(92% - 380px), 420px); } }
+@media (max-width: 600px) { .vh-root.editing .vh-hint.bottom { bottom: calc(62% + 14px); } }
 .vh-hint button { border: 0; border-radius: 10px; padding: 5px 10px; background: rgba(255,255,255,.16); color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
 a.vh-help { text-decoration: none; margin-left: auto; width: 32px; height: 32px; box-shadow: none; display: grid; place-items: center; color: var(--vh-dim); }
 a.vh-help svg { width: 20px; height: 20px; fill: currentColor; }

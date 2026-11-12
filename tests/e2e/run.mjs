@@ -68,6 +68,13 @@ async function step(name, fn) {
   }
 }
 
+/** Opens a part of the editor's Home tab (they fold under their headings). */
+async function openPart(page, panel, title) {
+  const head = page.locator(`${panel} .ed-sec-h`, { hasText: title });
+  await head.waitFor({ state: "visible", timeout: 30_000 });
+  if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+}
+
 async function until(fn, what, timeout = 30_000) {
   const end = Date.now() + timeout;
   let last;
@@ -263,13 +270,16 @@ async function run() {
   page.on("console", (m) => m.type() === "error" && /virtuhome/i.test(`${m.text()} ${m.location().url}`) && problems.push(`console: ${m.text()}`));
 
   const panel = "virtuhome-panel";
-  await step("The panel opens with nothing drawn before there is a plan", async () => {
+  await step("Before there is a plan the panel offers the ways to get a home in, over the demo house", async () => {
     await page.goto(`${url}/virtuhome`);
-    const p = await waitDrawn(page, panel, false);
-    // the first run offers the demo home
+    const choices = page.locator(`${panel} .vh-start-choice`);
+    await choices.first().waitFor({ state: "visible", timeout: 30_000 });
+    check((await choices.count()) === 4, `the first run offers ${await choices.count()} ways to start, not four`);
+    // it offers the demo home, and shows that house behind the choices
     await page.locator(`${panel} .vh-start-demo`).waitFor({ state: "visible", timeout: 30_000 });
+    const p = await waitDrawn(page, `${panel} .vh-hero`);
     await page.screenshot({ path: join(shots, "empty.png") });
-    return `${p.share}% of the view drawn`;
+    return `${p.share}% of the picture behind the choices drawn`;
   });
 
   for (const file of fixtures) {
@@ -295,6 +305,7 @@ async function run() {
     await page.locator(`${panel} .vh-edit`).click();
     const save = page.locator(`${panel} .ed-save`);
     await save.waitFor({ state: "visible", timeout: 30_000 });
+    await openPart(page, panel, "Outside walls");
     await page.locator(`${panel} .ed-chip`, { hasText: "Buff brick" }).first().click();
     await save.click();
     await until(async () => ({ ok: (await page.locator(`${panel} .ed-status`).textContent()) === "Saved" }), "the editor did not say Saved");
@@ -314,6 +325,7 @@ async function run() {
     await page.reload();
     await waitDrawn(page, panel);
     await page.locator(`${panel} .vh-edit`).click();
+    await openPart(page, panel, "Outside walls");
     const on = page.locator(`${panel} .ed-chip.on`, { hasText: "Buff brick" });
     await on.waitFor({ state: "visible", timeout: 30_000 });
     await page.locator(`${panel} .ed-head button[title="Close"]`).click();
@@ -346,6 +358,7 @@ async function run() {
     await page.reload();
     await waitDrawn(page, panel);
     await page.locator(`${panel} .vh-edit`).click();
+    await openPart(page, panel, "Demo home, house type, import");
     await page.locator(`${panel} .ed-btn`, { hasText: "Look at the demo home" }).click();
     const demo = `${panel} .vh-demo`;
     await page.locator(`${demo} .bar`).waitFor({ state: "visible", timeout: 30_000 });

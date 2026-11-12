@@ -4,7 +4,7 @@
 //   Devices  what is placed, and what of Home Assistant is not yet
 //   Selected the tapped room, device or furniture: link entities, move, turn, remove
 // In edit mode a tap selects instead of switching, and devices, lamps and furniture can be dragged.
-import { mdiAlertCircleOutline, mdiArrowULeftTop, mdiArrowURightTop, mdiCheckboxBlankCircleOutline, mdiCheckCircle, mdiCheckCircleOutline, mdiClose, mdiInformationOutline, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight } from "@mdi/js";
+import { mdiAlertCircleOutline, mdiArrowULeftTop, mdiArrowURightTop, mdiCheckboxBlankCircleOutline, mdiCheckCircle, mdiCheckCircleOutline, mdiClose, mdiInformationOutline, mdiContentSave, mdiDelete, mdiFlipHorizontal, mdiMagnify, mdiPlus, mdiRotateLeft, mdiRotateRight, mdiChevronDown } from "@mdi/js";
 import { autoPlace, linkRoomsByName } from "../auto/placement";
 import { importRoomPlan, isRoomPlan, type Detections, type Manifest } from "../import/roomplan";
 import { importSimple, isSimplePlan } from "../import/simple";
@@ -243,6 +243,13 @@ export class Editor {
   private houseTypes: HouseTypes | null = null;
   /** A house type is going in: not a first room drawn by hand. */
   private starting = false;
+  private closed = false;
+  /** A house type is showing in 3D while it is being chosen (the plan is not changed yet). */
+  private previewing = false;
+  /** The Home tab's parts the user opened or closed, by heading. */
+  private secOpen = new Map<string, boolean>();
+  /** How far the house reached when the 2D plan opened. */
+  private extentIn2d = "";
 
   constructor(private host: EditorHost) {
     this.plan = structuredClone(host.plan);
@@ -278,7 +285,7 @@ export class Editor {
     );
     const viewer = host.view.viewer;
     viewer.editMode = true;
-    showHint(host.view.root, "editor.select", t("editor.hint.select"));
+    this.hint();
     viewer.onDrag = (hit, x, z, phase) => this.onDrag(hit, x, z, phase);
     viewer.canDrag = (hit) => this.isHandle(hit);
     window.addEventListener("keydown", this.onKey);
@@ -325,6 +332,7 @@ export class Editor {
     root.classList.toggle("plan2d", on);
     if (on && !this.plan2d) {
       const viewer = this.host.view.viewer;
+      this.extentIn2d = this.extent();
       this.plan2d = new Plan2D({
         plan: () => this.plan,
         selection: () => this.sel,
@@ -346,6 +354,7 @@ export class Editor {
         },
         floor: () => (viewer.mode === "floor" ? viewer.activeFloor : 0),
         setFloor: (i) => this.host.view.showFloor(i),
+        newFloor: () => this.newFloor(),
         status: (text) => (this.status.textContent = text),
         images: {
           upload: (floorId, image, progress) => uploadImage(this.hass, floorId, image, progress),
@@ -354,12 +363,35 @@ export class Editor {
       });
       root.append(this.plan2d.el);
       root.querySelector(".vh-hint")?.remove();
-      showHint(root, "editor.measure", t("editor.hint.measure"));
+      this.hint();
       this.status.textContent = t("editor.main.selectSomethingThenDrag");
     } else if (!on && this.plan2d) {
       this.plan2d.dispose();
       this.plan2d = null;
+      root.querySelector(".vh-hint")?.remove();
+      this.hint();
+      // the house grew or shrank while it was drawn from above: the 3D view goes to all of it again
+      if (this.extent() !== this.extentIn2d) this.host.view.viewer.frame(true);
     }
+  }
+
+  /** How far the house reaches (rooms and garden, every storey), to the nearest half metre. */
+  private extent(): string {
+    const pts = this.plan.floors.flatMap((f) => [...f.rooms, ...(f.outdoor ?? [])].flatMap((r) => r.points));
+    if (!pts.length) return "";
+    const b = bounds(pts);
+    return [b.minX, b.minZ, b.maxX, b.maxZ].map((v) => Math.round(v * 2)).join(",");
+  }
+
+  /**
+   * The first-time hint for what is on screen: selecting in 3D, measurements in the 2D plan (at the bottom,
+   * clear of its tools). Not before there is a room: an empty plan has nothing to select or measure.
+   */
+  private hint(): void {
+    if (this.closed || !this.plan.floors.some((f) => f.rooms.length > 0)) return;
+    const root = this.host.view.root;
+    if (this.plan2d) showHint(root, "editor.measure", t("editor.hint.measure"), "bottom");
+    else showHint(root, "editor.select", t("editor.hint.select"));
   }
 
   /**
@@ -439,6 +471,7 @@ export class Editor {
     if (!quiet) this.render();
     this.status.textContent = this.savedText();
     this.updateHistoryButtons();
+    this.hint();
   }
 
   private updateHistoryButtons(): void {
@@ -563,6 +596,9 @@ export class Editor {
     viewer.editRoof(false);
     cancelAnimationFrame(this.dragRaf);
     window.removeEventListener("keydown", this.onKey);
+    this.closed = true;
+    if (this.previewing) viewer.forceRoof(null);
+    this.host.view.root.querySelector(".vh-hint")?.remove();
     this.plan2d?.dispose();
     this.plan2d = null;
     this.host.view.root.classList.remove("plan2d");
@@ -907,50 +943,11 @@ export class Editor {
   private homeTab(): HTMLElement {
     const fileIn = h("input", { type: "file", accept: ".json,.sh3d,application/json", multiple: true, hidden: true, onchange: (e: Event) => this.importFiles((e.target as HTMLInputElement).files) });
     const planIn = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: (e: Event) => this.loadPlanFile((e.target as HTMLInputElement).files?.[0]) });
-    const box = h("div", {},
-      this.houseTypes?.el,
-      ...this.setupSection(() => fileIn.click()),
-      ...this.checkSection(),
-      ...this.demoSection(),
-      this.houseTypes ? null : h("h4", {}, t("editor.houseType")),
-      this.houseTypes ? null : h("p", { class: "ed-hint" }, t("editor.home.aReadyMadeHome")),
-      this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, t("editor.home.startFromAHouse")),
-      h("div", { class: "ed-scan" },
-        h("h4", {}, t("editor.home.import")),
-        h("p", { class: "ed-hint" }, t("editor.home.aHouseScanScan")),
-        h("button", { class: "ed-btn", onclick: () => fileIn.click() }, t("editor.importAScanOr")),
-      ),
-      fileIn,
-      h("h4", {}, t("editor.devices")),
-      h("p", { class: "ed-hint" }, t("editor.home.linksRoomsToAreas")),
-      h("button", { class: "ed-btn", onclick: () => this.runAutoPlace() }, t("editor.placeDevicesAutomatically")),
-      h("div", { class: "ed-report" }),
-      h("h4", {}, t("editor.home.outsideWalls")),
-      this.finishChips(EXTERIOR_FINISHES, this.plan.settings.exterior_finish ?? "render", (k) =>
-        this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, t("editor.home.outsideWallsName", { name: t((EXTERIOR_FINISHES as Record<string, FinishDef>)[k].label) })), this.plan.settings.exterior_color),
-      (EXTERIOR_FINISHES as Record<string, FinishDef>)[this.plan.settings.exterior_finish ?? "render"]?.tintable
-        ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, t("editor.home.outsideWallColour")))
-        : null,
-      ...this.roofSection(),
-      ...this.energySection(),
-      ...this.peopleSection(),
-      ...this.topBarSection(),
-      ...this.helpSection(),
-      ...this.skySection(),
-      h("h4", {}, t("editor.home.floors")),
-      ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
-      h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.addFloor() }, t("editor.home.addAFloor"))),
-      h("p", { class: "ed-hint" }, t("editor.home.aNewFloorGoes", { x: this.plan.floors.some((f) => (f.roofs ?? []).length) ? ` ${t("editor.home.thenTapTheRoof")}` : "" })),
-      h("h4", {}, t("editor.home.planFile")),
-      h("div", { class: "ed-row" },
-        h("button", { class: "ed-btn ghost", onclick: () => this.downloadPlan() }, t("editor.home.download")),
-        h("button", { class: "ed-btn ghost", onclick: () => planIn.click() }, t("editor.home.load")),
-        planIn,
-      ),
-    );
+    // the last 20 saves, to go back to (asked for when the tab is drawn)
+    const restore: HTMLElement[] = [];
     if (this.host.restorePoints) {
       const list = h("div", { class: "ed-list" }, h("p", { class: "ed-hint" }, t("editor.loading")));
-      box.append(h("h4", {}, t("editor.home.restorePoints")), list);
+      restore.push(h("h4", {}, t("editor.home.restorePoints")), list);
       this.host.restorePoints().then((points) => {
         list.replaceChildren(...(points.length ? points.map((p) =>
           h("div", { class: "ed-item" },
@@ -962,7 +959,90 @@ export class Editor {
           )) : [h("p", { class: "ed-hint" }, t("editor.home.noneYetEverySave"))]));
       }).catch(() => list.replaceChildren(h("p", { class: "ed-hint" }, t("editor.home.notAvailableHere"))));
     }
+    const checks = this.checkSection();
+    // each part folds under its heading: getting started stays open while it has steps, the checks while one found something
+    const box = h("div", {},
+      this.houseTypes?.el,
+      // what the last step did (a house type, an import, Smart Setup), where it is seen at once
+      h("div", { class: "ed-report" }),
+      ...this.section(this.setupSection(() => fileIn.click()), true),
+      ...this.section(checks, checks.some((n) => n.classList.contains("ed-result") && !n.classList.contains("ok"))),
+      ...this.section([
+        h("h4", {}, t("editor.home.waysIn")),
+        ...this.demoSection(),
+        this.houseTypes ? null : h("h4", {}, t("editor.houseType")),
+        this.houseTypes ? null : h("p", { class: "ed-hint" }, t("editor.home.aReadyMadeHome")),
+        this.houseTypes ? null : h("button", { class: "ed-btn ghost", onclick: () => this.openHouseTypes() }, t("editor.home.startFromAHouse")),
+        h("div", { class: "ed-scan" },
+          h("h4", {}, t("editor.home.import")),
+          h("p", { class: "ed-hint" }, t("editor.home.aHouseScanScan")),
+          h("button", { class: "ed-btn", onclick: () => fileIn.click() }, t("editor.importAScanOr")),
+        ),
+      ]),
+      fileIn,
+      ...this.section([
+        h("h4", {}, t("editor.devices")),
+        h("p", { class: "ed-hint" }, t("editor.home.linksRoomsToAreas")),
+        h("button", { class: "ed-btn", onclick: () => this.runAutoPlace() }, t("editor.placeDevicesAutomatically")),
+      ]),
+      ...this.section([
+        h("h4", {}, t("editor.home.outsideWalls")),
+        this.finishChips(EXTERIOR_FINISHES, this.plan.settings.exterior_finish ?? "render", (k) =>
+          this.change((p) => (p.settings.exterior_finish = k as Plan["settings"]["exterior_finish"]), false, t("editor.home.outsideWallsName", { name: t((EXTERIOR_FINISHES as Record<string, FinishDef>)[k].label) })), this.plan.settings.exterior_color),
+        (EXTERIOR_FINISHES as Record<string, FinishDef>)[this.plan.settings.exterior_finish ?? "render"]?.tintable
+          ? this.colourPicker(PAINT_SWATCHES, this.plan.settings.exterior_color, (c) => this.change((p) => (p.settings.exterior_color = c), false, t("editor.home.outsideWallColour")))
+          : null,
+      ]),
+      ...this.section(this.roofSection()),
+      ...this.section(this.skySection()),
+      ...this.section([
+        h("h4", {}, t("editor.home.floors")),
+        ...this.plan.floors.map((f, i) => this.floorRow(f, i)),
+        h("div", { class: "ed-row" }, h("button", { class: "ed-btn ghost small", onclick: () => this.addFloor() }, t("editor.home.addAFloor"))),
+        h("p", { class: "ed-hint" }, t("editor.home.aNewFloorGoes", { x: this.plan.floors.some((f) => (f.roofs ?? []).length) ? ` ${t("editor.home.thenTapTheRoof")}` : "" })),
+      ]),
+      ...this.section(this.energySection()),
+      ...this.section(this.peopleSection()),
+      ...this.section(this.topBarSection()),
+      ...this.section([
+        h("h4", {}, t("editor.home.planFile")),
+        h("div", { class: "ed-row" },
+          h("button", { class: "ed-btn ghost", onclick: () => this.downloadPlan() }, t("editor.home.download")),
+          h("button", { class: "ed-btn ghost", onclick: () => planIn.click() }, t("editor.home.load")),
+          planIn,
+        ),
+        ...restore,
+      ]),
+      ...this.section(this.helpSection()),
+    );
     return box;
+  }
+
+  /**
+   * A part of the Home tab, folded under its heading until the heading is tapped. `nodes` start with the
+   * heading (an h4); `open` is how the part starts, until the user opens or closes it (kept while the
+   * editor is open). Nodes that start with no heading are left as they are.
+   */
+  private section(nodes: (HTMLElement | null | undefined | false)[], open = false): HTMLElement[] {
+    const list = nodes.filter((n): n is HTMLElement => !!n);
+    const head = list[0];
+    if (!head || head.tagName !== "H4") return list;
+    const title = head.textContent ?? "";
+    const body = h("div", { class: "ed-sec-b" }, ...list.slice(1));
+    const button = h("button", { class: "ed-sec-h", type: "button" }, h("span", {}, title), h("span", { class: "ed-sec-i", html: svg(mdiChevronDown) }));
+    const sec = h("section", { class: "ed-sec" }, h("h4", {}, button), body);
+    const set = (on: boolean) => {
+      body.hidden = !on;
+      button.setAttribute("aria-expanded", String(on));
+      sec.classList.toggle("open", on);
+    };
+    set(this.secOpen.get(title) ?? open);
+    button.onclick = () => {
+      const on = body.hidden !== false;
+      this.secOpen.set(title, on);
+      set(on);
+    };
+    return [sec];
   }
 
   /** Look at the demo home (not in the online demo, which is one). */
@@ -1200,6 +1280,9 @@ export class Editor {
 
   /** Scrolls the drawer (only the drawer: scrollIntoView would move the page around it too). */
   private scrollDrawerTo(el: HTMLElement): void {
+    // a folded part opens first
+    const sec = el.closest<HTMLElement>(".ed-sec");
+    if (sec && !sec.classList.contains("open")) sec.querySelector<HTMLElement>(".ed-sec-h")?.click();
     this.body.scrollTop += el.getBoundingClientRect().top - this.body.getBoundingClientRect().top - 6;
   }
 
@@ -1620,7 +1703,7 @@ export class Editor {
           ),
           h("div", { class: "ed-row" },
             h("label", {}, t("editor.area")),
-            this.dropdown(areas.map((a) => [a.area_id, a.name]), r.area_id ?? "", (v) => this.change((p) => (p.floors[fi].rooms[ri].area_id = v || null)), t("editor.notLinked")),
+            this.dropdown(areas.map((a) => [a.area_id, a.name]), r.area_id ?? "", (v) => this.linkRoom(fi, r.id, v || null), t("editor.notLinked")),
           ),
           h("div", { class: "ed-row" },
             h("label", {}, t("editor.floor")),
@@ -1695,6 +1778,24 @@ export class Editor {
     return this.furniturePanel(fi, f.furniture.find((x) => x.id === s.id));
   }
 
+  /** A room still called what it was made as (Room 3, New room), or nothing. */
+  private unnamed(name: string): boolean {
+    const text = name.trim();
+    const made = (pattern: string) => new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("§", "\\d+")}$`, "i").test(text);
+    return !text || text === t("editor.add.newRoom") || made(t("editor.plan.roomN", { n: "§" })) || made(t("editor.findRooms.roomX", { x: "§" }));
+  }
+
+  /** Links a room to an area (or to none). A room that has no name of its own yet takes the area's. */
+  private linkRoom(fi: number, id: string, area: string | null): void {
+    const name = area ? this.hass.areas?.[area]?.name : null;
+    this.change((p) => {
+      const r = p.floors[fi]?.rooms.find((x) => x.id === id);
+      if (!r) return;
+      r.area_id = area;
+      if (name && this.unnamed(r.name)) r.name = name;
+    });
+  }
+
   private roomPanel(fi: number, room: Room | undefined): HTMLElement {
     if (!room) return h("div", {});
     const f = this.plan.floors[fi];
@@ -1705,8 +1806,19 @@ export class Editor {
     const updRoom = (label: string, fn: (r: Room) => void) => this.change((p) => fn(p.floors[fi].rooms.find((r) => r.id === room.id)!), false, label);
     const wallFinish = room.wall_finish ?? "paint";
     const inRoom = f.furniture.filter((x) => pointInPolygon([x.x, x.z], room.points));
+    // the areas no room has yet come first: they are the ones still to give out
+    const taken = new Set(this.plan.floors.flatMap((x) => x.rooms).filter((r) => r.id !== room.id).map((r) => r.area_id));
+    const areas = Object.values(this.hass.areas ?? {}).sort((a, b) => Number(taken.has(a.area_id)) - Number(taken.has(b.area_id)) || a.name.localeCompare(b.name));
     return h("div", {},
       h("h4", {}, room.name),
+      h("div", { class: "ed-row" },
+        h("label", {}, t("editor.outdoor.name")),
+        h("input", { class: "ed-in", value: room.name, "aria-label": t("editor.outdoor.name"), onchange: (e: Event) => updRoom(t("editor.main.change"), (r) => (r.name = (e.target as HTMLInputElement).value)) }),
+      ),
+      h("div", { class: "ed-row" },
+        h("label", {}, t("editor.area")),
+        this.dropdown(areas.map((a) => [a.area_id, a.name]), room.area_id ?? "", (v) => this.linkRoom(fi, room.id, v || null), t("editor.notLinked")),
+      ),
       h("div", { class: "ed-sub" }, t("editor.floor")),
       this.finishChips(FLOOR_FINISHES, room.floor ?? "wood", (k) => updRoom(t("editor.nameFloor", { name: room.name }), (r) => (r.floor = k as FloorMaterial))),
       h("div", { class: "ed-sub" }, t("editor.room.walls")),
@@ -3099,19 +3211,29 @@ export class Editor {
       this.host.view.viewer.setMode("house");
       this.showReport([
         ...lines,
-        t("editor.nDevicesPlacedN2", { n: placed.report.placed.length, n2: placed.report.linked.length, n3: placed.report.roomsLinked.length }),
-      ], ".ed-scan");
+        this.setupLine(placed.report),
+      ]);
     };
     if (this.plan.floors.some((f) => f.rooms.length)) {
       this.confirm(t("editor.import.replaceTheWholePlan"), t("editor.replace"), go);
     } else go();
   }
 
+  /** What Smart Setup did, in a sentence: each count in its own words for one and for more. */
+  private setupLine(r: { placed: unknown[]; linked: unknown[]; roomsLinked: unknown[] }): string {
+    const parts = [
+      t("editor.import.setupPlaced", { n: r.placed.length }),
+      ...(r.linked.length ? [t("editor.import.setupOnOpenings", { n: r.linked.length })] : []),
+      ...(r.roomsLinked.length ? [t("editor.import.setupRooms", { n: r.roomsLinked.length })] : []),
+    ];
+    return t("editor.import.setup", { parts: parts.join(", ") });
+  }
+
   private runAutoPlace(): void {
     const { plan, report } = autoPlace(this.plan, this.hass);
     this.change((p) => Object.assign(p, plan));
     this.showReport([
-      t("editor.autoPlace.nDevicesPlacedN2", { n: report.placed.length, n2: report.linked.length, n3: report.roomsLinked.length }),
+      this.setupLine(report),
       ...(report.unplaced.length ? [t("editor.nDevicesAreIn", { n: report.unplaced.length })] : []),
       ...report.placed.slice(0, 30),
     ]);
@@ -3122,13 +3244,36 @@ export class Editor {
     this.houseTypes ??= new HouseTypes({
       use: (plan, name) => this.useHouseType(plan, name),
       close: () => {
+        this.previewHouse(null);
         this.houseTypes = null;
         this.render();
       },
       reveal: (el) => this.scrollDrawerTo(el),
+      preview: (plan) => this.previewHouse(plan),
     });
     this.show("home");
     this.body.scrollTop = 0;
+  }
+
+  /**
+   * A house type being chosen shows in the 3D view in place of the plan, its roofs off so the rooms and
+   * their furniture can be seen. The plan itself stays as it is until one is used; null shows it again.
+   */
+  private previewHouse(house: Plan | null): void {
+    const view = this.host.view;
+    if (!house) {
+      if (!this.previewing) return;
+      this.previewing = false;
+      view.viewer.forceRoof(null);
+      view.previewPlan(this.plan);
+      return;
+    }
+    const { wall_exterior, wall_interior, exterior_finish } = house.settings;
+    this.previewing = true;
+    view.previewPlan({ ...structuredClone(this.plan), floors: house.floors, settings: { ...this.plan.settings, wall_exterior, wall_interior, exterior_finish, exterior_color: null } });
+    view.viewer.forceRoof(false);
+    view.viewer.setMode("house");
+    view.viewer.frame(true);
   }
 
   /**
@@ -3147,6 +3292,8 @@ export class Editor {
       const next: Plan = { ...structuredClone(this.plan), floors, settings: { ...this.plan.settings, wall_exterior, wall_interior, exterior_finish, exterior_color: null } };
       const placed = autoPlace(next, this.hass);
       this.houseTypes = null;
+      if (this.previewing) this.host.view.viewer.forceRoof(null);
+      this.previewing = false;
       this.starting = true;
       this.change((p) => Object.assign(p, placed.plan), false, t("editor.houseType.startFromName", { name: name.toLowerCase() }));
       this.starting = false;
@@ -3157,28 +3304,34 @@ export class Editor {
       const r = placed.report;
       this.showReport([
         t("editor.houseType.summary", { name, rooms, n: floors.length, openings }),
-        t("editor.nDevicesPlacedN2", { n: r.placed.length, n2: r.linked.length, n3: r.roomsLinked.length }),
+        this.setupLine(r),
         ...(r.unplaced.length ? [t("editor.nDevicesAreIn", { n: r.unplaced.length })] : []),
         ...r.roomsLinked.slice(0, 20),
       ]);
-      const report = this.body.querySelector<HTMLElement>(".ed-report");
-      if (report) this.scrollDrawerTo(report);
+
     };
     if (this.plan.floors.some((f) => f.rooms.length)) this.confirm(t("editor.houseType.replaceTheCurrentPlan"), t("editor.replace"), go);
     else go();
   }
 
-  /** The report on the Home tab, scrolled to `from` (a section above it) when given. */
-  private showReport(lines: string[], from?: string): void {
+  /** What the last step did, at the top of the Home tab. */
+  private showReport(lines: string[]): void {
     this.show("home");
     const r = this.body.querySelector(".ed-report");
     r?.replaceChildren(...lines.map((l) => h("div", {}, l)));
-    const top = from ? this.body.querySelector<HTMLElement>(from) : null;
-    if (top) this.scrollDrawerTo(top);
+    this.body.scrollTop = 0;
   }
 
   /** A storey on top of the house: as high as the one below, linked to the Home Assistant floor of its level when there is one. */
   private addFloor(): void {
+    const floor = this.newFloor();
+    this.change((p) => p.floors.push(floor), false, t("editor.addName", { name: floor.name }));
+    this.select(null);
+    this.host.view.showFloor(this.plan.floors.length - 1);
+  }
+
+  /** A storey for the top of the house, not yet on the plan: named, as high as the one below, linked to the Home Assistant floor of its level. */
+  private newFloor(): Floor {
     const floors = this.plan.floors;
     const top = floors.reduce<Floor | null>((a, f) => (!a || f.elevation >= a.elevation ? f : a), null);
     const n = floors.length;
@@ -3192,9 +3345,7 @@ export class Editor {
       elevation: top ? Math.round((top.elevation + top.height) * 100) / 100 : 0, height: top?.height ?? 2.6,
       rooms: [], openings: [], furniture: [], devices: [], walls: [], outdoor: [], fences: [], roofs: [],
     };
-    this.change((p) => p.floors.push(floor), false, t("editor.addName", { name }));
-    this.select(null);
-    this.host.view.showFloor(this.plan.floors.length - 1);
+    return floor;
   }
 
   /** Takes a storey out with everything on it; the others keep their levels. */

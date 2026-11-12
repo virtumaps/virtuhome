@@ -15,6 +15,7 @@ export const NL: DemoStrings = {
     getIt: "Download VirtuHome",
     language: "Taal",
     failed: "De demo kon in deze browser niet starten.",
+    hint: "Sleep om het huis te draaien. Tik op een lamp, een deur of een kamer.",
   },
 
   house: {

@@ -94,7 +94,21 @@ a.ed-btn { display: inline-block; text-decoration: none; }
 .ed-pick b { font-size: 12px; font-weight: 600; }
 .ed-pick small { font-size: 11px; color: var(--vh-dim); }
 .ed-pick:hover { box-shadow: inset 0 0 0 1.5px var(--vh-accent); }
-.ed-report { margin-top: 8px; color: var(--vh-dim); line-height: 1.45; }
+.ed-report { margin: 4px 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--vh-chip); color: var(--vh-text); line-height: 1.45; }
+.ed-report:empty { display: none; }
+/* the Home tab's parts fold under their headings */
+.ed-sec { border-top: 1px solid var(--vh-line); }
+.ed-body .ed-sec > h4 { margin: 0; }
+.ed-sec-h {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 2px; border: 0; background: none; cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; text-align: left;
+}
+.ed-sec-h:hover, .ed-sec.open > h4 .ed-sec-h { color: var(--vh-text); }
+.ed-sec-h:focus-visible { outline: 2px solid var(--vh-accent); outline-offset: -2px; border-radius: 8px; }
+.ed-sec-i svg { display: block; width: 18px; height: 18px; fill: currentColor; transition: transform 0.15s; }
+.ed-sec.open .ed-sec-i svg { transform: rotate(180deg); }
+.ed-sec-b { padding-bottom: 12px; }
+.ed-sec-b > h4:first-child, .ed-sec-b > :first-child > h4:first-child { margin-top: 2px; }
 .ed-result span svg { width: 18px; height: 18px; display: block; fill: var(--vh-dim); }
 .ed-result.ok span svg { fill: #2bb673; }
 .ed-result.problem span svg { fill: #e5484d; }
