@@ -270,13 +270,16 @@ async function run() {
   page.on("console", (m) => m.type() === "error" && /virtuhome/i.test(`${m.text()} ${m.location().url}`) && problems.push(`console: ${m.text()}`));
 
   const panel = "virtuhome-panel";
-  await step("The panel opens with nothing drawn before there is a plan", async () => {
+  await step("Before there is a plan the panel offers the ways to get a home in, over the demo house", async () => {
     await page.goto(`${url}/virtuhome`);
-    const p = await waitDrawn(page, panel, false);
-    // the first run offers the demo home
+    const choices = page.locator(`${panel} .vh-start-choice`);
+    await choices.first().waitFor({ state: "visible", timeout: 30_000 });
+    check((await choices.count()) === 4, `the first run offers ${await choices.count()} ways to start, not four`);
+    // it offers the demo home, and shows that house behind the choices
     await page.locator(`${panel} .vh-start-demo`).waitFor({ state: "visible", timeout: 30_000 });
+    const p = await waitDrawn(page, `${panel} .vh-hero`);
     await page.screenshot({ path: join(shots, "empty.png") });
-    return `${p.share}% of the view drawn`;
+    return `${p.share}% of the picture behind the choices drawn`;
   });
 
   for (const file of fixtures) {
