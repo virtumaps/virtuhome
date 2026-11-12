@@ -28,11 +28,11 @@
     },
     "extension_needs_update": {
       "title": "A VirtuHome extension can't load",
-      "description": "{count} of your VirtuHome extensions need a newer VirtuHome or could not load. Update VirtuHome and VirtuHome Pro through HACS and restart Home Assistant; Edit → Home → Check my setup in VirtuHome says which. This goes away once they load."
+      "description": "{count} of your VirtuHome extensions need a newer VirtuHome or could not load. Update VirtuHome and VirtuHome Pro through the Marketplace (or HACS) and restart Home Assistant; Edit → Home → Check my setup in VirtuHome says which. This goes away once they load."
     },
     "pro_needed": {
       "title": "Your VirtuHome extensions now come with VirtuHome Pro",
-      "description": "Since VirtuHome 0.18, extensions come with VirtuHome Pro, an integration of its own, and this Home Assistant has a licence key for them. Open VirtuHome → Edit → Extras → Open in HACS, download VirtuHome Pro and restart Home Assistant. Your key, trials and the automations the extensions added carry on as they were, with nothing to enter again. This goes away once VirtuHome Pro is installed."
+      "description": "Since VirtuHome 0.18, extensions come with VirtuHome Pro, an integration of its own, and this Home Assistant has a licence key for them. Open VirtuHome → Edit → Extras → Open in the Marketplace, install VirtuHome Pro and restart Home Assistant. Your key, trials and the automations the extensions added carry on as they were, with nothing to enter again. This goes away once VirtuHome Pro is installed."
     }
   }
 }

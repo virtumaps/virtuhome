@@ -41,6 +41,9 @@
   minute, as everything else does; they still show over the whole house while they play or work.
   Music can play for hours, and its pulse kept a wall tablet drawing about ten frames a second all
   that time.
+- Home Assistant 2026.11 has HACS built in as the Marketplace, so VirtuHome's texts now send you
+  there (or to HACS on older versions): Edit → **Extras** has **Open in the Marketplace**, and Repairs,
+  Check my setup, the README, the guide's install steps and the online demo's tour say so.
 
 ## 0.19.0
 

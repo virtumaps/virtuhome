@@ -706,7 +706,7 @@ export const DE: Translation = {
   "checks.graphics.auto": "Automatisch: {tier}.",
   "checks.graphics.picked": "Auf diesem Gerät gewählt: {tier}.",
   "checks.extensions.title": "Erweiterungen",
-  "checks.extensions.newer": { one: "{names} braucht ein neueres VirtuHome: aktualisiere VirtuHome in HACS.", other: "{names} brauchen ein neueres VirtuHome: aktualisiere VirtuHome in HACS." },
+  "checks.extensions.newer": { one: "{names} braucht ein neueres VirtuHome: aktualisiere VirtuHome im Marketplace (oder in HACS).", other: "{names} brauchen ein neueres VirtuHome: aktualisiere VirtuHome im Marketplace (oder in HACS)." },
   "checks.extensions.broken": "{names} konnte nicht geladen werden.",
   "checks.extensions.none": "Keine Erweiterungen. Es gibt sie mit VirtuHome Pro (Bearbeiten → Extras).",
   "automations.title": "Eine Automatisierung zu Home Assistant hinzufügen?",

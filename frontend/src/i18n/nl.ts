@@ -706,7 +706,7 @@ export const NL: Translation = {
   "checks.graphics.auto": "Automatisch: {tier}.",
   "checks.graphics.picked": "Gekozen op dit apparaat: {tier}.",
   "checks.extensions.title": "Uitbreidingen",
-  "checks.extensions.newer": { one: "{names} heeft een nieuwere VirtuHome nodig: werk VirtuHome bij in HACS.", other: "{names} hebben een nieuwere VirtuHome nodig: werk VirtuHome bij in HACS." },
+  "checks.extensions.newer": { one: "{names} heeft een nieuwere VirtuHome nodig: werk VirtuHome bij in de Marktplaats (of HACS).", other: "{names} hebben een nieuwere VirtuHome nodig: werk VirtuHome bij in de Marktplaats (of HACS)." },
   "checks.extensions.broken": "{names} kon niet worden geladen.",
   "checks.extensions.none": "Geen uitbreidingen. Die komen met VirtuHome Pro (Bewerken → Extra's).",
   "automations.title": "Een automatisering aan Home Assistant toevoegen?",

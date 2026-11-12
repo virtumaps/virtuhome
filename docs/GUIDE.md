@@ -44,12 +44,16 @@ right turn the sound off, pause, skip a line or close the tour (**Esc**); the sp
 
 ## Install
 
-You need Home Assistant 2025.4 or later and [HACS](https://hacs.xyz).
+You need Home Assistant 2025.4 or later. From 2026.11, Home Assistant has HACS built in as the
+**Marketplace**; older versions need [HACS](https://hacs.xyz).
 
-1. Search for **VirtuHome** in HACS, download it, and restart Home Assistant. Or
-   [open VirtuHome in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=virtumaps&repository=virtuhome&category=integration) straight from here.
-2. Settings → Devices & services → **Add integration** → **VirtuHome**. One Home Assistant has one
-   VirtuHome.
+1. In Home Assistant 2026.11 or later: Settings → **Marketplace**, search for **VirtuHome**,
+   **Install** it, and restart Home Assistant if it asks. On older versions: search for **VirtuHome**
+   in HACS, download it, and restart Home Assistant. Or
+   [open VirtuHome in the Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=virtumaps&repository=virtuhome&category=integration)
+   (or HACS) straight from here.
+2. Settings → Devices & services → **Add integration** → **VirtuHome**, unless the Marketplace has
+   opened its setup already. One Home Assistant has one VirtuHome.
 3. Reload the page in your browser. **VirtuHome** is now in the sidebar, and the VirtuHome card is
    in your dashboards' card picker.
 4. Open **VirtuHome** in the sidebar. A new home shows **Let's get your home in**: pick **Trace a
@@ -64,8 +68,8 @@ You need Home Assistant 2025.4 or later and [HACS](https://hacs.xyz).
 Everyone can open VirtuHome in the sidebar. Only administrators see **Edit**, and only there, not on
 dashboard cards.
 
-**Updating:** HACS shows when a new version is out. Download it, restart Home Assistant and reload
-the page. Your plan stays as it is.
+**Updating:** a new version shows under Settings → **Updates** (and in HACS on older versions).
+Install it, restart Home Assistant and reload the page. Your plan stays as it is.
 
 ## Find your way around
 
@@ -886,18 +890,20 @@ devices** among its buttons (see [Keyboard and screen readers](#keyboard-and-scr
 ## Extensions and VirtuHome Pro
 
 VirtuHome is free and open source. Extensions add more (the table below). They come with
-**VirtuHome Pro**, an integration of its own from VirtuMaps that isn't in HACS's default list, and
+**VirtuHome Pro**, an integration of its own from VirtuMaps that isn't in the Marketplace's list, and
 are currently available to VirtuMaps installation clients.
 
 **Install VirtuHome Pro (once):**
-1. Edit → **Extras** → **Open in HACS**. HACS asks to add the repository
-   `virtumaps/virtuhome-pro-integration`: **Add**. (By hand: HACS → ⋮ → **Custom repositories**,
-   that repository with the type **Integration**.)
-2. **Download**, then restart Home Assistant.
+1. Edit → **Extras** → **Open in the Marketplace**. The Marketplace (HACS on older versions) asks
+   to add the custom repository `virtumaps/virtuhome-pro-integration`: **Add**. Adding one needs a
+   GitHub connection: if the Marketplace asks you to connect GitHub, do, then open it again. (By hand:
+   Settings → **Marketplace** → **Add from link**, `virtumaps/virtuhome-pro-integration`, **Add**. In
+   HACS: ⋮ → **Custom repositories**, that repository with the type **Integration**.)
+2. **Install** (**Download** in HACS), then restart Home Assistant.
 3. VirtuHome Pro sets itself up after the restart. Reload the page: **Extras** shows the licence and
    the extensions.
 
-Its updates come through HACS, like VirtuHome's.
+Its updates come like VirtuHome's, under Settings → **Updates**.
 
 **Coming from VirtuHome 0.17 or earlier:** extensions used to come with VirtuHome itself. Since 0.18
 they need VirtuHome Pro; until it's installed, **Settings → System → Repairs** says **Your VirtuHome
@@ -1086,8 +1092,8 @@ home in](#get-your-home-in). Dashboard cards only show the house once it is ther
 **No solar, battery or grid in the corner**: set them up in Home Assistant's energy dashboard, or
 pick the sensors in Edit → **Home** → **Energy**.
 
-**Extras still says Open in HACS after installing VirtuHome Pro**: restart Home Assistant once it's
-downloaded, then reload the page.
+**Extras still says Open in the Marketplace after installing VirtuHome Pro**: restart Home Assistant
+once it's installed, then reload the page.
 
 **Extensions don't show after activating**: tap **Reload now**, or reload the page.
 

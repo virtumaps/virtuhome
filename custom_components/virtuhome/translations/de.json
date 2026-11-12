@@ -28,11 +28,11 @@
     },
     "extension_needs_update": {
       "title": "Eine VirtuHome-Erweiterung kann nicht geladen werden",
-      "description": "{count} deiner VirtuHome-Erweiterungen brauchen ein neueres VirtuHome oder konnten nicht geladen werden. Aktualisiere VirtuHome und VirtuHome Pro über HACS und starte Home Assistant neu; Bearbeiten → Zuhause → Meine Einrichtung prüfen in VirtuHome sagt, welche. Das verschwindet, sobald sie laden."
+      "description": "{count} deiner VirtuHome-Erweiterungen brauchen ein neueres VirtuHome oder konnten nicht geladen werden. Aktualisiere VirtuHome und VirtuHome Pro über den Marketplace (oder HACS) und starte Home Assistant neu; Bearbeiten → Zuhause → Meine Einrichtung prüfen in VirtuHome sagt, welche. Das verschwindet, sobald sie laden."
     },
     "pro_needed": {
       "title": "Deine VirtuHome-Erweiterungen kommen jetzt mit VirtuHome Pro",
-      "description": "Seit VirtuHome 0.18 kommen Erweiterungen mit VirtuHome Pro, einer eigenen Integration, und dieses Home Assistant hat einen Lizenzschlüssel dafür. Öffne VirtuHome → Bearbeiten → Extras → In HACS öffnen, lade VirtuHome Pro herunter und starte Home Assistant neu. Dein Schlüssel, deine Testzeiträume und die Automationen der Erweiterungen laufen weiter wie bisher, ohne dass du etwas neu eingeben musst. Das verschwindet, sobald VirtuHome Pro installiert ist."
+      "description": "Seit VirtuHome 0.18 kommen Erweiterungen mit VirtuHome Pro, einer eigenen Integration, und dieses Home Assistant hat einen Lizenzschlüssel dafür. Öffne VirtuHome → Bearbeiten → Extras → Im Marketplace öffnen, installiere VirtuHome Pro und starte Home Assistant neu. Dein Schlüssel, deine Testzeiträume und die Automationen der Erweiterungen laufen weiter wie bisher, ohne dass du etwas neu eingeben musst. Das verschwindet, sobald VirtuHome Pro installiert ist."
     }
   }
 }

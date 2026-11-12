@@ -988,7 +988,7 @@ export const EN_EDITOR = {
   "editor.extras.extensions": "Extensions",
   "editor.extras.whatTheyAdd": "Extensions add more to VirtuHome: Energy, Security, Household, Wall Tablet and Network. They come with VirtuHome Pro, an integration of its own.",
   "editor.extras.getPro": "Get VirtuHome Pro",
-  "editor.extras.howToGet": "Open it in HACS, add the repository and download it, then restart Home Assistant. VirtuHome Pro sets itself up, and this tab is then where you enter your licence key.",
-  "editor.extras.openInHacs": "Open in HACS",
+  "editor.extras.howToGet": "Open it in the Marketplace (HACS on older versions of Home Assistant), add the repository and install it, then restart Home Assistant. VirtuHome Pro sets itself up, and this tab is then where you enter your licence key.",
+  "editor.extras.openInHacs": "Open in the Marketplace",
   "editor.extras.howItWorks": "How it works",
 } as const;
