@@ -79,11 +79,15 @@ with or without a scanner, devices, wall tablets, FAQ and troubleshooting. It is
 | **Finishes, colours and decor** | **2D plan with measurements** |
 | ![Editing a room's look](docs/screenshots/editor.jpg) | ![The 2D plan editor](docs/screenshots/plan.jpg) |
 
-## Install (HACS)
+## Install
 
-1. Search for **VirtuHome** in HACS, download it and restart Home Assistant. Or
-   [open VirtuHome in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=virtumaps&repository=virtuhome&category=integration) straight from here.
-2. Settings → Devices & services → Add integration → **VirtuHome**.
+1. In Home Assistant 2026.11 or later: Settings → **Marketplace**, search for **VirtuHome**, install
+   it, and restart Home Assistant if it asks. On older versions: search for **VirtuHome** in HACS,
+   download it and restart Home Assistant. Or
+   [open VirtuHome in the Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=virtumaps&repository=virtuhome&category=integration)
+   (or HACS) straight from here.
+2. Settings → Devices & services → Add integration → **VirtuHome**, unless the Marketplace has opened
+   its setup already.
 3. Open **VirtuHome** in the sidebar. Add the card to a dashboard with `type: custom:virtuhome-card`.
 
 The [user guide](docs/GUIDE.md) goes on from here.
@@ -221,9 +225,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md) a
 ## Extensions and VirtuHome Pro
 
 Extensions (Energy, Security, Household, Wall Tablet, Network) come with **VirtuHome Pro**, an
-integration of its own from VirtuMaps, installed from HACS as a custom repository
-([virtumaps/virtuhome-pro-integration](https://github.com/virtumaps/virtuhome-pro-integration)).
-Editor → **Extras** has **Open in HACS**. VirtuHome itself has no licence code, downloads nothing and
+integration of its own from VirtuMaps, installed from the Marketplace (or HACS on older versions) as a
+custom repository ([virtumaps/virtuhome-pro-integration](https://github.com/virtumaps/virtuhome-pro-integration)).
+Editor → **Extras** has **Open in the Marketplace**. VirtuHome itself has no licence code, downloads nothing and
 never loads code from outside this repository. VirtuHome Pro takes the licence key; the extensions it
 unlocks are verified, stored in Home Assistant and keep working offline (the guide says
 [how to install it and what is sent](docs/GUIDE.md#extensions-and-virtuhome-pro)).

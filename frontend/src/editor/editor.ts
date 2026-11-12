@@ -83,8 +83,11 @@ const TAB_HELP: Record<Tab, string> = {
   home: "get-your-home-in", rooms: "draw-it-in-the-2d-plan", devices: "place-your-devices", selected: "by-hand", extensions: "extensions-and-virtuhome-pro",
 };
 
-/** Opens VirtuHome Pro in HACS, which offers to add it as a custom repository first. */
-const PRO_HACS_LINK = "https://my.home-assistant.io/redirect/hacs_repository/?owner=virtumaps&repository=virtuhome-pro-integration&category=integration";
+/**
+ * Opens VirtuHome Pro in the Marketplace (HACS before Home Assistant 2026.11), which offers to add it
+ * as a custom repository first. My Home Assistant hands either one the same old hacs_repository link.
+ */
+const PRO_MARKETPLACE_LINK = "https://my.home-assistant.io/redirect/marketplace_repository/?owner=virtumaps&repository=virtuhome-pro-integration&category=integration";
 
 const OUTDOOR_KINDS: OutdoorKind[] = ["lawn", "patio", "deck", "path", "driveway", "bed", "gravel"];
 /** Common solar panel sizes (mm), long side first, newest first. */
@@ -1558,7 +1561,7 @@ export class Editor {
             h("b", {}, t("editor.extras.getPro")),
             h("p", { class: "ed-hint" }, t("editor.extras.howToGet")),
             h("div", { class: "ed-row" },
-              h("a", { class: "ed-btn small", href: PRO_HACS_LINK, target: "_blank", rel: "noopener" }, t("editor.extras.openInHacs")),
+              h("a", { class: "ed-btn small", href: PRO_MARKETPLACE_LINK, target: "_blank", rel: "noopener" }, t("editor.extras.openInHacs")),
               h("a", { class: "ed-btn ghost small", href: guideLink("extensions-and-virtuhome-pro"), target: "_blank", rel: "noopener" }, t("editor.extras.howItWorks")),
             ),
           ),

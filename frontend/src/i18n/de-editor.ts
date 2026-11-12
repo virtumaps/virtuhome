@@ -863,7 +863,7 @@ export const DE_EDITOR: Translation = {
   "editor.extras.extensions": "Erweiterungen",
   "editor.extras.whatTheyAdd": "Erweiterungen bringen mehr in VirtuHome: Energie, Sicherheit, Haushalt, Wandtablet und Netzwerk. Es gibt sie mit VirtuHome Pro, einer eigenen Integration.",
   "editor.extras.getPro": "VirtuHome Pro holen",
-  "editor.extras.howToGet": "Öffne es in HACS, füge das Repository hinzu und lade es herunter, dann starte Home Assistant neu. VirtuHome Pro richtet sich selbst ein, und hier gibst du dann deinen Lizenzschlüssel ein.",
-  "editor.extras.openInHacs": "In HACS öffnen",
+  "editor.extras.howToGet": "Öffne es im Marketplace (bei älteren Home-Assistant-Versionen in HACS), füge das Repository hinzu und installiere es, dann starte Home Assistant neu. VirtuHome Pro richtet sich selbst ein, und hier gibst du dann deinen Lizenzschlüssel ein.",
+  "editor.extras.openInHacs": "Im Marketplace öffnen",
   "editor.extras.howItWorks": "So funktioniert es",
 };

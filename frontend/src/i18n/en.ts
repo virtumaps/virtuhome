@@ -760,8 +760,8 @@ export const EN = {
   "checks.graphics.picked": "Picked on this device: {tier}.",
   "checks.extensions.title": "Extensions",
   "checks.extensions.newer": {
-    one: "{names} needs a newer VirtuHome: update VirtuHome in HACS.",
-    other: "{names} need a newer VirtuHome: update VirtuHome in HACS.",
+    one: "{names} needs a newer VirtuHome: update VirtuHome in the Marketplace (or HACS).",
+    other: "{names} need a newer VirtuHome: update VirtuHome in the Marketplace (or HACS).",
   },
   "checks.extensions.broken": "{names} could not load.",
   "checks.extensions.none": "No extensions. They come with VirtuHome Pro (Edit → Extras).",

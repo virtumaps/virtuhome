@@ -25,7 +25,7 @@ describe("the online demo site", () => {
   it("says it is a demo and loads nothing from elsewhere", () => {
     const page = demoPage(["chunk-A.js"]);
     expect(page).toContain("This is a demo.");
-    expect(page).toContain("https://github.com/virtumaps/virtuhome#install-hacs");
+    expect(page).toContain("https://github.com/virtumaps/virtuhome#install");
     expect(page).toContain('<link rel="modulepreload" href="chunk-A.js" />');
     expect(page).toContain('src="demo.js"');
     // no trackers or analytics: every script and stylesheet is the site's own
