@@ -9,14 +9,16 @@ in tour.ts makes it.
 Two voices:
   Kokoro      an open neural voice (Apache 2.0), on this computer: English, French, Spanish, Italian
               and Portuguese only.
-  ElevenLabs  one cheerful, human Pip in all 14 languages, with her mood in each line ([excited]...),
-              from its API: an account on a paid plan (which allows commercial use) and its API key.
+  ElevenLabs  Nell, the host, human and cheerful, in all 14 languages, with her mood in each line
+              ([excited]...), from its API: an account on a paid plan (which allows commercial use) and
+              its API key. English was recorded this way (in its web app, a chapter at a time).
+A language recorded with ElevenLabs is left alone by a Kokoro run (--force records it with Kokoro).
 
 Kokoro, one-time setup in this folder (frontend/dev/tour/voice; the model files and .venv are git-ignored):
     python3 -m venv .venv && .venv/bin/pip install kokoro-onnx soundfile
     curl -LO https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
     curl -LO https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
-Then, after changing what Pip says (in frontend/dev/lang):
+Then, after changing what the host says (in frontend/dev/lang):
     .venv/bin/python make.py            every language Kokoro has  (needs node, and ffmpeg for the mp3s)
     .venv/bin/python make.py fr es      just these
 
@@ -24,8 +26,8 @@ ElevenLabs (needs only Python, node and ffmpeg):
     export ELEVENLABS_API_KEY=...       (from elevenlabs.io → Developers → API keys)
     python3 make.py --elevenlabs        all 14 languages
     python3 make.py --elevenlabs bg de  just these
-  ELEVENLABS_VOICE picks the voice (a voice id from its Voice Library; Pip's below if unset),
-  ELEVENLABS_MODEL the model (eleven_v3, which follows the mood tags; eleven_multilingual_v2 without them).
+  ELEVENLABS_VOICE picks the voice (a voice id; Nell's below if unset), ELEVENLABS_MODEL the model
+  (eleven_v4 or eleven_v3, which follow the mood tags; eleven_multilingual_v2 without them).
 """
 import json
 import os
@@ -40,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 # the demo's languages
 LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "pt", "sv", "da", "nb", "pl", "cs", "tr", "bg"]
 
-# Pip with Kokoro: [voice, Kokoro's language, pace]. English: Kokoro's liveliest British voice (bf_alice:
+# The host with Kokoro: [voice, Kokoro's language, pace]. English: Kokoro's liveliest British voice (bf_alice:
 # about twice the rise and fall of bf_emma's) with some of its most natural one (af_heart), said the
 # British way, a little quicker than its own pace. A voice is one ("ff_siwis") or a mix
 # ("bf_alice:0.6+af_heart:0.4").
@@ -52,11 +54,13 @@ KOKORO = {
     "pt": ("pf_dora", "pt-br", 1.05),
 }
 
-# Pip with ElevenLabs: Lily, a warm young British woman from its premade voices; any voice speaks every
-# language in her own voice. Her mood in each line, as eleven_v3's audio tags (other models would say them).
-ELEVEN_VOICE = os.environ.get("ELEVENLABS_VOICE", "pFZP5JQG7iQjIQuC4Bku")
-ELEVEN_MODEL = os.environ.get("ELEVENLABS_MODEL", "eleven_v3")
-TAGS = {"excited": "[excited]", "happy": "[cheerfully]", "wink": "[playfully]", "surprised": "[surprised]", "pout": "[teasing]", "neutral": "[warmly]"}
+# Nell with ElevenLabs: a voice made with its Voice Design (a warm, bright British presenter in her early
+# thirties), on Eleven v4 at stability 0.4 and similarity 0.8; any voice speaks every language in her own
+# voice. Her mood in each line, as v3/v4's audio tags (other models would say them).
+ELEVEN_VOICE = os.environ.get("ELEVENLABS_VOICE", "idWwIMD5xMU0d29Vktoq")
+ELEVEN_MODEL = os.environ.get("ELEVENLABS_MODEL", "eleven_v4")
+TAGGED = ("eleven_v3", "eleven_v4")
+TAGS = {"excited": "[excited]", "happy": "[cheerfully]", "wink": "[playfully]", "surprised": "[surprised]", "pout": "[teasing]", "look": "[warmly]", "neutral": "[warmly]"}
 
 
 def voice_id(text: str) -> str:
@@ -102,9 +106,14 @@ def eleven_take(_box: list, code: str, text: str, mood: str, out: Path) -> None:
     key = os.environ.get("ELEVENLABS_API_KEY")
     if not key:
         sys.exit("set ELEVENLABS_API_KEY first (elevenlabs.io → Developers → API keys)")
-    said = f"{TAGS.get(mood, TAGS['neutral'])} {text}" if ELEVEN_MODEL == "eleven_v3" else text
+    said = f"{TAGS.get(mood, TAGS['neutral'])} {text}" if ELEVEN_MODEL in TAGGED else text
     # v3 takes a stability of 0 (creative), 0.5 (natural) or 1 (robust); the others a range, and style
-    settings = {"stability": 0.5} if ELEVEN_MODEL == "eleven_v3" else {"stability": 0.35, "similarity_boost": 0.8, "style": 0.55, "use_speaker_boost": True}
+    if ELEVEN_MODEL == "eleven_v4":
+        settings = {"stability": 0.4, "similarity_boost": 0.8}
+    elif ELEVEN_MODEL == "eleven_v3":
+        settings = {"stability": 0.5}
+    else:
+        settings = {"stability": 0.35, "similarity_boost": 0.8, "style": 0.55, "use_speaker_boost": True}
     body = json.dumps({"text": said, "model_id": ELEVEN_MODEL, "voice_settings": settings}).encode()
     req = urllib.request.Request(
         f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVEN_VOICE}?output_format=mp3_44100_128",
@@ -122,14 +131,17 @@ def eleven_take(_box: list, code: str, text: str, mood: str, out: Path) -> None:
     raw.unlink()
 
 
-def record(engine: str, box: list, code: str) -> None:
+def record(engine: str, box: list, code: str, force: bool = False) -> None:
     folder = HERE / code
+    made_with = folder / "made-with.txt"
+    if engine == "kokoro" and not force and made_with.exists() and made_with.read_text().startswith("elevenlabs"):
+        print(f"{code}: recorded with ElevenLabs, left alone (--force records it with Kokoro)")
+        return
     folder.mkdir(exist_ok=True)
     lines = json.loads(subprocess.check_output(["node", str(HERE.parent / "lines.mjs"), code, "--moods"], text=True))
     index_file = folder / "voices.json"
     index = json.loads(index_file.read_text()) if index_file.exists() else {}
     # a different voice, model or pace records every line again
-    made_with = folder / "made-with.txt"
     settings = f"elevenlabs {ELEVEN_VOICE} {ELEVEN_MODEL}\n" if engine == "elevenlabs" else "{} {} {}\n".format(*KOKORO[code])
     if not made_with.exists() or made_with.read_text() != settings:
         index = {}
@@ -165,7 +177,7 @@ def main() -> None:
         sys.exit("set ELEVENLABS_API_KEY first (elevenlabs.io → Developers → API keys)")
     box: list = []
     for code in codes:
-        record(engine, box, code)
+        record(engine, box, code, "--force" in args)
     # the languages that have recordings, for the tour to ask only for those
     have = [c for c in LANGUAGES if (HERE / c / "voices.json").exists() and json.loads((HERE / c / "voices.json").read_text())]
     (HERE / "index.json").write_text(json.dumps(have) + "\n")

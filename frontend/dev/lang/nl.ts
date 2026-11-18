@@ -96,7 +96,7 @@ export const NL: DemoStrings = {
 
   lines: {
     imagine: "Stel je voor dat dit jouw huis is. Levend, in 3D, gewoon in Home Assistant.",
-    pip: "Ik ben Pip! Geef me een paar minuutjes, dan laat ik zien wat het allemaal kan.",
+    hello: "Hoi, ik ben Nell. Geef me een paar minuutjes, dan leid ik je rond.",
     everything: "Elke lamp, deur en raam zit precies op de echte plek, en verandert op hetzelfde moment.",
     faces: "En de gezichtjes laten per kamer zien wie er thuis is. Daar is Sam, in de keuken!",
     scene: "Tijd voor sfeer. [[movie]]Filmavond: de lampen dimmen, en de tv gaat aan.",
@@ -107,7 +107,7 @@ export const NL: DemoStrings = {
     scan: "Een iPhone met LiDAR? Scan je huis kamer voor kamer, en binnen minuten staat het in 3D.",
     plans: "Of begin met een huistype, of trek de plattegrond van de makelaar over.",
     security: "En nu de add-ons. De hele dag weg? Security speelt terug wat er gebeurde, gewoon op het huis.",
-    halfEight: "Half negen. Iedereen is de deur uit, en het alarm gaat vanzelf aan.",
+    halfEight: "Half negen: iedereen is de deur uit, en het alarm staat aan.",
     parcel: "Tien over tien: een pakketje. En de video van de deurbel speelt er meteen naast.",
     walker: "Eén uur: de hondenuitlater laat zichzelf binnen en neemt de hond mee.",
     alexHome: "Twintig voor zes: Alex is thuis, en de verwarming staat al aan.",
@@ -120,7 +120,7 @@ export const NL: DemoStrings = {
     whatIf: "Meer willen? Probeer het eerst: drie extra panelen besparen zo'n {saving} per jaar en zijn binnen acht jaar terugverdiend.",
     household: "Household houdt de dagelijkse dingen in de gaten. De vaatwasser is klaar, en dat zie je op elk scherm.",
     bins: "Household markeert de avond ervoor welke container eruit moet, en ziet vocht en schimmel, per kamer.",
-    window: "Hij zegt zelfs wanneer je even moet luchten. Heel vriendelijk!",
+    window: "En hij vertelt je wat je moet doen, voordat er schimmel komt.",
     tablet: "Nog een tablet over? Hang hem bij de voordeur, en de Wall Tablet-add-on maakt er het eigen scherm van je huis van.",
     wakes: "Hij wordt wakker als je langsloopt, met de tijd, het weer en wie er thuis is.",
     doorbell: "Met een videodeurbel neemt de [[ring]]camera het over zodra er iemand voor de deur staat.",

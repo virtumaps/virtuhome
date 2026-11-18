@@ -5,16 +5,7 @@ export const PL: DemoStrings = {
   name: "Polski",
   locale: "pl-PL",
   money: { currency: "PLN", perPound: 4.9 },
-  sayAs: [
-    ["VirtuHome", "Werczu Hołm"],
-    ["LiDAR", "lidar"],
-    ["iPhone'a", "ajfona"],
-    ["Home Assistant", "Hołm Asystent"],
-    ["Security", "Sekjuriti"],
-    ["Energy", "Enerdżi"],
-    ["Household", "Hałs hołld"],
-    ["Wall Tablet", "Łol Tablet"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"]],
 
   page: {
     title: "Demo VirtuHome",
@@ -105,7 +96,7 @@ export const PL: DemoStrings = {
 
   lines: {
     imagine: "Wyobraź sobie, że to twój dom. Żywy, w 3D, prosto w Home Assistant.",
-    pip: "Jestem Pip! Daj mi dwie minutki, a pokażę ci, co potrafi.",
+    hello: "Cześć, jestem Nell. Daj mi dwie minutki, a cię oprowadzę.",
     everything: "Każde światło, drzwi i okno jest dokładnie tam, gdzie w domu, i zmienia się w tej samej chwili.",
     faces: "A małe buźki pokazują, kto jest w domu i w którym pokoju. O, Sam w kuchni!",
     scene: "Stwórz nastrój. [[movie]]Wieczór filmowy: światła przygasają, a telewizor się włącza.",
@@ -116,7 +107,7 @@ export const PL: DemoStrings = {
     scan: "Masz iPhone'a z czujnikiem LiDAR? Zeskanuj dom pokój po pokoju, a za parę minut jest w 3D.",
     plans: "Albo zacznij od gotowego typu domu, albo odrysuj plan od pośrednika.",
     security: "A teraz dodatki. Nie ma cię cały dzień? Security odtworzy, co się działo, prosto na modelu domu.",
-    halfEight: "Wpół do dziewiątej. Wszyscy wyszli, a alarm włącza się sam.",
+    halfEight: "Wpół do dziewiątej: wszyscy wyszli, a alarm jest włączony.",
     parcel: "Dziesięć po dziesiątej: paczka. A tuż obok leci nagranie z dzwonka.",
     walker: "Pierwsza po południu: opiekun psa sam sobie otwiera i zabiera psa na spacer.",
     alexHome: "Za dwadzieścia szósta: Alex wraca do domu, a ogrzewanie już działa.",
@@ -129,7 +120,7 @@ export const PL: DemoStrings = {
     whatIf: "Chcesz więcej? Sprawdź najpierw: trzy panele więcej zaoszczędzą około {saving} rocznie i zwrócą się w niecałe osiem lat.",
     household: "Household pilnuje codziennych spraw. Zmywarka skończyła i od razu widać to na każdym ekranie.",
     bins: "Dzień przed wywozem zaznacza, który kosz wystawić, i wykrywa wilgoć i pleśń, pokój po pokoju.",
-    window: "Powie ci nawet, kiedy otworzyć okno. Grzecznie!",
+    window: "I powie ci, co zrobić, zanim pojawi się pleśń.",
     tablet: "Masz wolny tablet? Powieś go przy drzwiach wejściowych, a dodatek Wall Tablet zrobi z niego ekran twojego domu.",
     wakes: "Budzi się, gdy przechodzisz obok, i pokazuje godzinę, pogodę i to, kto jest w domu.",
     doorbell: "Dodaj dzwonek wideo, a jego [[ring]]kamera przejmuje ekran, gdy tylko ktoś się pojawi.",

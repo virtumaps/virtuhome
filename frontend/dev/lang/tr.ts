@@ -5,18 +5,7 @@ export const TR: DemoStrings = {
   name: "Türkçe",
   locale: "tr-TR",
   money: { currency: "TRY", perPound: 55 },
-  sayAs: [
-    ["VirtuHome", "Vörçu Hom"],
-    ["LiDAR", "lidar"],
-    ["Home Assistant", "Hom Asistınt"],
-    ["Marketplace", "Market pleys"],
-    ["iPhone", "ayfon"],
-    ["Security", "Sikyuriti"],
-    ["Energy", "Enırci"],
-    ["Household", "Haushold"],
-    ["Wall Tablet", "Vol Tablet"],
-    ["Alex", "Aleks"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"]],
 
   page: {
     title: "VirtuHome demosu",
@@ -107,7 +96,7 @@ export const TR: DemoStrings = {
 
   lines: {
     imagine: "Bunun senin evin olduğunu hayal et. Canlı, 3D ve tam Home Assistant'ın içinde.",
-    pip: "Ben Pip! Bana birkaç dakika ver, neler yapabildiğini sana göstereyim.",
+    hello: "Merhaba, ben Nell. Bana birkaç dakika ver, sana evi gezdireyim.",
     everything: "Her lamba, kapı ve pencere gerçek yerinde duruyor ve değiştiği an burada da değişiyor.",
     faces: "Küçük yüzler de kimin evde olduğunu oda oda gösteriyor. İşte Sam, mutfakta!",
     scene: "Ortamı hazırla. [[movie]]Film gecesi: ışıklar kısılıyor, televizyon açılıyor.",
@@ -118,7 +107,7 @@ export const TR: DemoStrings = {
     scan: "LiDAR'lı bir iPhone'un mu var? Evini oda oda tara, dakikalar içinde 3D'de olsun.",
     plans: "Ya da hazır bir ev tipiyle başla, ya da emlakçının kat planının üstünden çiz.",
     security: "Şimdi eklentiler. Bütün gün dışarıda mıydın? Security olanları evin üzerinde yeniden oynatıyor.",
-    halfEight: "Sekiz buçuk. Herkes çıkmış, alarm kendiliğinden kuruluyor.",
+    halfEight: "Sekiz buçuk: herkes çıkmış, alarm kurulu.",
     parcel: "Onu on geçe: bir kargo. Kapı zilinin kaydı da hemen yanında oynuyor.",
     walker: "Saat bir: köpek gezdiricisi kendi anahtarıyla girip köpeği yürüyüşe çıkarıyor.",
     alexHome: "Altıya yirmi var: Alex eve geldi, kombi de çoktan çalışıyor.",
@@ -131,7 +120,7 @@ export const TR: DemoStrings = {
     whatIf: "Daha fazlası mı? Önce dene: üç panel daha yılda yaklaşık {saving} kazandırır, sekiz yıl dolmadan da kendini amorti eder.",
     household: "Household gündelik işlere göz kulak oluyor. Bulaşık makinesi bitti ve bunu her ekranda söylüyor.",
     bins: "Hangi çöp kutusunun çıkacağını bir akşam önceden işaretliyor, nemi ve küfü oda oda buluyor.",
-    window: "Hatta pencereyi ne zaman açacağını bile söylüyor. Kibarca!",
+    window: "Ve küf oluşmadan önce ne yapman gerektiğini söylüyor.",
     tablet: "Boşta bir tablet mi var? Giriş kapısının yanına as, Wall Tablet eklentisi onu evinin kendi ekranı yapsın.",
     wakes: "Yanından geçince uyanıyor; saati, havayı ve evde kimin olduğunu gösteriyor.",
     doorbell: "Bir görüntülü kapı zili ekle; biri kapıya gelir gelmez [[ring]]kamerası ekranı devralıyor.",

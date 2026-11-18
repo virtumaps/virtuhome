@@ -5,17 +5,7 @@ export const ES: DemoStrings = {
   name: "Español",
   locale: "es-ES",
   money: { currency: "EUR", perPound: 1.15 },
-  sayAs: [
-    ["VirtuHome", "Vérchu Jom"],
-    ["Home Assistant", "Jom Asístant"],
-    ["LiDAR", "lidar"],
-    ["Security", "Sekiúriti"],
-    ["Energy", "Énerchi"],
-    ["Household", "Jáus-jold"],
-    ["Wall Tablet", "Uol Táblet"],
-    ["Marketplace", "Márketpleis"],
-    ["€", "euros"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"], ["€", "euros"]],
 
   page: {
     title: "Demo de VirtuHome",
@@ -106,7 +96,7 @@ export const ES: DemoStrings = {
 
   lines: {
     imagine: "Imagina que esta es tu casa. Viva, en 3D, dentro de Home Assistant.",
-    pip: "¡Soy Pip! Dame un par de minutos y te enseño todo lo que puede hacer.",
+    hello: "Hola, soy Nell. Dame un par de minutos y te enseño la casa.",
     everything: "Cada luz, puerta y ventana está en su sitio real, y cambia en cuanto cambia de verdad.",
     faces: "Y las caritas muestran quién está en cada habitación. ¡Mira, Sam está en la cocina!",
     scene: "Crea ambiente. [[movie]]Noche de cine: las luces bajan, y se enciende la tele.",
@@ -117,7 +107,7 @@ export const ES: DemoStrings = {
     scan: "¿Tienes un iPhone con LiDAR? Escanea tu casa habitación por habitación, y en minutos la tienes en 3D.",
     plans: "O empieza con un tipo de casa, o calca el plano de la inmobiliaria.",
     security: "Y ahora, los complementos. ¿Fuera todo el día? Security te enseña lo que pasó, sobre la propia casa.",
-    halfEight: "Las ocho y media. Ya no queda nadie, y la alarma se activa sola.",
+    halfEight: "Las ocho y media: ya no queda nadie, y la alarma está puesta.",
     parcel: "Las diez y diez: un paquete. Y aquí está el vídeo del timbre, justo al lado.",
     walker: "La una: el paseador de perros entra por su cuenta, y saca al perro.",
     alexHome: "Las seis menos veinte: Alex llega, y la calefacción ya está puesta.",
@@ -130,7 +120,7 @@ export const ES: DemoStrings = {
     whatIf: "¿Quieres más? Pruébalo antes: tres placas más te ahorrarían unos {saving} al año, y se pagan solas en menos de ocho años.",
     household: "Household vigila lo de cada día. El lavavajillas ha terminado, y lo avisa en todas las pantallas.",
     bins: "Te marca qué cubo sacar la noche antes, y detecta humedad y moho, habitación por habitación.",
-    window: "Hasta te dice cuándo abrir una ventana. ¡Con mucho tacto!",
+    window: "Y te dice qué hacer, antes de que aparezca el moho.",
     tablet: "¿Tienes una tablet que no usas? Ponla junto a la puerta, y el complemento Wall Tablet la convierte en la pantalla de tu casa.",
     wakes: "Se enciende al pasar, con la hora, el tiempo, y quién está en casa.",
     doorbell: "Añade un timbre con vídeo, y su [[ring]]cámara toma el control en cuanto hay alguien.",

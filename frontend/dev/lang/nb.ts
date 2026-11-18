@@ -96,7 +96,7 @@ export const NB: DemoStrings = {
 
   lines: {
     imagine: "Tenk deg at dette er hjemmet ditt. Levende, i 3D, rett inne i Home Assistant.",
-    pip: "Jeg heter Pip! Gi meg et par minutter, så skal jeg vise deg hva det kan.",
+    hello: "Hei, jeg heter Nell. Gi meg et par minutter, så viser jeg deg rundt.",
     everything: "Alle lys, dører og vinduer er akkurat der de er, og endrer seg i samme øyeblikk som de gjør.",
     faces: "Og de små ansiktene viser hvem som er hjemme, rom for rom. Der er Sam, på kjøkkenet!",
     scene: "Sett stemningen. [[movie]]Filmkveld: lyset dempes, og TV-en slås på.",
@@ -107,7 +107,7 @@ export const NB: DemoStrings = {
     scan: "Har du en iPhone med LiDAR? Skann hjemmet rom for rom, og på få minutter er det i 3D.",
     plans: "Eller start fra en hustype, eller tegn etter meglerens plantegning.",
     security: "Så, tilleggene. Borte hele dagen? Security spiller av det som skjedde, rett på huset.",
-    halfEight: "Halv ni. Alle har dratt, og alarmen går på av seg selv.",
+    halfEight: "Halv ni: alle har dratt, og alarmen er på.",
     parcel: "Ti over ti: en pakke. Og her er klippet fra ringeklokka, rett ved siden av.",
     walker: "Klokka ett: hundelufteren låser seg inn og tar med hunden ut.",
     alexHome: "Tjue på seks: Alex er hjemme, og varmen står allerede på.",
@@ -120,7 +120,7 @@ export const NB: DemoStrings = {
     whatIf: "Vil du ha mer? Prøv først: tre paneler til ville spart rundt {saving} i året, og tjent seg inn på under åtte år.",
     household: "Household holder et øye med hverdagen. Oppvaskmaskinen er ferdig, og det står på alle skjermer.",
     bins: "Det merker hvilken dunk som skal ut kvelden før, og finner fukt og mugg, rom for rom.",
-    window: "Det sier til og med fra når du bør lufte. Pent og pyntelig!",
+    window: "Og det forteller deg hva du skal gjøre, før det blir mugg.",
     tablet: "Har du et nettbrett til overs? Heng det opp ved inngangsdøra, så gjør Wall Tablet-tillegget det til hjemmets egen skjerm.",
     wakes: "Det våkner når du går forbi, med klokka, været og hvem som er hjemme.",
     doorbell: "Legg til en videoringeklokke, så tar [[ring]]kameraet over i det øyeblikket noen står der.",

@@ -5,17 +5,7 @@ export const FR: DemoStrings = {
   name: "Français",
   locale: "fr-FR",
   money: { currency: "EUR", perPound: 1.15 },
-  sayAs: [
-    ["VirtuHome", "Veurtchou Home"],
-    ["LiDAR", "lidar"],
-    ["iPhone", "aïe-phone"],
-    ["Security", "Sékiouriti"],
-    ["Energy", "Énerdji"],
-    ["Household", "Aousse-hôld"],
-    ["Wall Tablet", "Ouol Tablette"],
-    ["Marketplace", "Markètplèsse"],
-    ["€", "euros"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"], ["€", "euros"]],
 
   page: {
     title: "Démo VirtuHome",
@@ -106,7 +96,7 @@ export const FR: DemoStrings = {
 
   lines: {
     imagine: "Imaginez que c’est votre maison. Vivante, en 3D, directement dans Home Assistant.",
-    pip: "Moi, c’est Pip ! Donnez-moi deux minutes, et je vous montre tout ce qu’on peut faire.",
+    hello: "Bonjour, moi c’est Nell. Donnez-moi deux minutes, et je vous fais visiter.",
     everything: "Chaque lampe, porte et fenêtre est à sa vraie place, et change à l’instant où elle change en vrai.",
     faces: "Et les petits visages montrent qui est là, pièce par pièce. Tiens, c’est Sam, dans la cuisine !",
     scene: "Créez l’ambiance. [[movie]]Soirée ciné : les lumières baissent, et la télé s’allume.",
@@ -117,7 +107,7 @@ export const FR: DemoStrings = {
     scan: "Un iPhone avec LiDAR ? Scannez chaque pièce, et en quelques minutes, tout est en 3D.",
     plans: "Ou partez d’un type de maison, ou décalquez le plan de l’agence immobilière.",
     security: "Passons aux modules. Pas là de la journée ? Security rejoue ce qui s’est passé, directement sur la maison.",
-    halfEight: "Huit heures et demie. Tout le monde est parti, et l’alarme s’active toute seule.",
+    halfEight: "Huit heures et demie : tout le monde est parti, et l’alarme est activée.",
     parcel: "Dix heures dix : un colis. Et voici la vidéo de la sonnette, juste à côté.",
     walker: "Treize heures : le promeneur de chiens entre tout seul, et sort le chien.",
     alexHome: "Dix-sept heures quarante : Alex rentre, et le chauffage est déjà allumé.",
@@ -130,7 +120,7 @@ export const FR: DemoStrings = {
     whatIf: "Envie de plus ? Testez d’abord : trois panneaux de plus, c’est environ {saving} d’économie par an, remboursés en moins de huit ans.",
     household: "Household veille sur le quotidien. Le lave-vaisselle a fini, et tous les écrans le disent.",
     bins: "Il signale la poubelle à sortir la veille, et repère l’humidité et la moisissure, pièce par pièce.",
-    window: "Il vous dit même quand ouvrir une fenêtre. Gentiment !",
+    window: "Et il vous dit quoi faire, avant que la moisissure s’installe.",
     tablet: "Une tablette qui traîne ? Fixez-la près de la porte d’entrée, et le module Wall Tablet en fait l’écran de votre maison.",
     wakes: "Elle se réveille à votre passage, avec l’heure, la météo, et qui est là.",
     doorbell: "Ajoutez une sonnette vidéo, et sa [[ring]]caméra prend le relais dès que quelqu’un est là.",
