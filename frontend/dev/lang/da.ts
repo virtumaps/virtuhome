@@ -96,7 +96,7 @@ export const DA: DemoStrings = {
 
   lines: {
     imagine: "Forestil dig, at det her er dit hjem. Levende, i 3D, lige inde i Home Assistant.",
-    pip: "Jeg hedder Pip! Giv mig et par minutter, så viser jeg dig, hvad det kan.",
+    hello: "Hej, jeg hedder Nell. Giv mig et par minutter, så viser jeg dig rundt.",
     everything: "Alle lamper, døre og vinduer sidder, hvor de virkelig er, og skifter i samme øjeblik, som de gør.",
     faces: "Og de små ansigter viser, hvem der er hjemme, rum for rum. Dér er Sam, i køkkenet!",
     scene: "Sæt stemningen. [[movie]]Filmaften: lyset dæmpes, og fjernsynet tænder.",
@@ -107,7 +107,7 @@ export const DA: DemoStrings = {
     scan: "Har du en iPhone med LiDAR? Scan dit hjem rum for rum, så er det i 3D på få minutter.",
     plans: "Eller start fra en hustype, eller tegn efter ejendomsmæglerens plantegning.",
     security: "Nu til tilføjelserne. Ude hele dagen? Security afspiller, hvad der skete, lige på huset.",
-    halfEight: "Halv ni. Alle er taget af sted, og alarmen slår sig selv til.",
+    halfEight: "Halv ni: alle er taget af sted, og alarmen er slået til.",
     parcel: "Ti over ti: en pakke. Og her kører klippet fra dørklokken, lige ved siden af.",
     walker: "Klokken ét: hundelufteren lukker sig selv ind og tager hunden med ud.",
     alexHome: "Tyve minutter i seks: Alex er hjemme, og varmen er allerede tændt.",
@@ -120,7 +120,7 @@ export const DA: DemoStrings = {
     whatIf: "Vil du have mere? Prøv først: tre paneler mere ville spare omkring {saving} om året og tjene sig hjem på under otte år.",
     household: "Household holder øje med de daglige ting. Opvaskemaskinen er færdig, og det står på alle skærme.",
     bins: "Den viser, hvilken skraldespand der skal ud aftenen før, og finder fugt og skimmel, rum for rum.",
-    window: "Den siger endda til, når du skal lufte ud. Høfligt!",
+    window: "Og den fortæller dig, hvad du skal gøre, før der kommer skimmel.",
     tablet: "Har du en ekstra tablet liggende? Sæt den op ved hoveddøren, så gør Wall Tablet-tilføjelsen den til husets egen skærm.",
     wakes: "Den vågner, når du går forbi, med klokken, vejret og hvem der er hjemme.",
     doorbell: "Tilføj en videodørklokke, og dens [[ring]]kamera tager over, så snart nogen står der.",

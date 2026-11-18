@@ -7,7 +7,7 @@
 
 /** The tour's lines, by what each one is for. */
 export type LineId =
-  | "imagine" | "pip"
+  | "imagine" | "hello"
   | "everything" | "faces" | "scene" | "friends" | "weather"
   | "bricks" | "paint" | "scan" | "plans"
   | "security" | "halfEight" | "parcel" | "walker" | "alexHome" | "summary"
@@ -96,7 +96,7 @@ export interface DemoStrings {
     bathroomValue: string;
   };
 
-  /** What Pip says. {saving}: the what-if's saving a year, in money. */
+  /** What the host says. {saving}: the what-if's saving a year, in money. */
   lines: Record<LineId, string>;
 
   props: {

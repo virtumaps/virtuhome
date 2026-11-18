@@ -26,11 +26,11 @@ in its bar changes it. The demo house's rooms are named in the language, and Vir
 follow where VirtuHome has them (German and Dutch).
 
 **Take the tour** in the demo's bar plays a tour of under three minutes with a voice, music and
-subtitles: a host shows you round the demo house, then what the add-ons of
+subtitles: Nell, a little house with a human voice, shows you round the demo house, then what the add-ons of
 [VirtuHome Pro](#extensions-and-virtuhome-pro) do. Their parts are previews drawn on the demo house with pretend numbers. To end on the add-ons'
-free trials only while they are open, it asks VirtuMaps' licence server, and sends nothing else. The
-host's voice is recorded in English, French, Spanish, Italian and Portuguese; in the other languages
-she speaks English, with the subtitles in the language. The browser plays the music as it goes. The
+free trials only while they are open, it asks VirtuMaps' licence server, and sends nothing else. Nell
+speaks English; in the demo's other languages you hear her English, with the subtitles in the
+language. The browser plays the music as it goes. The
 buttons at the top right turn the sound off, pause, skip a line or close the tour (**Esc**); the
 space bar pauses and **→** skips a line.
 

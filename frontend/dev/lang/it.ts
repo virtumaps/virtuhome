@@ -106,7 +106,7 @@ export const IT: DemoStrings = {
 
   lines: {
     imagine: "Immagina che questa sia casa tua. Viva, in 3D, direttamente dentro Home Assistant.",
-    pip: "Io sono Pip! Dammi un paio di minuti, e ti faccio vedere cosa sa fare.",
+    hello: "Ciao, sono Nell. Dammi un paio di minuti, e ti faccio fare un giro.",
     everything: "Ogni luce, porta e finestra è al suo vero posto, e si aggiorna nell’istante in cui cambia.",
     faces: "E le faccine ti dicono chi è in casa, stanza per stanza. Ecco Sam, in cucina!",
     scene: "Crea l’atmosfera. [[movie]]Serata cinema: le luci si abbassano, e si accende la TV.",
@@ -117,7 +117,7 @@ export const IT: DemoStrings = {
     scan: "Hai un iPhone con LiDAR? Scansiona casa stanza per stanza, e in pochi minuti è in 3D.",
     plans: "O parti da un tipo di casa, o ricalca la planimetria dell’agenzia.",
     security: "Ora, gli add-on. Fuori tutto il giorno? Security ti fa rivedere la giornata, proprio sulla casa.",
-    halfEight: "Le otto e mezza. Sono usciti tutti, e l’allarme si inserisce da solo.",
+    halfEight: "Le otto e mezza: sono usciti tutti, e l’allarme è inserito.",
     parcel: "Le dieci e dieci: un pacco. Ed ecco la clip del campanello, proprio lì accanto.",
     walker: "L’una: il dog sitter entra da solo, e porta il cane a fare un giro.",
     alexHome: "Le sei meno venti: Alex è a casa, e il riscaldamento è già acceso.",
@@ -130,7 +130,7 @@ export const IT: DemoStrings = {
     whatIf: "Vuoi di più? Provalo prima: con tre pannelli in più risparmieresti circa {saving} l’anno, e si ripagano in meno di otto anni.",
     household: "Household tiene d’occhio le cose di tutti i giorni. La lavastoviglie ha finito, e lo dice su ogni schermo.",
     bins: "Ti segnala il bidone da portare fuori la sera prima, e scova umidità e muffa, stanza per stanza.",
-    window: "Ti dice perfino quando aprire una finestra. Con gentilezza!",
+    window: "E ti dice cosa fare, prima che arrivi la muffa.",
     tablet: "Hai un tablet in più? Mettilo vicino alla porta d’ingresso, e l’add-on Wall Tablet lo trasforma nello schermo di casa.",
     wakes: "Si accende quando passi, con l’ora, il meteo, e chi è in casa.",
     doorbell: "Aggiungi un videocitofono, e la sua [[ring]]telecamera appare appena c’è qualcuno.",

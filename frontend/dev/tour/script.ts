@@ -27,8 +27,8 @@ import type { Mood } from "./cast";
 import type { ClipKind } from "./props";
 import { fill, money, num, type ChapterId, type DemoStrings, type LineId } from "../lang";
 
-/** The host's name (a placeholder). */
-export const HOST = "Pip";
+/** The host's name. */
+export const HOST = "Nell";
 
 /** What shows beside the house: drawn props (props.ts), and panels as they look in the app (panels.ts). */
 export type Prop =
@@ -266,7 +266,7 @@ export function chapters(S: DemoStrings): Chapter[] {
       },
       lines: [
         { id: "imagine", say: L.imagine, mood: "excited", pause: 2800 },
-        { id: "pip", say: L.pip, mood: "happy" },
+        { id: "hello", say: L.hello, mood: "happy" },
       ],
     },
     {
@@ -277,7 +277,7 @@ export function chapters(S: DemoStrings): Chapter[] {
       lines: [
         { id: "everything", say: L.everything },
         {
-          id: "faces", say: L.faces, mood: "happy",
+          id: "faces", say: L.faces, mood: "look",
           do: (s) => {
             s.quiet("person.alex", "home");
             s.quiet("person.sam", "home");
@@ -365,10 +365,10 @@ export function chapters(S: DemoStrings): Chapter[] {
       lines: [
         { id: "security", say: L.security, replay: "08:28" },
         { id: "halfEight", say: L.halfEight, replay: "08:40" },
-        { id: "parcel", say: L.parcel, do: (s) => s.props([clip]), replay: "10:13", gap: 700 },
+        { id: "parcel", say: L.parcel, mood: "look", do: (s) => s.props([clip]), replay: "10:13", gap: 700 },
         { id: "walker", say: L.walker, do: (s) => s.props([]), replay: "13:20" },
         { id: "alexHome", say: L.alexHome, replay: "17:50" },
-        { id: "summary", say: L.summary, do: (s) => s.props([{ kind: "alert", time: "17:41", title: S.props.alertTitle, body: S.props.alertBody }]), gap: 900 },
+        { id: "summary", say: L.summary, mood: "look", do: (s) => s.props([{ kind: "alert", time: "17:41", title: S.props.alertTitle, body: S.props.alertBody }]), gap: 900 },
       ],
     },
     {
@@ -394,7 +394,7 @@ export function chapters(S: DemoStrings): Chapter[] {
         { id: "kettle", say: L.kettle, mood: "happy", do: (s) => s.fly("media_player.kitchen_speaker") },
         { id: "cheap", say: L.cheap, do: (s) => s.floor(0) },
         {
-          id: "roof", say: L.roof, mood: "excited", gap: 1100,
+          id: "roof", say: L.roof, mood: "look", gap: 1100,
           after: (s) => {
             energyRooms(s, false, S);
             s.house(true);
@@ -430,7 +430,7 @@ export function chapters(S: DemoStrings): Chapter[] {
             tintRoom(s, "bathroom", [0.3, 0.6, 1, 0.45], S.props.damp);
           },
         },
-        { id: "window", say: L.window, mood: "wink" },
+        { id: "window", say: L.window, mood: "happy" },
       ],
     },
     {

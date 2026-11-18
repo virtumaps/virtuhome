@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- The online demo's tour has a new host: **Nell**, a little house with big eyes and a recorded human
+  voice that turns to what she shows. She speaks English; the demo's other languages hear her
+  English, with the subtitles in the language. Three lines say more exactly what the add-ons do (the
+  alarm is set, not set by Security; Household says what to do before mould sets in).
+
 ## 0.21.0
 
 ### New

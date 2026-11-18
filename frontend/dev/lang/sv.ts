@@ -96,7 +96,7 @@ export const SV: DemoStrings = {
 
   lines: {
     imagine: "Tänk dig att det här är ditt hem. Levande, i 3D, direkt i Home Assistant.",
-    pip: "Jag heter Pip! Ge mig ett par minuter, så visar jag vad det kan göra.",
+    hello: "Hej, jag heter Nell. Ge mig ett par minuter, så visar jag dig runt.",
     everything: "Varje lampa, dörr och fönster sitter där de sitter på riktigt, och ändras i samma stund.",
     faces: "Och de små ansiktena visar vem som är hemma, rum för rum. Där är Sam, i köket!",
     scene: "Sätt stämningen. [[movie]]Filmkväll: lamporna dämpas, och tv:n slås på.",
@@ -107,7 +107,7 @@ export const SV: DemoStrings = {
     scan: "Har du en iPhone med LiDAR? Skanna hemmet rum för rum, så är det i 3D på några minuter.",
     plans: "Eller börja från en hustyp, eller rita av mäklarens planritning.",
     security: "Nu till tilläggen. Borta hela dagen? Security spelar upp vad som hände, direkt på huset.",
-    halfEight: "Halv nio. Alla har gått, och larmet slås på av sig självt.",
+    halfEight: "Halv nio: alla har gått, och larmet är på.",
     parcel: "Tio över tio: ett paket. Och här är klippet från dörrklockan, precis bredvid.",
     walker: "Klockan ett: hundvakten låser upp själv och tar ut hunden.",
     alexHome: "Tjugo i sex: Alex är hemma, och värmen är redan på.",
@@ -120,7 +120,7 @@ export const SV: DemoStrings = {
     whatIf: "Vill du ha mer? Testa först: tre paneler till skulle spara runt {saving} om året, och ha betalat sig på under åtta år.",
     household: "Household håller koll på vardagsgrejerna. Diskmaskinen är klar, och det syns på varje skärm.",
     bins: "Det markerar vilken tunna som ska ut kvällen innan, och hittar fukt och mögel, rum för rum.",
-    window: "Det säger till och med när du ska vädra. Och snällt dessutom!",
+    window: "Och det säger vad du ska göra, innan möglet hinner komma.",
     tablet: "Har du en surfplatta över? Sätt upp den vid ytterdörren, så gör Wall Tablet-tillägget den till hemmets egen skärm.",
     wakes: "Den vaknar när du går förbi, med klockan, vädret och vem som är hemma.",
     doorbell: "Lägg till en videodörrklocka, så tar dess [[ring]]kamera över så fort någon står där.",

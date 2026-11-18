@@ -96,7 +96,7 @@ export const EN: DemoStrings = {
 
   lines: {
     imagine: "Imagine this is your home. Alive, in 3D, right inside Home Assistant.",
-    pip: "I'm Pip! Give me a couple of minutes, and I'll show you what it can do.",
+    hello: "Hi, I'm Nell. Give me a couple of minutes, and I'll show you round.",
     everything: "Every light, door and window sits where it really is, and changes the moment it does.",
     faces: "And the little faces show who's home, room by room. That's Sam, in the kitchen!",
     scene: "Set the scene. [[movie]]Movie night: the lights go down, and the telly comes on.",
@@ -107,7 +107,7 @@ export const EN: DemoStrings = {
     scan: "Got an iPhone with LiDAR? Scan your home room by room, and it's in 3D in minutes.",
     plans: "Or start from a house type, or trace the estate agent's floor plan.",
     security: "Now, the add-ons. Out all day? Security plays back what happened, right on the house.",
-    halfEight: "Half past eight. Everyone's gone, and the alarm sets itself.",
+    halfEight: "Half past eight: everyone's gone, and the alarm's set.",
     parcel: "Ten past ten: a parcel. And here's the doorbell clip, playing right beside it.",
     walker: "One o'clock: the dog walker lets themselves in, and takes the dog out.",
     alexHome: "Twenty to six: Alex is home, and the heating's already on.",
@@ -120,7 +120,7 @@ export const EN: DemoStrings = {
     whatIf: "Want more? Try it first: three more panels would save about a hundred and ninety pounds a year, and pay back in under eight years.",
     household: "Household keeps an eye on the everyday stuff. The dishwasher's done, and it says so on every screen.",
     bins: "It tags the bin to put out the night before, and spots damp and mould, room by room.",
-    window: "It'll even tell you when to open a window. Nicely!",
+    window: "And it tells you what to do, before mould sets in.",
     tablet: "Got a spare tablet? Put it up by the front door, and the Wall Tablet add-on makes it your home's own screen.",
     wakes: "It wakes as you walk past, with the time, the weather, and who's home.",
     doorbell: "Add a video doorbell, and its [[ring]]camera takes over the moment someone's there.",

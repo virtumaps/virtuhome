@@ -107,7 +107,7 @@ export const PT: DemoStrings = {
 
   lines: {
     imagine: "Imagine que esta é a sua casa. Viva, em 3D, dentro do Home Assistant.",
-    pip: "Eu sou a Pip! Dê-me uns minutinhos, e mostro tudo o que dá para fazer.",
+    hello: "Olá, eu sou a Nell. Dê-me uns minutinhos, e eu mostro-lhe a casa.",
     everything: "Cada luz, porta e janela está no seu lugar real, e muda no mesmo instante que a verdadeira.",
     faces: "E as carinhas mostram quem está em casa, e onde. Ali está Sam, na cozinha!",
     scene: "Crie o ambiente. [[movie]]Noite de cinema: luzes baixas, e TV ligada.",
@@ -118,7 +118,7 @@ export const PT: DemoStrings = {
     scan: "Tem um iPhone com LiDAR? Digitalize a casa, espaço a espaço, e em minutos está tudo em 3D.",
     plans: "Ou parta de um modelo de casa, ou desenhe por cima da planta da imobiliária.",
     security: "Agora, os complementos. Passou o dia fora? O Security mostra o que aconteceu, na própria casa.",
-    halfEight: "Oito e meia. Já saíram todos, e o alarme liga sozinho.",
+    halfEight: "Oito e meia: já saíram todos, e o alarme está ligado.",
     parcel: "Dez e dez: uma encomenda. E aqui está o vídeo da campainha, logo ao lado.",
     walker: "À uma hora: o passeador de cães entra sozinho, e leva o cão para passear.",
     alexHome: "Vinte para as seis: Alex está de volta, e o aquecimento já está ligado.",
@@ -131,7 +131,7 @@ export const PT: DemoStrings = {
     whatIf: "Quer mais? Teste primeiro: mais três painéis poupariam cerca de {saving} por ano, e o investimento volta em menos de oito anos.",
     household: "O Household cuida do dia a dia. A máquina de lavar louça terminou, e todos os dispositivos avisam.",
     bins: "Marca na véspera qual lixo vai para a rua, e encontra humidade e bolor em cada espaço da casa.",
-    window: "Até diz quando abrir uma janela. Com jeitinho!",
+    window: "E diz-lhe o que fazer, antes que surja bolor.",
     tablet: "Tem um tablet parado? Ponha-o ao lado da porta de entrada, e o complemento Wall Tablet faz dele o painel da sua casa.",
     wakes: "Acorda quando alguém passa, e mostra a hora, o tempo e quem está em casa.",
     doorbell: "Adicione uma campainha com vídeo, e a [[ring]]imagem dela entra em cena assim que alguém chega.",

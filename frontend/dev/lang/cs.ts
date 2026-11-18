@@ -106,7 +106,7 @@ export const CS: DemoStrings = {
 
   lines: {
     imagine: "Představ si, že tohle je tvůj domov. Živý, ve 3D, přímo v Home Assistantu.",
-    pip: "Já jsem Pip! Dej mi pár minut a ukážu ti, co všechno umí.",
+    hello: "Ahoj, já jsem Nell. Dej mi pár minut a provedu tě.",
     everything: "Každé světlo, dveře i okno sedí tam, kde ve skutečnosti, a mění se v tu samou chvíli.",
     faces: "A malé tvářičky ukazují, kdo je doma, místnost po místnosti. Tady je Sam, v kuchyni!",
     scene: "Nastav atmosféru. [[movie]]Filmový večer: světla se ztlumí a zapne se televize.",
@@ -117,7 +117,7 @@ export const CS: DemoStrings = {
     scan: "Máš iPhone s LiDARem? Naskenuj dům místnost po místnosti a za pár minut je ve 3D.",
     plans: "Nebo začni od typu domu, nebo obkresli půdorys od realitky.",
     security: "A teď doplňky. Celý den pryč? Security ti přehraje, co se dělo, přímo na domě.",
-    halfEight: "Půl deváté. Všichni odešli a alarm se zapne sám.",
+    halfEight: "Půl deváté: všichni odešli a alarm je zapnutý.",
     parcel: "Deset po desáté: balík. A hned vedle běží záznam ze zvonku.",
     walker: "V jednu: venčitel si sám odemkne a vezme psa na procházku.",
     alexHome: "Za dvacet šest: Alex je doma a topení už běží.",
@@ -130,7 +130,7 @@ export const CS: DemoStrings = {
     whatIf: "Chceš víc? Nejdřív si to zkus: tři panely navíc ušetří zhruba {saving} ročně a zaplatí se za necelých osm let.",
     household: "Household hlídá každodenní věci. Myčka dodělala a všechny obrazovky to hned hlásí.",
     bins: "Večer předem označí popelnici, kterou máš vyndat, a hledá vlhkost a plíseň, místnost po místnosti.",
-    window: "Dokonce ti řekne, kdy otevřít okno. Hezky slušně!",
+    window: "A řekne ti, co dělat, než se objeví plíseň.",
     tablet: "Máš doma volný tablet? Pověs ho k vchodovým dveřím a doplněk Wall Tablet z něj udělá displej tvého domova.",
     wakes: "Probudí se, když jdeš kolem, a ukáže čas, počasí a kdo je doma.",
     doorbell: "Přidej videozvonek a jeho [[ring]]kamera naskočí, jakmile u dveří někdo stojí.",

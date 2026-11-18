@@ -96,7 +96,7 @@ export const DE: DemoStrings = {
 
   lines: {
     imagine: "Stell dir vor, das ist dein Zuhause. Lebendig, in 3D, direkt in Home Assistant.",
-    pip: "Ich bin Pip! Gib mir ein paar Minuten, und ich zeig dir, was es alles kann.",
+    hello: "Hallo, ich bin Nell. Gib mir ein paar Minuten, und ich führ dich herum.",
     everything: "Jede Lampe, jede Tür, jedes Fenster sitzt am echten Platz und reagiert im selben Moment.",
     faces: "Die kleinen Gesichter zeigen, wer wo zu Hause ist. Das ist Sam, in der Küche!",
     scene: "Stimmung gefällig? [[movie]]Filmabend: Das Licht geht runter, der Fernseher an.",
@@ -107,7 +107,7 @@ export const DE: DemoStrings = {
     scan: "Du hast ein iPhone mit LiDAR? Scann dein Zuhause Raum für Raum, und in Minuten ist es in 3D.",
     plans: "Oder fang mit einem Haustyp an, oder zeichne den Grundriss vom Makler nach.",
     security: "Jetzt die Add-ons. Den ganzen Tag weg? Security spielt ab, was passiert ist, direkt am Haus.",
-    halfEight: "Halb neun. Alle sind weg, und die Alarmanlage schaltet sich selbst scharf.",
+    halfEight: "Halb neun: Alle sind weg, und die Alarmanlage ist scharf.",
     parcel: "Zehn nach zehn: ein Paket. Und direkt daneben läuft der Clip von der Türklingel.",
     walker: "Ein Uhr: Der Hundesitter schließt selbst auf und geht mit dem Hund Gassi.",
     alexHome: "Zwanzig vor sechs: Alex ist zu Hause, und die Heizung läuft schon.",
@@ -120,7 +120,7 @@ export const DE: DemoStrings = {
     whatIf: "Lust auf mehr? Erst ausprobieren: Drei Module mehr sparen rund {saving} im Jahr und rechnen sich in unter acht Jahren.",
     household: "Household behält den Alltag im Blick. Die Spülmaschine ist fertig, und das steht auf jedem Bildschirm.",
     bins: "Es markiert am Vorabend die Tonne, die rausmuss, und erkennt Feuchte und Schimmel, Raum für Raum.",
-    window: "Es sagt dir sogar, wann du lüften solltest. Ganz freundlich!",
+    window: "Und es sagt dir, was zu tun ist, bevor sich Schimmel bildet.",
     tablet: "Noch ein Tablet übrig? Häng es neben die Haustür, und das Wall-Tablet-Add-on macht es zum Bildschirm deines Zuhauses.",
     wakes: "Es wacht auf, wenn du vorbeigehst, mit Uhrzeit, Wetter und wer zu Hause ist.",
     doorbell: "Mit einer Video-Türklingel übernimmt ihre [[ring]]Kamera, sobald jemand vor der Tür steht.",

@@ -53,7 +53,7 @@ export function voiceId(text: string): string {
 }
 
 const CSS = /* css */ `
-:host { --j: #5cd0ff; --m: #ff8f8f; --ink: #f4f7ff; --dim: rgba(238,244,255,.74); --line: rgba(255,255,255,.16); --glass: rgba(9,13,24,.74);
+:host { --j: #5cd0ff; --m: #ff8f8f; --host: #ffc46b; --ink: #f4f7ff; --dim: rgba(238,244,255,.74); --line: rgba(255,255,255,.16); --glass: rgba(9,13,24,.74);
   position: fixed; left: 0; top: 0; right: 0; bottom: var(--bar, 36px); z-index: 10; pointer-events: none; color: var(--ink);
   font-family: Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
 .stage { position: absolute; inset: 0; overflow: hidden; }
@@ -71,14 +71,14 @@ button, a.btn { pointer-events: auto; font: inherit; cursor: pointer; }
 .char canvas { width: 100%; height: 100%; display: block; }
 .char.talking { transform: scale(1.07); }
 .tag { position: absolute; bottom: 4%; left: 50%; transform: translateX(-50%); font-size: max(10px, calc(var(--u) * 1.4)); letter-spacing: .3em; padding-left: .3em;
-  text-transform: uppercase; font-weight: 700; opacity: .8; transition: opacity .3s; color: var(--m); text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+  text-transform: uppercase; font-weight: 700; opacity: .8; transition: opacity .3s; color: var(--host); text-shadow: 0 1px 6px rgba(0,0,0,.8); }
 .talking .tag { opacity: 1; }
 .stage:not(.on) .char { transform: translateY(110%); opacity: 0; }
 .subs { position: absolute; left: 50%; bottom: calc(var(--u) * 4); width: min(56vw, calc(var(--u) * 110)); transform: translate(-50%, 12px); text-align: center;
   border-radius: calc(var(--u) * 2.4); padding: calc(var(--u) * 1.8) calc(var(--u) * 3) calc(var(--u) * 2.2); box-sizing: border-box; opacity: 0;
   transition: opacity .3s, transform .4s cubic-bezier(.2,.9,.3,1); }
 .subs.show { opacity: 1; transform: translate(-50%, 0); }
-.who { font-size: max(10px, calc(var(--u) * 1.4)); letter-spacing: .3em; text-transform: uppercase; font-weight: 700; margin-bottom: .6em; color: var(--m); }
+.who { font-size: max(10px, calc(var(--u) * 1.4)); letter-spacing: .3em; text-transform: uppercase; font-weight: 700; margin-bottom: .6em; color: var(--host); }
 /* "narrated in English, with subtitles": quieter than her name */
 .who small { font-size: 1em; letter-spacing: 0; text-transform: none; font-weight: 500; color: var(--dim); margin-left: .6em; }
 .say { margin: 0; font-size: max(15px, calc(var(--u) * 3.1)); line-height: 1.38; font-weight: 500; }
@@ -337,7 +337,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
   let lineSecs = 1;
   let trials = false;
   /**
-   * How Pip speaks: her recordings in the language, the browser's voice in it, or (with neither) her
+   * How the host speaks: her recordings in the language, the browser's voice in it, or (with neither) her
    * English recordings, with the subtitles still in the language.
    */
   let mode: "recorded" | "browser" | "english" = "browser";
@@ -617,7 +617,7 @@ export function openTour(house: DemoHouse, start: boolean, audio: AudioContext |
     face.talking = talking && !paused;
     face.target = face.talking ? mouth : 0;
     // talking, mostly at the viewer; between lines it looks about, now and then over at the house
-    if (face.talking) face.gazeTo = Math.sin(t * 0.7) * 0.15;
+    if (face.talking) face.gazeTo = face.mood === "look" ? -0.85 : Math.sin(t * 0.7) * 0.15;
     else if (t > face.nextGlance) {
       face.gazeTo = [0, 0, 0.35, -0.35, -0.8][Math.floor(Math.random() * 5)];
       face.nextGlance = t + 1.6 + Math.random() * 3.4;
