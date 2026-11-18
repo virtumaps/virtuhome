@@ -5,17 +5,7 @@ export const FR: DemoStrings = {
   name: "Français",
   locale: "fr-FR",
   money: { currency: "EUR", perPound: 1.15 },
-  sayAs: [
-    ["VirtuHome", "Veurtchou Home"],
-    ["LiDAR", "lidar"],
-    ["iPhone", "aïe-phone"],
-    ["Security", "Sékiouriti"],
-    ["Energy", "Énerdji"],
-    ["Household", "Aousse-hôld"],
-    ["Wall Tablet", "Ouol Tablette"],
-    ["Marketplace", "Markètplèsse"],
-    ["€", "euros"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"], ["€", "euros"]],
 
   page: {
     title: "Démo VirtuHome",

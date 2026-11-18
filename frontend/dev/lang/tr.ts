@@ -5,18 +5,7 @@ export const TR: DemoStrings = {
   name: "Türkçe",
   locale: "tr-TR",
   money: { currency: "TRY", perPound: 55 },
-  sayAs: [
-    ["VirtuHome", "Vörçu Hom"],
-    ["LiDAR", "lidar"],
-    ["Home Assistant", "Hom Asistınt"],
-    ["Marketplace", "Market pleys"],
-    ["iPhone", "ayfon"],
-    ["Security", "Sikyuriti"],
-    ["Energy", "Enırci"],
-    ["Household", "Haushold"],
-    ["Wall Tablet", "Vol Tablet"],
-    ["Alex", "Aleks"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"]],
 
   page: {
     title: "VirtuHome demosu",

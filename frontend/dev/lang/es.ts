@@ -5,17 +5,7 @@ export const ES: DemoStrings = {
   name: "Español",
   locale: "es-ES",
   money: { currency: "EUR", perPound: 1.15 },
-  sayAs: [
-    ["VirtuHome", "Vérchu Jom"],
-    ["Home Assistant", "Jom Asístant"],
-    ["LiDAR", "lidar"],
-    ["Security", "Sekiúriti"],
-    ["Energy", "Énerchi"],
-    ["Household", "Jáus-jold"],
-    ["Wall Tablet", "Uol Táblet"],
-    ["Marketplace", "Márketpleis"],
-    ["€", "euros"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"], ["€", "euros"]],
 
   page: {
     title: "Demo de VirtuHome",

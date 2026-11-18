@@ -5,16 +5,7 @@ export const PL: DemoStrings = {
   name: "Polski",
   locale: "pl-PL",
   money: { currency: "PLN", perPound: 4.9 },
-  sayAs: [
-    ["VirtuHome", "Werczu Hołm"],
-    ["LiDAR", "lidar"],
-    ["iPhone'a", "ajfona"],
-    ["Home Assistant", "Hołm Asystent"],
-    ["Security", "Sekjuriti"],
-    ["Energy", "Enerdżi"],
-    ["Household", "Hałs hołld"],
-    ["Wall Tablet", "Łol Tablet"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"]],
 
   page: {
     title: "Demo VirtuHome",

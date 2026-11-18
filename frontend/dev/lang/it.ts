@@ -5,17 +5,7 @@ export const IT: DemoStrings = {
   name: "Italiano",
   locale: "it-IT",
   money: { currency: "EUR", perPound: 1.15 },
-  sayAs: [
-    ["VirtuHome", "Vèrciu Home"],
-    ["LiDAR", "lidar"],
-    ["Security", "Sekiùriti"],
-    ["Energy", "Ènergi"],
-    ["Household", "Àus-hold"],
-    ["Wall Tablet", "Uòl Tàblet"],
-    ["Marketplace", "Màrketpleis"],
-    ["L’add-on", "L’àddon"],
-    ["add-on", "àddon"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"]],
 
   page: {
     title: "Demo di VirtuHome",

@@ -5,17 +5,7 @@ export const CS: DemoStrings = {
   name: "Čeština",
   locale: "cs-CZ",
   money: { currency: "CZK", perPound: 28 },
-  sayAs: [
-    ["VirtuHome", "Verčů Houm"],
-    ["LiDAR", "lidar"],
-    ["iPhone", "ajfoun"],
-    ["Home Assistant", "Houm Asistent"],
-    ["Marketplace", "Market plejs"],
-    ["Security", "Sikjurity"],
-    ["Energy", "Enerdží"],
-    ["Household", "Haus hould"],
-    ["Wall Tablet", "Vól Tablet"],
-  ],
+  sayAs: [["VirtuHome", "Virtu Home"], ["LiDAR", "lidar"]],
 
   page: {
     title: "Demo VirtuHome",
